@@ -9,11 +9,11 @@ import os
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Literal, NotRequired, TypedDict
 from uuid import UUID, uuid4
 
 import psycopg
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from course_server.agent import load_resource_definitions
 from course_server.agent.capabilities import DEFAULT_RESOURCE_REGISTRY_PATH
@@ -44,6 +44,7 @@ class ManifestResource(BaseModel):
     description: str = ""
     media_type: str
     file: str
+    assets: dict[str, str] = Field(default_factory=dict)
     visibility: Literal["public"] = "public"
     status: Literal["published", "provisional"] = "published"
     order: int = 1_000
@@ -54,6 +55,17 @@ class ResourceManifest(BaseModel):
 
     schema_version: Literal[1] = 1
     resource: ManifestResource
+
+
+class GeneratedResourceEntry(TypedDict):
+    uri: str
+    title: str
+    description: str
+    media_type: str
+    path: str
+    assets: NotRequired[dict[str, str]]
+    visibility: str
+    status: str
 
 
 def normalize_resource_text(text: str) -> str:
@@ -73,7 +85,7 @@ def refresh_resource_registry(
 
     shared_root = registry_path.parent.parent.resolve()
     course_root = shared_root / "course"
-    ordered_entries: list[tuple[int, dict[str, str]]] = []
+    ordered_entries: list[tuple[int, GeneratedResourceEntry]] = []
     seen_uris: set[str] = set()
     seen_paths: set[str] = set()
     for manifest_path in sorted(course_root.rglob("resource.json")):
@@ -89,20 +101,30 @@ def refresh_resource_registry(
             raise ValueError(f"duplicate resource file in manifests: {relative_path}")
         seen_uris.add(resource.uri)
         seen_paths.add(relative_path)
-        ordered_entries.append(
-            (
-                resource.order,
-                {
-                    "uri": resource.uri,
-                    "title": resource.title,
-                    "description": resource.description,
-                    "media_type": resource.media_type,
-                    "path": relative_path,
-                    "visibility": resource.visibility,
-                    "status": resource.status,
-                },
-            )
+        assets: dict[str, str] = {}
+        for asset_id, asset_file in sorted(resource.assets.items()):
+            if not asset_id or not asset_file:
+                raise ValueError(f"invalid resource asset for {resource.uri}: {asset_id}")
+            asset_path = (manifest_path.parent / asset_file).resolve()
+            if not asset_path.is_relative_to(shared_root) or not asset_path.is_file():
+                raise ValueError(f"invalid resource asset for {resource.uri}: {asset_file}")
+            relative_asset_path = asset_path.relative_to(shared_root).as_posix()
+            if relative_asset_path in seen_paths:
+                raise ValueError(f"duplicate resource file in manifests: {relative_asset_path}")
+            seen_paths.add(relative_asset_path)
+            assets[asset_id] = relative_asset_path
+        entry = GeneratedResourceEntry(
+            uri=resource.uri,
+            title=resource.title,
+            description=resource.description,
+            media_type=resource.media_type,
+            path=relative_path,
+            visibility=resource.visibility,
+            status=resource.status,
         )
+        if assets:
+            entry["assets"] = assets
+        ordered_entries.append((resource.order, entry))
     ordered_entries.sort(key=lambda item: (item[0], item[1]["uri"]))
     entries = [entry for _, entry in ordered_entries]
     generated = (

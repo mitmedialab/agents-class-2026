@@ -15,7 +15,7 @@ import re
 import shutil
 import socket
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import ClassVar, Literal, Protocol
@@ -33,12 +33,14 @@ from pydantic import (
 )
 
 from agent_core import PrincipalContext
+from course_server.browser.constants import BROWSER_TOOL_IDS
 from course_server.uploads import (
     APPLICATION_PHOTO_MEDIA_TYPES,
     StoredTemporaryUpload,
     TemporaryUploadStore,
     UploadError,
 )
+from course_server.workspace.constants import WORKSPACE_TOOL_IDS
 
 READ_SYLLABUS_TOOL_ID = "course.read_syllabus"
 READ_PUBLIC_FILE_TOOL_ID = "course.read_public_file"
@@ -49,6 +51,7 @@ SEARCH_FAQ_TOOL_ID = "course.search_faq"
 SEARCH_COURSE_TOOL_ID = "course.search"
 SUBMIT_APPLICATION_TOOL_ID = "course.submit_application"
 WEB_SEARCH_TOOL_ID = "web.search"
+WEB_IMAGE_SEARCH_TOOL_ID = "web.search_images"
 VISIT_WEBPAGE_TOOL_ID = "web.visit"
 COURSE_SYLLABUS_URI = "course://syllabus"
 COURSE_SCHEDULE_URI = "course://schedule"
@@ -71,6 +74,22 @@ _MAX_WEB_RESULT_LENGTH = 20_000
 StoragePolicy = Literal["server_full", "server_summary", "local_only", "ephemeral"]
 ResourceVisibility = Literal["public"]
 ResourceStatus = Literal["published", "provisional"]
+RegistrationStatus = Literal[
+    "MAS student for credit",
+    "MIT student for credit",
+    "MAS student listener",
+    "MIT student listener",
+    "Other student for credit",
+    "Other student listener",
+]
+REGISTRATION_STATUS_OPTIONS: tuple[RegistrationStatus, ...] = (
+    "MAS student for credit",
+    "MIT student for credit",
+    "MAS student listener",
+    "MIT student listener",
+    "Other student for credit",
+    "Other student listener",
+)
 
 
 class CapabilityCatalogError(RuntimeError):
@@ -85,6 +104,16 @@ class ToolValidationError(ValueError):
     """A tool request failed with a safe, model-actionable validation message."""
 
 
+class ToolEmittedEvent(BaseModel):
+    """Trusted event draft emitted as a consequence of successful tool execution."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    type: str = Field(min_length=1, max_length=200)
+    payload: dict[str, JsonValue] = Field(default_factory=dict)
+    metadata: dict[str, JsonValue] = Field(default_factory=dict)
+
+
 class ToolExecutionResult(BaseModel):
     """Portable tool output plus explicit history-storage behavior."""
 
@@ -94,6 +123,7 @@ class ToolExecutionResult(BaseModel):
     summary: str | None = None
     storage_policy: StoragePolicy = "server_full"
     resource_uris: list[str] = Field(default_factory=list)
+    emitted_events: list[ToolEmittedEvent] = Field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -103,6 +133,7 @@ class ToolExecutionContext:
     principal: PrincipalContext
     conversation_id: UUID
     permitted_resource_uris: frozenset[str]
+    workspace_state: dict[str, JsonValue] = field(default_factory=lambda: {"panels": []})
 
 
 class ExecutableTool(Protocol):
@@ -125,6 +156,7 @@ class ExecutableTool(Protocol):
 
 
 WebTextRunner = Callable[[str], str]
+ImageSearchRunner = Callable[[str, int], list[dict[str, object]]]
 
 
 def _required_tool_string(
@@ -222,6 +254,135 @@ class PublicWebSearchTool:
         )
 
 
+def _https_result_url(value: object) -> str | None:
+    if not isinstance(value, str) or len(value) > _MAX_WEB_URL_LENGTH:
+        return None
+    parsed = urlsplit(value)
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        return None
+    hostname = parsed.hostname.casefold()
+    if hostname == "localhost" or hostname.endswith((".localhost", ".local")):
+        return None
+    try:
+        address = ipaddress.ip_address(hostname.split("%", 1)[0])
+    except ValueError:
+        return value
+    return value if address.is_global else None
+
+
+def _image_dimension(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        dimension = value
+    elif isinstance(value, str) and value.isdigit():
+        dimension = int(value)
+    else:
+        return None
+    return dimension if 1 <= dimension <= 100_000 else None
+
+
+def _optional_result_text(value: object, *, max_length: int) -> str | None:
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    return text[:max_length] if text else None
+
+
+class PublicImageSearchTool:
+    """Search public images through an injected DDGS adapter."""
+
+    id = WEB_IMAGE_SEARCH_TOOL_ID
+    description = (
+        "Search public images through a DuckDuckGo-first provider for use in a registered "
+        "visual workspace component. Returns direct HTTPS image and thumbnail URLs plus "
+        "source-page "
+        "metadata. Use focused queries that include the person, place, project, or concept."
+    )
+    input_schema: ClassVar[dict[str, JsonValue]] = {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "A focused public image-search query.",
+                "minLength": 1,
+                "maxLength": _MAX_WEB_QUERY_LENGTH,
+            },
+            "limit": {
+                "type": "integer",
+                "description": "Maximum image candidates, from 1 through 10.",
+                "minimum": 1,
+                "maximum": 10,
+            },
+        },
+        "required": ["query"],
+        "additionalProperties": False,
+    }
+
+    def __init__(self, search: ImageSearchRunner) -> None:
+        self._search = search
+
+    async def execute(
+        self,
+        arguments: Mapping[str, JsonValue],
+        context: ToolExecutionContext,
+    ) -> ToolExecutionResult:
+        del context
+        _reject_unknown_arguments(arguments, frozenset({"query", "limit"}))
+        query = _required_text_argument(
+            arguments,
+            "query",
+            max_length=_MAX_WEB_QUERY_LENGTH,
+        )
+        limit = _optional_limit(arguments, default=6)
+        try:
+            raw_results = await asyncio.to_thread(self._search, query, limit)
+        except Exception as error:
+            raise ToolValidationError(
+                "Public image search failed. Try a shorter or more specific query."
+            ) from error
+
+        results: list[dict[str, JsonValue]] = []
+        seen_urls: set[str] = set()
+        for raw_result in raw_results:
+            thumbnail_url = _https_result_url(raw_result.get("thumbnail"))
+            image_url = _https_result_url(raw_result.get("image")) or thumbnail_url
+            if image_url is None or image_url in seen_urls:
+                continue
+            seen_urls.add(image_url)
+            candidate: dict[str, JsonValue] = {
+                "title": _optional_result_text(raw_result.get("title"), max_length=500)
+                or "Image result",
+                "image_url": image_url,
+            }
+            optional_values: dict[str, JsonValue | None] = {
+                "thumbnail_url": thumbnail_url,
+                "source_page_url": _https_result_url(raw_result.get("url")),
+                "source": _optional_result_text(raw_result.get("source"), max_length=200),
+                "width": _image_dimension(raw_result.get("width")),
+                "height": _image_dimension(raw_result.get("height")),
+            }
+            candidate.update(
+                {name: value for name, value in optional_values.items() if value is not None}
+            )
+            results.append(candidate)
+            if len(results) >= limit:
+                break
+
+        if not results:
+            raise ToolValidationError("Public image search returned no usable HTTPS images.")
+        return ToolExecutionResult(
+            content={"query": query, "results": results},
+            summary=f"Found {len(results)} public image candidates.",
+            storage_policy="server_summary",
+        )
+
+
 class PublicVisitWebpageTool:
     """Read a public webpage through an injected smolagents page-view implementation."""
 
@@ -284,6 +445,7 @@ class ResourceDefinition:
     description: str = ""
     visibility: ResourceVisibility = "public"
     status: ResourceStatus = "published"
+    assets: dict[str, Path] = field(default_factory=dict)
 
 
 class ResourceRegistryEntry(BaseModel):
@@ -296,6 +458,7 @@ class ResourceRegistryEntry(BaseModel):
     description: str = ""
     media_type: str
     path: str
+    assets: dict[str, str] = Field(default_factory=dict)
     visibility: ResourceVisibility = "public"
     status: ResourceStatus = "published"
 
@@ -340,12 +503,24 @@ class ResourceContents(BaseModel):
     text: str
 
 
+@dataclass(frozen=True)
+class ResourceFile:
+    """Raw registered resource bytes for an authorized first-party viewer."""
+
+    uri: str
+    title: str
+    media_type: str
+    data: bytes
+
+
 class ResourceProvider(Protocol):
     async def read(self, uri: str) -> ResourceContents: ...
 
 
 class CourseResourceCatalog(ResourceProvider, Protocol):
     def list_public(self) -> list[ResourceSummary]: ...
+
+    async def read_file(self, uri: str) -> ResourceFile: ...
 
     async def search(
         self,
@@ -366,18 +541,31 @@ class FileResourceProvider:
             raise ValueError("resource URIs must be unique")
 
     async def read(self, uri: str) -> ResourceContents:
+        resource_file = await self.read_file(uri)
+        try:
+            text = resource_file.data.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise ResourceNotFound(f"{uri} is not a UTF-8 text resource") from error
+        return ResourceContents(
+            uri=resource_file.uri,
+            title=resource_file.title,
+            media_type=resource_file.media_type,
+            text=text,
+        )
+
+    async def read_file(self, uri: str) -> ResourceFile:
         resource = self._resources.get(uri)
         if resource is None:
             raise ResourceNotFound(uri)
         try:
-            text = await asyncio.to_thread(resource.path.read_text, encoding="utf-8")
+            data = await asyncio.to_thread(resource.path.read_bytes)
         except OSError as error:
             raise ResourceNotFound(uri) from error
-        return ResourceContents(
+        return ResourceFile(
             uri=resource.uri,
             title=resource.title,
             media_type=resource.media_type,
-            text=text,
+            data=data,
         )
 
     def list_public(self) -> list[ResourceSummary]:
@@ -472,6 +660,14 @@ def load_resource_definitions(
             raise ValueError(f"resource path leaves shared root: {entry.path}")
         if not path.is_file():
             raise ResourceNotFound(entry.uri)
+        assets: dict[str, Path] = {}
+        for asset_id, asset_path_string in entry.assets.items():
+            asset_path = (shared_root / asset_path_string).resolve()
+            if not asset_path.is_relative_to(shared_root):
+                raise ValueError(f"resource asset path leaves shared root: {asset_path_string}")
+            if not asset_path.is_file():
+                raise ResourceNotFound(f"{entry.uri} asset {asset_id}")
+            assets[asset_id] = asset_path
         resources.append(
             ResourceDefinition(
                 uri=entry.uri,
@@ -481,6 +677,7 @@ def load_resource_definitions(
                 path=path,
                 visibility=entry.visibility,
                 status=entry.status,
+                assets=assets,
             )
         )
     return resources
@@ -838,7 +1035,6 @@ class CourseApplication(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
 
-    email_address: EmailStr
     name: str = Field(min_length=2, max_length=200)
     email: EmailStr
     department_research_group_year_of_study_mit: str = Field(min_length=1, max_length=1_000)
@@ -847,7 +1043,7 @@ class CourseApplication(BaseModel):
     why_take_this_class: str = Field(min_length=1, max_length=4_000)
     knowledgeable_about: str = Field(min_length=1, max_length=4_000)
     skill_set: str = Field(min_length=1, max_length=4_000)
-    registration_status: str = Field(min_length=1, max_length=500)
+    registration_status: RegistrationStatus
     listener_willing_to_do_weekly_builds: str = Field(min_length=1, max_length=500)
     questions_or_comments_for_instructors: str = Field(min_length=1, max_length=4_000)
     photo_upload_id: UUID
@@ -957,10 +1153,6 @@ class CourseSubmitApplicationTool:
     input_schema: ClassVar[dict[str, JsonValue]] = {
         "type": "object",
         "properties": {
-            "email_address": {
-                "type": "string",
-                "description": "Email Address field.",
-            },
             "name": {
                 "type": "string",
                 "description": "Name field.",
@@ -995,7 +1187,12 @@ class CourseSubmitApplicationTool:
             },
             "registration_status": {
                 "type": "string",
-                "description": "Registration Status field.",
+                "enum": list(REGISTRATION_STATUS_OPTIONS),
+                "description": (
+                    "The applicant's combined affiliation and participation mode. Ask the "
+                    "applicant to choose one option; never infer for-credit or listener status "
+                    "from an MAS, MIT, or other affiliation."
+                ),
             },
             "listener_willing_to_do_weekly_builds": {
                 "type": "string",
@@ -1018,7 +1215,6 @@ class CourseSubmitApplicationTool:
             },
         },
         "required": [
-            "email_address",
             "name",
             "email",
             "department_research_group_year_of_study_mit",
@@ -1121,7 +1317,12 @@ class AuthorizedCapabilities:
 class PublicCapabilityPolicy:
     """Every principal receives the Phase 6 public course capabilities."""
 
-    def __init__(self, resource_uris: Iterable[str] | None = None) -> None:
+    def __init__(
+        self,
+        resource_uris: Iterable[str] | None = None,
+        *,
+        browser_enabled: bool = False,
+    ) -> None:
         resolved = tuple(
             resource_uris
             if resource_uris is not None
@@ -1139,6 +1340,7 @@ class PublicCapabilityPolicy:
         if any(not uri.startswith("course://") for uri in resolved):
             raise ValueError("public resource URIs must use the course:// scheme")
         self._resource_uris = resolved
+        self._browser_enabled = browser_enabled
 
     def authorize(self, principal: PrincipalContext) -> AuthorizedCapabilities:
         del principal
@@ -1153,7 +1355,10 @@ class PublicCapabilityPolicy:
                 SEARCH_COURSE_TOOL_ID,
                 SUBMIT_APPLICATION_TOOL_ID,
                 WEB_SEARCH_TOOL_ID,
+                WEB_IMAGE_SEARCH_TOOL_ID,
                 VISIT_WEBPAGE_TOOL_ID,
+                *WORKSPACE_TOOL_IDS,
+                *(BROWSER_TOOL_IDS if self._browser_enabled else ()),
             ),
             resource_uris=self._resource_uris,
         )

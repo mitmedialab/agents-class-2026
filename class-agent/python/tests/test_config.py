@@ -19,6 +19,9 @@ def test_settings_accept_standard_openai_environment_without_exposing_secret() -
     assert settings.model_api_key.get_secret_value() == "test-secret-value"
     assert settings.applicant_data_path.name == "applicants"
     assert settings.upload_data_path.name == "uploads"
+    assert settings.browser_enabled is True
+    assert settings.browser_max_sessions == 20
+    assert settings.browser_max_sessions_per_principal == 2
     assert "test-secret-value" not in repr(settings)
 
 
@@ -34,6 +37,26 @@ def test_settings_accept_private_applicant_storage_path() -> None:
 
     assert str(settings.applicant_data_path) == "/srv/class-agent/applicants"
     assert str(settings.upload_data_path) == "/srv/class-agent/uploads"
+
+
+def test_settings_can_disable_and_bound_the_remote_browser() -> None:
+    settings = AgentSettings.from_environment(
+        {
+            "DATABASE_URL": "postgresql://example",
+            "OPENAI_API_KEY": "test-secret-value",
+            "BROWSER_ENABLED": "false",
+            "BROWSER_MAX_SESSIONS": "12",
+            "BROWSER_MAX_SESSIONS_PER_PRINCIPAL": "1",
+            "BROWSER_SESSION_TTL_SECONDS": "600",
+            "BROWSER_EXECUTABLE_PATH": "/opt/chromium/chrome",
+        }
+    )
+
+    assert settings.browser_enabled is False
+    assert settings.browser_max_sessions == 12
+    assert settings.browser_max_sessions_per_principal == 1
+    assert settings.browser_session_ttl_seconds == 600
+    assert str(settings.browser_executable_path) == "/opt/chromium/chrome"
 
 
 def test_openai_provider_creates_transient_smolagents_model_without_network_call() -> None:

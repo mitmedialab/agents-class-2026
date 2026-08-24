@@ -21,3 +21,17 @@ Application logs and canonical events are separate. Ordinary logs must not becom
 - `agent.message`: response `text` and portable `input_id`.
 
 Phase 3's sample syllabus uses `server_full`. The tool adapter already honors `server_summary`, `local_only`, and `ephemeral` by omitting disallowed full results from durable event payloads.
+
+## Phase 7 workspace payloads
+
+- `workspace.panel.opened`: an `open` command containing the complete validated panel;
+- `workspace.panel.updated`: a validated `update` or `focus` command;
+- `workspace.panel.closed`: a validated `close` command.
+- `workspace.interaction`: the existing panel ID/component ID, a permitted semantic
+  interaction name, and its validated JSON value.
+
+Each payload has exactly one `command` object conforming to
+`shared/schemas/v1/workspace.schema.json`. Panel state is reconstructed by reducing
+these events in order. The durable representation contains component IDs, resource
+URIs, validated JSON props/state, and layout hints—never React elements, JavaScript,
+or PDF.js objects.

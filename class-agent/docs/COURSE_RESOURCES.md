@@ -19,6 +19,10 @@ publication status, display order, and the file to expose. The generated
 `shared/registry/resources.json` is retained as a portable catalog artifact; do not edit
 it by hand.
 
+A sidecar may also declare an `assets` object that maps stable asset IDs to files
+relative to the sidecar. Asset paths are confined to `shared/`, validated as existing
+files, and copied into the generated registry alongside the primary resource path.
+
 To add a resource, create its public content and a sibling `resource.json`. The
 manifest's `file` path is relative to its own directory. URI and resolved file paths
 must be unique, and files must remain under `shared/`. Private or student-specific
@@ -49,12 +53,17 @@ marks removed seeded FAQ entries inactive. It does not use embeddings.
 
 `course://application` is the public guide. The private submission tool accepts a
 structured application only after the user explicitly approves it. Required fields are
-Email Address, Name, Email, Department / Research Group / Year of Study MIT, Personal
+Name, Email, Department / Research Group / Year of Study MIT, Personal
 Webpage, Interests, reason for taking the class, Knowledgeable about, Skill-set,
 Registration Status, listener commitment to weekly builds, questions or comments, and a
 temporary JPEG, PNG, or WebP face-photo upload. Missing, blank, placeholder, malformed,
 expired, and inaccessible values produce a model-visible validation error naming the
 fields that still need answers.
+
+Registration Status is a closed six-option combination of affiliation (`MAS student`,
+`MIT student`, or `Other student`) and participation mode (`for credit` or `listener`).
+The guide and tool contract require the agent to ask for this choice rather than infer
+participation mode from a researched affiliation.
 
 Temporary uploads are principal-scoped, expire after 24 hours, and default to
 `var/uploads/`. A successful submission copies the selected photo into a durable,

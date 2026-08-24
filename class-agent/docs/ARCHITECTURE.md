@@ -1,6 +1,6 @@
-# Architecture decisions through Phase 6
+# Architecture decisions through Phase 7
 
-The platform has one logical production agent, `course-agent`. A request combines that shared agent policy with a trusted principal, conversation context, authorized tools and resources, and available device capabilities. Phase 1 defines the portable contracts needed to express that boundary; Phase 2 resolves trusted principals from access-code and anonymous sessions; Phase 3 persists canonical conversation events and runs the first CLI-accessible adapter; Phase 4 exposes those services through FastAPI without moving transport concerns into the core; Phase 5 adds a static React client over those HTTP contracts; Phase 6 adds public course resources, search, and private application submission.
+The platform has one logical production agent, `course-agent`. A request combines that shared agent policy with a trusted principal, conversation context, authorized tools and resources, and available device capabilities. Phase 1 defines the portable contracts needed to express that boundary; Phase 2 resolves trusted principals from access-code and anonymous sessions; Phase 3 persists canonical conversation events and runs the first CLI-accessible adapter; Phase 4 exposes those services through FastAPI without moving transport concerns into the core; Phase 5 adds a static React client over those HTTP contracts; Phase 6 adds public course resources, search, and private application submission; Phase 7 adds the registered native workspace protocol and its first document/calendar renderers.
 
 ## Decisions
 
@@ -37,7 +37,7 @@ The current contract version is `1`. Every `Event` carries `schema_version`; the
 
 ## Stable interfaces
 
-The stable platform interfaces through Phase 6 are:
+The stable platform interfaces through Phase 7 are:
 
 - `PrincipalContext`
 - `Event`
@@ -51,13 +51,17 @@ The stable platform interfaces through Phase 6 are:
 - `AgentResult`
 - `AgentRuntime`
 - `ModelProvider`
+- `WorkspaceState`
+- `WorkspaceCommand`
+- `ComponentManifest`
 - `shared/schemas/v1/agent-core.schema.json`
+- `shared/schemas/v1/workspace.schema.json`
 
 Changing one requires contract tests, documentation, and a schema-version review. Persistence migrations will also be required once later phases store these contracts.
 
 ## Deliberately deferred
 
-MCP servers, workspace commands and dynamic components, the Agent Bridge, and a browser extension remain deferred to their constitution phases. The authentication service continues to return an opaque credential without depending on HTTP; the FastAPI adapter alone translates credentials into cookies.
+MCP Apps, the Agent Bridge, and a browser extension remain deferred to their constitution phases. The authentication service continues to return an opaque credential without depending on HTTP; the FastAPI adapter alone translates credentials into cookies.
 
 ## Deviations and clarifications
 
@@ -144,10 +148,11 @@ model reasoning.
 The adapter has a second transient channel for concise assistant progress
 messages such as an announced next tool action. It accepts only ordinary
 assistant content deliberately addressed to the user, never reasoning or tool
-arguments. FastAPI transports it as `agent.progress.delta`, and the browser
-temporarily projects it in the main response area while a neutral activity state
-marks the update in the trace. The next public progress or final response
-replaces that projection. Progress text is not persisted as an `agent.message`
+arguments. FastAPI transports it as `agent.progress.delta`, with an explicit
+`replace` flag marking the first fragment of each public progress message. The
+browser temporarily projects it in the main response area while a neutral activity
+state marks the update in the trace. The next public progress or final response
+replaces that projection instead of accumulating earlier progress. Progress text is not persisted as an `agent.message`
 and never joins the final response.
 
 When the application supplies a text observer, that concrete adapter enables
@@ -197,3 +202,37 @@ The browser adds pre-message attachment upload, maps internal resource and tool
 identifiers to ordinary activity labels, and omits private application arguments and
 tool results from its trace. Response typography now scales continuously with content
 length and line count while streamed fragments remain visible as soon as they arrive.
+
+## Phase 7 additions
+
+`packages/workspace` owns the framework-independent TypeScript component manifests,
+wire-command parser, JSON-Schema prop validation, and deterministic workspace reducer.
+The matching Python bindings and command validator live under
+`course_server.workspace`. Both implementations are tested against
+`shared/schemas/v1/workspace.schema.json` and the trusted
+`shared/registry/components.json` registry.
+
+Workspace state is a projection of canonical `workspace.panel.*` events, not a React
+tree or framework serialization. `CourseAgentService` reconstructs the current state
+before each run and places its JSON representation in trusted runtime metadata. The
+workspace tools apply each command against that state before returning success. Their
+internal wrappers use MCP tool IDs, descriptions, JSON input schemas, and JSON results;
+the later MCP transport/gateway can expose them without changing the workspace contract.
+
+The browser reduces the same commands received over SSE and reconstructs panels from
+conversation events after navigation or reload. Native renderers remain an explicit
+trusted map for `document-viewer` and `calendar`; an unknown component or invalid prop
+set is rejected rather than mounted. Student/external interfaces remain sandboxed MCP
+Apps work for Phase 8.
+
+Components receive resource URIs, not embedded course data. The authorized resource
+content endpoint resolves a registered URI to bytes without revealing its filesystem
+path. DocumentViewer uses PDF.js locally for PDF canvas rendering and searchable page
+text; Markdown and plain text are rendered without injecting HTML. Semantic highlights
+use resource URI, page, quote, and optional surrounding text. Calendar normalizes the
+published schedule for display but retains unknown dates as unknown instead of
+fabricating them.
+
+No database migration is required. Panel history uses the existing canonical event
+table. The new workspace schema is an independent additive v1 contract and does not
+reinterpret any Phase 1 event envelope.

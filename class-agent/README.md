@@ -2,7 +2,7 @@
 
 Class Agent is the extensible Course Agent platform described in [CONSTITUTION.md](CONSTITUTION.md). It is designed for an MIT Media Lab course and favors explicit, portable contracts that students can inspect and extend.
 
-The repository is currently at **Phase 6**: public course resources and private course applications over the Phase 5 web agent. It contains stable core contracts, access-code and anonymous authentication, portable PostgreSQL conversation/event history, a `ToolCallingAgent` adapter, a public syllabus, provisional schedule, course staff directory, repository overview, FAQ, application guide, lexical course search, public web search and page reading, a manifest-generated public resource catalog, secure temporary chat uploads, validated private application submission with a photo, Server-Sent Event output, and a minimal conversation/workspace frontend. It intentionally does not yet contain Phase 7 native workspace components, MCP servers, Agent Bridge, or a browser extension.
+The repository is currently at **Phase 7**: validated native workspace components over the Phase 6 Course Agent. It contains stable core and workspace contracts, access-code and anonymous authentication, portable PostgreSQL conversation/event history, a `ToolCallingAgent` adapter, public course resources and search, private course applications, typed workspace tools, an event-derived panel workspace, a Markdown/plain-text/PDF DocumentViewer, and a month/agenda Calendar. It intentionally does not yet contain MCP Apps, Agent Bridge, or a browser extension.
 
 ## Requirements
 
@@ -113,13 +113,14 @@ python/course_server/    auth, orchestration, FastAPI/CLI, and PostgreSQL adapte
 python/runtime_smolagents/ replaceable ToolCallingAgent/OpenAI adapters
 python/tests/            Python serialization and contract tests
 packages/protocol/       TypeScript wire-contract types and tests
-packages/ui/             first-party React primitives and design tokens
+packages/ui/             first-party React primitives, viewers, and design tokens
+packages/workspace/      component manifests, workspace contracts, and reducer
 apps/web/                 static Vite Course Agent interface
 shared/schemas/v1/       canonical JSON Schemas and shared examples
 database/migrations/     permanent checksummed PostgreSQL migrations
 shared/course/            public course content and per-resource manifests
-shared/registry/          generated public resource registry
+shared/registry/          public resource and trusted component registries
 docs/                    architecture and versioning decisions
 ```
 
-See [docs/API.md](docs/API.md), [docs/RUNTIME.md](docs/RUNTIME.md), [docs/AUTH.md](docs/AUTH.md), and [docs/STORAGE.md](docs/STORAGE.md) for behavior and operational guidance. The default tests use a scripted model and do not spend OpenAI credits.
+See [docs/API.md](docs/API.md), [docs/WORKSPACE.md](docs/WORKSPACE.md), [docs/RUNTIME.md](docs/RUNTIME.md), [docs/AUTH.md](docs/AUTH.md), and [docs/STORAGE.md](docs/STORAGE.md) for behavior and operational guidance. The default tests use a scripted model and do not spend OpenAI credits.

@@ -4,15 +4,23 @@ import asyncio
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
-from uuid import uuid4
+from typing import Any, cast
+from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 
-from agent_core import AgentContext, AgentInput, AgentResult, Event
+from agent_core import AgentContext, AgentInput, AgentResult, Event, PrincipalContext
 from course_server.agent import CourseAgentService, InMemoryConversationStore
 from course_server.api import API_PREFIX, AppServices, create_app
 from course_server.auth import AuthenticationService, InMemoryAuthStore, UserAdminService
+from course_server.browser import (
+    BrowserPage,
+    BrowserPreview,
+    BrowserPreviewSnapshot,
+    BrowserSessionNotFound,
+    BrowserSessionService,
+    BrowserSnapshot,
+)
 from course_server.uploads import FileTemporaryUploadStore, TemporaryUploadStore
 
 
@@ -28,20 +36,45 @@ class RecordingRuntime:
     ) -> AgentResult:
         self.contexts.append(context)
         output = f"Echo: {input.text}"
-        return AgentResult(
-            input_id=input.id,
-            conversation_id=context.conversation_id,
-            output_text=output,
-            events=[
+        events = [
+            Event(
+                type="agent.message",
+                actor="course-agent",
+                principal_user_id=context.principal.user_id,
+                anonymous_session_id=context.principal.anonymous_session_id,
+                conversation_id=context.conversation_id,
+                payload={"text": output},
+            )
+        ]
+        if input.text == "open schedule":
+            events.insert(
+                0,
                 Event(
-                    type="agent.message",
+                    type="workspace.panel.opened",
                     actor="course-agent",
                     principal_user_id=context.principal.user_id,
                     anonymous_session_id=context.principal.anonymous_session_id,
                     conversation_id=context.conversation_id,
-                    payload={"text": output},
-                )
-            ],
+                    payload={
+                        "command": {
+                            "type": "open",
+                            "panel": {
+                                "id": "40000000-0000-4000-8000-000000000001",
+                                "component_id": "calendar",
+                                "title": "Course schedule",
+                                "resource_uri": "course://schedule",
+                                "props": {"view": "agenda"},
+                                "state": {},
+                            },
+                        }
+                    },
+                ),
+            )
+        return AgentResult(
+            input_id=input.id,
+            conversation_id=context.conversation_id,
+            output_text=output,
+            events=events,
         )
 
     async def run_observed(
@@ -55,7 +88,7 @@ class RecordingRuntime:
     ) -> AgentResult:
         result = await self.run(context=context, input=input)
         if progress_delta_observer is not None:
-            progress_delta_observer("I'll prepare a concise response.")
+            progress_delta_observer("I'll prepare a concise response.", True)
         if text_delta_observer is not None:
             text_delta_observer("Echo: ")
             text_delta_observer(input.text)
@@ -64,8 +97,160 @@ class RecordingRuntime:
         return result
 
 
+class SnapshotBrowserService:
+    def __init__(self) -> None:
+        self.sessions: dict[UUID, tuple[UUID, UUID, BrowserPage]] = {}
+        self.previews: dict[UUID, tuple[UUID, UUID, BrowserPreview]] = {}
+
+    async def start(self) -> None:
+        return None
+
+    async def close(self) -> None:
+        self.sessions.clear()
+        self.previews.clear()
+
+    async def open(
+        self,
+        *,
+        principal: PrincipalContext,
+        conversation_id: UUID,
+        url: str,
+    ) -> BrowserPage:
+        session_id = uuid4()
+        page = BrowserPage(
+            session_id=session_id,
+            url=url,
+            title="Example",
+            revision=1,
+            text_excerpt="Example",
+            expires_at=datetime.now(UTC) + timedelta(minutes=15),
+            viewport_width=1280,
+            viewport_height=800,
+        )
+        self.sessions[session_id] = (principal.session_id, conversation_id, page)
+        return page
+
+    async def create_preview(
+        self,
+        *,
+        principal: PrincipalContext,
+        conversation_id: UUID,
+        url: str,
+    ) -> BrowserPreview:
+        preview = BrowserPreview(
+            preview_id=uuid4(),
+            url=url,
+            title="Example preview",
+            expires_at=datetime.now(UTC) + timedelta(minutes=15),
+            viewport_width=1280,
+            viewport_height=800,
+            document_height=1600,
+        )
+        self.previews[preview.preview_id] = (
+            principal.session_id,
+            conversation_id,
+            preview,
+        )
+        return preview
+
+    async def preview_snapshot(
+        self,
+        *,
+        principal: PrincipalContext,
+        conversation_id: UUID,
+        preview_id: UUID,
+    ) -> BrowserPreviewSnapshot:
+        stored = self.previews.get(preview_id)
+        if stored is None or stored[:2] != (principal.session_id, conversation_id):
+            raise BrowserSessionNotFound("Browser preview not found.")
+        return BrowserPreviewSnapshot(preview=stored[2], png=b"\x89PNG\r\n\x1a\n")
+
+    async def navigate(
+        self,
+        *,
+        principal: PrincipalContext,
+        conversation_id: UUID,
+        session_id: UUID,
+        url: str,
+    ) -> BrowserPage:
+        del principal, conversation_id, session_id, url
+        raise NotImplementedError
+
+    async def scroll(
+        self,
+        *,
+        principal: PrincipalContext,
+        conversation_id: UUID,
+        session_id: UUID,
+        delta_y: int,
+    ) -> BrowserPage:
+        del delta_y
+        stored = self.sessions.get(session_id)
+        if stored is None or stored[:2] != (principal.session_id, conversation_id):
+            raise BrowserSessionNotFound("Browser session not found.")
+        page = stored[2].model_copy(update={"revision": stored[2].revision + 1})
+        self.sessions[session_id] = (principal.session_id, conversation_id, page)
+        return page
+
+    async def resize(
+        self,
+        *,
+        principal: PrincipalContext,
+        conversation_id: UUID,
+        session_id: UUID,
+        width: int,
+        height: int,
+    ) -> BrowserPage:
+        stored = self.sessions.get(session_id)
+        if stored is None or stored[:2] != (principal.session_id, conversation_id):
+            raise BrowserSessionNotFound("Browser session not found.")
+        page = stored[2].model_copy(
+            update={
+                "revision": stored[2].revision + 1,
+                "viewport_width": width,
+                "viewport_height": height,
+            }
+        )
+        self.sessions[session_id] = (principal.session_id, conversation_id, page)
+        return page
+
+    async def highlight_text(
+        self,
+        *,
+        principal: PrincipalContext,
+        conversation_id: UUID,
+        session_id: UUID,
+        text: str,
+    ) -> tuple[BrowserPage, int]:
+        del principal, conversation_id, session_id, text
+        raise NotImplementedError
+
+    async def snapshot(
+        self,
+        *,
+        principal: PrincipalContext,
+        conversation_id: UUID,
+        session_id: UUID,
+    ) -> BrowserSnapshot:
+        stored = self.sessions.get(session_id)
+        if stored is None or stored[:2] != (principal.session_id, conversation_id):
+            raise BrowserSessionNotFound("Browser session not found.")
+        return BrowserSnapshot(page=stored[2], png=b"\x89PNG\r\n\x1a\n")
+
+    async def close_session(
+        self,
+        *,
+        principal: PrincipalContext,
+        conversation_id: UUID,
+        session_id: UUID,
+    ) -> None:
+        del principal, conversation_id, session_id
+        raise NotImplementedError
+
+
 def _build_client(
     upload_store: TemporaryUploadStore | None = None,
+    browser: BrowserSessionService | None = None,
 ) -> tuple[TestClient, str, RecordingRuntime]:
     auth_store = InMemoryAuthStore()
     conversations = InMemoryConversationStore()
@@ -85,6 +270,7 @@ def _build_client(
         agent=CourseAgentService(runtime=runtime, conversations=conversations),
         conversations=conversations,
         uploads=upload_store,
+        browser=browser,
     )
     return (
         TestClient(create_app(services=services), base_url="https://testserver"),
@@ -166,6 +352,28 @@ def test_public_course_resource_catalog_marks_schedule_provisional() -> None:
         resource for resource in response.json() if resource["uri"] == "course://schedule"
     )
     assert schedule["status"] == "provisional"
+
+
+def test_authorized_resource_content_is_served_by_uri_without_exposing_paths() -> None:
+    client, _, _ = _build_client()
+
+    response = client.get(
+        f"{API_PREFIX}/course/resources/content",
+        params={"uri": "course://schedule"},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")
+    assert response.headers["x-class-agent-resource-uri"] == "course://schedule"
+    assert response.json()["status"] == "provisional"
+    assert "shared/course" not in response.text
+    assert (
+        client.get(
+            f"{API_PREFIX}/course/resources/content",
+            params={"uri": "course://private-grades"},
+        ).status_code
+        == 404
+    )
 
 
 def test_temporary_upload_route_stores_allowed_file_for_session(tmp_path: Path) -> None:
@@ -282,11 +490,250 @@ def test_stream_route_emits_typed_sse_events() -> None:
     assert payloads[1] == {
         "type": "agent.progress.delta",
         "text": "I'll prepare a concise response.",
+        "replace": True,
     }
     assert payloads[2] == {"type": "agent.text.delta", "text": "Echo: "}
     assert payloads[3] == {"type": "agent.text.delta", "text": "hello"}
     assert payloads[4] == {"type": "agent.text.done", "text": "Echo: hello"}
     assert payloads[-1] == {"type": "agent.run.completed"}
+
+
+def test_workspace_actions_validate_existing_panels_and_persist_events() -> None:
+    client, _, _ = _build_client()
+    conversation_id = _create_conversation(client)
+    opened = client.post(
+        f"/conversations/{conversation_id}/run",
+        json={"text": "open schedule"},
+    )
+    assert opened.status_code == 200
+
+    interaction = client.post(
+        f"/conversations/{conversation_id}/workspace/interactions",
+        json={
+            "panel_id": "40000000-0000-4000-8000-000000000001",
+            "action": "calendar.select_event",
+            "value": "week-1",
+        },
+    )
+    assert interaction.status_code == 200
+    assert interaction.json()["type"] == "workspace.interaction"
+    assert (
+        client.post(
+            f"/conversations/{conversation_id}/workspace/interactions",
+            json={
+                "panel_id": "40000000-0000-4000-8000-000000000001",
+                "action": "document.change_page",
+                "value": 2,
+            },
+        ).status_code
+        == 400
+    )
+
+    closed = client.post(
+        f"/conversations/{conversation_id}/workspace/actions",
+        json={
+            "action": "close",
+            "panel_id": "40000000-0000-4000-8000-000000000001",
+        },
+    )
+
+    assert closed.status_code == 200
+    assert closed.json()["type"] == "workspace.panel.closed"
+    detail = client.get(f"/conversations/{conversation_id}")
+    assert [
+        event["type"] for event in detail.json()["events"] if event["type"].startswith("workspace.")
+    ] == [
+        "workspace.panel.opened",
+        "workspace.interaction",
+        "workspace.panel.closed",
+    ]
+    assert (
+        client.post(
+            f"/conversations/{conversation_id}/workspace/actions",
+            json={"action": "focus", "panel_id": str(uuid4())},
+        ).status_code
+        == 400
+    )
+
+
+def test_visual_composition_records_only_bounded_editable_field_changes() -> None:
+    client, _, _ = _build_client()
+    principal = PrincipalContext.model_validate(client.get("/auth/me").json())
+    conversation_id = UUID(_create_conversation(client, title="Profile draft"))
+    panel_id = uuid4()
+    opened = Event(
+        type="workspace.panel.opened",
+        actor="course-agent",
+        anonymous_session_id=principal.anonymous_session_id,
+        conversation_id=conversation_id,
+        payload={
+            "command": {
+                "type": "open",
+                "panel": {
+                    "id": str(panel_id),
+                    "component_id": "visual-composition",
+                    "props": {
+                        "root_id": "profile",
+                        "elements": [
+                            {
+                                "id": "profile",
+                                "type": "group",
+                                "children": ["name", "bio"],
+                            },
+                            {"id": "name", "type": "heading", "text": "Ada"},
+                            {"id": "bio", "type": "textarea", "label": "Biography"},
+                        ],
+                    },
+                    "state": {},
+                },
+            }
+        },
+    )
+    app = cast(Any, client.app)
+    asyncio.run(
+        app.state.course_state.services.conversations.append_events(
+            conversation_id,
+            [opened],
+        )
+    )
+
+    changed = client.post(
+        f"/conversations/{conversation_id}/workspace/interactions",
+        json={
+            "panel_id": str(panel_id),
+            "action": "visual.change",
+            "value": {"element_id": "bio", "value": "Updated biography"},
+        },
+    )
+    immutable = client.post(
+        f"/conversations/{conversation_id}/workspace/interactions",
+        json={
+            "panel_id": str(panel_id),
+            "action": "visual.change",
+            "value": {"element_id": "name", "value": "Changed heading"},
+        },
+    )
+
+    assert changed.status_code == 200
+    assert changed.json()["payload"]["action"] == "visual.change"
+    assert immutable.status_code == 400
+
+
+def test_browser_snapshot_is_scoped_to_principal_and_conversation() -> None:
+    browser = SnapshotBrowserService()
+    client, _, _ = _build_client(browser=browser)
+    principal = PrincipalContext.model_validate(client.get("/auth/me").json())
+    conversation_id = _create_conversation(client, title="Browser")
+    other_conversation_id = _create_conversation(client, title="Other")
+    page = asyncio.run(
+        browser.open(
+            principal=principal,
+            conversation_id=UUID(conversation_id),
+            url="https://example.com/",
+        )
+    )
+
+    snapshot = client.get(f"/conversations/{conversation_id}/browser/{page.session_id}/snapshot")
+    wrong_conversation = client.get(
+        f"/conversations/{other_conversation_id}/browser/{page.session_id}/snapshot"
+    )
+    other_principal = TestClient(client.app, base_url="https://testserver")
+    wrong_principal = other_principal.get(
+        f"/conversations/{conversation_id}/browser/{page.session_id}/snapshot"
+    )
+
+    assert snapshot.status_code == 200
+    assert snapshot.headers["content-type"] == "image/png"
+    assert snapshot.headers["cache-control"] == "private, no-store"
+    assert snapshot.content.startswith(b"\x89PNG")
+    assert wrong_conversation.status_code == 404
+    assert wrong_principal.status_code == 404
+
+
+def test_browser_preview_is_scoped_to_principal_and_conversation() -> None:
+    browser = SnapshotBrowserService()
+    client, _, _ = _build_client(browser=browser)
+    principal = PrincipalContext.model_validate(client.get("/auth/me").json())
+    conversation_id = _create_conversation(client, title="Previews")
+    other_conversation_id = _create_conversation(client, title="Other")
+    preview = asyncio.run(
+        browser.create_preview(
+            principal=principal,
+            conversation_id=UUID(conversation_id),
+            url="https://example.com/",
+        )
+    )
+
+    snapshot = client.get(
+        f"/conversations/{conversation_id}/browser/previews/{preview.preview_id}/snapshot"
+    )
+    wrong_conversation = client.get(
+        f"/conversations/{other_conversation_id}/browser/previews/{preview.preview_id}/snapshot"
+    )
+    other_principal = TestClient(client.app, base_url="https://testserver")
+    wrong_principal = other_principal.get(
+        f"/conversations/{conversation_id}/browser/previews/{preview.preview_id}/snapshot"
+    )
+
+    assert snapshot.status_code == 200
+    assert snapshot.headers["content-type"] == "image/png"
+    assert snapshot.headers["cache-control"] == "private, no-store"
+    assert snapshot.content.startswith(b"\x89PNG")
+    assert wrong_conversation.status_code == 404
+    assert wrong_principal.status_code == 404
+
+
+def test_browser_scroll_recovers_a_stale_post_restart_session_in_place() -> None:
+    browser = SnapshotBrowserService()
+    client, _, _ = _build_client(browser=browser)
+    principal = PrincipalContext.model_validate(client.get("/auth/me").json())
+    conversation_id = UUID(_create_conversation(client, title="Recovered browser"))
+    panel_id = uuid4()
+    stale_session_id = uuid4()
+    opened = Event(
+        type="workspace.panel.opened",
+        actor="course-agent",
+        anonymous_session_id=principal.anonymous_session_id,
+        conversation_id=conversation_id,
+        payload={
+            "command": {
+                "type": "open",
+                "panel": {
+                    "id": str(panel_id),
+                    "component_id": "browser-viewer",
+                    "title": "Example",
+                    "props": {
+                        "session_id": str(stale_session_id),
+                        "url": "https://example.com/",
+                        "title": "Example",
+                        "revision": 1,
+                        "viewport_width": 1280,
+                        "viewport_height": 800,
+                    },
+                    "state": {},
+                },
+            }
+        },
+    )
+    app = cast(Any, client.app)
+    asyncio.run(
+        app.state.course_state.services.conversations.append_events(
+            conversation_id,
+            [opened],
+        )
+    )
+
+    response = client.post(
+        f"/conversations/{conversation_id}/browser/{stale_session_id}/scroll",
+        json={"panel_id": str(panel_id), "delta_y": 640},
+    )
+
+    assert response.status_code == 200
+    command = response.json()["payload"]["command"]
+    assert command["type"] == "update"
+    assert command["panel_id"] == str(panel_id)
+    assert command["props"]["session_id"] != str(stale_session_id)
+    assert command["props"]["revision"] == 2
 
 
 def test_versioned_agent_run_supports_json_and_streaming() -> None:

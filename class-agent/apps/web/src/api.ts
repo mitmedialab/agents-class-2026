@@ -1,4 +1,5 @@
 import type { Conversation, Event, PrincipalContext, Uuid } from "@class-agent/protocol";
+import type { JsonValue } from "@class-agent/workspace";
 
 const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL as string | undefined;
 const API_BASE_URL = (configuredBaseUrl ?? "/api/v1").replace(/\/$/, "");
@@ -15,6 +16,12 @@ export interface TemporaryUpload {
   size_bytes: number;
   created_at: string;
   expires_at: string;
+}
+
+export interface CourseResourceContent {
+  uri: string;
+  mediaType: string;
+  data: Uint8Array;
 }
 
 export type AgentActivityKind =
@@ -36,8 +43,9 @@ export interface AgentActivity {
 export type AgentStreamEvent =
   | { kind: "text"; text: string }
   | { kind: "text_final"; text: string }
-  | { kind: "progress"; text: string }
+  | { kind: "progress"; text: string; replace: boolean }
   | { kind: "activity"; activity: AgentActivity }
+  | { kind: "workspace"; command: unknown }
   | { kind: "done" }
   | { kind: "error" };
 
@@ -120,6 +128,107 @@ export function getConversation(conversationId: Uuid): Promise<ConversationDetai
   return requestJson<ConversationDetail>(`/conversations/${conversationId}`);
 }
 
+export async function getCourseResourceContent(
+  resourceUri: string,
+): Promise<CourseResourceContent> {
+  const query = new URLSearchParams({ uri: resourceUri });
+  const response = await fetch(
+    `${API_BASE_URL}/course/resources/content?${query.toString()}`,
+    { credentials: "include" },
+  );
+  if (!response.ok) {
+    throw new ApiError(await errorMessage(response), response.status);
+  }
+  const mediaType = response.headers.get("content-type")?.split(";", 1)[0] ?? "text/plain";
+  return {
+    uri: resourceUri,
+    mediaType,
+    data: new Uint8Array(await response.arrayBuffer()),
+  };
+}
+
+export function applyWorkspacePanelAction(
+  conversationId: Uuid,
+  action: "focus" | "close",
+  panelId: Uuid,
+): Promise<Event> {
+  return requestJson<Event>(`/conversations/${conversationId}/workspace/actions`, {
+    method: "POST",
+    body: JSON.stringify({ action, panel_id: panelId }),
+  });
+}
+
+export function recordWorkspaceInteraction(
+  conversationId: Uuid,
+  panelId: Uuid,
+  action:
+    | "calendar.select_event"
+    | "calendar.change_view"
+    | "document.change_page"
+    | "document.find_text"
+    | "page_cards.select"
+    | "visual.change",
+  value: JsonValue,
+): Promise<Event> {
+  return requestJson<Event>(`/conversations/${conversationId}/workspace/interactions`, {
+    method: "POST",
+    body: JSON.stringify({ panel_id: panelId, action, value }),
+  });
+}
+
+export function browserSnapshotUrl(
+  conversationId: Uuid,
+  sessionId: Uuid,
+  revision: number,
+): string {
+  return (
+    `${API_BASE_URL}/conversations/${conversationId}/browser/${sessionId}/snapshot` +
+    `?revision=${revision}`
+  );
+}
+
+export function browserPreviewSnapshotUrl(
+  conversationId: Uuid,
+  previewId: Uuid,
+  revision: number,
+): string {
+  return (
+    `${API_BASE_URL}/conversations/${conversationId}/browser/previews/${previewId}/snapshot` +
+    `?revision=${revision}`
+  );
+}
+
+export function scrollBrowserSession(
+  conversationId: Uuid,
+  panelId: Uuid,
+  sessionId: Uuid,
+  deltaY: number,
+): Promise<Event> {
+  return requestJson<Event>(
+    `/conversations/${conversationId}/browser/${sessionId}/scroll`,
+    {
+      method: "POST",
+      body: JSON.stringify({ panel_id: panelId, delta_y: deltaY }),
+    },
+  );
+}
+
+export function resizeBrowserSession(
+  conversationId: Uuid,
+  panelId: Uuid,
+  sessionId: Uuid,
+  width: number,
+  height: number,
+): Promise<Event> {
+  return requestJson<Event>(
+    `/conversations/${conversationId}/browser/${sessionId}/resize`,
+    {
+      method: "POST",
+      body: JSON.stringify({ panel_id: panelId, width, height }),
+    },
+  );
+}
+
 function uploadMediaType(file: File): string {
   if (file.type) return file.type;
   const extension = file.name.split(".").at(-1)?.toLowerCase();
@@ -181,7 +290,17 @@ const TOOL_ACTIVITY_LABELS: Record<string, string> = {
   "course.show_public_files": "Checking available course information",
   "course.submit_application": "Submitting application",
   "web.search": "Searching the public web",
+  "web.search_images": "Searching public images",
   "web.visit": "Reading a public webpage",
+  "browser.open": "Opening remote browser",
+  "browser.navigate": "Navigating remote browser",
+  "browser.scroll": "Scrolling remote browser",
+  "browser.highlight_text": "Highlighting page content",
+  "workspace.close_component": "Closing workspace panel",
+  "workspace.focus_component": "Focusing workspace panel",
+  "workspace.list_components": "Checking workspace components",
+  "workspace.open_component": "Opening workspace panel",
+  "workspace.update_component": "Updating workspace panel",
 };
 
 function toolActivityLabel(toolId: string | null): string {
@@ -277,7 +396,11 @@ function emitSseEvent(
     return;
   }
   if (parsed.event === "progress" && typeof parsed.data.text === "string") {
-    onEvent({ kind: "progress", text: parsed.data.text });
+    onEvent({
+      kind: "progress",
+      text: parsed.data.text,
+      replace: parsed.data.replace === true,
+    });
     return;
   }
   if (parsed.event === "status" && typeof parsed.data.label === "string") {
@@ -292,6 +415,13 @@ function emitSseEvent(
     return;
   }
   if (parsed.event === "platform") {
+    const type = typeof parsed.data.type === "string" ? parsed.data.type : "";
+    const platformEvent = isRecord(parsed.data.event) ? parsed.data.event : null;
+    const payload = platformEvent && isRecord(platformEvent.payload) ? platformEvent.payload : null;
+    if (type.startsWith("workspace.panel.") && payload?.command !== undefined) {
+      onEvent({ kind: "workspace", command: payload.command });
+      return;
+    }
     const activity = platformActivity(parsed.data);
     if (activity) {
       onEvent({ kind: "activity", activity });

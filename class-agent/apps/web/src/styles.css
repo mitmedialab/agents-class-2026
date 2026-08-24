@@ -29,6 +29,10 @@ textarea {
   position: relative;
 }
 
+.course-agent[data-about-open="true"] {
+  overflow: visible;
+}
+
 .agent-header {
   align-items: center;
   display: flex;
@@ -40,6 +44,37 @@ textarea {
   right: 0;
   top: 0;
   z-index: 10;
+}
+
+.header-left {
+  align-items: center;
+  display: flex;
+  gap: 1.25rem;
+}
+
+.history-toggle {
+  align-items: center;
+  color: var(--color-text-muted);
+  display: flex;
+  height: 1.75rem;
+  justify-content: center;
+  transition: color 140ms ease;
+  width: 1.75rem;
+}
+
+.history-toggle:hover,
+.history-toggle:focus-visible {
+  color: var(--color-text);
+}
+
+.history-toggle svg {
+  fill: none;
+  height: 1.4rem;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.35;
+  width: 1.4rem;
 }
 
 .institutional-marks {
@@ -68,6 +103,13 @@ textarea {
   width: auto;
 }
 
+.header-actions {
+  align-items: center;
+  display: flex;
+  gap: clamp(0.75rem, 2vw, 1.75rem);
+}
+
+.header-prompt,
 .about-link {
   color: var(--color-text);
   font-size: 0.6875rem;
@@ -75,11 +117,301 @@ textarea {
   text-transform: uppercase;
 }
 
+.header-prompt,
+.about-link {
+  transition: color 140ms ease;
+}
+
+.header-prompt:hover,
+.about-link:hover {
+  color: var(--color-text-muted);
+}
+
+.header-prompt:disabled {
+  color: var(--color-text-muted);
+  cursor: default;
+}
+
+.about-link[aria-current="page"] {
+  color: var(--color-text-muted);
+}
+
+.syllabus-page {
+  background: var(--color-background);
+  min-height: 100dvh;
+  padding: 9rem clamp(2rem, 6vw, 7rem) 8rem;
+}
+
+.syllabus-document {
+  margin: 0 auto;
+  max-width: 76rem;
+}
+
+.syllabus-document > h1 {
+  font-size: clamp(2.75rem, 5.8vw, 5.75rem);
+  font-weight: 400;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  margin: 0 0 5rem;
+  max-width: 18ch;
+}
+
+.syllabus-metadata {
+  border-bottom: 1px solid var(--color-border);
+  margin: 0 0 6rem;
+}
+
+.syllabus-metadata > div {
+  border-top: 1px solid var(--color-border);
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: minmax(10rem, 16rem) minmax(0, 1fr);
+  padding: 1.5rem 0;
+}
+
+.syllabus-metadata dt,
+.syllabus-metadata dd {
+  font-size: clamp(1rem, 1.5vw, 1.35rem);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.syllabus-metadata dt {
+  color: var(--color-text-muted);
+}
+
+.syllabus-sections {
+  max-width: 68rem;
+}
+
+.syllabus-sections h1,
+.syllabus-sections h2,
+.syllabus-sections h3 {
+  font-weight: 400;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+
+.syllabus-sections h1,
+.syllabus-sections h2 {
+  border-top: 1px solid var(--color-border);
+  font-size: clamp(1.8rem, 3vw, 2.75rem);
+  margin: 5rem 0 1.75rem;
+  padding-top: 2rem;
+}
+
+.syllabus-sections h3 {
+  font-size: 1.35rem;
+  margin: 3rem 0 1rem;
+}
+
+.syllabus-sections p,
+.syllabus-sections li,
+.syllabus-sections td,
+.syllabus-sections th {
+  font-size: clamp(1rem, 1.35vw, 1.2rem);
+  line-height: 1.65;
+}
+
+.syllabus-sections p {
+  color: var(--color-text-muted);
+  margin: 0 0 1.4rem;
+}
+
+.syllabus-sections strong {
+  color: var(--color-text);
+}
+
+.syllabus-sections ul,
+.syllabus-sections ol {
+  color: var(--color-text-muted);
+  display: grid;
+  gap: 0.65rem;
+  margin: 0 0 2rem;
+  padding-left: 1.5rem;
+}
+
+.syllabus-sections a {
+  color: var(--color-text);
+}
+
+.syllabus-table-scroll {
+  margin-top: 2rem;
+  overflow-x: auto;
+}
+
+.syllabus-table-scroll table {
+  border-collapse: collapse;
+  min-width: 38rem;
+  width: 100%;
+}
+
+.syllabus-table-scroll th,
+.syllabus-table-scroll td {
+  border-bottom: 1px solid var(--color-border);
+  padding: 1rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.syllabus-table-scroll th {
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+.syllabus-status {
+  color: var(--color-text-muted);
+  margin: 0 auto;
+  max-width: 76rem;
+}
+
 .workspace-shell {
   display: grid;
   min-height: 100dvh;
   place-items: center;
   padding: 7rem clamp(1.5rem, 7vw, 8rem) 9rem;
+}
+
+.course-agent[data-workspace-open="true"] .workspace-shell {
+  align-items: stretch;
+  gap: 0;
+  grid-template-columns: minmax(18rem, 42vw) minmax(0, 1fr);
+  padding: 0;
+  place-items: initial;
+}
+
+.course-agent[data-workspace-open="true"] .response-stage {
+  justify-self: stretch;
+  max-width: none;
+  padding: 6rem clamp(2rem, 4vw, 5rem) 9rem;
+}
+
+.course-agent[data-workspace-open="true"] .latest-response {
+  font-size: clamp(1.2rem, 2vw, 2.35rem);
+  letter-spacing: -0.025em;
+  line-height: 1.18;
+  max-height: 50dvh;
+  max-width: 31ch;
+}
+
+.course-agent[data-workspace-open="true"] .composer {
+  padding-inline: clamp(2rem, 4vw, 5rem);
+  right: 58%;
+}
+
+.workspace-pane {
+  background: var(--color-background);
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+.workspace-tabs {
+  align-items: center;
+  display: flex;
+  flex: none;
+  gap: var(--space-3);
+  justify-content: space-between;
+  min-height: 7rem;
+  padding: 4.75rem 1.5rem 0.75rem;
+}
+
+.workspace-tabs > div {
+  display: flex;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.workspace-tabs button {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  flex: none;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.6875rem;
+  padding: 0.55rem 0.75rem;
+}
+
+.workspace-tabs [role="tab"][aria-selected="true"] {
+  background: var(--color-surface-raised);
+  border-radius: 999px;
+  color: var(--color-text);
+}
+
+.workspace-tabs button:focus-visible {
+  outline: 1px solid var(--color-text);
+  outline-offset: -2px;
+}
+
+.workspace-close {
+  align-items: center;
+  background: var(--color-surface-raised) !important;
+  border-radius: 50% !important;
+  display: flex;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif !important;
+  font-size: 1.2rem !important;
+  height: 2rem;
+  justify-content: center;
+  line-height: 1;
+  padding: 0 !important;
+  width: 2rem;
+}
+
+.workspace-single-close {
+  opacity: 0.55;
+  position: absolute;
+  right: 1.5rem;
+  top: 4.75rem;
+  transition: opacity 140ms ease;
+  z-index: 4;
+}
+
+.workspace-single-close:hover,
+.workspace-single-close:focus-visible {
+  opacity: 1;
+}
+
+.workspace-panel {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  padding: 0 1.5rem 2rem;
+}
+
+.workspace-panel > * {
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.workspace-pane[data-tabbed="false"] .workspace-panel {
+  padding-top: 2.5rem;
+}
+
+.workspace-pane[data-tabbed="false"] .ca-viewer-toolbar {
+  padding-right: 4.5rem;
+}
+
+.workspace-pane[data-tabbed="false"] .ca-visual-composition > header,
+.workspace-pane[data-tabbed="false"] .ca-visual-status {
+  display: none;
+}
+
+.workspace-pane[data-tabbed="false"] .ca-visual-canvas {
+  padding: 0 0 2rem;
+}
+
+.workspace-panel-message {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  margin: 0;
+  padding: var(--space-6);
 }
 
 .response-stage {
@@ -548,21 +880,6 @@ textarea {
   text-transform: uppercase;
 }
 
-.drawer-about-copy {
-  color: var(--color-text-muted);
-  font-size: 0.9375rem;
-  line-height: 1.55;
-  margin-bottom: 2.5rem;
-}
-
-.drawer-about-copy p {
-  margin: 0;
-}
-
-.drawer-about-copy p + p {
-  margin-top: 0.75rem;
-}
-
 .new-conversation {
   font-size: 0.75rem;
   letter-spacing: 0.1em;
@@ -689,9 +1006,111 @@ textarea {
   }
 }
 
+@media (max-width: 900px) {
+  .course-agent[data-workspace-open="true"] .workspace-shell {
+    display: block;
+    padding: 4.5rem 1rem 7rem;
+  }
+
+  .course-agent[data-workspace-open="true"] .response-stage {
+    height: 38dvh;
+    min-height: 15rem;
+    padding: 2rem 1.5rem;
+  }
+
+  .course-agent[data-workspace-open="true"] .latest-response {
+    max-height: 24dvh;
+  }
+
+  .course-agent[data-workspace-open="true"] .workspace-pane {
+    bottom: 7rem;
+    height: auto;
+    left: 0;
+    position: fixed;
+    right: 0;
+    top: max(38dvh, 15rem);
+    z-index: 5;
+  }
+
+  .workspace-tabs {
+    min-height: 3.5rem;
+    padding: 0.75rem 1rem 0.5rem;
+  }
+
+  .workspace-panel,
+  .workspace-pane[data-tabbed="false"] .workspace-panel {
+    padding: 0.75rem 1rem 1rem;
+  }
+
+  .workspace-single-close {
+    right: 1rem;
+    top: 0.75rem;
+  }
+
+  .workspace-pane[data-tabbed="false"] .ca-visual-canvas {
+    padding-top: 2.75rem;
+  }
+
+  .course-agent[data-workspace-open="true"] .composer {
+    background: var(--color-background);
+    bottom: 0;
+    min-height: 7rem;
+    padding: 1.25rem 1.5rem 2rem;
+    right: 0;
+  }
+}
+
 @media (max-width: 640px) {
   .agent-header {
     height: 4rem;
+    padding-inline: 1rem;
+  }
+
+  .header-actions {
+    gap: 0.65rem;
+  }
+
+  .header-left {
+    gap: 0.65rem;
+  }
+
+  .header-prompt,
+  .about-link {
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+  }
+
+  .history-toggle {
+    height: 1.4rem;
+    width: 1.4rem;
+  }
+
+  .history-toggle svg {
+    height: 1.2rem;
+    width: 1.2rem;
+  }
+
+  .syllabus-page {
+    padding: 6.5rem 1.5rem 5rem;
+  }
+
+  .syllabus-document > h1 {
+    margin-bottom: 3rem;
+  }
+
+  .syllabus-metadata {
+    margin-bottom: 4rem;
+  }
+
+  .syllabus-metadata > div {
+    gap: 0.4rem;
+    grid-template-columns: 1fr;
+    padding: 1.1rem 0;
+  }
+
+  .syllabus-sections h1,
+  .syllabus-sections h2 {
+    margin-top: 3.5rem;
   }
 
   .activity-trace {

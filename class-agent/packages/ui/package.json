@@ -18,8 +18,12 @@
   "peerDependencies": {
     "react": "^19.2.0"
   },
+  "dependencies": {
+    "pdfjs-dist": "^5.4.149"
+  },
   "devDependencies": {
     "@types/react": "^19.2.0",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vite": "^7.3.0"
   }
 }

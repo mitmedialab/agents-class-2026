@@ -1,5 +1,6 @@
 # UI package
 
-Small, first-party React primitives shared by the Class Agent interfaces. Phase 5
-starts with the controls required by authentication and conversation navigation;
-later phases can extend the package without replacing its design tokens.
+Small, first-party React primitives shared by the Class Agent interfaces. In addition
+to specialized viewers, `VisualComposition` exposes a constrained set of composable
+layout, content, image, fact, link, and form elements. Components receive validated data
+from the host and contain no authentication, authorization, or server-path logic.

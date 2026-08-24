@@ -1,0 +1,405 @@
+{
+  "schema_version": 1,
+  "components": [
+    {
+      "id": "document-viewer",
+      "version": "1.0.0",
+      "title": "Document Viewer",
+      "description": "Displays Markdown, plain text, and PDF course resources.",
+      "props_schema": {
+        "type": "object",
+        "properties": {
+          "page": { "type": "integer", "minimum": 1 },
+          "find_text": { "type": "string", "maxLength": 500 },
+          "highlight": {
+            "type": "object",
+            "properties": {
+              "resource_uri": { "type": "string", "minLength": 1, "maxLength": 500 },
+              "page": { "type": "integer", "minimum": 1 },
+              "quote": { "type": "string", "minLength": 1, "maxLength": 2000 },
+              "prefix": { "type": "string", "maxLength": 500 },
+              "suffix": { "type": "string", "maxLength": 500 }
+            },
+            "required": ["resource_uri", "page", "quote"],
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "supported_operations": ["open", "update", "focus", "close"],
+      "default_size": { "width": 720, "height": 640 }
+    },
+    {
+      "id": "calendar",
+      "version": "1.0.0",
+      "title": "Calendar",
+      "description": "Displays normalized course events in month or agenda views.",
+      "props_schema": {
+        "type": "object",
+        "properties": {
+          "view": { "type": "string", "enum": ["month", "agenda"] },
+          "focus_date": { "type": "string", "format": "date" },
+          "selected_event_id": { "type": "string", "minLength": 1, "maxLength": 200 }
+        },
+        "additionalProperties": false
+      },
+      "supported_operations": ["open", "update", "focus", "close"],
+      "default_size": { "width": 760, "height": 620 }
+    },
+    {
+      "id": "webpage-viewer",
+      "version": "1.0.0",
+      "title": "Web Page",
+      "description": "Displays an agent-read page or an optional live sandboxed iframe.",
+      "props_schema": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https://[^\\s]+$",
+            "maxLength": 2048
+          },
+          "mode": { "type": "string", "enum": ["reader", "live"] },
+          "content": { "type": "string", "maxLength": 20000 }
+        },
+        "required": ["url"],
+        "additionalProperties": false
+      },
+      "supported_operations": ["open", "update", "focus", "close"],
+      "default_size": { "width": 900, "height": 680 }
+    },
+    {
+      "id": "browser-viewer",
+      "version": "1.0.0",
+      "title": "Remote Browser",
+      "description": "Displays an isolated server-side browser session. Open it with browser.open; session IDs are platform-issued.",
+      "props_schema": {
+        "type": "object",
+        "properties": {
+          "session_id": { "type": "string", "format": "uuid" },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https://[^\\s]+$",
+            "maxLength": 2048
+          },
+          "title": { "type": "string", "minLength": 1, "maxLength": 500 },
+          "revision": { "type": "integer", "minimum": 1 },
+          "viewport_width": { "type": "integer", "minimum": 320, "maximum": 4096 },
+          "viewport_height": { "type": "integer", "minimum": 240, "maximum": 4096 },
+          "scroll_y": { "type": "integer", "minimum": 0 },
+          "document_height": { "type": "integer", "minimum": 0 }
+        },
+        "required": [
+          "session_id",
+          "url",
+          "title",
+          "revision",
+          "viewport_width",
+          "viewport_height"
+        ],
+        "additionalProperties": false
+      },
+      "supported_operations": ["open", "update", "focus", "close"],
+      "default_size": { "width": 960, "height": 720 }
+    },
+    {
+      "id": "page-cards",
+      "version": "1.0.0",
+      "title": "Page Cards",
+      "description": "Compares several website candidates in adjacent, independently scrollable preview columns.",
+      "props_schema": {
+        "type": "object",
+        "properties": {
+          "heading": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "description": { "type": "string", "maxLength": 2000 },
+          "selected_id": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 6,
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_-]*$",
+                  "maxLength": 100
+                },
+                "url": {
+                  "type": "string",
+                  "format": "uri",
+                  "pattern": "^https://[^\\s]+$",
+                  "maxLength": 2048
+                },
+                "title": { "type": "string", "minLength": 1, "maxLength": 500 },
+                "description": { "type": "string", "maxLength": 2000 },
+                "preview_id": { "type": "string", "format": "uuid" },
+                "revision": { "type": "integer", "minimum": 1 }
+              },
+              "required": ["id", "url", "title"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["items"],
+        "additionalProperties": false
+      },
+      "supported_operations": ["open", "update", "focus", "close"],
+      "default_size": { "width": 1100, "height": 720 }
+    },
+    {
+      "id": "visual-composition",
+      "version": "1.0.0",
+      "title": "Visual Composition",
+      "description": "Composes trusted image, text, profile, form, and layout primitives into one visual surface. Use groups and element IDs instead of HTML or CSS.",
+      "props_schema": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "description": { "type": "string", "maxLength": 2000 },
+          "root_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]*$",
+            "maxLength": 100
+          },
+          "elements": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 80,
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$", "maxLength": 100 },
+                    "type": { "const": "group" },
+                    "children": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 24,
+                      "uniqueItems": true,
+                      "items": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$", "maxLength": 100 }
+                    },
+                    "layout": { "type": "string", "enum": ["stack", "row", "grid"] },
+                    "columns": { "type": "integer", "minimum": 1, "maximum": 4 },
+                    "gap": { "type": "string", "enum": ["compact", "normal", "loose"] },
+                    "align": { "type": "string", "enum": ["start", "center", "end", "stretch"] },
+                    "justify": { "type": "string", "enum": ["start", "center", "end", "between"] },
+                    "wrap": { "type": "boolean" },
+                    "surface": { "type": "string", "enum": ["plain", "subtle", "raised", "accent"] },
+                    "padding": { "type": "string", "enum": ["none", "small", "medium", "large"] },
+                    "radius": { "type": "string", "enum": ["none", "small", "medium", "large"] },
+                    "width": { "type": "string", "enum": ["auto", "full", "half", "third"] }
+                  },
+                  "required": ["id", "type", "children"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$", "maxLength": 100 },
+                    "type": { "const": "image" },
+                    "url": { "type": "string", "format": "uri", "pattern": "^https://[^\\s]+$", "maxLength": 2048 },
+                    "alt": { "type": "string", "maxLength": 500 },
+                    "caption": { "type": "string", "maxLength": 1000 },
+                    "aspect": { "type": "string", "enum": ["auto", "square", "portrait", "landscape", "wide"] },
+                    "fit": { "type": "string", "enum": ["cover", "contain"] },
+                    "radius": { "type": "string", "enum": ["none", "small", "medium", "large", "round"] },
+                    "width": { "type": "string", "enum": ["auto", "full", "half", "third"] }
+                  },
+                  "required": ["id", "type", "url", "alt"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$", "maxLength": 100 },
+                    "type": { "const": "heading" },
+                    "text": { "type": "string", "minLength": 1, "maxLength": 1000 },
+                    "level": { "type": "integer", "minimum": 1, "maximum": 4 },
+                    "size": { "type": "string", "enum": ["small", "medium", "large", "display"] },
+                    "tone": { "type": "string", "enum": ["default", "muted", "accent"] },
+                    "align": { "type": "string", "enum": ["left", "center", "right"] },
+                    "width": { "type": "string", "enum": ["auto", "full", "half", "third"] }
+                  },
+                  "required": ["id", "type", "text"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$", "maxLength": 100 },
+                    "type": { "const": "text" },
+                    "text": { "type": "string", "maxLength": 8000 },
+                    "variant": { "type": "string", "enum": ["body", "lead", "caption", "quote"] },
+                    "tone": { "type": "string", "enum": ["default", "muted", "accent"] },
+                    "align": { "type": "string", "enum": ["left", "center", "right"] },
+                    "width": { "type": "string", "enum": ["auto", "full", "half", "third"] }
+                  },
+                  "required": ["id", "type", "text"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$", "maxLength": 100 },
+                    "type": { "const": "badge" },
+                    "label": { "type": "string", "minLength": 1, "maxLength": 200 },
+                    "tone": { "type": "string", "enum": ["neutral", "accent", "success", "warning"] },
+                    "width": { "type": "string", "enum": ["auto", "full", "half", "third"] }
+                  },
+                  "required": ["id", "type", "label"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$", "maxLength": 100 },
+                    "type": { "const": "link" },
+                    "label": { "type": "string", "minLength": 1, "maxLength": 300 },
+                    "url": { "type": "string", "format": "uri", "pattern": "^https://[^\\s]+$", "maxLength": 2048 },
+                    "style": { "type": "string", "enum": ["text", "button", "quiet"] },
+                    "width": { "type": "string", "enum": ["auto", "full", "half", "third"] }
+                  },
+                  "required": ["id", "type", "label", "url"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$", "maxLength": 100 },
+                    "type": { "const": "facts" },
+                    "items": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 20,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "label": { "type": "string", "minLength": 1, "maxLength": 200 },
+                          "value": { "type": "string", "maxLength": 1000 }
+                        },
+                        "required": ["label", "value"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "width": { "type": "string", "enum": ["auto", "full", "half", "third"] }
+                  },
+                  "required": ["id", "type", "items"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$", "maxLength": 100 },
+                    "type": { "const": "input" },
+                    "label": { "type": "string", "minLength": 1, "maxLength": 200 },
+                    "value": { "type": "string", "maxLength": 2000 },
+                    "placeholder": { "type": "string", "maxLength": 300 },
+                    "input_type": { "type": "string", "enum": ["text", "email", "url"] },
+                    "read_only": { "type": "boolean" },
+                    "width": { "type": "string", "enum": ["auto", "full", "half", "third"] }
+                  },
+                  "required": ["id", "type", "label"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$", "maxLength": 100 },
+                    "type": { "const": "textarea" },
+                    "label": { "type": "string", "minLength": 1, "maxLength": 200 },
+                    "value": { "type": "string", "maxLength": 8000 },
+                    "placeholder": { "type": "string", "maxLength": 300 },
+                    "rows": { "type": "integer", "minimum": 2, "maximum": 12 },
+                    "read_only": { "type": "boolean" },
+                    "width": { "type": "string", "enum": ["auto", "full", "half", "third"] }
+                  },
+                  "required": ["id", "type", "label"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$", "maxLength": 100 },
+                    "type": { "const": "divider" },
+                    "width": { "type": "string", "enum": ["auto", "full", "half", "third"] }
+                  },
+                  "required": ["id", "type"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$", "maxLength": 100 },
+                    "type": { "const": "spacer" },
+                    "size": { "type": "string", "enum": ["small", "medium", "large"] },
+                    "width": { "type": "string", "enum": ["auto", "full", "half", "third"] }
+                  },
+                  "required": ["id", "type"],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          }
+        },
+        "required": ["root_id", "elements"],
+        "additionalProperties": false
+      },
+      "supported_operations": ["open", "update", "focus", "close"],
+      "default_size": { "width": 960, "height": 720 }
+    },
+    {
+      "id": "draft-document",
+      "version": "1.0.0",
+      "title": "Draft Document",
+      "description": "Builds a structured document progressively from confirmed and draft fields.",
+      "props_schema": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "description": { "type": "string", "maxLength": 2000 },
+          "status": {
+            "type": "string",
+            "enum": ["draft", "ready", "final", "submitted"]
+          },
+          "content": { "type": "string", "minLength": 1, "maxLength": 30000 },
+          "fields": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_-]*$",
+                  "maxLength": 100
+                },
+                "label": { "type": "string", "minLength": 1, "maxLength": 200 },
+                "value": { "type": "string", "maxLength": 4000 },
+                "status": {
+                  "type": "string",
+                  "enum": ["missing", "candidate", "inferred", "confirmed"]
+                },
+                "source": { "type": "string", "maxLength": 500 }
+              },
+              "required": ["id", "label", "status"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["title"],
+        "anyOf": [
+          { "properties": { "content": {} }, "required": ["content"] },
+          { "properties": { "fields": {} }, "required": ["fields"] }
+        ],
+        "additionalProperties": false
+      },
+      "supported_operations": ["open", "update", "focus", "close"],
+      "default_size": { "width": 760, "height": 720 }
+    }
+  ]
+}

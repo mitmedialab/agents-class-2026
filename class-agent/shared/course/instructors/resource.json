@@ -6,6 +6,14 @@
     "description": "Instructors, teaching assistants, affiliations, contact information, biographies, and application fields.",
     "media_type": "text/markdown",
     "file": "instructors.md",
+    "assets": {
+      "chitralekha_gupta_portrait": "portraits/chitralekha_gupta.jpg",
+      "pattie_maes_portrait": "portraits/pattie_maes.jpg",
+      "rachel_poonsiriwong_portrait": "portraits/rachel_poonsiriwong.jpg",
+      "valdemar_danry_portrait": "portraits/valdemar_danry.jpg",
+      "wazeer_zulfikar_portrait": "portraits/wazeer_zulfikar.jpg",
+      "yasith_samaradivakara_portrait": "portraits/yasith_samaradivakara.jpg"
+    },
     "visibility": "public",
     "status": "published",
     "order": 45

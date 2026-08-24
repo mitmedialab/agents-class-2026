@@ -17,6 +17,11 @@ from agent_core import (
     Event,
     PrincipalContext,
 )
+from course_server.workspace import (
+    ComponentRegistry,
+    load_component_registry,
+    project_workspace_events,
+)
 
 from .capabilities import PublicCapabilityPolicy
 from .store import ConversationAccessDenied, ConversationStore, principal_owns_conversation
@@ -24,7 +29,7 @@ from .store import ConversationAccessDenied, ConversationStore, principal_owns_c
 RECENT_EVENT_LIMIT = 50
 EventObserver = Callable[[Event], None]
 TextDeltaObserver = Callable[[str], None]
-ProgressDeltaObserver = Callable[[str], None]
+ProgressDeltaObserver = Callable[[str, bool], None]
 
 
 class ObservableAgentRuntime(Protocol):
@@ -57,10 +62,12 @@ class CourseAgentService:
         runtime: AgentRuntime,
         conversations: ConversationStore,
         capability_policy: PublicCapabilityPolicy | None = None,
+        workspace_registry: ComponentRegistry | None = None,
     ) -> None:
         self._runtime = runtime
         self._conversations = conversations
         self._capability_policy = capability_policy or PublicCapabilityPolicy()
+        self._workspace_registry = workspace_registry or load_component_registry()
 
     async def create_conversation(
         self,
@@ -107,6 +114,10 @@ class CourseAgentService:
         await self._conversations.append_events(conversation_id, [user_event])
 
         authorized = self._capability_policy.authorize(principal)
+        workspace_state = project_workspace_events(
+            previous_events,
+            self._workspace_registry,
+        )
         context = AgentContext(
             principal=principal,
             conversation_id=conversation_id,
@@ -116,6 +127,9 @@ class CourseAgentService:
             ],
             permitted_tool_ids=list(authorized.tool_ids),
             permitted_resource_uris=list(authorized.resource_uris),
+            metadata={
+                "workspace_state": workspace_state.model_dump(mode="json", exclude_none=True)
+            },
         )
         observed_method = getattr(self._runtime, "run_observed", None)
         observers_requested = (

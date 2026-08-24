@@ -18,3 +18,9 @@ Before a new major version is accepted:
 6. add persistence migration steps when storage exists.
 
 `Event.schema_version` identifies the event payload contract. For all other Phase 1 models, the enclosing API, file, or future protocol declaration must identify the schema major version. Silent reinterpretation is forbidden.
+
+Phase 7 adds the independent `workspace.schema.json` in the existing v1 directory.
+This is additive: it does not change any existing agent-core document. Workspace event
+payloads reference its `WorkspaceCommand` definition, while the trusted component
+registry references `ComponentRegistry`. Breaking either representation requires a new
+major schema directory and event migration plan.

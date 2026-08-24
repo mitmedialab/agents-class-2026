@@ -24,7 +24,12 @@ describe("agent event stream", () => {
         );
         controller.enqueue(
           encoder.encode(
-            '\nevent: progress\ndata: {"type":"agent.progress.delta","text":"I’ll read the syllabus."}\n\n',
+            '\nevent: platform\ndata: {"type":"workspace.panel.opened","event":{"payload":{"command":{"type":"open","panel":{"id":"40000000-0000-4000-8000-000000000001","component_id":"calendar","resource_uri":"course://schedule","props":{"view":"agenda"},"state":{}}}}}}\n\n',
+          ),
+        );
+        controller.enqueue(
+          encoder.encode(
+            '\nevent: progress\ndata: {"type":"agent.progress.delta","text":"I’ll read the syllabus.","replace":true}\n\n',
           ),
         );
         controller.enqueue(
@@ -79,7 +84,20 @@ describe("agent event stream", () => {
           label: "Reading application information",
         },
       },
-      { kind: "progress", text: "I’ll read the syllabus." },
+      {
+        kind: "workspace",
+        command: {
+          type: "open",
+          panel: {
+            id: "40000000-0000-4000-8000-000000000001",
+            component_id: "calendar",
+            resource_uri: "course://schedule",
+            props: { view: "agenda" },
+            state: {},
+          },
+        },
+      },
+      { kind: "progress", text: "I’ll read the syllabus.", replace: true },
       { kind: "text", text: "Hello" },
       { kind: "text_final", text: "Hello world" },
       { kind: "done" },

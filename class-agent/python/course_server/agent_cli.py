@@ -26,13 +26,25 @@ from course_server.agent import (
     FileApplicantStore,
     FileResourceProvider,
     PublicCapabilityPolicy,
+    PublicImageSearchTool,
     PublicVisitWebpageTool,
     PublicWebSearchTool,
     ToolCatalog,
 )
+from course_server.agent.capabilities import ExecutableTool
 from course_server.agent.store import ConversationStore
 from course_server.auth import AuthenticationService
 from course_server.auth.store import AuthStore
+from course_server.browser import (
+    BrowserSessionService,
+)
+from course_server.browser.tools import (
+    BrowserCompareTool,
+    BrowserHighlightTextTool,
+    BrowserNavigateTool,
+    BrowserOpenTool,
+    BrowserScrollTool,
+)
 from course_server.config import AgentSettings, ConfigurationError
 from course_server.index_resources import index_resources
 from course_server.migrations import apply_migrations
@@ -41,6 +53,15 @@ from course_server.postgres.conversation_store import PostgresConversationStore
 from course_server.uploads import (
     FileTemporaryUploadStore,
     TemporaryUploadStore,
+)
+from course_server.web_search import search_duckduckgo_images
+from course_server.workspace import ComponentRegistry, load_component_registry
+from course_server.workspace.tools import (
+    WorkspaceCloseComponentTool,
+    WorkspaceFocusComponentTool,
+    WorkspaceListComponentsTool,
+    WorkspaceOpenComponentTool,
+    WorkspaceUpdateComponentTool,
 )
 from runtime_smolagents import OpenAIModelProvider, SmolagentsRuntime
 
@@ -80,6 +101,8 @@ def build_runtime(
     resources: CourseResourceCatalog | None = None,
     applicants: ApplicantStore | None = None,
     uploads: TemporaryUploadStore | None = None,
+    components: ComponentRegistry | None = None,
+    browser: BrowserSessionService | None = None,
 ) -> SmolagentsRuntime:
     course_resources = resources if resources is not None else FileResourceProvider.from_registry()
     applicant_store = (
@@ -88,20 +111,36 @@ def build_runtime(
     upload_store = (
         uploads if uploads is not None else FileTemporaryUploadStore(settings.upload_data_path)
     )
-    tools = ToolCatalog(
-        [
-            CourseReadSyllabusTool(course_resources),
-            CourseReadPublicFileTool(course_resources),
-            CourseGetScheduleTool(course_resources),
-            CourseGetApplicationTool(course_resources),
-            CourseShowPublicFilesTool(course_resources),
-            CourseSearchFaqTool(course_resources),
-            CourseSearchTool(course_resources),
-            CourseSubmitApplicationTool(applicant_store, upload_store),
-            PublicWebSearchTool(DuckDuckGoSearchTool(max_results=5).forward),
-            PublicVisitWebpageTool(VisitWebpageTool(max_output_length=20_000).forward),
-        ]
-    )
+    component_registry = components or load_component_registry()
+    executable_tools: list[ExecutableTool] = [
+        CourseReadSyllabusTool(course_resources),
+        CourseReadPublicFileTool(course_resources),
+        CourseGetScheduleTool(course_resources),
+        CourseGetApplicationTool(course_resources),
+        CourseShowPublicFilesTool(course_resources),
+        CourseSearchFaqTool(course_resources),
+        CourseSearchTool(course_resources),
+        CourseSubmitApplicationTool(applicant_store, upload_store),
+        PublicWebSearchTool(DuckDuckGoSearchTool(max_results=5).forward),
+        PublicImageSearchTool(search_duckduckgo_images),
+        PublicVisitWebpageTool(VisitWebpageTool(max_output_length=20_000).forward),
+        WorkspaceListComponentsTool(component_registry),
+        WorkspaceOpenComponentTool(component_registry),
+        WorkspaceUpdateComponentTool(component_registry),
+        WorkspaceFocusComponentTool(component_registry),
+        WorkspaceCloseComponentTool(component_registry),
+    ]
+    if browser is not None:
+        executable_tools.extend(
+            [
+                BrowserCompareTool(browser, component_registry),
+                BrowserOpenTool(browser, component_registry),
+                BrowserNavigateTool(browser, component_registry),
+                BrowserScrollTool(browser, component_registry),
+                BrowserHighlightTextTool(browser, component_registry),
+            ]
+        )
+    tools = ToolCatalog(executable_tools)
     provider = OpenAIModelProvider(
         model_id=settings.model_id,
         api_key=settings.model_api_key,

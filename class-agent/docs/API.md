@@ -14,11 +14,14 @@ POST /api/v1/auth/logout
 GET  /api/v1/auth/me
 
 GET  /api/v1/course/resources
+GET  /api/v1/course/resources/content?uri={resource_uri}
 POST /api/v1/uploads?filename={filename}
 
 GET  /api/v1/conversations
 POST /api/v1/conversations
 GET  /api/v1/conversations/{conversation_id}
+POST /api/v1/conversations/{conversation_id}/workspace/actions
+POST /api/v1/conversations/{conversation_id}/workspace/interactions
 
 POST /api/v1/conversations/{conversation_id}/run
 POST /api/v1/conversations/{conversation_id}/run/stream
@@ -28,6 +31,21 @@ POST /api/v1/agent/run
 `GET /api/v1/course/resources` returns path-free public metadata for the syllabus,
 provisional schedule, repository overview, FAQ, course staff, and application guide. It
 never returns private applicant files, temporary uploads, or server filesystem paths.
+
+`GET /api/v1/course/resources/content` resolves one authorized registered URI to its
+original bytes and media type for a trusted native viewer. The URI is checked against
+the principal's resource catalog before reading; model- or browser-provided filesystem
+paths are never accepted.
+
+`POST /api/v1/conversations/{conversation_id}/workspace/actions` accepts only `focus`
+and `close` for an existing panel UUID. It checks conversation ownership, reconstructs
+workspace state, validates the operation against the registered component, and appends
+the resulting canonical event. It cannot introduce an arbitrary component or props.
+
+`POST /api/v1/conversations/{conversation_id}/workspace/interactions` records a
+schema-limited calendar selection/view change or document page/find action as
+`workspace.interaction`. The server verifies that the panel exists and that the action
+matches its registered component before appending the event.
 
 `POST /api/v1/uploads` accepts the file as the raw request body, its original name in
 the required `filename` query parameter, and its media type in `Content-Type`. It
@@ -77,10 +95,12 @@ before a non-final tool call:
 
 ```text
 event: progress
-data: {"type":"agent.progress.delta","text":"I’ll read the syllabus first."}
+data: {"type":"agent.progress.delta","text":"I’ll read the syllabus first.","replace":true}
 ```
 
-These deltas update a transient activity entry. They are neither final-answer
+`replace: true` starts a new public progress message and replaces the previous
+temporary projection. Later chunks from the same message carry `replace: false`
+and append to that new projection. These deltas update a transient activity entry. They are neither final-answer
 text nor canonical conversation messages, and clients must not append them to
 the answer. They contain only ordinary assistant content intended for the user;
 private reasoning remains unavailable.
@@ -94,5 +114,10 @@ accepts only explicit user-facing assistant content; private reasoning and
 non-final tool-call arguments are never sent to the client. Runtimes without
 these optional behaviors still work. The stable `AgentRuntime` interface remains
 unchanged, and provider-specific framework objects never enter the stream.
+
+Validated `workspace.panel.opened`, `workspace.panel.updated`, and
+`workspace.panel.closed` events use the same `event: platform` channel. Clients must
+validate and reduce the enclosed command; they must not interpret it as arbitrary UI
+code.
 
 Unexpected runtime failures return a generic `503` for JSON requests or a structured `system.error` SSE event. Provider exception messages, request data, credentials, and tracebacks are not sent to clients.

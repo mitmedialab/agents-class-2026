@@ -40,6 +40,7 @@ course.search_faq
 course.search
 course.submit_application
 web.search
+web.search_images
 web.visit
 ```
 
@@ -56,10 +57,13 @@ to authorized resource URIs during execution. Model-controlled input cannot sele
 filesystem path. The schedule tool identifies its source as provisional.
 
 `web.search` and `web.visit` wrap smolagents' toolkit implementations inside the same
-authorized platform boundary. Page reads reject non-HTTP, credential-bearing, local,
-and private-network destinations. Web result bodies are returned to the current model
-turn but are not copied into durable event history; only a generic completion summary
-is stored.
+authorized platform boundary. `web.search_images` wraps DuckDuckGo-first DDGS image
+search, with another DDGS public-image backend as an availability fallback, and returns
+normalized direct HTTPS image candidates for registered workspace components. A fresh
+DDGS client is created per request, so concurrent conversations do not share search
+state. Page reads reject non-HTTP, credential-bearing, local, and private-network
+destinations. Web result bodies are returned to the current model turn but are not
+copied into durable event history; only a generic completion summary is stored.
 
 Each transient agent receives a title-and-description index of its authorized public
 information. The index contains no backing paths or canonical resource identifiers;

@@ -16,6 +16,7 @@ from course_server.agent import (
     GET_APPLICATION_TOOL_ID,
     SEARCH_COURSE_TOOL_ID,
     VISIT_WEBPAGE_TOOL_ID,
+    WEB_IMAGE_SEARCH_TOOL_ID,
     WEB_SEARCH_TOOL_ID,
     ConversationAccessDenied,
     CourseAgentService,
@@ -24,6 +25,7 @@ from course_server.agent import (
 )
 from course_server.agent_cli import _safe_failure_message, run_cli_turn
 from course_server.auth import InMemoryAuthStore
+from course_server.browser import BROWSER_TOOL_IDS
 
 
 def public_principal() -> PrincipalContext:
@@ -69,7 +71,9 @@ def test_public_policy_exposes_phase_six_course_capabilities() -> None:
     assert SEARCH_COURSE_TOOL_ID in authorized.tool_ids
     assert GET_APPLICATION_TOOL_ID in authorized.tool_ids
     assert WEB_SEARCH_TOOL_ID in authorized.tool_ids
+    assert WEB_IMAGE_SEARCH_TOOL_ID in authorized.tool_ids
     assert VISIT_WEBPAGE_TOOL_ID in authorized.tool_ids
+    assert not set(BROWSER_TOOL_IDS) & set(authorized.tool_ids)
     assert authorized.resource_uris == (
         COURSE_SYLLABUS_URI,
         COURSE_SCHEDULE_URI,
@@ -78,6 +82,9 @@ def test_public_policy_exposes_phase_six_course_capabilities() -> None:
         COURSE_INSTRUCTORS_URI,
         COURSE_APPLICATION_URI,
     )
+
+    browser_authorized = PublicCapabilityPolicy(browser_enabled=True).authorize(public_principal())
+    assert set(BROWSER_TOOL_IDS) <= set(browser_authorized.tool_ids)
 
 
 def test_course_agent_persists_portable_history_and_isolates_anonymous_users() -> None:

@@ -17,7 +17,7 @@
 
 ## Stable interfaces
 
-Treat these contracts as stable: `PrincipalContext`, `Event`, `Conversation`, `Memory`, `Capability`, `Permission`, `Node`, `AgentContext`, `AgentInput`, `AgentResult`, `AgentRuntime`, `ModelProvider`, and the versioned JSON Schemas under `shared/schemas/`.
+Treat these contracts as stable: `PrincipalContext`, `Event`, `Conversation`, `Memory`, `Capability`, `Permission`, `Node`, `AgentContext`, `AgentInput`, `AgentResult`, `AgentRuntime`, `ModelProvider`, `WorkspaceState`, `WorkspaceCommand`, `ComponentManifest`, and the versioned JSON Schemas under `shared/schemas/`.
 
 Changes to a stable interface require:
 

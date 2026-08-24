@@ -13,6 +13,7 @@
   "dependencies": {
     "@class-agent/protocol": "workspace:*",
     "@class-agent/ui": "workspace:*",
+    "@class-agent/workspace": "workspace:*",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

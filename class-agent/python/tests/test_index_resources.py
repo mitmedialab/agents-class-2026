@@ -23,6 +23,7 @@ def test_resource_registry_is_generated_from_sidecar_manifests(tmp_path: Path) -
     resource_directory = tmp_path / "shared/course/guide"
     resource_directory.mkdir(parents=True)
     (resource_directory / "guide.md").write_text("# Guide\n", encoding="utf-8")
+    (resource_directory / "portrait.jpg").write_bytes(b"jpeg fixture")
     (resource_directory / "resource.json").write_text(
         json.dumps(
             {
@@ -33,6 +34,7 @@ def test_resource_registry_is_generated_from_sidecar_manifests(tmp_path: Path) -
                     "description": "A generated registry entry.",
                     "media_type": "text/markdown",
                     "file": "guide.md",
+                    "assets": {"guide_portrait": "portrait.jpg"},
                     "visibility": "public",
                     "status": "published",
                 },
@@ -45,3 +47,4 @@ def test_resource_registry_is_generated_from_sidecar_manifests(tmp_path: Path) -
     assert refresh_resource_registry(registry_path) == ["course://guide"]
     generated = json.loads(registry_path.read_text(encoding="utf-8"))
     assert generated["resources"][0]["path"] == "course/guide/guide.md"
+    assert generated["resources"][0]["assets"] == {"guide_portrait": "course/guide/portrait.jpg"}

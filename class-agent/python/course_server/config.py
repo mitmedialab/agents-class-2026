@@ -29,6 +29,11 @@ class AgentSettings(BaseModel):
     database_url: str
     applicant_data_path: Path = Path(__file__).resolve().parents[2] / "var/applicants"
     upload_data_path: Path = Path(__file__).resolve().parents[2] / "var/uploads"
+    browser_enabled: bool = True
+    browser_max_sessions: int = Field(default=20, ge=1, le=100)
+    browser_max_sessions_per_principal: int = Field(default=2, ge=1, le=10)
+    browser_session_ttl_seconds: int = Field(default=900, ge=60, le=86_400)
+    browser_executable_path: Path | None = None
 
     @classmethod
     def from_environment(
@@ -78,6 +83,15 @@ class AgentSettings(BaseModel):
             if raw_upload_path and raw_upload_path.strip()
             else Path(__file__).resolve().parents[2] / "var/uploads"
         )
+        raw_browser_executable = values.get("BROWSER_EXECUTABLE_PATH")
+        browser_executable_path = (
+            Path(raw_browser_executable.strip()).expanduser()
+            if raw_browser_executable and raw_browser_executable.strip()
+            else None
+        )
+        browser_enabled = values.get("BROWSER_ENABLED", "true").strip().casefold()
+        if browser_enabled not in {"true", "false", "1", "0", "yes", "no"}:
+            raise ConfigurationError("BROWSER_ENABLED must be true or false")
 
         return cls(
             model_provider="openai",
@@ -87,4 +101,11 @@ class AgentSettings(BaseModel):
             database_url=database_url,
             applicant_data_path=applicant_data_path,
             upload_data_path=upload_data_path,
+            browser_enabled=browser_enabled in {"true", "1", "yes"},
+            browser_max_sessions=int(values.get("BROWSER_MAX_SESSIONS", "20")),
+            browser_max_sessions_per_principal=int(
+                values.get("BROWSER_MAX_SESSIONS_PER_PRINCIPAL", "2")
+            ),
+            browser_session_ttl_seconds=int(values.get("BROWSER_SESSION_TTL_SECONDS", "900")),
+            browser_executable_path=browser_executable_path,
         )

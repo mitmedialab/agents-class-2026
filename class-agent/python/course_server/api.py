@@ -4,18 +4,19 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
 from psycopg_pool import AsyncConnectionPool
-from pydantic import BaseModel, ConfigDict, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, StringConstraints
 
 from agent_core import AgentResult, Conversation, Event, PrincipalContext
 from course_server.agent import (
@@ -25,7 +26,9 @@ from course_server.agent import (
     CourseResourceCatalog,
     FileResourceProvider,
     PublicCapabilityPolicy,
+    ResourceNotFound,
     ResourceSummary,
+    ToolValidationError,
 )
 from course_server.agent.store import principal_owns_conversation
 from course_server.agent_cli import build_runtime
@@ -36,6 +39,18 @@ from course_server.auth import (
     LoginRateLimited,
 )
 from course_server.auth.models import SessionCredential
+from course_server.browser import (
+    BROWSER_COMPONENT_ID,
+    BrowserCapacityReached,
+    BrowserError,
+    BrowserNavigationError,
+    BrowserSecurityError,
+    BrowserSessionNotFound,
+    BrowserSessionService,
+    BrowserUnavailable,
+    ThreadedPlaywrightBrowserSessionService,
+)
+from course_server.browser.tools import browser_page_props
 from course_server.config import AgentSettings
 from course_server.index_resources import index_resources
 from course_server.migrations import apply_migrations
@@ -48,6 +63,17 @@ from course_server.uploads import (
     TemporaryUploadStore,
     UploadError,
 )
+from course_server.workspace import (
+    CloseWorkspaceCommand,
+    ComponentRegistry,
+    FocusWorkspaceCommand,
+    UpdateWorkspaceCommand,
+    WorkspaceValidationError,
+    load_component_registry,
+    project_workspace_events,
+)
+
+logger = logging.getLogger(__name__)
 
 AUTH_COOKIE = "class_agent_auth"
 ANON_COOKIE = "class_agent_anon"
@@ -75,6 +101,35 @@ class RunRequest(ApiModel):
 
 class AgentRunRequest(RunRequest):
     conversation_id: UUID
+
+
+class WorkspacePanelActionRequest(ApiModel):
+    action: Literal["focus", "close"]
+    panel_id: UUID
+
+
+class WorkspaceInteractionRequest(ApiModel):
+    panel_id: UUID
+    action: Literal[
+        "calendar.select_event",
+        "calendar.change_view",
+        "document.change_page",
+        "document.find_text",
+        "page_cards.select",
+        "visual.change",
+    ]
+    value: JsonValue
+
+
+class BrowserScrollRequest(ApiModel):
+    panel_id: UUID
+    delta_y: int = Field(ge=-1_600, le=1_600)
+
+
+class BrowserResizeRequest(ApiModel):
+    panel_id: UUID
+    width: int = Field(ge=320, le=4_096)
+    height: int = Field(ge=240, le=4_096)
 
 
 class PrincipalResponse(ApiModel):
@@ -117,6 +172,8 @@ class AppServices:
     conversations: ConversationStore
     course_resources: CourseResourceCatalog | None = None
     uploads: TemporaryUploadStore | None = None
+    workspace_registry: ComponentRegistry | None = None
+    browser: BrowserSessionService | None = None
 
 
 @dataclass
@@ -124,6 +181,7 @@ class AppRuntimeResources:
     """Resources owned by the production application lifespan."""
 
     pool: AsyncConnectionPool[Any] | None = None
+    browser: BrowserSessionService | None = None
 
 
 @dataclass
@@ -140,6 +198,7 @@ class StreamTextDelta:
 @dataclass(frozen=True)
 class StreamProgressDelta:
     text: str
+    replace: bool
 
 
 CookieAction = Callable[[Response], None]
@@ -237,6 +296,61 @@ async def _require_owned_conversation(
     return conversation
 
 
+def _browser_http_error(error: BrowserError) -> HTTPException:
+    if isinstance(error, BrowserSessionNotFound):
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+    if isinstance(error, BrowserCapacityReached):
+        return HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="remote browser capacity reached",
+            headers={"Retry-After": "30"},
+        )
+    if isinstance(error, (BrowserSecurityError, BrowserNavigationError)):
+        return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error))
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="remote browser unavailable",
+    )
+
+
+def _valid_page_card_selection(
+    props: dict[str, JsonValue],
+    value: JsonValue,
+) -> bool:
+    items = props.get("items")
+    return (
+        isinstance(value, str)
+        and isinstance(items, list)
+        and any(isinstance(item, dict) and item.get("id") == value for item in items)
+    )
+
+
+def _valid_visual_change(
+    props: dict[str, JsonValue],
+    value: JsonValue,
+) -> bool:
+    if not isinstance(value, dict):
+        return False
+    element_id = value.get("element_id")
+    changed_value = value.get("value")
+    elements = props.get("elements")
+    if (
+        not isinstance(element_id, str)
+        or not isinstance(changed_value, str)
+        or not isinstance(elements, list)
+    ):
+        return False
+    return any(
+        isinstance(element, dict)
+        and element.get("id") == element_id
+        and (
+            (element.get("type") == "input" and len(changed_value) <= 2_000)
+            or (element.get("type") == "textarea" and len(changed_value) <= 8_000)
+        )
+        for element in elements
+    )
+
+
 async def _run_agent(
     *,
     state: AppState,
@@ -245,7 +359,7 @@ async def _run_agent(
     text: str,
     event_observer: Callable[[Event], None] | None = None,
     text_delta_observer: Callable[[str], None] | None = None,
-    progress_delta_observer: Callable[[str], None] | None = None,
+    progress_delta_observer: Callable[[str, bool], None] | None = None,
 ) -> AgentResult:
     assert state.services is not None
     try:
@@ -301,11 +415,11 @@ async def _stream_agent_run(
                 StreamTextDelta(text=text_delta),
             )
 
-    def observe_progress_delta(progress_delta: str) -> None:
+    def observe_progress_delta(progress_delta: str, replace: bool) -> None:
         with suppress(RuntimeError):
             loop.call_soon_threadsafe(
                 event_queue.put_nowait,
-                StreamProgressDelta(text=progress_delta),
+                StreamProgressDelta(text=progress_delta, replace=replace),
             )
 
     run_task = asyncio.create_task(
@@ -336,7 +450,11 @@ async def _stream_agent_run(
         if isinstance(update, StreamProgressDelta):
             yield _sse(
                 event="progress",
-                data={"type": "agent.progress.delta", "text": update.text},
+                data={
+                    "type": "agent.progress.delta",
+                    "text": update.text,
+                    "replace": update.replace,
+                },
             )
             continue
         event = update
@@ -356,6 +474,9 @@ async def _stream_agent_run(
             "agent.tool.completed",
             "agent.tool.failed",
             "resource.read",
+            "workspace.panel.opened",
+            "workspace.panel.updated",
+            "workspace.panel.closed",
         }:
             yield _sse(
                 event="platform",
@@ -415,6 +536,22 @@ def create_app(
         conversation_store = PostgresConversationStore(pool)
         course_resources = FileResourceProvider.from_registry()
         upload_store = FileTemporaryUploadStore(resolved_settings.upload_data_path)
+        component_registry = load_component_registry()
+        browser_service: BrowserSessionService | None = None
+        if resolved_settings.browser_enabled:
+            playwright_browser = ThreadedPlaywrightBrowserSessionService(
+                max_sessions=resolved_settings.browser_max_sessions,
+                max_sessions_per_principal=(resolved_settings.browser_max_sessions_per_principal),
+                session_ttl_seconds=resolved_settings.browser_session_ttl_seconds,
+                executable_path=resolved_settings.browser_executable_path,
+            )
+            try:
+                await playwright_browser.start()
+            except BrowserUnavailable:
+                logger.warning("Remote browser unavailable; browser tools are disabled")
+            else:
+                browser_service = playwright_browser
+                resources.browser = browser_service
         app.state.course_state.services = AppServices(
             authentication=AuthenticationService(auth_store),
             agent=CourseAgentService(
@@ -422,26 +559,35 @@ def create_app(
                     resolved_settings,
                     resources=course_resources,
                     uploads=upload_store,
+                    components=component_registry,
+                    browser=browser_service,
                 ),
                 conversations=conversation_store,
                 capability_policy=PublicCapabilityPolicy(
-                    resource.uri for resource in course_resources.list_public()
+                    (resource.uri for resource in course_resources.list_public()),
+                    browser_enabled=browser_service is not None,
                 ),
+                workspace_registry=component_registry,
             ),
             conversations=conversation_store,
             course_resources=course_resources,
             uploads=upload_store,
+            workspace_registry=component_registry,
+            browser=browser_service,
         )
         try:
             yield
         finally:
             app.state.course_state.services = None
+            if browser_service is not None:
+                await browser_service.close()
+                resources.browser = None
             await pool.close()
             resources.pool = None
 
     app = FastAPI(
         title="Class Agent API",
-        version="0.6.0",
+        version="0.7.1",
         lifespan=lifespan,
     )
     app.state.course_state = AppState(services=services, resources=resources)
@@ -522,6 +668,41 @@ def create_app(
             .resource_uris
         )
         return [resource for resource in catalog.list_public() if resource.uri in permitted]
+
+    @router.get("/course/resources/content", response_model=None)
+    async def read_course_resource_content(
+        uri: NonEmptyText,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> Response:
+        state = _get_app_state(request)
+        assert state.services is not None
+        catalog = state.services.course_resources
+        if catalog is None:
+            catalog = FileResourceProvider.from_registry()
+        permitted = frozenset(
+            PublicCapabilityPolicy(resource.uri for resource in catalog.list_public())
+            .authorize(principal)
+            .resource_uris
+        )
+        if uri not in permitted:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+        try:
+            resource = await catalog.read_file(uri)
+        except ResourceNotFound as error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="not found",
+            ) from error
+        return Response(
+            content=resource.data,
+            media_type=resource.media_type,
+            headers={
+                "Cache-Control": "private, max-age=60",
+                "X-Class-Agent-Resource-Uri": resource.uri,
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
 
     @router.post(
         "/uploads",
@@ -621,6 +802,425 @@ def create_app(
         assert state.services is not None
         events = await state.services.conversations.list_events(conversation_id)
         return ConversationDetailResponse(conversation=conversation, events=events)
+
+    @router.post(
+        "/conversations/{conversation_id}/workspace/actions",
+        response_model=Event,
+    )
+    async def apply_workspace_panel_action(
+        conversation_id: UUID,
+        payload: WorkspacePanelActionRequest,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> Event:
+        state = _get_app_state(request)
+        await _require_owned_conversation(
+            state=state,
+            principal=principal,
+            conversation_id=conversation_id,
+        )
+        assert state.services is not None
+        events = await state.services.conversations.list_events(conversation_id)
+        registry = state.services.workspace_registry or load_component_registry()
+        workspace = project_workspace_events(events, registry)
+        panel = next(
+            (candidate for candidate in workspace.panels if candidate.id == payload.panel_id),
+            None,
+        )
+        command = (
+            FocusWorkspaceCommand(panel_id=payload.panel_id)
+            if payload.action == "focus"
+            else CloseWorkspaceCommand(panel_id=payload.panel_id)
+        )
+        try:
+            registry.apply(workspace, command)
+        except WorkspaceValidationError as error:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(error),
+            ) from error
+        event = Event(
+            type=(
+                "workspace.panel.updated" if payload.action == "focus" else "workspace.panel.closed"
+            ),
+            actor="user",
+            principal_user_id=principal.user_id,
+            anonymous_session_id=principal.anonymous_session_id,
+            conversation_id=conversation_id,
+            payload={"command": command.model_dump(mode="json", exclude_none=True)},
+        )
+        await state.services.conversations.append_events(conversation_id, [event])
+        if (
+            payload.action == "close"
+            and panel is not None
+            and panel.component_id == BROWSER_COMPONENT_ID
+            and state.services.browser is not None
+        ):
+            raw_session_id = panel.props.get("session_id")
+            if isinstance(raw_session_id, str):
+                with suppress(ValueError, BrowserError):
+                    await state.services.browser.close_session(
+                        principal=principal,
+                        conversation_id=conversation_id,
+                        session_id=UUID(raw_session_id),
+                    )
+        return event
+
+    @router.post(
+        "/conversations/{conversation_id}/workspace/interactions",
+        response_model=Event,
+    )
+    async def record_workspace_interaction(
+        conversation_id: UUID,
+        payload: WorkspaceInteractionRequest,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> Event:
+        state = _get_app_state(request)
+        await _require_owned_conversation(
+            state=state,
+            principal=principal,
+            conversation_id=conversation_id,
+        )
+        assert state.services is not None
+        events = await state.services.conversations.list_events(conversation_id)
+        registry = state.services.workspace_registry or load_component_registry()
+        workspace = project_workspace_events(events, registry)
+        panel = next(
+            (candidate for candidate in workspace.panels if candidate.id == payload.panel_id),
+            None,
+        )
+        if panel is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="unknown panel",
+            )
+        valid = (
+            (
+                payload.action == "calendar.select_event"
+                and panel.component_id == "calendar"
+                and isinstance(payload.value, str)
+                and 0 < len(payload.value) <= 200
+            )
+            or (
+                payload.action == "calendar.change_view"
+                and panel.component_id == "calendar"
+                and isinstance(payload.value, str)
+                and payload.value in {"month", "agenda"}
+            )
+            or (
+                payload.action == "document.change_page"
+                and panel.component_id == "document-viewer"
+                and isinstance(payload.value, int)
+                and not isinstance(payload.value, bool)
+                and payload.value >= 1
+            )
+            or (
+                payload.action == "document.find_text"
+                and panel.component_id == "document-viewer"
+                and isinstance(payload.value, str)
+                and len(payload.value) <= 500
+            )
+            or (
+                payload.action == "page_cards.select"
+                and panel.component_id == "page-cards"
+                and _valid_page_card_selection(panel.props, payload.value)
+            )
+            or (
+                payload.action == "visual.change"
+                and panel.component_id == "visual-composition"
+                and _valid_visual_change(panel.props, payload.value)
+            )
+        )
+        if not valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="invalid workspace interaction",
+            )
+        event = Event(
+            type="workspace.interaction",
+            actor="user",
+            principal_user_id=principal.user_id,
+            anonymous_session_id=principal.anonymous_session_id,
+            conversation_id=conversation_id,
+            payload={
+                "panel_id": str(panel.id),
+                "component_id": panel.component_id,
+                "action": payload.action,
+                "value": payload.value,
+            },
+        )
+        await state.services.conversations.append_events(conversation_id, [event])
+        return event
+
+    @router.get(
+        "/conversations/{conversation_id}/browser/{session_id}/snapshot",
+        response_model=None,
+    )
+    async def browser_snapshot(
+        conversation_id: UUID,
+        session_id: UUID,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> Response:
+        state = _get_app_state(request)
+        await _require_owned_conversation(
+            state=state,
+            principal=principal,
+            conversation_id=conversation_id,
+        )
+        assert state.services is not None
+        browser = state.services.browser
+        if browser is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="remote browser unavailable",
+            )
+        try:
+            snapshot = await browser.snapshot(
+                principal=principal,
+                conversation_id=conversation_id,
+                session_id=session_id,
+            )
+        except BrowserError as error:
+            raise _browser_http_error(error) from error
+        return Response(
+            content=snapshot.png,
+            media_type="image/png",
+            headers={
+                "Cache-Control": "private, no-store",
+                "X-Content-Type-Options": "nosniff",
+                "X-Class-Agent-Browser-Revision": str(snapshot.page.revision),
+            },
+        )
+
+    @router.get(
+        "/conversations/{conversation_id}/browser/previews/{preview_id}/snapshot",
+        response_model=None,
+    )
+    async def browser_preview_snapshot(
+        conversation_id: UUID,
+        preview_id: UUID,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> Response:
+        state = _get_app_state(request)
+        await _require_owned_conversation(
+            state=state,
+            principal=principal,
+            conversation_id=conversation_id,
+        )
+        assert state.services is not None
+        browser = state.services.browser
+        if browser is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="remote browser unavailable",
+            )
+        try:
+            snapshot = await browser.preview_snapshot(
+                principal=principal,
+                conversation_id=conversation_id,
+                preview_id=preview_id,
+            )
+        except BrowserError as error:
+            raise _browser_http_error(error) from error
+        return Response(
+            content=snapshot.png,
+            media_type="image/png",
+            headers={
+                "Cache-Control": "private, no-store",
+                "X-Content-Type-Options": "nosniff",
+                "X-Class-Agent-Browser-Revision": str(snapshot.preview.revision),
+            },
+        )
+
+    @router.post(
+        "/conversations/{conversation_id}/browser/{session_id}/scroll",
+        response_model=Event,
+    )
+    async def scroll_browser_session(
+        conversation_id: UUID,
+        session_id: UUID,
+        payload: BrowserScrollRequest,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> Event:
+        state = _get_app_state(request)
+        await _require_owned_conversation(
+            state=state,
+            principal=principal,
+            conversation_id=conversation_id,
+        )
+        if payload.delta_y == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="scroll distance must not be zero",
+            )
+        assert state.services is not None
+        browser = state.services.browser
+        if browser is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="remote browser unavailable",
+            )
+        events = await state.services.conversations.list_events(conversation_id)
+        registry = state.services.workspace_registry or load_component_registry()
+        workspace = project_workspace_events(events, registry)
+        panel = next(
+            (
+                candidate
+                for candidate in workspace.panels
+                if candidate.id == payload.panel_id
+                and candidate.component_id == BROWSER_COMPONENT_ID
+                and candidate.props.get("session_id") == str(session_id)
+            ),
+            None,
+        )
+        if panel is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="browser panel not found",
+            )
+        try:
+            try:
+                page = await browser.scroll(
+                    principal=principal,
+                    conversation_id=conversation_id,
+                    session_id=session_id,
+                    delta_y=payload.delta_y,
+                )
+            except BrowserSessionNotFound:
+                raw_url = panel.props.get("url")
+                if not isinstance(raw_url, str):
+                    raise
+                recovered = await browser.open(
+                    principal=principal,
+                    conversation_id=conversation_id,
+                    url=raw_url,
+                )
+                page = await browser.scroll(
+                    principal=principal,
+                    conversation_id=conversation_id,
+                    session_id=recovered.session_id,
+                    delta_y=payload.delta_y,
+                )
+            command = UpdateWorkspaceCommand(
+                panel_id=panel.id,
+                title=page.title,
+                props=browser_page_props(page),
+            )
+            registry.apply(workspace, command)
+        except BrowserError as error:
+            raise _browser_http_error(error) from error
+        except (ToolValidationError, WorkspaceValidationError) as error:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(error),
+            ) from error
+        event = Event(
+            type="workspace.panel.updated",
+            actor="user",
+            principal_user_id=principal.user_id,
+            anonymous_session_id=principal.anonymous_session_id,
+            conversation_id=conversation_id,
+            payload={"command": command.model_dump(mode="json", exclude_none=True)},
+            metadata={"interaction": "browser.scroll"},
+        )
+        await state.services.conversations.append_events(conversation_id, [event])
+        return event
+
+    @router.post(
+        "/conversations/{conversation_id}/browser/{session_id}/resize",
+        response_model=Event,
+    )
+    async def resize_browser_session(
+        conversation_id: UUID,
+        session_id: UUID,
+        payload: BrowserResizeRequest,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> Event:
+        state = _get_app_state(request)
+        await _require_owned_conversation(
+            state=state,
+            principal=principal,
+            conversation_id=conversation_id,
+        )
+        assert state.services is not None
+        browser = state.services.browser
+        if browser is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="remote browser unavailable",
+            )
+        events = await state.services.conversations.list_events(conversation_id)
+        registry = state.services.workspace_registry or load_component_registry()
+        workspace = project_workspace_events(events, registry)
+        panel = next(
+            (
+                candidate
+                for candidate in workspace.panels
+                if candidate.id == payload.panel_id
+                and candidate.component_id == BROWSER_COMPONENT_ID
+                and candidate.props.get("session_id") == str(session_id)
+            ),
+            None,
+        )
+        if panel is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="browser panel not found",
+            )
+        try:
+            try:
+                page = await browser.resize(
+                    principal=principal,
+                    conversation_id=conversation_id,
+                    session_id=session_id,
+                    width=payload.width,
+                    height=payload.height,
+                )
+            except BrowserSessionNotFound:
+                raw_url = panel.props.get("url")
+                if not isinstance(raw_url, str):
+                    raise
+                recovered = await browser.open(
+                    principal=principal,
+                    conversation_id=conversation_id,
+                    url=raw_url,
+                )
+                page = await browser.resize(
+                    principal=principal,
+                    conversation_id=conversation_id,
+                    session_id=recovered.session_id,
+                    width=payload.width,
+                    height=payload.height,
+                )
+            command = UpdateWorkspaceCommand(
+                panel_id=panel.id,
+                title=page.title,
+                props=browser_page_props(page),
+            )
+            registry.apply(workspace, command)
+        except BrowserError as error:
+            raise _browser_http_error(error) from error
+        except WorkspaceValidationError as error:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(error),
+            ) from error
+        event = Event(
+            type="workspace.panel.updated",
+            actor="system",
+            principal_user_id=principal.user_id,
+            anonymous_session_id=principal.anonymous_session_id,
+            conversation_id=conversation_id,
+            payload={"command": command.model_dump(mode="json", exclude_none=True)},
+            metadata={"interaction": "browser.resize"},
+        )
+        await state.services.conversations.append_events(conversation_id, [event])
+        return event
 
     @router.post(
         "/conversations/{conversation_id}/run",

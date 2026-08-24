@@ -1,4 +1,4 @@
-# Web interface
+# Web interface through Phase 7
 
 The web client is a static React/Vite application in `apps/web`. Its default
 screen is intentionally sparse:
@@ -96,6 +96,30 @@ The production API base defaults to `/api/v1`. A separate deployment may set
 `VITE_API_BASE_URL` at build time. CSS variables are owned by `packages/ui`, and
 the application layout remains in `apps/web/src/styles.css`.
 
-The current interface remains a workspace shell with temporary attachments. Registered
-dynamic components, document/calendar panels, workspace commands, and MCP Apps remain
-in their later phases.
+Phase 7 fills the workspace shell with registered native components. A validated
+workspace event changes the desktop layout to conversation plus workspace; smaller
+screens stack the active workspace below the current response. MCP Apps remain Phase 8.
+The desktop workspace is a full-height right-side canvas without an enclosing card.
+One panel uses the entire canvas without a tab bar; tabs are introduced only for
+multiple open panels.
+
+The native component set includes DocumentViewer, Calendar, the isolated BrowserViewer,
+PageCards, WebpageViewer, and DraftDocument. PageCards presents two to six website
+candidates as compact adjacent columns. Platform-generated captures fill each column,
+each preview scrolls independently under the pointer, and selecting a card emits a
+`workspace.interaction` event. The agent uses `browser.compare` to populate real previews;
+generic `workspace.open_component` calls may also create metadata-only cards that retain
+safe external links.
+
+VisualComposition provides the lower-level vocabulary beneath specialized viewers. It
+combines registered groups, images, headings, text, badges, links, facts, inputs,
+textareas, dividers, and spacers using semantic design-token variants. A profile page,
+for example, is a grid group containing raised profile groups, each composed from a
+rounded image, heading, badge, facts, biography, and link. The agent cannot supply CSS
+classes or arbitrary style declarations.
+
+DocumentViewer renders
+Markdown and plain text locally, uses PDF.js for PDF pages, supports find/page controls,
+and resolves semantic quote anchors. Calendar provides agenda and month views over a
+normalized resource without embedding schedule data in component code. Panel tabs,
+focus, and close use semantic operations rather than arbitrary DOM or JavaScript.

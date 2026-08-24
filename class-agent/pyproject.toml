@@ -11,8 +11,11 @@ requires-python = ">=3.11"
 license = { file = "LICENSE" }
 dependencies = [
   "argon2-cffi>=23.1,<26",
+  "ddgs>=9.15,<10",
   "email-validator>=2.2,<3",
   "fastapi>=0.115,<1",
+  "jsonschema>=4.23,<5",
+  "playwright>=1.55,<2",
   "pydantic>=2.10,<3",
   "psycopg[binary,pool]>=3.2,<4",
   "python-dotenv>=1.0,<2",
@@ -23,7 +26,6 @@ dependencies = [
 [dependency-groups]
 dev = [
   "httpx>=0.28,<1",
-  "jsonschema>=4.23,<5",
   "mypy>=1.13,<2",
   "pytest>=8,<10",
   "ruff>=0.8,<1",

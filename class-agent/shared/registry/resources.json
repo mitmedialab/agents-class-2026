@@ -44,7 +44,15 @@
       "media_type": "text/markdown",
       "path": "course/instructors/instructors.md",
       "visibility": "public",
-      "status": "published"
+      "status": "published",
+      "assets": {
+        "chitralekha_gupta_portrait": "course/instructors/portraits/chitralekha_gupta.jpg",
+        "pattie_maes_portrait": "course/instructors/portraits/pattie_maes.jpg",
+        "rachel_poonsiriwong_portrait": "course/instructors/portraits/rachel_poonsiriwong.jpg",
+        "valdemar_danry_portrait": "course/instructors/portraits/valdemar_danry.jpg",
+        "wazeer_zulfikar_portrait": "course/instructors/portraits/wazeer_zulfikar.jpg",
+        "yasith_samaradivakara_portrait": "course/instructors/portraits/yasith_samaradivakara.jpg"
+      }
     },
     {
       "uri": "course://application",

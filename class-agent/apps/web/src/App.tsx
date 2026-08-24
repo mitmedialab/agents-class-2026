@@ -1,12 +1,24 @@
 import type { Conversation, Event, PrincipalContext } from "@class-agent/protocol";
 import { Button, TextInput } from "@class-agent/ui";
 import {
+  builtInComponentRegistry,
+  emptyWorkspaceState,
+  projectWorkspaceEvents,
+  type JsonValue,
+  type WorkspaceState,
+} from "@class-agent/workspace";
+import {
+  applyWorkspacePanelAction,
   createConversation,
+  getCourseResourceContent,
   getConversation,
   getPrincipal,
   listConversations,
   login,
   logout,
+  recordWorkspaceInteraction,
+  resizeBrowserSession,
+  scrollBrowserSession,
   streamAgentRun,
   uploadFile,
   type AgentActivity,
@@ -15,11 +27,18 @@ import {
 } from "./api.js";
 import { ActivityTrace } from "./ActivityTrace.js";
 import { AgentResponse } from "./AgentResponse.js";
+import { SyllabusPage } from "./SyllabusPage.js";
+import { Workspace } from "./Workspace.js";
 import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
 
 const CONNECTION_ERROR = "I couldn’t reach the Course Agent. Please try again.";
 const WELCOME_MESSAGE =
   "Welcome. I’m the Course Agent. This agent is the class website—ask me for class information, or talk with me if you’d like to apply.";
+const HEADER_PROMPTS = [
+  { label: "Apply", message: "I'd like to apply for the course." },
+  { label: "Schedule", message: "Show me the course schedule." },
+  { label: "Grading", message: "How is grading handled in this course?" },
+] as const;
 
 function newestFirst(conversations: Conversation[]): Conversation[] {
   return [...conversations].sort(
@@ -65,6 +84,14 @@ function formatConversationDate(value: string): string {
   }).format(new Date(value));
 }
 
+function workspaceFromEvents(events: Event[]): WorkspaceState {
+  try {
+    return projectWorkspaceEvents(events);
+  } catch {
+    return emptyWorkspaceState();
+  }
+}
+
 export default function App() {
   const [principal, setPrincipal] = useState<PrincipalContext | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -72,6 +99,9 @@ export default function App() {
   const [latestResponse, setLatestResponse] = useState(WELCOME_MESSAGE);
   const [currentAction, setCurrentAction] = useState<string | null>("Connecting");
   const [activities, setActivities] = useState<AgentActivity[]>([]);
+  const [workspaceState, setWorkspaceState] = useState<WorkspaceState>(
+    emptyWorkspaceState,
+  );
   const [message, setMessage] = useState("");
   const [isInitializing, setIsInitializing] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
@@ -79,14 +109,18 @@ export default function App() {
   const [uploads, setUploads] = useState<TemporaryUpload[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const [syllabusContent, setSyllabusContent] = useState<string | null>(null);
+  const [syllabusError, setSyllabusError] = useState<string | null>(null);
+  const [syllabusLoading, setSyllabusLoading] = useState(false);
   const [username, setUsername] = useState("");
   const [accessCode, setAccessCode] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const drawerRef = useRef<HTMLElement>(null);
+  const historyRef = useRef<HTMLElement>(null);
   const activeRun = useRef<AbortController | null>(null);
 
   async function showConversation(conversation: Conversation): Promise<void> {
@@ -95,8 +129,10 @@ export default function App() {
       const detail = await getConversation(conversation.id);
       setSelectedConversationId(conversation.id);
       setLatestResponse(latestAgentResponse(detail.events) || WELCOME_MESSAGE);
+      setWorkspaceState(workspaceFromEvents(detail.events));
       setActivities([]);
-      setDrawerOpen(false);
+      setHistoryOpen(false);
+      setAboutOpen(false);
     } catch {
       setLatestResponse(CONNECTION_ERROR);
     } finally {
@@ -128,6 +164,7 @@ export default function App() {
           if (disposed) return;
           setSelectedConversationId(newest.id);
           setLatestResponse(latestAgentResponse(detail.events) || WELCOME_MESSAGE);
+          setWorkspaceState(workspaceFromEvents(detail.events));
         }
       } catch {
         if (!disposed) setLatestResponse(CONNECTION_ERROR);
@@ -157,7 +194,8 @@ export default function App() {
     function focusComposer(event: globalThis.KeyboardEvent) {
       const target = event.target;
       if (
-        drawerOpen ||
+        historyOpen ||
+        aboutOpen ||
         event.metaKey ||
         event.ctrlKey ||
         event.altKey ||
@@ -173,29 +211,29 @@ export default function App() {
 
     window.addEventListener("keydown", focusComposer);
     return () => window.removeEventListener("keydown", focusComposer);
-  }, [drawerOpen]);
+  }, [aboutOpen, historyOpen]);
 
   useEffect(() => {
-    if (!drawerOpen) return;
+    if (!historyOpen) return;
 
     const previouslyFocused = document.activeElement;
     const priorOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
     const frame = requestAnimationFrame(() => {
-      drawerRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+      historyRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
     });
 
     function handleDrawerKeys(event: globalThis.KeyboardEvent) {
       if (event.key === "Escape") {
         event.preventDefault();
-        setDrawerOpen(false);
+        setHistoryOpen(false);
         return;
       }
-      if (event.key !== "Tab" || !drawerRef.current) return;
+      if (event.key !== "Tab" || !historyRef.current) return;
 
       const focusable = Array.from(
-        drawerRef.current.querySelectorAll<HTMLElement>(
+        historyRef.current.querySelectorAll<HTMLElement>(
           'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
         ),
       );
@@ -218,24 +256,27 @@ export default function App() {
       document.body.style.overflow = priorOverflow;
       if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus();
     };
-  }, [drawerOpen]);
+  }, [historyOpen]);
 
-  async function sendMessage(): Promise<void> {
-    const visibleText = message.trim();
+  async function sendMessage(suggestedMessage?: string): Promise<void> {
+    const isSuggestedPrompt = suggestedMessage !== undefined;
+    const visibleText = (suggestedMessage ?? message).trim();
+    const pendingUploads = isSuggestedPrompt ? [] : uploads;
     if (
-      (!visibleText && uploads.length === 0) ||
+      (!visibleText && pendingUploads.length === 0) ||
       isInitializing ||
       isRunning ||
       isUploading
     ) {
       return;
     }
-    const pendingUploads = uploads;
     const text = messageWithUploads(visibleText, pendingUploads);
 
-    setMessage("");
-    setUploads([]);
-    setUploadError(null);
+    if (!isSuggestedPrompt) {
+      setMessage("");
+      setUploads([]);
+      setUploadError(null);
+    }
     setIsRunning(true);
     setIsStreamingText(false);
     setCurrentAction("Preparing conversation context");
@@ -275,7 +316,7 @@ export default function App() {
           streamedText = event.text;
           setLatestResponse(event.text);
         } else if (event.kind === "progress") {
-          progressText += event.text;
+          progressText = event.replace ? event.text : progressText + event.text;
           const progressResponse = progressText.trim();
           if (!progressResponse) return;
           setLatestResponse(progressResponse);
@@ -298,6 +339,14 @@ export default function App() {
         } else if (event.kind === "activity") {
           setActivities((current) => [...current, event.activity]);
           setCurrentAction(event.activity.label);
+        } else if (event.kind === "workspace") {
+          setWorkspaceState((current) => {
+            try {
+              return builtInComponentRegistry.apply(current, event.command);
+            } catch {
+              return current;
+            }
+          });
         } else if (event.kind === "done") {
           setActivities((current) => [
             ...current,
@@ -363,9 +412,32 @@ export default function App() {
     setSelectedConversationId(null);
     setLatestResponse(WELCOME_MESSAGE);
     setActivities([]);
+    setWorkspaceState(emptyWorkspaceState());
     setCurrentAction(null);
-    setDrawerOpen(false);
+    setHistoryOpen(false);
+    setAboutOpen(false);
     requestAnimationFrame(() => composerRef.current?.focus());
+  }
+
+  async function toggleAbout(): Promise<void> {
+    if (aboutOpen) {
+      setAboutOpen(false);
+      requestAnimationFrame(() => composerRef.current?.focus());
+      return;
+    }
+    setHistoryOpen(false);
+    setAboutOpen(true);
+    setSyllabusContent(null);
+    setSyllabusError(null);
+    setSyllabusLoading(true);
+    try {
+      const resource = await getCourseResourceContent("course://syllabus");
+      setSyllabusContent(new TextDecoder().decode(resource.data));
+    } catch {
+      setSyllabusError("The syllabus could not be loaded. Please try again.");
+    } finally {
+      setSyllabusLoading(false);
+    }
   }
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
@@ -411,27 +483,172 @@ export default function App() {
     }
   }
 
+  async function handleWorkspacePanelAction(
+    action: "focus" | "close",
+    panelId: string,
+  ): Promise<void> {
+    if (!selectedConversationId) return;
+    try {
+      const event = await applyWorkspacePanelAction(
+        selectedConversationId,
+        action,
+        panelId,
+      );
+      setWorkspaceState((current) =>
+        builtInComponentRegistry.apply(current, event.payload.command),
+      );
+    } catch {
+      setActivities((current) => [
+        ...current,
+        { kind: "error", label: "Workspace action failed" },
+      ]);
+    }
+  }
+
+  function handleWorkspaceInteraction(
+    panelId: string,
+    action: string,
+    value: JsonValue,
+  ): void {
+    if (!selectedConversationId) return;
+    if (
+      action !== "calendar.select_event" &&
+      action !== "calendar.change_view" &&
+      action !== "document.change_page" &&
+      action !== "document.find_text" &&
+      action !== "page_cards.select" &&
+      action !== "visual.change"
+    ) {
+      return;
+    }
+    void recordWorkspaceInteraction(
+      selectedConversationId,
+      panelId,
+      action,
+      value,
+    ).catch(() => {
+      setActivities((current) => [
+        ...current,
+        { kind: "error", label: "Workspace interaction was not saved" },
+      ]);
+    });
+  }
+
+  async function handleBrowserScroll(
+    panelId: string,
+    sessionId: string,
+    deltaY: number,
+  ): Promise<void> {
+    if (!selectedConversationId) return;
+    try {
+      const event = await scrollBrowserSession(
+        selectedConversationId,
+        panelId,
+        sessionId,
+        deltaY,
+      );
+      setWorkspaceState((current) =>
+        builtInComponentRegistry.apply(current, event.payload.command),
+      );
+    } catch {
+      setActivities((current) => [
+        ...current,
+        { kind: "error", label: "Browser session could not be scrolled" },
+      ]);
+    }
+  }
+
+  async function handleBrowserResize(
+    panelId: string,
+    sessionId: string,
+    width: number,
+    height: number,
+  ): Promise<void> {
+    if (!selectedConversationId) return;
+    try {
+      const event = await resizeBrowserSession(
+        selectedConversationId,
+        panelId,
+        sessionId,
+        width,
+        height,
+      );
+      setWorkspaceState((current) =>
+        builtInComponentRegistry.apply(current, event.payload.command),
+      );
+    } catch {
+      setActivities((current) => [
+        ...current,
+        { kind: "error", label: "Browser viewport could not be resized" },
+      ]);
+    }
+  }
+
   return (
-    <div className="course-agent">
+    <div
+      className="course-agent"
+      data-about-open={aboutOpen}
+      data-workspace-open={!aboutOpen && workspaceState.panels.length > 0}
+    >
       <header className="agent-header">
-        <div aria-label="MIT and MIT Media Lab" className="institutional-marks">
-          <a aria-label="MIT" href="https://www.mit.edu/">
-            <img alt="" className="mit-mark" src="/mit-logo.svg" />
-          </a>
-          <a aria-label="MIT Media Lab" href="https://www.media.mit.edu/">
-            <img alt="" className="media-lab-mark" src="/media-lab-logo.svg" />
-          </a>
+        <div className="header-left">
+          <Button
+            aria-expanded={historyOpen}
+            aria-haspopup="dialog"
+            aria-label="Show chat history"
+            className="history-toggle"
+            onClick={() => {
+              setAboutOpen(false);
+              setHistoryOpen(true);
+            }}
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <rect height="16" rx="1" width="18" x="3" y="4" />
+              <path d="M9 4v16" />
+              <path d="m8 10-2-2m2 2-2 2" />
+            </svg>
+          </Button>
+          <div aria-label="MIT and MIT Media Lab" className="institutional-marks">
+            <a aria-label="MIT" href="https://www.mit.edu/">
+              <img alt="" className="mit-mark" src="/mit-logo.svg" />
+            </a>
+            <a aria-label="MIT Media Lab" href="https://www.media.mit.edu/">
+              <img alt="" className="media-lab-mark" src="/media-lab-logo.svg" />
+            </a>
+          </div>
         </div>
-        <Button
-          aria-expanded={drawerOpen}
-          aria-haspopup="dialog"
-          className="about-link"
-          onClick={() => setDrawerOpen(true)}
-        >
-          About
-        </Button>
+        <nav aria-label="Course shortcuts" className="header-actions">
+          {HEADER_PROMPTS.map((prompt) => (
+            <Button
+              className="header-prompt"
+              disabled={isInitializing || isRunning || isUploading}
+              key={prompt.label}
+              onClick={() => {
+                setAboutOpen(false);
+                void sendMessage(prompt.message);
+              }}
+            >
+              {prompt.label}
+            </Button>
+          ))}
+          <Button
+            aria-current={aboutOpen ? "page" : undefined}
+            className="about-link"
+            onClick={() => void toggleAbout()}
+          >
+            About
+          </Button>
+        </nav>
       </header>
 
+      {aboutOpen ? (
+        <SyllabusPage
+          content={syllabusContent}
+          error={syllabusError}
+          loading={syllabusLoading}
+        />
+      ) : (
+        <>
       <main className="workspace-shell" data-testid="workspace-shell">
         <section aria-atomic="false" aria-live="polite" className="response-stage">
           <div className="response-agent-line" data-testid="response-agent-line">
@@ -442,6 +659,16 @@ export default function App() {
             <AgentResponse streaming={isStreamingText} text={latestResponse} />
           ) : null}
         </section>
+        {workspaceState.panels.length > 0 ? (
+          <Workspace
+            conversationId={selectedConversationId!}
+            onBrowserResize={handleBrowserResize}
+            onBrowserScroll={handleBrowserScroll}
+            onInteraction={handleWorkspaceInteraction}
+            onPanelAction={handleWorkspacePanelAction}
+            state={workspaceState}
+          />
+        ) : null}
       </main>
 
       <form
@@ -517,34 +744,36 @@ export default function App() {
           Send
         </button>
       </form>
+        </>
+      )}
 
-      {drawerOpen ? (
+      {historyOpen ? (
         <div
           className="drawer-backdrop"
-          onClick={() => setDrawerOpen(false)}
+          onClick={() => setHistoryOpen(false)}
           role="presentation"
         >
           <aside
-            ref={drawerRef}
-            aria-label="About Course Agent"
+            ref={historyRef}
+            aria-label="Chat history"
             aria-modal="true"
             className="agent-drawer"
             onClick={(event) => event.stopPropagation()}
             role="dialog"
           >
             <div className="drawer-heading">
-              <span>About</span>
-              <Button aria-label="Close menu" onClick={() => setDrawerOpen(false)}>
-                Close
+              <span>Course Agent</span>
+              <Button
+                aria-label="Hide chat history"
+                className="history-toggle"
+                onClick={() => setHistoryOpen(false)}
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <rect height="16" rx="1" width="18" x="3" y="4" />
+                  <path d="M9 4v16" />
+                  <path d="m6 10 2-2m-2 2 2 2" />
+                </svg>
               </Button>
-            </div>
-
-            <div className="drawer-about-copy">
-              <p>The Course Agent is the class website.</p>
-              <p>
-                Ask it for course information, discuss applying, or start a new
-                conversation at any time.
-              </p>
             </div>
 
             <Button className="new-conversation" onClick={startNewConversation} variant="outline">

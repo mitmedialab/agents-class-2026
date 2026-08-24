@@ -7,6 +7,7 @@
 | Field | Value |
 | --- | --- |
 | Role | Instructor |
+| Portrait | [pattie_maes.jpg](portraits/pattie_maes.jpg) |
 | Email | pattie@media.mit.edu |
 | Department | Program in Media Arts and Sciences, MIT Media Lab |
 | Research group | Fluid Interfaces; co-director, Advancing Humans with AI |
@@ -24,6 +25,7 @@ Source: [MIT Media Lab profile](https://www.media.mit.edu/people/pattie/overview
 | Field | Value |
 | --- | --- |
 | Role | Instructor |
+| Portrait | [valdemar_danry.jpg](portraits/valdemar_danry.jpg) |
 | Email | vdanry@mit.edu |
 | Department | Program in Media Arts and Sciences, MIT Media Lab |
 | Research group | Fluid Interfaces |
@@ -43,6 +45,7 @@ Source: [MIT Media Lab profile](https://www.media.mit.edu/people/vdanry/overview
 | Field | Value |
 | --- | --- |
 | Role | Teaching Assistant |
+| Portrait | [chitralekha_gupta.jpg](portraits/chitralekha_gupta.jpg) |
 | Email | chitra_g@mit.edu |
 | Department | MIT Media Lab; Department of Computer Science, National University of Singapore |
 | Research groups | Fluid Interfaces; Augmented Human Lab |
@@ -60,6 +63,7 @@ Source: [personal website](https://chitralekha.info/)
 | Field | Value |
 | --- | --- |
 | Role | Teaching Assistant |
+| Portrait | [rachel_poonsiriwong.jpg](portraits/rachel_poonsiriwong.jpg) |
 | Email | rachelpo@mit.edu |
 | Department | MIT Media Lab |
 | Research group | Cyborg Psychology |
@@ -77,6 +81,7 @@ Source: [DesignSingapore Council profile](https://designsingapore.org/stories/ra
 | Field | Value |
 | --- | --- |
 | Role | Teaching Assistant |
+| Portrait | [wazeer_zulfikar.jpg](portraits/wazeer_zulfikar.jpg) |
 | Email | wazeer@mit.edu |
 | Department | Program in Media Arts and Sciences, MIT Media Lab |
 | Research group | Fluid Interfaces |
@@ -98,6 +103,7 @@ Source: [MIT Media Lab profile](https://www.media.mit.edu/people/wazeer/overview
 | Field | Value |
 | --- | --- |
 | Role | Teaching Assistant |
+| Portrait | [yasith_samaradivakara.jpg](portraits/yasith_samaradivakara.jpg) |
 | Email | yasith@mit.edu |
 | Department | Program in Media Arts and Sciences, MIT Media Lab |
 | Research group | Fluid Interfaces |
@@ -124,7 +130,7 @@ Source: [MIT Media Lab profile](https://www.media.mit.edu/people/yasith/overview
 8. Why do you want to take this class?
 9. Knowledgeable about
 10. Skill-set (practical knowledge and builder experience)
-11. Registration Status
+11. Registration Status (MAS/MIT/other student, for credit/listener)
 12. For listeners: willingness to do the weekly builds
 13. Questions or comments for instructors
 14. Recent profile photo uploaded in chat (`JPEG`, `PNG`, or `WebP`)

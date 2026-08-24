@@ -23,10 +23,12 @@ from course_server.agent import (
     CourseSubmitApplicationTool,
     FileApplicantStore,
     FileResourceProvider,
+    PublicImageSearchTool,
     PublicVisitWebpageTool,
     PublicWebSearchTool,
     ToolExecutionContext,
     ToolValidationError,
+    load_resource_definitions,
 )
 from course_server.uploads import FileTemporaryUploadStore
 
@@ -77,7 +79,23 @@ def test_public_resource_registry_includes_provisional_schedule() -> None:
     instructor_contents = asyncio.run(resources.read(COURSE_INSTRUCTORS_URI))
     assert "Pattie Maes" in instructor_contents.text
     assert "Yasith Samaradivakara" in instructor_contents.text
+    assert "portraits/pattie_maes.jpg" in instructor_contents.text
+    assert "portraits/yasith_samaradivakara.jpg" in instructor_contents.text
     assert "Recent profile photo uploaded in chat" in instructor_contents.text
+
+    instructors_definition = next(
+        resource
+        for resource in load_resource_definitions()
+        if resource.uri == COURSE_INSTRUCTORS_URI
+    )
+    assert sorted(instructors_definition.assets) == [
+        "chitralekha_gupta_portrait",
+        "pattie_maes_portrait",
+        "rachel_poonsiriwong_portrait",
+        "valdemar_danry_portrait",
+        "wazeer_zulfikar_portrait",
+        "yasith_samaradivakara_portrait",
+    ]
 
 
 def test_public_resource_contents_do_not_expose_internal_resource_identifiers() -> None:
@@ -219,7 +237,7 @@ def test_application_information_tool_reads_official_guide_directly() -> None:
         assert "Recent profile photo" in result.content
         assert "ask only for the applicant's full name" in result.content
         assert "every required field has a supported candidate value" in result.content
-        assert "continue with a field by field interview" in result.content
+        assert "later field-by-field interview" in result.content
         assert result.resource_uris == [COURSE_APPLICATION_URI]
 
     asyncio.run(scenario())
@@ -261,6 +279,83 @@ def test_public_web_tools_wrap_search_and_page_reading_without_persisting_result
     asyncio.run(scenario())
 
 
+def test_public_image_search_normalizes_https_candidates_for_workspace_images() -> None:
+    async def scenario() -> None:
+        calls: list[tuple[str, int]] = []
+
+        def search(query: str, limit: int) -> list[dict[str, object]]:
+            calls.append((query, limit))
+            return [
+                {
+                    "title": "  Fluid Interfaces  ",
+                    "image": "https://images.example.org/fluid.jpg",
+                    "thumbnail": "https://images.example.org/fluid-thumb.jpg",
+                    "url": "https://www.example.org/fluid",
+                    "source": "Example",
+                    "width": "1600",
+                    "height": 900,
+                },
+                {
+                    "title": "Duplicate",
+                    "image": "https://images.example.org/fluid.jpg",
+                },
+                {
+                    "title": "HTTPS thumbnail fallback",
+                    "image": "http://images.example.org/insecure.jpg",
+                    "thumbnail": "https://images.example.org/fallback-thumb.jpg",
+                },
+                {
+                    "title": "Private address",
+                    "image": "https://127.0.0.1/private.jpg",
+                },
+                {
+                    "title": "Second result",
+                    "image": "https://cdn.example.org/second.jpg",
+                    "thumbnail": "http://cdn.example.org/second-thumb.jpg",
+                    "url": "http://www.example.org/second",
+                },
+            ]
+
+        result = await PublicImageSearchTool(search).execute(
+            {"query": "MIT Media Lab Fluid Interfaces", "limit": 4},
+            execution_context(),
+        )
+
+        assert calls == [("MIT Media Lab Fluid Interfaces", 4)]
+        assert result.content == {
+            "query": "MIT Media Lab Fluid Interfaces",
+            "results": [
+                {
+                    "title": "Fluid Interfaces",
+                    "image_url": "https://images.example.org/fluid.jpg",
+                    "thumbnail_url": "https://images.example.org/fluid-thumb.jpg",
+                    "source_page_url": "https://www.example.org/fluid",
+                    "source": "Example",
+                    "width": 1600,
+                    "height": 900,
+                },
+                {
+                    "title": "HTTPS thumbnail fallback",
+                    "image_url": "https://images.example.org/fallback-thumb.jpg",
+                    "thumbnail_url": "https://images.example.org/fallback-thumb.jpg",
+                },
+                {
+                    "title": "Second result",
+                    "image_url": "https://cdn.example.org/second.jpg",
+                },
+            ],
+        }
+        assert result.summary == "Found 3 public image candidates."
+        assert result.storage_policy == "server_summary"
+
+        with pytest.raises(ToolValidationError, match="no usable HTTPS images"):
+            await PublicImageSearchTool(
+                lambda _query, _limit: [{"image": "http://example.org/image.jpg"}]
+            ).execute({"query": "example"}, execution_context())
+
+    asyncio.run(scenario())
+
+
 def test_application_tool_stores_private_json_with_server_generated_name(
     tmp_path: Path,
 ) -> None:
@@ -283,7 +378,6 @@ def test_application_tool_stores_private_json_with_server_generated_name(
             uploads,
         )
         application = {
-            "email_address": "ada@example.edu",
             "name": "Ada Applicant",
             "email": "ada@example.edu",
             "department_research_group_year_of_study_mit": (
@@ -297,11 +391,17 @@ def test_application_tool_stores_private_json_with_server_generated_name(
             ),
             "knowledgeable_about": "Human-computer interaction and learning sciences",
             "skill_set": "Python, TypeScript, interface design, qualitative research",
-            "registration_status": "Taking for credit",
+            "registration_status": "MAS student for credit",
             "listener_willing_to_do_weekly_builds": "Not applicable; taking for credit",
             "questions_or_comments_for_instructors": "No questions",
             "photo_upload_id": str(photo.id),
         }
+
+        with pytest.raises(ToolValidationError, match="registration_status"):
+            await tool.execute(
+                {**application, "registration_status": "Taking for credit"},
+                context,
+            )
 
         result = await tool.execute(application, context)
 
@@ -338,7 +438,6 @@ def test_application_tool_reports_every_incomplete_field(tmp_path: Path) -> None
         message = str(raised.value)
         assert "email" in message
         assert "photo_upload_id" in message
-        assert "email_address" in message
         assert "registration_status" in message
         assert "questions_or_comments_for_instructors" in message
 
@@ -347,7 +446,6 @@ def test_application_tool_reports_every_incomplete_field(tmp_path: Path) -> None
 
 def test_application_tool_requires_supplied_form_categories_and_photo() -> None:
     assert CourseSubmitApplicationTool.input_schema["required"] == [
-        "email_address",
         "name",
         "email",
         "department_research_group_year_of_study_mit",
@@ -360,4 +458,16 @@ def test_application_tool_requires_supplied_form_categories_and_photo() -> None:
         "listener_willing_to_do_weekly_builds",
         "questions_or_comments_for_instructors",
         "photo_upload_id",
+    ]
+    properties = CourseSubmitApplicationTool.input_schema["properties"]
+    assert isinstance(properties, dict)
+    registration_status = properties["registration_status"]
+    assert isinstance(registration_status, dict)
+    assert registration_status["enum"] == [
+        "MAS student for credit",
+        "MIT student for credit",
+        "MAS student listener",
+        "MIT student listener",
+        "Other student for credit",
+        "Other student listener",
     ]

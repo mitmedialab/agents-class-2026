@@ -1,6 +1,6 @@
 # **AI Agents for Cognitive Augmentation**
 
-**Proposed instructors:** Valdemar Danry and Professor Pattie Maes
+**Instructors:** Valdemar Danry and Professor Pattie Maes
 **Format:** Weekly 2-hour session: 1-hour lecture \+ 1-hour hands-on tutorial
 **Course structure:** Classes, weekly technical implementation assignments, cumulative agentic website, final project or study
 **Teaching support:** At least 3 part-time teaching assistants (volunteers)
