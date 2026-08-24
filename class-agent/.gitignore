@@ -1,0 +1,14 @@
+.DS_Store
+.env
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pnpm-store/
+__pycache__/
+*.py[cod]
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/

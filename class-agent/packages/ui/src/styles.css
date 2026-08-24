@@ -1,0 +1,86 @@
+:root {
+  --color-background: #000000;
+  --color-surface: #080808;
+  --color-surface-raised: #111111;
+  --color-text: #f5f5f2;
+  --color-text-muted: #8b8b86;
+  --color-border: #2a2a28;
+  --color-accent: #f5f5f2;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+}
+
+.ca-button {
+  appearance: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}
+
+.ca-button[data-variant="plain"] {
+  background: transparent;
+}
+
+.ca-button[data-variant="outline"] {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  padding: 0.75rem 1rem;
+}
+
+.ca-button:focus-visible,
+.ca-input:focus-visible {
+  outline: 1px solid var(--color-text);
+  outline-offset: 4px;
+}
+
+.ca-field {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.ca-field__label {
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ca-input {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font: inherit;
+  padding: 0.625rem 0;
+  width: 100%;
+}
+
+.ca-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.ca-spinner {
+  animation: ca-pulse 1.2s steps(2, end) infinite;
+  background: currentColor;
+  display: inline-block;
+  height: 0.4rem;
+  width: 0.4rem;
+}
+
+@keyframes ca-pulse {
+  50% {
+    opacity: 0.2;
+  }
+}

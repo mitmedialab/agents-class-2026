@@ -1,0 +1,422 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agents.media.mit.edu/schemas/v1/agent-core.schema.json",
+  "title": "Class Agent core contracts v1",
+  "$defs": {
+    "JsonValue": {
+      "anyOf": [
+        { "type": "null" },
+        { "type": "boolean" },
+        { "type": "number" },
+        { "type": "string" },
+        {
+          "type": "array",
+          "items": { "$ref": "#/$defs/JsonValue" }
+        },
+        {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/JsonValue" }
+        }
+      ]
+    },
+    "JsonObject": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/JsonValue" }
+    },
+    "NonEmptyString": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "NullableUuid": {
+      "anyOf": [
+        { "type": "string", "format": "uuid" },
+        { "type": "null" }
+      ]
+    },
+    "PrincipalContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authenticated",
+        "user_id",
+        "anonymous_session_id",
+        "username",
+        "display_name",
+        "roles",
+        "session_id"
+      ],
+      "properties": {
+        "authenticated": { "type": "boolean" },
+        "user_id": { "$ref": "#/$defs/NullableUuid" },
+        "anonymous_session_id": { "$ref": "#/$defs/NullableUuid" },
+        "username": {
+          "anyOf": [
+            { "$ref": "#/$defs/NonEmptyString" },
+            { "type": "null" }
+          ]
+        },
+        "display_name": {
+          "anyOf": [
+            { "$ref": "#/$defs/NonEmptyString" },
+            { "type": "null" }
+          ]
+        },
+        "roles": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": ["public", "student", "ta", "instructor", "admin"]
+          }
+        },
+        "session_id": { "type": "string", "format": "uuid" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "authenticated": { "const": true } },
+            "required": ["authenticated"]
+          },
+          "then": {
+            "properties": {
+              "user_id": { "type": "string", "format": "uuid" },
+              "anonymous_session_id": { "type": "null" },
+              "username": { "$ref": "#/$defs/NonEmptyString" },
+              "roles": {
+                "type": "array",
+                "contains": { "const": "public" },
+                "allOf": [
+                  {
+                    "type": "array",
+                    "contains": {
+                      "enum": ["student", "ta", "instructor", "admin"]
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "user_id": { "type": "null" },
+              "anonymous_session_id": { "type": "string", "format": "uuid" },
+              "username": { "type": "null" },
+              "display_name": { "type": "null" },
+              "roles": {
+                "type": "array",
+                "prefixItems": [{ "const": "public" }],
+                "minItems": 1,
+                "maxItems": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "schema_version",
+        "timestamp",
+        "type",
+        "actor",
+        "principal_user_id",
+        "anonymous_session_id",
+        "conversation_id",
+        "node_id",
+        "payload",
+        "metadata"
+      ],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "schema_version": { "const": 1 },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "type": { "$ref": "#/$defs/NonEmptyString" },
+        "actor": { "$ref": "#/$defs/NonEmptyString" },
+        "principal_user_id": { "$ref": "#/$defs/NullableUuid" },
+        "anonymous_session_id": { "$ref": "#/$defs/NullableUuid" },
+        "conversation_id": { "$ref": "#/$defs/NullableUuid" },
+        "node_id": { "$ref": "#/$defs/NullableUuid" },
+        "payload": { "$ref": "#/$defs/JsonObject" },
+        "metadata": { "$ref": "#/$defs/JsonObject" }
+      },
+      "not": {
+        "properties": {
+          "principal_user_id": { "type": "string" },
+          "anonymous_session_id": { "type": "string" }
+        },
+        "required": ["principal_user_id", "anonymous_session_id"]
+      }
+    },
+    "Conversation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "user_id",
+        "anonymous_session_id",
+        "created_at",
+        "updated_at",
+        "title",
+        "archived_at"
+      ],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "user_id": { "$ref": "#/$defs/NullableUuid" },
+        "anonymous_session_id": { "$ref": "#/$defs/NullableUuid" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "title": {
+          "anyOf": [
+            { "$ref": "#/$defs/NonEmptyString" },
+            { "type": "null" }
+          ]
+        },
+        "archived_at": {
+          "anyOf": [
+            { "type": "string", "format": "date-time" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "user_id": { "type": "string", "format": "uuid" },
+            "anonymous_session_id": { "type": "null" }
+          }
+        },
+        {
+          "properties": {
+            "user_id": { "type": "null" },
+            "anonymous_session_id": { "type": "string", "format": "uuid" }
+          }
+        }
+      ]
+    },
+    "Memory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "user_id",
+        "created_at",
+        "updated_at",
+        "kind",
+        "content",
+        "source_event_ids",
+        "privacy",
+        "metadata"
+      ],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "user_id": { "type": "string", "format": "uuid" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "kind": { "$ref": "#/$defs/NonEmptyString" },
+        "content": { "$ref": "#/$defs/NonEmptyString" },
+        "source_event_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "format": "uuid" }
+        },
+        "privacy": { "enum": ["personal", "course_private"] },
+        "metadata": { "$ref": "#/$defs/JsonObject" }
+      }
+    },
+    "CapabilityAcquisition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "metadata"],
+      "properties": {
+        "type": { "$ref": "#/$defs/NonEmptyString" },
+        "metadata": { "$ref": "#/$defs/JsonObject" }
+      }
+    },
+    "Capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "acquisition", "node_id", "metadata"],
+      "properties": {
+        "id": { "$ref": "#/$defs/NonEmptyString" },
+        "status": { "enum": ["available", "obtainable", "unavailable"] },
+        "acquisition": {
+          "anyOf": [
+            { "$ref": "#/$defs/CapabilityAcquisition" },
+            { "type": "null" }
+          ]
+        },
+        "node_id": { "$ref": "#/$defs/NullableUuid" },
+        "metadata": { "$ref": "#/$defs/JsonObject" }
+      },
+      "if": {
+        "properties": { "status": { "const": "obtainable" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "acquisition": { "$ref": "#/$defs/CapabilityAcquisition" }
+        }
+      }
+    },
+    "Permission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "capability",
+        "scope",
+        "status",
+        "principal_user_id",
+        "anonymous_session_id",
+        "node_id",
+        "created_at",
+        "updated_at",
+        "metadata"
+      ],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "capability": { "$ref": "#/$defs/NonEmptyString" },
+        "scope": { "$ref": "#/$defs/JsonObject" },
+        "status": { "enum": ["requested", "granted", "denied", "revoked"] },
+        "principal_user_id": { "$ref": "#/$defs/NullableUuid" },
+        "anonymous_session_id": { "$ref": "#/$defs/NullableUuid" },
+        "node_id": { "$ref": "#/$defs/NullableUuid" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "metadata": { "$ref": "#/$defs/JsonObject" }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "principal_user_id": { "type": "string", "format": "uuid" },
+            "anonymous_session_id": { "type": "null" }
+          }
+        },
+        {
+          "properties": {
+            "principal_user_id": { "type": "null" },
+            "anonymous_session_id": { "type": "string", "format": "uuid" }
+          }
+        }
+      ]
+    },
+    "Node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "user_id",
+        "type",
+        "name",
+        "capabilities",
+        "online",
+        "last_seen_at"
+      ],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "user_id": { "$ref": "#/$defs/NullableUuid" },
+        "type": {
+          "enum": ["web", "browser_extension", "local_bridge", "raspberry_pi", "device"]
+        },
+        "name": { "$ref": "#/$defs/NonEmptyString" },
+        "capabilities": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/NonEmptyString" }
+        },
+        "online": { "type": "boolean" },
+        "last_seen_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "AgentContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "principal",
+        "conversation_id",
+        "recent_events",
+        "selected_memories",
+        "capabilities",
+        "permissions",
+        "permitted_tool_ids",
+        "permitted_resource_uris",
+        "active_skill_ids",
+        "metadata"
+      ],
+      "properties": {
+        "principal": { "$ref": "#/$defs/PrincipalContext" },
+        "conversation_id": { "type": "string", "format": "uuid" },
+        "recent_events": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Event" }
+        },
+        "selected_memories": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Memory" }
+        },
+        "capabilities": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Capability" }
+        },
+        "permissions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Permission" }
+        },
+        "permitted_tool_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/NonEmptyString" }
+        },
+        "permitted_resource_uris": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/NonEmptyString" }
+        },
+        "active_skill_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/NonEmptyString" }
+        },
+        "metadata": { "$ref": "#/$defs/JsonObject" }
+      }
+    },
+    "AgentInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "conversation_id", "text", "metadata"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "conversation_id": { "type": "string", "format": "uuid" },
+        "text": { "$ref": "#/$defs/NonEmptyString" },
+        "metadata": { "$ref": "#/$defs/JsonObject" }
+      }
+    },
+    "AgentResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "input_id",
+        "conversation_id",
+        "output_text",
+        "events",
+        "metadata"
+      ],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "input_id": { "type": "string", "format": "uuid" },
+        "conversation_id": { "type": "string", "format": "uuid" },
+        "output_text": { "type": "string" },
+        "events": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Event" }
+        },
+        "metadata": { "$ref": "#/$defs/JsonObject" }
+      }
+    }
+  }
+}

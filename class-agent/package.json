@@ -1,0 +1,18 @@
+{
+  "name": "class-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MIT Cognitive Agent course platform monorepo",
+  "packageManager": "pnpm@10.32.1",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=10"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @class-agent/web dev",
+    "build": "pnpm --filter @class-agent/web build",
+    "preview": "pnpm --filter @class-agent/web preview",
+    "test": "pnpm --recursive --if-present test",
+    "typecheck": "pnpm --recursive --if-present typecheck"
+  }
+}
