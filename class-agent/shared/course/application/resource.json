@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "resource": {
+    "uri": "course://application",
+    "title": "Course Application Guide",
+    "description": "Capacity, priority, deadlines, required fields, and photo requirement.",
+    "media_type": "text/markdown",
+    "file": "application.md",
+    "visibility": "public",
+    "status": "published",
+    "order": 50
+  }
+}

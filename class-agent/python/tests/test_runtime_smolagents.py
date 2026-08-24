@@ -15,7 +15,9 @@ from smolagents.models import (
 from agent_core import AgentContext, AgentInput, AgentResult, Event, ModelProvider, PrincipalContext
 from course_server.agent import (
     COURSE_SYLLABUS_URI,
+    GET_APPLICATION_TOOL_ID,
     READ_SYLLABUS_TOOL_ID,
+    WEB_SEARCH_TOOL_ID,
     CourseReadSyllabusTool,
     FileResourceProvider,
     ToolCatalog,
@@ -32,6 +34,7 @@ class ScriptedToolCallingModel(Model):  # type: ignore[misc]
         super().__init__(model_id="scripted-model")
         self.calls = 0
         self.available_tool_names: list[str] = []
+        self.message_text = ""
 
     def generate(
         self,
@@ -41,7 +44,8 @@ class ScriptedToolCallingModel(Model):  # type: ignore[misc]
         tools_to_call_from: list[Any] | None = None,
         **kwargs: Any,
     ) -> ChatMessage:
-        del messages, stop_sequences, response_format, kwargs
+        self.message_text = "\n".join(str(message.content or "") for message in messages)
+        del stop_sequences, response_format, kwargs
         self.available_tool_names = [tool.name for tool in tools_to_call_from or []]
         self.calls += 1
         if self.calls == 1:
@@ -140,6 +144,9 @@ def test_toolcalling_adapter_reads_authorized_resource_and_emits_portable_events
         runtime = SmolagentsRuntime(
             model_provider=ScriptedProvider(model),
             tools=ToolCatalog([CourseReadSyllabusTool(resources), HiddenCourseTool(resources)]),
+            public_resource_index=(
+                "Course Application Guide: capacity, deadlines, and required fields",
+            ),
         )
         conversation_id = uuid4()
         context = AgentContext(
@@ -158,6 +165,12 @@ def test_toolcalling_adapter_reads_authorized_resource_and_emits_portable_events
         assert result.output_text == "The syllabus describes readings and student-built tools."
         assert "course_read_syllabus" in model.available_tool_names
         assert "ta_list_questions" not in model.available_tool_names
+        assert "Official information available through tools" in model.message_text
+        assert "Course Application Guide" in model.message_text
+        assert "Application workflow:" not in model.message_text
+        assert "exactly one missing field per message" not in model.message_text
+        assert "resource identifiers" in model.message_text
+        assert "course://application" not in model.message_text
         assert [event.type for event in result.events] == [
             "agent.run.started",
             "agent.tool.requested",
@@ -168,6 +181,61 @@ def test_toolcalling_adapter_reads_authorized_resource_and_emits_portable_events
         ]
         assert result.events[2].payload == {"uri": COURSE_SYLLABUS_URI}
         assert AgentResult.model_validate_json(result.model_dump_json()) == result
+
+    asyncio.run(scenario())
+
+
+def test_application_guide_and_web_action_are_retained_as_natural_history() -> None:
+    async def scenario() -> None:
+        model = ScriptedToolCallingModel()
+        resources = FileResourceProvider.with_sample_syllabus()
+        runtime = SmolagentsRuntime(
+            model_provider=ScriptedProvider(model),
+            tools=ToolCatalog([CourseReadSyllabusTool(resources)]),
+        )
+        conversation_id = uuid4()
+        principal = public_principal()
+        context = AgentContext(
+            principal=principal,
+            conversation_id=conversation_id,
+            recent_events=[
+                Event(
+                    type="agent.tool.completed",
+                    actor="course-agent",
+                    anonymous_session_id=principal.anonymous_session_id,
+                    conversation_id=conversation_id,
+                    payload={
+                        "tool_id": GET_APPLICATION_TOOL_ID,
+                        "storage_policy": "server_full",
+                        "result": "Ask for one field at a time and search after the full name.",
+                    },
+                ),
+                Event(
+                    type="agent.tool.completed",
+                    actor="course-agent",
+                    anonymous_session_id=principal.anonymous_session_id,
+                    conversation_id=conversation_id,
+                    payload={
+                        "tool_id": WEB_SEARCH_TOOL_ID,
+                        "storage_policy": "server_summary",
+                        "summary": "Searched the public web.",
+                    },
+                ),
+            ],
+            permitted_tool_ids=[READ_SYLLABUS_TOOL_ID],
+            permitted_resource_uris=[COURSE_SYLLABUS_URI],
+        )
+
+        await runtime.run(
+            context=context,
+            input=AgentInput(conversation_id=conversation_id, text="Continue."),
+        )
+
+        assert "Official application guide:" in model.message_text
+        assert "search after the full name" in model.message_text
+        assert "Public web search completed" in model.message_text
+        assert GET_APPLICATION_TOOL_ID not in model.message_text
+        assert WEB_SEARCH_TOOL_ID not in model.message_text
 
     asyncio.run(scenario())
 

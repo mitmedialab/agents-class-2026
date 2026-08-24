@@ -15,16 +15,58 @@ from smolagents.monitoring import LogLevel
 
 from agent_core import AgentContext, AgentInput, AgentResult, Event, ModelProvider
 from course_server.agent.capabilities import (
+    GET_APPLICATION_TOOL_ID,
+    VISIT_WEBPAGE_TOOL_ID,
+    WEB_SEARCH_TOOL_ID,
     ExecutableTool,
     ResourceNotFound,
     ToolCatalog,
     ToolExecutionContext,
     ToolExecutionResult,
+    ToolValidationError,
 )
 
 _JSON_OBJECT = TypeAdapter(dict[str, JsonValue])
 _TOOL_NAME_CHARACTER = re.compile(r"[^A-Za-z0-9_]")
 _FINAL_ANSWER_START = re.compile(r'"answer"\s*:\s*"')
+
+
+def _agent_instructions(
+    context: AgentContext,
+    public_resource_index: tuple[str, ...],
+    history: str,
+) -> str:
+    sections = [
+        (
+            "You are the single logical Course Agent. Use only the tools provided for "
+            "this run. Never claim to have read official information unless a provided "
+            "tool returned it. Before saying information is undocumented, read or search "
+            "the relevant official resource."
+        ),
+        (
+            "Capability names, resource identifiers, storage locations, filenames, and "
+            "other implementation details are internal. Do not mention them in "
+            "user-facing progress or answers unless the user explicitly asks how the "
+            "system is implemented. Never present an internal resource pointer as the "
+            "answer; follow it with the appropriate read tool."
+        ),
+    ]
+    sections.extend(
+        [
+            (
+                "Before using a non-final tool, briefly state the user-facing action without "
+                "naming the tool or resource identifier. Do not reveal private reasoning, and "
+                "do not include a progress message alongside the final_answer tool."
+            ),
+            f"Trusted principal roles: {', '.join(context.principal.roles)}.",
+        ]
+    )
+    if public_resource_index:
+        entries = "\n".join(f"- {entry}" for entry in public_resource_index)
+        sections.append(f"Official information available through tools:\n{entries}")
+    if history:
+        sections.append(f"Prior conversation:\n{history}")
+    return "\n\n".join(sections)
 
 
 def _event_principal_fields(context: AgentContext) -> dict[str, Any]:
@@ -240,16 +282,12 @@ class _SmolagentsToolAdapter(Tool):  # type: ignore[misc]
             "conversation_id": self._agent_context.conversation_id,
             **_event_principal_fields(self._agent_context),
         }
-        self._collector.add(
-            Event(
-                type="agent.tool.requested",
-                payload={
-                    "tool_id": self._platform_tool.id,
-                    "arguments": portable_arguments,
-                },
-                **common,
-            )
-        )
+        requested_payload: dict[str, JsonValue] = {"tool_id": self._platform_tool.id}
+        if getattr(self._platform_tool, "redact_arguments_in_events", False):
+            requested_payload["arguments_redacted"] = True
+        else:
+            requested_payload["arguments"] = portable_arguments
+        self._collector.add(Event(type="agent.tool.requested", payload=requested_payload, **common))
         try:
             result = asyncio.run(
                 self._platform_tool.execute(portable_arguments, self._execution_context)
@@ -263,7 +301,10 @@ class _SmolagentsToolAdapter(Tool):  # type: ignore[misc]
                     **common,
                 )
             )
-            raise RuntimeError(f"{category}: tool execution failed") from error
+            message = (
+                str(error) if isinstance(error, ToolValidationError) else "tool execution failed"
+            )
+            raise RuntimeError(f"{category}: {message}") from error
 
         for resource_uri in result.resource_uris:
             self._collector.add(
@@ -291,12 +332,23 @@ class _SmolagentsToolAdapter(Tool):  # type: ignore[misc]
 def _conversation_history(context: AgentContext) -> str:
     lines: list[str] = []
     for event in context.recent_events:
-        if event.type not in {"user.message", "agent.message"}:
+        if event.type in {"user.message", "agent.message"}:
+            text = event.payload.get("text")
+            if isinstance(text, str):
+                speaker = "User" if event.type == "user.message" else "Class Agent"
+                lines.append(f"{speaker}: {text}")
             continue
-        text = event.payload.get("text")
-        if isinstance(text, str):
-            speaker = "User" if event.type == "user.message" else "Class Agent"
-            lines.append(f"{speaker}: {text}")
+        if event.type != "agent.tool.completed":
+            continue
+        tool_id = event.payload.get("tool_id")
+        if tool_id == GET_APPLICATION_TOOL_ID:
+            result = event.payload.get("result")
+            if isinstance(result, str):
+                lines.append(f"Official application guide:\n{result}")
+        elif tool_id == WEB_SEARCH_TOOL_ID:
+            lines.append("Class Agent action: Public web search completed.")
+        elif tool_id == VISIT_WEBPAGE_TOOL_ID:
+            lines.append("Class Agent action: Public webpage read.")
     return "\n".join(lines)
 
 
@@ -308,11 +360,15 @@ class SmolagentsRuntime:
         *,
         model_provider: ModelProvider[Model],
         tools: ToolCatalog,
+        public_resource_index: Iterable[str] = (),
         max_steps: int = 10,
         agent_id: str = "course-agent",
     ) -> None:
         self._model_provider = model_provider
         self._tools = tools
+        self._public_resource_index = tuple(
+            entry.strip() for entry in public_resource_index if entry.strip()
+        )
         self._max_steps = max_steps
         self._agent_id = agent_id
 
@@ -376,17 +432,11 @@ class SmolagentsRuntime:
             for tool in authorized_tools
         ]
         history = _conversation_history(context)
-        instructions = (
-            "You are the single logical Class Agent. Use only the tools provided for this "
-            "run. Never claim to have read a resource unless a provided tool returned it. "
-            "If official course information is absent, say it is not documented. Before "
-            "using a non-final tool, briefly state what you are about to do as ordinary "
-            "user-facing content. Do not reveal private reasoning, and do not include a "
-            "progress message alongside the final_answer tool.\n"
-            f"Trusted principal roles: {', '.join(context.principal.roles)}."
+        instructions = _agent_instructions(
+            context,
+            self._public_resource_index,
+            history,
         )
-        if history:
-            instructions = f"{instructions}\nPrior conversation:\n{history}"
 
         model = self._model_provider.create_model()
         agent = ToolCallingAgent(

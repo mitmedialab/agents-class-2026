@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -12,6 +13,7 @@ from agent_core import AgentContext, AgentInput, AgentResult, Event
 from course_server.agent import CourseAgentService, InMemoryConversationStore
 from course_server.api import API_PREFIX, AppServices, create_app
 from course_server.auth import AuthenticationService, InMemoryAuthStore, UserAdminService
+from course_server.uploads import FileTemporaryUploadStore, TemporaryUploadStore
 
 
 class RecordingRuntime:
@@ -62,7 +64,9 @@ class RecordingRuntime:
         return result
 
 
-def _build_client() -> tuple[TestClient, str, RecordingRuntime]:
+def _build_client(
+    upload_store: TemporaryUploadStore | None = None,
+) -> tuple[TestClient, str, RecordingRuntime]:
     auth_store = InMemoryAuthStore()
     conversations = InMemoryConversationStore()
     authentication = AuthenticationService(auth_store)
@@ -80,6 +84,7 @@ def _build_client() -> tuple[TestClient, str, RecordingRuntime]:
         authentication=authentication,
         agent=CourseAgentService(runtime=runtime, conversations=conversations),
         conversations=conversations,
+        uploads=upload_store,
     )
     return (
         TestClient(create_app(services=services), base_url="https://testserver"),
@@ -141,6 +146,58 @@ def test_login_me_and_logout_flow() -> None:
     logout = client.post("/auth/logout")
     assert logout.status_code == 204
     assert client.get("/auth/me").json()["authenticated"] is False
+
+
+def test_public_course_resource_catalog_marks_schedule_provisional() -> None:
+    client, _, _ = _build_client()
+
+    response = client.get(f"{API_PREFIX}/course/resources")
+
+    assert response.status_code == 200
+    assert [resource["uri"] for resource in response.json()] == [
+        "course://syllabus",
+        "course://schedule",
+        "course://repositories",
+        "course://faq",
+        "course://instructors",
+        "course://application",
+    ]
+    schedule = next(
+        resource for resource in response.json() if resource["uri"] == "course://schedule"
+    )
+    assert schedule["status"] == "provisional"
+
+
+def test_temporary_upload_route_stores_allowed_file_for_session(tmp_path: Path) -> None:
+    client, _, _ = _build_client(FileTemporaryUploadStore(tmp_path / "uploads"))
+
+    response = client.post(
+        f"{API_PREFIX}/uploads",
+        params={"filename": "face photo.png"},
+        content=b"\x89PNG\r\n\x1a\nphoto-data",
+        headers={"Content-Type": "image/png"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["filename"] == "face photo.png"
+    assert response.json()["media_type"] == "image/png"
+    upload_directory = tmp_path / "uploads" / response.json()["id"]
+    assert (upload_directory / "content.bin").is_file()
+    assert (upload_directory / "metadata.json").is_file()
+
+
+def test_temporary_upload_route_rejects_unsupported_content(tmp_path: Path) -> None:
+    client, _, _ = _build_client(FileTemporaryUploadStore(tmp_path / "uploads"))
+
+    response = client.post(
+        f"{API_PREFIX}/uploads",
+        params={"filename": "script.js"},
+        content=b"alert(1)",
+        headers={"Content-Type": "application/javascript"},
+    )
+
+    assert response.status_code == 415
+    assert response.json()["detail"] == "unsupported file type"
 
 
 def test_invalid_credentials_are_generic_and_rate_limited() -> None:

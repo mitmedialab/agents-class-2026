@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "resource": {
+    "uri": "course://repositories",
+    "title": "Student Repository Overview",
+    "description": "Published student project repositories.",
+    "media_type": "text/markdown",
+    "file": "repositories.md",
+    "visibility": "public",
+    "status": "published",
+    "order": 30
+  }
+}

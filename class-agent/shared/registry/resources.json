@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "resources": [
+    {
+      "uri": "course://syllabus",
+      "title": "AI Agents for Cognitive Augmentation Syllabus",
+      "description": "Official course overview, structure, learning goals, and evaluation.",
+      "media_type": "text/markdown",
+      "path": "course/syllabus/syllabus.md",
+      "visibility": "public",
+      "status": "published"
+    },
+    {
+      "uri": "course://schedule",
+      "title": "Provisional Course Schedule",
+      "description": "Provisional weekly topics, tutorials, speakers, and readings.",
+      "media_type": "application/json",
+      "path": "course/schedule/schedule.json",
+      "visibility": "public",
+      "status": "provisional"
+    },
+    {
+      "uri": "course://repositories",
+      "title": "Student Repository Overview",
+      "description": "Published student project repositories.",
+      "media_type": "text/markdown",
+      "path": "course/repositories/repositories.md",
+      "visibility": "public",
+      "status": "published"
+    },
+    {
+      "uri": "course://faq",
+      "title": "Course Information Index",
+      "description": "Pointers to canonical course resources by topic.",
+      "media_type": "text/markdown",
+      "path": "course/faq/faq.md",
+      "visibility": "public",
+      "status": "published"
+    },
+    {
+      "uri": "course://instructors",
+      "title": "Course Staff",
+      "description": "Instructors, teaching assistants, affiliations, contact information, biographies, and application fields.",
+      "media_type": "text/markdown",
+      "path": "course/instructors/instructors.md",
+      "visibility": "public",
+      "status": "published"
+    },
+    {
+      "uri": "course://application",
+      "title": "Course Application Guide",
+      "description": "Capacity, priority, deadlines, required fields, and photo requirement.",
+      "media_type": "text/markdown",
+      "path": "course/application/application.md",
+      "visibility": "public",
+      "status": "published"
+    }
+  ]
+}

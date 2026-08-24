@@ -8,12 +8,13 @@ import {
   login,
   logout,
   streamAgentRun,
+  uploadFile,
   type AgentActivity,
   type AgentStreamEvent,
+  type TemporaryUpload,
 } from "./api.js";
 import { ActivityTrace } from "./ActivityTrace.js";
 import { AgentResponse } from "./AgentResponse.js";
-import { TextRevealQueue } from "./textReveal.js";
 import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
 
 const CONNECTION_ERROR = "I couldn’t reach the Course Agent. Please try again.";
@@ -45,6 +46,18 @@ function titleFromMessage(message: string): string {
   return singleLine.length > 56 ? `${singleLine.slice(0, 55)}…` : singleLine;
 }
 
+function messageWithUploads(message: string, uploads: TemporaryUpload[]): string {
+  if (uploads.length === 0) return message;
+  const uploadContext = uploads
+    .map(
+      (upload) =>
+        `[Temporary upload: ${upload.filename}; upload_id: ${upload.id}; ` +
+        `media_type: ${upload.media_type}; expires_at: ${upload.expires_at}]`,
+    )
+    .join("\n");
+  return `${message || "I attached file(s) for this conversation."}\n\n${uploadContext}`;
+}
+
 function formatConversationDate(value: string): string {
   return new Intl.DateTimeFormat(undefined, {
     month: "short",
@@ -63,15 +76,18 @@ export default function App() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
   const [isStreamingText, setIsStreamingText] = useState(false);
+  const [uploads, setUploads] = useState<TemporaryUpload[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [username, setUsername] = useState("");
   const [accessCode, setAccessCode] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
   const activeRun = useRef<AbortController | null>(null);
-  const activeReveal = useRef<TextRevealQueue | null>(null);
 
   async function showConversation(conversation: Conversation): Promise<void> {
     setCurrentAction("Loading conversation");
@@ -127,7 +143,6 @@ export default function App() {
     return () => {
       disposed = true;
       activeRun.current?.abort();
-      activeReveal.current?.cancel();
     };
   }, []);
 
@@ -206,10 +221,21 @@ export default function App() {
   }, [drawerOpen]);
 
   async function sendMessage(): Promise<void> {
-    const text = message.trim();
-    if (!text || isInitializing || isRunning) return;
+    const visibleText = message.trim();
+    if (
+      (!visibleText && uploads.length === 0) ||
+      isInitializing ||
+      isRunning ||
+      isUploading
+    ) {
+      return;
+    }
+    const pendingUploads = uploads;
+    const text = messageWithUploads(visibleText, pendingUploads);
 
     setMessage("");
+    setUploads([]);
+    setUploadError(null);
     setIsRunning(true);
     setIsStreamingText(false);
     setCurrentAction("Preparing conversation context");
@@ -219,19 +245,14 @@ export default function App() {
     let receivedError = false;
     let writingActivityRecorded = false;
     let progressText = "";
-    let presentationFinished: Promise<void> | null = null;
+    let streamedText = "";
     const controller = new AbortController();
     activeRun.current = controller;
-    activeReveal.current?.cancel();
-    const reveal = new TextRevealQueue((visibleText, active) => {
-      setLatestResponse(visibleText);
-      setIsStreamingText(active);
-    });
-    activeReveal.current = reveal;
 
     try {
       if (!conversationId) {
-        const created = await createConversation(titleFromMessage(text));
+        const title = visibleText || `Uploaded ${pendingUploads[0]?.filename ?? "file"}`;
+        const created = await createConversation(titleFromMessage(title));
         conversationId = created.id;
         setSelectedConversationId(created.id);
         setConversations((current) => newestFirst([created, ...current]));
@@ -248,9 +269,11 @@ export default function App() {
               { kind: "output", label: "Writing final response" },
             ]);
           }
-          reveal.append(event.text);
+          streamedText += event.text;
+          setLatestResponse(streamedText);
         } else if (event.kind === "text_final") {
-          presentationFinished = reveal.finish(event.text);
+          streamedText = event.text;
+          setLatestResponse(event.text);
         } else if (event.kind === "progress") {
           progressText += event.text;
           const progressResponse = progressText.trim();
@@ -282,7 +305,6 @@ export default function App() {
           ]);
         } else if (event.kind === "error") {
           receivedError = true;
-          reveal.cancel();
           setLatestResponse(CONNECTION_ERROR);
           setActivities((current) => [
             ...current,
@@ -293,9 +315,7 @@ export default function App() {
 
       await streamAgentRun(conversationId, text, handleStreamEvent, controller.signal);
       if (!receivedError) {
-        presentationFinished ??= reveal.finish();
         setCurrentAction("Presenting response");
-        await presentationFinished;
       }
       try {
         await loadConversationList();
@@ -303,13 +323,11 @@ export default function App() {
         // The completed answer remains usable if refreshing navigation fails.
       }
     } catch (error) {
-      reveal.cancel();
       if (!(error instanceof DOMException && error.name === "AbortError")) {
         setLatestResponse(CONNECTION_ERROR);
       }
     } finally {
       activeRun.current = null;
-      if (activeReveal.current === reveal) activeReveal.current = null;
       setCurrentAction(null);
       setIsStreamingText(false);
       setIsRunning(false);
@@ -321,6 +339,23 @@ export default function App() {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       void sendMessage();
+    }
+  }
+
+  async function handleFileSelection(fileList: FileList | null): Promise<void> {
+    const files = Array.from(fileList ?? []);
+    if (files.length === 0) return;
+    setIsUploading(true);
+    setUploadError(null);
+    try {
+      const stored = await Promise.all(files.map((file) => uploadFile(file)));
+      setUploads((current) => [...current, ...stored]);
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "Upload failed");
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      setIsUploading(false);
+      requestAnimationFrame(() => composerRef.current?.focus());
     }
   }
 
@@ -417,21 +452,67 @@ export default function App() {
           void sendMessage();
         }}
       >
-        <textarea
-          ref={composerRef}
-          aria-label="Message"
-          autoComplete="off"
-          autoFocus
-          className="composer-text"
-          disabled={isInitializing || isRunning}
-          enterKeyHint="send"
-          onChange={(event) => setMessage(event.target.value)}
-          onKeyDown={handleComposerKeyDown}
-          placeholder="Start typing to interact with the agent"
-          rows={1}
-          spellCheck
-          value={message}
-        />
+        <div className="composer-inner">
+          <input
+            ref={fileInputRef}
+            accept=".csv,.json,.md,.pdf,.txt,image/gif,image/jpeg,image/png,image/webp"
+            className="visually-hidden"
+            multiple
+            onChange={(event) => void handleFileSelection(event.target.files)}
+            type="file"
+          />
+          <button
+            aria-label="Attach files"
+            className="attachment-button"
+            disabled={isInitializing || isRunning || isUploading}
+            onClick={() => fileInputRef.current?.click()}
+            type="button"
+          >
+            {isUploading ? "Uploading" : "Attach"}
+          </button>
+          <div className="composer-entry">
+            {uploads.length > 0 ? (
+              <ul aria-label="Temporary uploads" className="upload-list">
+                {uploads.map((upload) => (
+                  <li key={upload.id}>
+                    <span>{upload.filename}</span>
+                    <button
+                      aria-label={`Remove ${upload.filename}`}
+                      onClick={() =>
+                        setUploads((current) =>
+                          current.filter((item) => item.id !== upload.id),
+                        )
+                      }
+                      type="button"
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <textarea
+              ref={composerRef}
+              aria-label="Message"
+              autoComplete="off"
+              autoFocus
+              className="composer-text"
+              disabled={isInitializing || isRunning || isUploading}
+              enterKeyHint="send"
+              onChange={(event) => setMessage(event.target.value)}
+              onKeyDown={handleComposerKeyDown}
+              placeholder="Start typing to interact with the agent"
+              rows={1}
+              spellCheck
+              value={message}
+            />
+            {uploadError ? (
+              <p className="upload-error" role="alert">
+                {uploadError}
+              </p>
+            ) : null}
+          </div>
+        </div>
         <button aria-hidden="true" className="visually-hidden" tabIndex={-1} type="submit">
           Send
         </button>

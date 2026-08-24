@@ -1,4 +1,4 @@
-# Phase 3 Course Agent runtime
+# Course Agent runtime
 
 There is one logical agent definition: `course-agent`. Each run combines that definition with a trusted `PrincipalContext`, portable conversation events, and an already-authorized list of tool and resource IDs.
 
@@ -28,9 +28,72 @@ max steps: 10 (overridable with AGENT_MAX_STEPS)
 
 ## Tool and resource boundary
 
-Phase 3 implements one public tool, `course.read_syllabus`, and one public resource, `course://syllabus`. Application wrappers use canonical IDs, resource URIs, and JSON input schemas that translate directly to MCP. They are not a second wire protocol, and an MCP server is intentionally deferred.
+Phase 6 exposes these public tools:
 
-Authorization happens before smolagents receives tools. `PublicCapabilityPolicy` grants only the Phase 3 public capability; `ToolCatalog` fails closed if trusted context names an unregistered tool. The syllabus tool also checks the authorized resource URI during execution. Model-controlled input cannot select a filesystem path.
+```text
+course.read_syllabus
+course.read_public_file
+course.get_schedule
+course.get_application
+course.show_public_files
+course.search_faq
+course.search
+course.submit_application
+web.search
+web.visit
+```
+
+The readable resources are `course://syllabus`, `course://schedule`,
+`course://repositories`, `course://faq`, `course://instructors`, and
+`course://application`. Application wrappers use canonical IDs, resource URIs, and JSON
+input schemas that translate directly to MCP. They are not a second wire protocol, and
+an MCP server is intentionally deferred.
+
+Authorization happens before smolagents receives tools. `PublicCapabilityPolicy`
+grants only Phase 6 public course capabilities; `ToolCatalog` fails closed if trusted
+context names an unregistered tool. Read and search tools independently constrain work
+to authorized resource URIs during execution. Model-controlled input cannot select a
+filesystem path. The schedule tool identifies its source as provisional.
+
+`web.search` and `web.visit` wrap smolagents' toolkit implementations inside the same
+authorized platform boundary. Page reads reject non-HTTP, credential-bearing, local,
+and private-network destinations. Web result bodies are returned to the current model
+turn but are not copied into durable event history; only a generic completion summary
+is stored.
+
+Each transient agent receives a title-and-description index of its authorized public
+information. The index contains no backing paths or canonical resource identifiers;
+full resource content is read through an authorized tool only when needed. The runtime
+instructions require the model to resolve internal pointers before answering and forbid
+mentioning capability names, resource identifiers, storage locations, or filenames
+unless the user explicitly asks about implementation.
+
+`course.search` uses deterministic paragraph-level lexical matching over the current
+registered files, so edits are visible without a server restart. The companion
+`course_server.index_resources` command maintains normalized PostgreSQL full-text data
+for inspection and later MCP-backed search without requiring embeddings.
+
+`course.submit_application` is public so prospective students do not need an account.
+Its schema requires every structured application field and a principal-owned temporary
+photo upload. Server-side validation rejects missing, placeholder, too-short, malformed,
+expired, foreign, and non-image inputs. Safe validation failures name the affected
+fields to the model so it can ask the applicant follow-up questions; unexpected tool
+errors remain generic. A successful call writes the structured record and copied photo
+through a private server-side store and returns a receipt UUID. Submitted content is not
+a public resource and is not included in the tool-completion result persisted by the
+runtime.
+
+Application intent has a dedicated workflow. The agent must first call
+`course.get_application`, collect only the official fields and photo, retain values from
+conversation history, summarize the completed form for explicit approval, and only then
+call `course.submit_application`. It must not draft an application letter or invent
+criteria. Submission arguments are redacted from tool-request audit events; the private
+application store remains canonical.
+
+Chat attachments are uploaded before a message is sent. The user message includes only
+the temporary receipt metadata—not file bytes or a server path—so an authorized tool can
+refer to the upload. Upload ownership is reconstructed from the trusted principal rather
+than accepted as a tool argument.
 
 smolagents requires Python-identifier tool names, so the adapter maps `course.read_syllabus` to `course_read_syllabus` only inside the transient runtime. Events and persistent state always retain the canonical dotted ID.
 

@@ -12,6 +12,7 @@ from psycopg import sql
 from agent_core import Conversation, Event
 from course_server.auth import AuthenticationService, UserAdminService
 from course_server.auth.security import hash_session_token
+from course_server.index_resources import index_resources
 from course_server.migrations import apply_migrations
 from course_server.postgres.auth_store import PostgresAuthStore, create_auth_pool
 from course_server.postgres.conversation_store import PostgresConversationStore
@@ -47,8 +48,22 @@ def test_postgres_auth_store_roundtrip() -> None:
         assert apply_migrations(scoped_url) == [
             "0001_authentication",
             "0002_conversations_events",
+            "0003_course_resources",
         ]
         assert apply_migrations(scoped_url) == []
+        assert index_resources(scoped_url) == [
+            "course://syllabus",
+            "course://schedule",
+            "course://repositories",
+            "course://faq",
+            "course://instructors",
+            "course://application",
+        ]
+        with psycopg.connect(scoped_url) as connection:
+            assert connection.execute("SELECT count(*) FROM course_resources").fetchone() == (6,)
+            assert connection.execute(
+                "SELECT count(*) FROM faq_entries WHERE active"
+            ).fetchone() == (5,)
 
         async def scenario() -> None:
             pool = create_auth_pool(scoped_url)

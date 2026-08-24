@@ -1,6 +1,6 @@
-# Architecture decisions through Phase 5
+# Architecture decisions through Phase 6
 
-The platform has one logical production agent, `course-agent`. A request combines that shared agent policy with a trusted principal, conversation context, authorized tools and resources, and available device capabilities. Phase 1 defines the portable contracts needed to express that boundary; Phase 2 resolves trusted principals from access-code and anonymous sessions; Phase 3 persists canonical conversation events and runs the first CLI-accessible adapter; Phase 4 exposes those services through FastAPI without moving transport concerns into the core; Phase 5 adds a static React client over those HTTP contracts.
+The platform has one logical production agent, `course-agent`. A request combines that shared agent policy with a trusted principal, conversation context, authorized tools and resources, and available device capabilities. Phase 1 defines the portable contracts needed to express that boundary; Phase 2 resolves trusted principals from access-code and anonymous sessions; Phase 3 persists canonical conversation events and runs the first CLI-accessible adapter; Phase 4 exposes those services through FastAPI without moving transport concerns into the core; Phase 5 adds a static React client over those HTTP contracts; Phase 6 adds public course resources, search, and private application submission.
 
 ## Decisions
 
@@ -37,7 +37,7 @@ The current contract version is `1`. Every `Event` carries `schema_version`; the
 
 ## Stable interfaces
 
-The stable platform interfaces through Phase 5 are:
+The stable platform interfaces through Phase 6 are:
 
 - `PrincipalContext`
 - `Event`
@@ -154,16 +154,46 @@ When the application supplies a text observer, that concrete adapter enables
 smolagents' native provider stream and incrementally decodes only the
 `final_answer` tool-call argument. FastAPI emits those fragments as
 `agent.text.delta`, then emits the canonical complete result as
-`agent.text.done`. The browser ingests these events immediately and independently
-paces their visible projection at about 50 Unicode characters per second, without
-backpressuring agent execution. This adds readable live final-output movement
-without persisting partial messages, exposing intermediate reasoning, or
-changing the stable `AgentRuntime` contract. Runtimes that only implement `run`
-keep the non-streaming fallback.
+`agent.text.done`. The browser projects each fragment immediately and reconciles it with
+the canonical result without persisting partial messages, exposing intermediate
+reasoning, or changing the stable `AgentRuntime` contract. Runtimes that only implement
+`run` keep the non-streaming fallback.
 
 The expandable browser trace projects only portable activity already authorized
-for the principal: statuses, runtime/model identifiers, exact tools and
-arguments, resources, tool results, and completion. Iconography and monospace
-styling distinguish this operational evidence from the Course Agent's final
-message. Explicit public progress may temporarily occupy the main response area,
-while private reasoning remains outside the transport and UI.
+for the principal. Internal tool and resource identifiers are translated into ordinary
+activity labels, and application arguments are omitted. Iconography and monospace
+styling distinguish this operational evidence from the Course Agent's final message.
+Explicit public progress may temporarily occupy the main response area, while private
+reasoning remains outside the transport and UI.
+
+## Phase 6 additions
+
+Phase 6 expands the authorized public catalog to `course://syllabus`,
+`course://schedule`, `course://repositories`, `course://faq`,
+`course://instructors`, and `course://application`. Repository-owned sidecar manifests
+map these resources to confined files under `shared/` and generate the aggregate
+registry during indexing. The schedule carries a machine-readable `provisional` status.
+Public tools can list, read, and lexically search only the URIs placed in trusted
+`AgentContext`; resource arguments never become paths. PostgreSQL stores a normalized
+full-text copy for inspection and future gateway-backed search, without replacing the
+repository-owned files as the source of truth.
+
+Private class applications are written through a separate applicant store using
+server-generated paths and are never registered or searched as public resources.
+Principal-scoped temporary uploads let the browser pass an opaque photo receipt to the
+structured application tool; successful submission copies that photo to durable private
+storage. Submission arguments are redacted from portable tool-request events, and the
+completion event stores only a receipt summary.
+
+The concrete runtime receives a user-facing title/description resource index on every
+run, while canonical resource identifiers remain inside authorization and tool
+execution. A dedicated application-information tool keeps application conversations
+tied to the official form instead of generic model advice. The interaction workflow
+itself lives in the application guide rather than the global runtime prompt. Authorized
+smolagents web-search and page-reading wrappers support the guide's applicant research
+step without retaining fetched web content in event history.
+
+The browser adds pre-message attachment upload, maps internal resource and tool
+identifiers to ordinary activity labels, and omits private application arguments and
+tool results from its trace. Response typography now scales continuously with content
+length and line count while streamed fragments remain visible as soon as they arrive.

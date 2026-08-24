@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
@@ -26,6 +27,8 @@ class AgentSettings(BaseModel):
     model_api_key: SecretStr = Field(repr=False)
     max_steps: int = Field(default=10, ge=1, le=50)
     database_url: str
+    applicant_data_path: Path = Path(__file__).resolve().parents[2] / "var/applicants"
+    upload_data_path: Path = Path(__file__).resolve().parents[2] / "var/uploads"
 
     @classmethod
     def from_environment(
@@ -63,10 +66,25 @@ class AgentSettings(BaseModel):
         if not model_id:
             raise ConfigurationError("MODEL_ID must not be blank")
 
+        raw_applicant_path = values.get("APPLICANT_DATA_PATH")
+        applicant_data_path = (
+            Path(raw_applicant_path.strip()).expanduser()
+            if raw_applicant_path and raw_applicant_path.strip()
+            else Path(__file__).resolve().parents[2] / "var/applicants"
+        )
+        raw_upload_path = values.get("UPLOAD_DATA_PATH")
+        upload_data_path = (
+            Path(raw_upload_path.strip()).expanduser()
+            if raw_upload_path and raw_upload_path.strip()
+            else Path(__file__).resolve().parents[2] / "var/uploads"
+        )
+
         return cls(
             model_provider="openai",
             model_id=model_id,
             model_api_key=SecretStr(api_key),
             max_steps=int(values.get("AGENT_MAX_STEPS", "10")),
             database_url=database_url,
+            applicant_data_path=applicant_data_path,
+            upload_data_path=upload_data_path,
         )

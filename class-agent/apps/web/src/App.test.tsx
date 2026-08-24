@@ -12,6 +12,7 @@ vi.mock("./api.js", () => ({
   login: vi.fn(),
   logout: vi.fn(),
   streamAgentRun: vi.fn(),
+  uploadFile: vi.fn(),
 }));
 
 const publicPrincipal: PrincipalContext = {
@@ -70,6 +71,14 @@ beforeEach(() => {
   vi.mocked(api.login).mockResolvedValue(studentPrincipal);
   vi.mocked(api.logout).mockResolvedValue();
   vi.mocked(api.streamAgentRun).mockResolvedValue();
+  vi.mocked(api.uploadFile).mockResolvedValue({
+    id: "40000000-0000-4000-8000-000000000001",
+    filename: "portrait.png",
+    media_type: "image/png",
+    size_bytes: 12,
+    created_at: "2026-08-23T10:00:00Z",
+    expires_at: "2026-08-24T10:00:00Z",
+  });
 });
 
 describe("Course Agent interface", () => {
@@ -95,8 +104,7 @@ describe("Course Agent interface", () => {
         kind: "activity",
         activity: {
           kind: "resource",
-          label: "Reading course material",
-          detail: "course://syllabus",
+          label: "Reading course syllabus",
         },
       });
       onEvent({ kind: "text", text: "The new " });
@@ -119,6 +127,34 @@ describe("Course Agent interface", () => {
       expect.any(Function),
       expect.any(AbortSignal),
     );
+  });
+
+  it("shows streamed deltas immediately while newly arrived characters fade in", async () => {
+    let releaseStream = () => {};
+    vi.mocked(api.streamAgentRun).mockImplementation(async (_id, _text, onEvent) => {
+      onEvent({ kind: "text", text: "Now." });
+      await new Promise<void>((resolve) => {
+        releaseStream = resolve;
+      });
+      onEvent({ kind: "text_final", text: "Now done." });
+      onEvent({ kind: "done" });
+    });
+    render(<App />);
+    await screen.findByText("The earlier response.");
+
+    const composer = screen.getByRole("textbox", { name: "Message" });
+    fireEvent.change(composer, { target: { value: "Stream the answer" } });
+    fireEvent.keyDown(composer, { key: "Enter" });
+
+    await waitFor(() =>
+      expect(document.querySelector(".latest-response")).toHaveTextContent("Now."),
+    );
+    expect(document.querySelectorAll(".response-character")).toHaveLength(4);
+    expect(composer).toBeDisabled();
+
+    releaseStream();
+    expect(await screen.findByText("Now done.")).toBeInTheDocument();
+    await waitFor(() => expect(composer).not.toBeDisabled());
   });
 
   it("shows public progress as the temporary response until final text replaces it", async () => {
@@ -192,6 +228,34 @@ describe("Course Agent interface", () => {
     expect(api.createConversation).toHaveBeenCalledWith("Begin a new idea");
   });
 
+  it("uploads a temporary attachment and gives its receipt to the agent", async () => {
+    render(<App />);
+    await screen.findByText("The earlier response.");
+    const fileInput = document.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(fileInput).not.toBeNull();
+    const photo = new File([new Uint8Array([137, 80, 78, 71])], "portrait.png", {
+      type: "image/png",
+    });
+
+    fireEvent.change(fileInput!, { target: { files: [photo] } });
+
+    expect(await screen.findByText("portrait.png")).toBeInTheDocument();
+    expect(api.uploadFile).toHaveBeenCalledWith(photo);
+    const composer = screen.getByRole("textbox", { name: "Message" });
+    fireEvent.change(composer, { target: { value: "Use this photo for my application" } });
+    fireEvent.keyDown(composer, { key: "Enter" });
+
+    await waitFor(() => expect(api.streamAgentRun).toHaveBeenCalled());
+    expect(api.streamAgentRun).toHaveBeenCalledWith(
+      conversation.id,
+      expect.stringContaining(
+        "upload_id: 40000000-0000-4000-8000-000000000001",
+      ),
+      expect.any(Function),
+      expect.any(AbortSignal),
+    );
+  });
+
   it("welcomes first-time visitors and explains that the agent is the website", async () => {
     vi.mocked(api.listConversations).mockResolvedValue([]);
     render(<App />);
@@ -208,8 +272,7 @@ describe("Course Agent interface", () => {
         kind: "activity",
         activity: {
           kind: "tool",
-          label: "Running course.read_syllabus",
-          detail: "No arguments",
+          label: "Reading course syllabus",
         },
       });
       onEvent({ kind: "text", text: "Done." });
@@ -232,12 +295,10 @@ describe("Course Agent interface", () => {
       "Course Agent",
     );
     expect(screen.getByRole("banner")).not.toHaveTextContent("Course Agent");
-    expect(screen.getByText("Running course.read_syllabus")).not.toBeVisible();
+    expect(screen.getByText("Reading course syllabus")).not.toBeVisible();
     fireEvent.click(trace);
     expect(trace.closest("details")).toHaveAttribute("open");
-    expect(screen.getByText("Running course.read_syllabus")).toBeInTheDocument();
-    fireEvent.click(screen.getByText("Details"));
-    expect(screen.getByText("No arguments")).toBeInTheDocument();
+    expect(screen.getByText("Reading course syllabus")).toBeInTheDocument();
   });
 
   it("logs students in from the secondary drawer", async () => {

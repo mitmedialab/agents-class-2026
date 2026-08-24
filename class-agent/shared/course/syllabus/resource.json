@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "resource": {
+    "uri": "course://syllabus",
+    "title": "AI Agents for Cognitive Augmentation Syllabus",
+    "description": "Official course overview, structure, learning goals, and evaluation.",
+    "media_type": "text/markdown",
+    "file": "syllabus.md",
+    "visibility": "public",
+    "status": "published",
+    "order": 10
+  }
+}

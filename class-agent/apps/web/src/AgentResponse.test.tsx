@@ -1,23 +1,26 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { AgentResponse, responseDensity } from "./AgentResponse.js";
+import { AgentResponse, responseScale } from "./AgentResponse.js";
 
 describe("AgentResponse", () => {
   it("preserves the large treatment for short responses", () => {
     const { container } = render(<AgentResponse streaming text="A concise answer." />);
 
-    expect(responseDensity("A concise answer.")).toBe("short");
-    expect(container.firstChild).toHaveAttribute("data-density", "short");
+    expect(responseScale("A concise answer.")).toBe(1);
+    expect(container.firstChild).toHaveAttribute("data-response-scale", "1.000");
     expect(container.firstChild).toHaveAttribute("data-streaming", "true");
     expect(container.querySelectorAll(".response-character")).toHaveLength(17);
     expect(container.firstChild).toHaveTextContent("A concise answer.");
   });
 
-  it("moves substantial prose into the bounded long-reading treatment", () => {
+  it("scales continuously from large responses to the bounded reading size", () => {
+    const mediumAnswer = "Course information and application details. ".repeat(6);
     const substantialAnswer = "Course information and application details. ".repeat(14);
 
     expect(substantialAnswer.length).toBeGreaterThan(520);
-    expect(responseDensity(substantialAnswer)).toBe("long");
+    expect(responseScale(mediumAnswer)).toBeGreaterThan(0);
+    expect(responseScale(mediumAnswer)).toBeLessThan(1);
+    expect(responseScale(substantialAnswer)).toBeLessThan(responseScale(mediumAnswer));
   });
 
   it("bounds long responses and renders common markdown structurally", () => {
@@ -31,7 +34,7 @@ describe("AgentResponse", () => {
     ].join("\n");
     const { container } = render(<AgentResponse text={longText} />);
 
-    expect(container.firstChild).toHaveAttribute("data-density", "long");
+    expect(container.firstChild).toHaveAttribute("data-response-scale", "0.000");
     expect(screen.getByRole("heading", { name: "Course information" })).toBeInTheDocument();
     expect(screen.getByText("Course focus:").tagName).toBe("STRONG");
     expect(screen.getByRole("list")).toBeInTheDocument();

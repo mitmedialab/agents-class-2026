@@ -8,21 +8,40 @@ import re
 from collections.abc import Sequence
 
 from dotenv import load_dotenv
+from smolagents import DuckDuckGoSearchTool, VisitWebpageTool
 
 from agent_core import AgentResult, AgentRuntime, Conversation
 from course_server.agent import (
+    ApplicantStore,
     CourseAgentService,
+    CourseGetApplicationTool,
+    CourseGetScheduleTool,
+    CourseReadPublicFileTool,
     CourseReadSyllabusTool,
+    CourseResourceCatalog,
+    CourseSearchFaqTool,
+    CourseSearchTool,
+    CourseShowPublicFilesTool,
+    CourseSubmitApplicationTool,
+    FileApplicantStore,
     FileResourceProvider,
+    PublicCapabilityPolicy,
+    PublicVisitWebpageTool,
+    PublicWebSearchTool,
     ToolCatalog,
 )
 from course_server.agent.store import ConversationStore
 from course_server.auth import AuthenticationService
 from course_server.auth.store import AuthStore
 from course_server.config import AgentSettings, ConfigurationError
+from course_server.index_resources import index_resources
 from course_server.migrations import apply_migrations
 from course_server.postgres.auth_store import PostgresAuthStore, create_auth_pool
 from course_server.postgres.conversation_store import PostgresConversationStore
+from course_server.uploads import (
+    FileTemporaryUploadStore,
+    TemporaryUploadStore,
+)
 from runtime_smolagents import OpenAIModelProvider, SmolagentsRuntime
 
 _SAFE_PROVIDER_FIELD = re.compile(r"^[A-Za-z0-9_.\[\]-]{1,120}$")
@@ -34,13 +53,18 @@ async def run_cli_turn(
     runtime: AgentRuntime,
     auth_store: AuthStore,
     conversation_store: ConversationStore,
+    capability_policy: PublicCapabilityPolicy | None = None,
 ) -> tuple[Conversation, AgentResult]:
     """Run the CLI flow with injectable adapters so tests never call an external model."""
 
     authentication = AuthenticationService(auth_store)
     credential = await authentication.create_anonymous()
     principal = await authentication.resolve_anonymous(credential.token)
-    service = CourseAgentService(runtime=runtime, conversations=conversation_store)
+    service = CourseAgentService(
+        runtime=runtime,
+        conversations=conversation_store,
+        capability_policy=capability_policy,
+    )
     conversation = await service.create_conversation(principal)
     result = await service.run(
         principal=principal,
@@ -50,9 +74,34 @@ async def run_cli_turn(
     return conversation, result
 
 
-def build_runtime(settings: AgentSettings) -> SmolagentsRuntime:
-    resources = FileResourceProvider.with_sample_syllabus()
-    tools = ToolCatalog([CourseReadSyllabusTool(resources)])
+def build_runtime(
+    settings: AgentSettings,
+    *,
+    resources: CourseResourceCatalog | None = None,
+    applicants: ApplicantStore | None = None,
+    uploads: TemporaryUploadStore | None = None,
+) -> SmolagentsRuntime:
+    course_resources = resources if resources is not None else FileResourceProvider.from_registry()
+    applicant_store = (
+        applicants if applicants is not None else FileApplicantStore(settings.applicant_data_path)
+    )
+    upload_store = (
+        uploads if uploads is not None else FileTemporaryUploadStore(settings.upload_data_path)
+    )
+    tools = ToolCatalog(
+        [
+            CourseReadSyllabusTool(course_resources),
+            CourseReadPublicFileTool(course_resources),
+            CourseGetScheduleTool(course_resources),
+            CourseGetApplicationTool(course_resources),
+            CourseShowPublicFilesTool(course_resources),
+            CourseSearchFaqTool(course_resources),
+            CourseSearchTool(course_resources),
+            CourseSubmitApplicationTool(applicant_store, upload_store),
+            PublicWebSearchTool(DuckDuckGoSearchTool(max_results=5).forward),
+            PublicVisitWebpageTool(VisitWebpageTool(max_output_length=20_000).forward),
+        ]
+    )
     provider = OpenAIModelProvider(
         model_id=settings.model_id,
         api_key=settings.model_api_key,
@@ -60,6 +109,10 @@ def build_runtime(settings: AgentSettings) -> SmolagentsRuntime:
     return SmolagentsRuntime(
         model_provider=provider,
         tools=tools,
+        public_resource_index=(
+            f"{resource.title}: {resource.description}"
+            for resource in course_resources.list_public()
+        ),
         max_steps=settings.max_steps,
         agent_id=settings.agent_id,
     )
@@ -73,11 +126,15 @@ async def _run_postgres_turn(
     await pool.open()
     await pool.wait()
     try:
+        course_resources = FileResourceProvider.from_registry()
         return await run_cli_turn(
             text,
-            runtime=build_runtime(settings),
+            runtime=build_runtime(settings, resources=course_resources),
             auth_store=PostgresAuthStore(pool),
             conversation_store=PostgresConversationStore(pool),
+            capability_policy=PublicCapabilityPolicy(
+                resource.uri for resource in course_resources.list_public()
+            ),
         )
     finally:
         await pool.close()
@@ -135,6 +192,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         apply_migrations(settings.database_url)
+        index_resources(settings.database_url)
         conversation, result = asyncio.run(_run_postgres_turn(arguments.message, settings))
     except Exception as error:
         raise SystemExit(_safe_failure_message(error)) from None

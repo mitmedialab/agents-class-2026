@@ -22,6 +22,10 @@ from course_server.agent import (
     ConversationAccessDenied,
     ConversationStore,
     CourseAgentService,
+    CourseResourceCatalog,
+    FileResourceProvider,
+    PublicCapabilityPolicy,
+    ResourceSummary,
 )
 from course_server.agent.store import principal_owns_conversation
 from course_server.agent_cli import build_runtime
@@ -33,9 +37,17 @@ from course_server.auth import (
 )
 from course_server.auth.models import SessionCredential
 from course_server.config import AgentSettings
+from course_server.index_resources import index_resources
 from course_server.migrations import apply_migrations
 from course_server.postgres.auth_store import PostgresAuthStore, create_auth_pool
 from course_server.postgres.conversation_store import PostgresConversationStore
+from course_server.uploads import (
+    MAX_UPLOAD_BYTES,
+    FileTemporaryUploadStore,
+    TemporaryUploadReceipt,
+    TemporaryUploadStore,
+    UploadError,
+)
 
 AUTH_COOKIE = "class_agent_auth"
 ANON_COOKIE = "class_agent_anon"
@@ -103,6 +115,8 @@ class AppServices:
     authentication: AuthenticationService
     agent: CourseAgentService
     conversations: ConversationStore
+    course_resources: CourseResourceCatalog | None = None
+    uploads: TemporaryUploadStore | None = None
 
 
 @dataclass
@@ -392,19 +406,31 @@ def create_app(
             load_dotenv(override=False)
         resolved_settings = settings or AgentSettings.from_environment()
         apply_migrations(resolved_settings.database_url)
+        index_resources(resolved_settings.database_url)
         pool = create_auth_pool(resolved_settings.database_url)
         await pool.open()
         await pool.wait()
         resources.pool = pool
         auth_store = PostgresAuthStore(pool)
         conversation_store = PostgresConversationStore(pool)
+        course_resources = FileResourceProvider.from_registry()
+        upload_store = FileTemporaryUploadStore(resolved_settings.upload_data_path)
         app.state.course_state.services = AppServices(
             authentication=AuthenticationService(auth_store),
             agent=CourseAgentService(
-                runtime=build_runtime(resolved_settings),
+                runtime=build_runtime(
+                    resolved_settings,
+                    resources=course_resources,
+                    uploads=upload_store,
+                ),
                 conversations=conversation_store,
+                capability_policy=PublicCapabilityPolicy(
+                    resource.uri for resource in course_resources.list_public()
+                ),
             ),
             conversations=conversation_store,
+            course_resources=course_resources,
+            uploads=upload_store,
         )
         try:
             yield
@@ -415,7 +441,7 @@ def create_app(
 
     app = FastAPI(
         title="Class Agent API",
-        version="0.4.0",
+        version="0.6.0",
         lifespan=lifespan,
     )
     app.state.course_state = AppState(services=services, resources=resources)
@@ -479,6 +505,81 @@ def create_app(
         principal: Annotated[PrincipalContext, Depends(_require_principal)],
     ) -> PrincipalResponse:
         return PrincipalResponse.from_principal(principal)
+
+    @router.get("/course/resources", response_model=list[ResourceSummary])
+    async def list_course_resources(
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> list[ResourceSummary]:
+        state = _get_app_state(request)
+        assert state.services is not None
+        catalog = state.services.course_resources
+        if catalog is None:
+            catalog = FileResourceProvider.from_registry()
+        permitted = frozenset(
+            PublicCapabilityPolicy(resource.uri for resource in catalog.list_public())
+            .authorize(principal)
+            .resource_uris
+        )
+        return [resource for resource in catalog.list_public() if resource.uri in permitted]
+
+    @router.post(
+        "/uploads",
+        response_model=TemporaryUploadReceipt,
+        status_code=status.HTTP_201_CREATED,
+    )
+    async def upload_file(
+        filename: str,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> TemporaryUploadReceipt:
+        state = _get_app_state(request)
+        assert state.services is not None
+        upload_store = state.services.uploads
+        if upload_store is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="temporary uploads are unavailable",
+            )
+        content_length = request.headers.get("content-length")
+        if content_length is not None:
+            try:
+                declared_length = int(content_length)
+            except ValueError as error:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="invalid content length",
+                ) from error
+            if declared_length > MAX_UPLOAD_BYTES:
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail="uploaded file exceeds the 10 MB limit",
+                )
+
+        chunks: list[bytes] = []
+        size = 0
+        async for chunk in request.stream():
+            size += len(chunk)
+            if size > MAX_UPLOAD_BYTES:
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail="uploaded file exceeds the 10 MB limit",
+                )
+            chunks.append(chunk)
+        try:
+            return await upload_store.store(
+                filename=filename,
+                media_type=request.headers.get("content-type", ""),
+                content=b"".join(chunks),
+                principal=principal,
+            )
+        except UploadError as error:
+            response_status = (
+                status.HTTP_415_UNSUPPORTED_MEDIA_TYPE
+                if "unsupported file type" in str(error)
+                else status.HTTP_400_BAD_REQUEST
+            )
+            raise HTTPException(status_code=response_status, detail=str(error)) from error
 
     @router.get("/conversations", response_model=list[Conversation])
     async def list_conversations(

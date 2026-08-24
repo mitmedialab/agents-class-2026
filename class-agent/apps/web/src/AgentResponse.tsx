@@ -1,12 +1,38 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
-export type ResponseDensity = "short" | "medium" | "long";
+const MIN_CONTENT_LOAD = 40;
+const MAX_CONTENT_LOAD = 900;
 
-export function responseDensity(text: string): ResponseDensity {
+export function responseScale(text: string): number {
   const visibleLines = text.split("\n").filter((line) => line.trim()).length;
-  if (text.length <= 180 && visibleLines <= 3) return "short";
-  if (text.length <= 520 && visibleLines <= 10) return "medium";
-  return "long";
+  const contentLoad = text.length + Math.max(0, visibleLines - 1) * 36;
+  const progress = Math.min(
+    1,
+    Math.max(0, (contentLoad - MIN_CONTENT_LOAD) / (MAX_CONTENT_LOAD - MIN_CONTENT_LOAD)),
+  );
+  const easedProgress = progress * progress * (3 - 2 * progress);
+  return 1 - easedProgress;
+}
+
+function interpolate(small: number, large: number, scale: number): number {
+  return small + (large - small) * scale;
+}
+
+function responseStyle(text: string): CSSProperties {
+  const scale = responseScale(text);
+  return {
+    "--response-font-min": `${interpolate(1.05, 1.75, scale).toFixed(3)}rem`,
+    "--response-font-fluid": `${interpolate(1.55, 3.5, scale).toFixed(3)}vw`,
+    "--response-font-max": `${interpolate(1.5, 3.875, scale).toFixed(3)}rem`,
+    "--response-mobile-min": `${interpolate(1, 1.5, scale).toFixed(3)}rem`,
+    "--response-mobile-fluid": `${interpolate(4.2, 8, scale).toFixed(3)}vw`,
+    "--response-mobile-max": `${interpolate(1, 2.25, scale).toFixed(3)}rem`,
+    "--response-letter-spacing": `${interpolate(-0.01, -0.035, scale).toFixed(4)}em`,
+    "--response-line-height": interpolate(1.48, 1.12, scale).toFixed(3),
+    "--response-max-width": `${interpolate(52, 24, scale).toFixed(2)}ch`,
+    "--response-padding-inline": `${interpolate(1.5, 0.25, scale).toFixed(3)}rem`,
+    "--response-padding-bottom": `${interpolate(2, 0.25, scale).toFixed(3)}rem`,
+  } as CSSProperties;
 }
 
 function characterNodes(text: string, keyPrefix: string, streaming: boolean): ReactNode {
@@ -117,11 +143,13 @@ export interface AgentResponseProps {
 }
 
 export function AgentResponse({ streaming = false, text }: AgentResponseProps) {
+  const scale = responseScale(text);
   return (
     <div
       className="latest-response"
-      data-density={responseDensity(text)}
+      data-response-scale={scale.toFixed(3)}
       data-streaming={streaming}
+      style={responseStyle(text)}
     >
       {responseBlocks(text, streaming)}
     </div>

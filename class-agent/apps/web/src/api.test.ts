@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { streamAgentRun, type AgentStreamEvent } from "./api.js";
+import { streamAgentRun, uploadFile, type AgentStreamEvent } from "./api.js";
 
 describe("agent event stream", () => {
   it("parses split CRLF events into process and text updates", async () => {
@@ -15,6 +15,11 @@ describe("agent event stream", () => {
         controller.enqueue(
           encoder.encode(
             '\ndata: {"type":"resource.read","event":{"payload":{"uri":"course://syllabus"}}}\r\n\r',
+          ),
+        );
+        controller.enqueue(
+          encoder.encode(
+            '\nevent: platform\ndata: {"type":"agent.tool.requested","event":{"payload":{"tool_id":"course.get_application","arguments":{}}}}\n\n',
           ),
         );
         controller.enqueue(
@@ -64,8 +69,14 @@ describe("agent event stream", () => {
         kind: "activity",
         activity: {
           kind: "resource",
-          label: "Reading course://syllabus",
-          detail: "course://syllabus",
+          label: "Reading course syllabus",
+        },
+      },
+      {
+        kind: "activity",
+        activity: {
+          kind: "tool",
+          label: "Reading application information",
         },
       },
       { kind: "progress", text: "I’ll read the syllabus." },
@@ -76,6 +87,38 @@ describe("agent event stream", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/v1/conversations/20000000-0000-4000-8000-000000000001/run/stream",
       expect.objectContaining({ credentials: "include", method: "POST" }),
+    );
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("temporary uploads", () => {
+  it("sends raw file bytes with a filename query and content type", async () => {
+    const upload = {
+      id: "40000000-0000-4000-8000-000000000001",
+      filename: "face photo.png",
+      media_type: "image/png",
+      size_bytes: 8,
+      created_at: "2026-08-23T10:00:00Z",
+      expires_at: "2026-08-24T10:00:00Z",
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: vi.fn().mockResolvedValue(upload),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const file = new File(["contents"], "face photo.png", { type: "image/png" });
+
+    await expect(uploadFile(file)).resolves.toEqual(upload);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/uploads?filename=face+photo.png",
+      expect.objectContaining({
+        body: file,
+        credentials: "include",
+        headers: { "Content-Type": "image/png" },
+        method: "POST",
+      }),
     );
     vi.unstubAllGlobals();
   });

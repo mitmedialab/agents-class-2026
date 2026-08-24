@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "resource": {
+    "uri": "course://faq",
+    "title": "Course Information Index",
+    "description": "Pointers to canonical course resources by topic.",
+    "media_type": "text/markdown",
+    "file": "faq.md",
+    "visibility": "public",
+    "status": "published",
+    "order": 40
+  }
+}

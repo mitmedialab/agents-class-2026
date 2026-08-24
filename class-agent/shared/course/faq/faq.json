@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "id": "8d4f529b-6718-4fac-a4d5-0aa5d7e91c96",
+      "question": "Where are course content, structure, and evaluation documented?",
+      "answer": "Syllabus"
+    },
+    {
+      "id": "e60e5eb9-b8ef-4617-8459-b19e53bf52d8",
+      "question": "Where is the meeting schedule documented?",
+      "answer": "Course schedule"
+    },
+    {
+      "id": "bdc677b8-d8b8-42b0-a220-0157e33e7fd4",
+      "question": "Where are applications, admissions, and deadlines documented?",
+      "answer": "Application information"
+    },
+    {
+      "id": "6d4e2a75-3f10-4db2-b8da-086d77f6a453",
+      "question": "Where are the instructors and teaching assistants documented?",
+      "answer": "Course staff"
+    },
+    {
+      "id": "6f4960b4-fab4-4ea9-bc3c-8ca3e8b1ba9d",
+      "question": "Where are student repositories documented?",
+      "answer": "Student repository overview"
+    }
+  ]
+}

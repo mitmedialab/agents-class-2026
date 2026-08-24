@@ -12,3 +12,5 @@ dist/
 coverage/
 playwright-report/
 test-results/
+var/applicants/
+var/uploads/

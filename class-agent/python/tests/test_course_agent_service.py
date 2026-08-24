@@ -7,8 +7,16 @@ import pytest
 
 from agent_core import AgentContext, AgentInput, AgentResult, Event, PrincipalContext
 from course_server.agent import (
+    COURSE_APPLICATION_URI,
+    COURSE_FAQ_URI,
+    COURSE_INSTRUCTORS_URI,
+    COURSE_REPOSITORIES_URI,
+    COURSE_SCHEDULE_URI,
     COURSE_SYLLABUS_URI,
-    READ_SYLLABUS_TOOL_ID,
+    GET_APPLICATION_TOOL_ID,
+    SEARCH_COURSE_TOOL_ID,
+    VISIT_WEBPAGE_TOOL_ID,
+    WEB_SEARCH_TOOL_ID,
     ConversationAccessDenied,
     CourseAgentService,
     InMemoryConversationStore,
@@ -55,11 +63,21 @@ class RecordingRuntime:
         )
 
 
-def test_public_policy_exposes_only_phase_three_capabilities() -> None:
+def test_public_policy_exposes_phase_six_course_capabilities() -> None:
     authorized = PublicCapabilityPolicy().authorize(public_principal())
 
-    assert authorized.tool_ids == (READ_SYLLABUS_TOOL_ID,)
-    assert authorized.resource_uris == (COURSE_SYLLABUS_URI,)
+    assert SEARCH_COURSE_TOOL_ID in authorized.tool_ids
+    assert GET_APPLICATION_TOOL_ID in authorized.tool_ids
+    assert WEB_SEARCH_TOOL_ID in authorized.tool_ids
+    assert VISIT_WEBPAGE_TOOL_ID in authorized.tool_ids
+    assert authorized.resource_uris == (
+        COURSE_SYLLABUS_URI,
+        COURSE_SCHEDULE_URI,
+        COURSE_REPOSITORIES_URI,
+        COURSE_FAQ_URI,
+        COURSE_INSTRUCTORS_URI,
+        COURSE_APPLICATION_URI,
+    )
 
 
 def test_course_agent_persists_portable_history_and_isolates_anonymous_users() -> None:
@@ -81,7 +99,7 @@ def test_course_agent_persists_portable_history_and_isolates_anonymous_users() -
             "user.message",
             "agent.message",
         ]
-        assert runtime.contexts[0].permitted_tool_ids == [READ_SYLLABUS_TOOL_ID]
+        assert SEARCH_COURSE_TOOL_ID in runtime.contexts[0].permitted_tool_ids
 
         with pytest.raises(ConversationAccessDenied):
             await service.run(

@@ -2,7 +2,7 @@
 
 Class Agent is the extensible Course Agent platform described in [CONSTITUTION.md](CONSTITUTION.md). It is designed for an MIT Media Lab course and favors explicit, portable contracts that students can inspect and extend.
 
-The repository is currently at **Phase 5**: a React/Vite interface over the Course Agent service. It contains stable core contracts, access-code and anonymous authentication, portable PostgreSQL conversation/event history, a `ToolCallingAgent` adapter, one public syllabus tool/resource, secure session-cookie routes, conversation APIs, Server-Sent Event output, and a minimal conversation/workspace frontend. It intentionally does not yet contain the phase-6 course resource catalog, dynamic workspace components, MCP servers, Agent Bridge, or a browser extension.
+The repository is currently at **Phase 6**: public course resources and private course applications over the Phase 5 web agent. It contains stable core contracts, access-code and anonymous authentication, portable PostgreSQL conversation/event history, a `ToolCallingAgent` adapter, a public syllabus, provisional schedule, course staff directory, repository overview, FAQ, application guide, lexical course search, public web search and page reading, a manifest-generated public resource catalog, secure temporary chat uploads, validated private application submission with a photo, Server-Sent Event output, and a minimal conversation/workspace frontend. It intentionally does not yet contain Phase 7 native workspace components, MCP servers, Agent Bridge, or a browser extension.
 
 ## Requirements
 
@@ -34,6 +34,7 @@ docker-compose up -d postgres
 cp -n .env.example .env
 export DATABASE_URL=postgresql://class_agent:class_agent_dev@127.0.0.1:5432/class_agent
 uv run python -m course_server.migrations apply
+uv run python -m course_server.index_resources
 ```
 
 Put your key in `.env` as one unquoted, single-line assignment and leave `.env` uncommitted. Do not add literal `\\n` characters. Blank lines between assignments are fine:
@@ -49,13 +50,17 @@ The CLI intentionally does not override variables already exported in the shell.
 uv run python -m course_server.agent_cli "What does the syllabus say?"
 ```
 
-Run the Phase 4 API at `http://127.0.0.1:8000` with:
+Run the API at `http://127.0.0.1:8000` with:
 
 ```bash
 uv run python -m course_server.api
 ```
 
-In another terminal, run the Phase 5 web app:
+The runtime prompt, authorized tool catalog, and public resource index are constructed
+at API startup. Restart this process after changing Python runtime behavior or resource
+manifests. Public resource file contents themselves are read when a tool is called.
+
+In another terminal, run the web app:
 
 ```bash
 pnpm dev
@@ -66,7 +71,15 @@ development API. Click the centered `Course Agent` title to open login and
 conversation navigation. The default production build uses same-origin
 `/api/v1`; set `VITE_API_BASE_URL` only when deploying the API elsewhere.
 
-The API's session cookies are always marked `Secure`, including in development. A browser must therefore access it through HTTPS to retain sessions; terminating local TLS at a development proxy is the closest production-equivalent setup. The API is documented at `/docs`, with canonical routes under `/api/v1`.
+The API's session cookies are always marked `Secure`, including in development. A browser must therefore access it through HTTPS to retain sessions; terminating local TLS at a development proxy is the closest production-equivalent setup. The API is documented at `/docs`, with canonical routes under `/api/v1`. Public resource metadata is available at `/api/v1/course/resources`; the schedule is marked `provisional` until its details are confirmed.
+
+Chat attachments are stored for 24 hours under `UPLOAD_DATA_PATH` (default
+`var/uploads/`). Complete course applications submitted through the agent are written
+as private structured records with a durable photo under `APPLICANT_DATA_PATH` (default
+`var/applicants/`). Both directories are ignored by Git; only the applicant directory
+normally belongs in protected production backups. See
+[docs/COURSE_RESOURCES.md](docs/COURSE_RESOURCES.md) for resource manifests, automatic
+indexing, uploads, and application-storage operations.
 
 Run the real PostgreSQL integration test with:
 
@@ -104,6 +117,8 @@ packages/ui/             first-party React primitives and design tokens
 apps/web/                 static Vite Course Agent interface
 shared/schemas/v1/       canonical JSON Schemas and shared examples
 database/migrations/     permanent checksummed PostgreSQL migrations
+shared/course/            public course content and per-resource manifests
+shared/registry/          generated public resource registry
 docs/                    architecture and versioning decisions
 ```
 

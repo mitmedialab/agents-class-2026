@@ -16,6 +16,7 @@ def test_migrations_are_discoverable_and_checksummed() -> None:
     assert [migration.version for migration in migrations] == [
         "0001_authentication",
         "0002_conversations_events",
+        "0003_course_resources",
     ]
     assert all(len(migration.checksum) == 64 for migration in migrations)
 
@@ -47,6 +48,15 @@ def test_phase_three_migration_contains_portable_history_tables() -> None:
     assert "payload jsonb" in sql
     assert "metadata jsonb" in sql
     assert "pickle" not in sql
+
+
+def test_phase_six_migration_contains_searchable_course_resources() -> None:
+    sql = discover_migrations(MIGRATIONS_PATH)[2].sql.lower()
+
+    assert "create table course_resources" in sql
+    assert "create table faq_entries" in sql
+    assert "tsvector" in sql
+    assert "using gin" in sql
 
 
 def test_invalid_migration_filename_is_rejected(tmp_path: Path) -> None:

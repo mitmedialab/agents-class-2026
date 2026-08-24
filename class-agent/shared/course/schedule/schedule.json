@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "status": "provisional",
+  "meeting": {
+    "frequency": "weekly",
+    "modality": "in_person",
+    "start_time": "11:00 AM",
+    "show_and_tell_minutes": 15
+  },
+  "weeks": [
+    {
+      "week": 1,
+      "date_label": "9/20",
+      "lecture": "Course introduction: What is an AI agent? History of agents and cognitive augmentation; agents as perception-action loops, tool use, and autonomy.",
+      "speakers": ["Pattie Maes"],
+      "tutorial": "Build a minimal observe-decide-act agent loop and start the documentation website.",
+      "readings": "ReAct; surveys on LLM agents; software agents background."
+    },
+    {
+      "week": 2,
+      "date_label": null,
+      "lecture": "Tool use and agent interfaces: function calling, APIs, MCP, schemas, affordances, permissions, and failures.",
+      "speakers": ["Valdemar Danry"],
+      "tutorial": "Build a typed tool-calling agent with five tools and tool-call validation.",
+      "readings": "Toolformer; MCP specification; recent tool-use agent papers."
+    },
+    {
+      "week": 3,
+      "date_label": null,
+      "lecture": "Human-agent interaction and cognitive augmentation: delegation, agency, overreliance, deskilling, representation, and human outcomes.",
+      "speakers": ["Pattie Maes"],
+      "tutorial": "Explore agent interaction design decisions such as hand-off and approval.",
+      "readings": "Guidelines for Human-AI Interaction; cognitive offloading; Socratic AI; human-AI teaming."
+    },
+    {
+      "week": 4,
+      "date_label": null,
+      "lecture": "Agent environments and evaluation: tasks, environments, state-based grading, metrics, failure taxonomies, cost, and latency.",
+      "speakers": ["Valdemar Danry"],
+      "tutorial": "Build a mini benchmark with 30 tasks and automatic grading.",
+      "readings": "Tau-bench; GAIA; AgentBench; benchmark design papers."
+    },
+    {
+      "week": 5,
+      "date_label": null,
+      "lecture": "Browser and computer-use agents: DOM, screenshots, accessibility trees, visual grounding, software control, coding, terminals, and sandboxing.",
+      "speakers": ["Yasith Samarandivakara"],
+      "tutorial": "Build a browser agent for a local website or a coding/terminal agent that fixes small repository issues.",
+      "readings": "WebArena; VisualWebArena; Mind2Web; VideoWebArena; SWE-agent; SWE-bench; OSWorld."
+    },
+    {
+      "week": 6,
+      "date_label": null,
+      "lecture": "Memory architectures, context, and personalization: short-term, episodic, semantic, and long-term memory; writing, reading, and forgetting policies.",
+      "speakers": ["Wazeer"],
+      "tutorial": "Build a multi-session agent and compare no memory, naive memory, and selective memory.",
+      "readings": "Recent agent memory surveys; Generative Agents."
+    },
+    {
+      "week": 7,
+      "date_label": null,
+      "lecture": "Final project proposal presentations.",
+      "speakers": [],
+      "tutorial": null,
+      "readings": null
+    },
+    {
+      "week": 8,
+      "date_label": null,
+      "lecture": "Multimodal agents: vision, audio, video, interaction traces, gaze, screen state, sensor data, and grounding.",
+      "speakers": ["Paul Liang"],
+      "tutorial": "Build an agent that uses at least one non-text input.",
+      "readings": "GPT-4V, Gemini, and LLaVA-style agent papers; VideoWebArena; OpenVLA."
+    },
+    {
+      "week": 9,
+      "date_label": null,
+      "lecture": "Agentic reinforcement learning and self-improving agents: GRPO, PPO, DPO, trajectories, rewards, feedback, and adaptation.",
+      "speakers": ["Paul Liang"],
+      "tutorial": "Fine-tune or adapt a small agent policy using trajectories, preferences, or reward signals.",
+      "readings": "DeepSeek-R1; DPO; agentic reinforcement-learning surveys."
+    },
+    {
+      "week": 10,
+      "date_label": null,
+      "lecture": "Multi-agent systems and simulated societies: role decomposition, delegation, debate, user simulators, collaboration, and coordination failures.",
+      "speakers": ["Sung-Won Park", "Bernstein"],
+      "tutorial": "Build a single-agent versus multi-agent comparison.",
+      "readings": "Generative Agents; multi-agent failure papers."
+    },
+    {
+      "week": 11,
+      "date_label": null,
+      "lecture": "Wearables, BCIs, and physiology-aware agents: gaze, EEG, EDA, audio, context sensing, and closed-loop systems.",
+      "speakers": ["Chitra", "Cathy", "Dünya"],
+      "tutorial": "Build a physiology- or context-aware prototype, or use a simulated sensor stream.",
+      "readings": "Wearable AI; BCI; affective computing; gaze-aware assistants."
+    },
+    {
+      "week": 12,
+      "date_label": null,
+      "lecture": "Safety, security, and agent behaviors: prompt and tool injection, exfiltration, irreversible actions, sandboxing, audit logs, and approvals.",
+      "speakers": ["Manuel Cherep", "Tobin South"],
+      "tutorial": "Red-team another group's agent.",
+      "readings": "MCP security discussions; prompt-injection papers; agent-safety papers."
+    },
+    {
+      "week": 13,
+      "date_label": null,
+      "lecture": "Final project presentations with live demo, paper-style presentation, and failure analysis.",
+      "speakers": [],
+      "tutorial": "Final demos.",
+      "readings": "Final project reports."
+    }
+  ]
+}

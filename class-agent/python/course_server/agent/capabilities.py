@@ -1,4 +1,4 @@
-"""Minimal MCP-aligned tool and resource conveniences for Phase 3.
+"""MCP-aligned public course tools and resources.
 
 These are application wrappers, not a competing wire protocol. Their IDs, resource
 URIs, and JSON input schemas translate directly to MCP concepts when the gateway is
@@ -8,22 +8,69 @@ introduced in a later phase.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Iterable, Mapping
+import ipaddress
+import json
+import os
+import re
+import shutil
+import socket
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import ClassVar, Literal, Protocol
-from uuid import UUID
+from urllib.parse import urlsplit
+from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    JsonValue,
+    ValidationError,
+    field_validator,
+)
 
 from agent_core import PrincipalContext
+from course_server.uploads import (
+    APPLICATION_PHOTO_MEDIA_TYPES,
+    StoredTemporaryUpload,
+    TemporaryUploadStore,
+    UploadError,
+)
 
 READ_SYLLABUS_TOOL_ID = "course.read_syllabus"
+READ_PUBLIC_FILE_TOOL_ID = "course.read_public_file"
+GET_SCHEDULE_TOOL_ID = "course.get_schedule"
+GET_APPLICATION_TOOL_ID = "course.get_application"
+SHOW_PUBLIC_FILES_TOOL_ID = "course.show_public_files"
+SEARCH_FAQ_TOOL_ID = "course.search_faq"
+SEARCH_COURSE_TOOL_ID = "course.search"
+SUBMIT_APPLICATION_TOOL_ID = "course.submit_application"
+WEB_SEARCH_TOOL_ID = "web.search"
+VISIT_WEBPAGE_TOOL_ID = "web.visit"
 COURSE_SYLLABUS_URI = "course://syllabus"
+COURSE_SCHEDULE_URI = "course://schedule"
+COURSE_REPOSITORIES_URI = "course://repositories"
+COURSE_FAQ_URI = "course://faq"
+COURSE_INSTRUCTORS_URI = "course://instructors"
+COURSE_APPLICATION_URI = "course://application"
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_SYLLABUS_PATH = PROJECT_ROOT / "shared/course/syllabus/syllabus.md"
+DEFAULT_RESOURCE_REGISTRY_PATH = PROJECT_ROOT / "shared/registry/resources.json"
+DEFAULT_APPLICANT_DATA_PATH = PROJECT_ROOT / "var/applicants"
+
+_SEARCH_WORD = re.compile(r"[\w'-]+", re.UNICODE)
+_MAX_SEARCH_QUERY_LENGTH = 300
+_MAX_SEARCH_LIMIT = 10
+_MAX_WEB_QUERY_LENGTH = 300
+_MAX_WEB_URL_LENGTH = 2_048
+_MAX_WEB_RESULT_LENGTH = 20_000
 
 StoragePolicy = Literal["server_full", "server_summary", "local_only", "ephemeral"]
+ResourceVisibility = Literal["public"]
+ResourceStatus = Literal["published", "provisional"]
 
 
 class CapabilityCatalogError(RuntimeError):
@@ -32,6 +79,10 @@ class CapabilityCatalogError(RuntimeError):
 
 class ResourceNotFound(RuntimeError):
     """A requested resource is not registered or no longer readable."""
+
+
+class ToolValidationError(ValueError):
+    """A tool request failed with a safe, model-actionable validation message."""
 
 
 class ToolExecutionResult(BaseModel):
@@ -73,6 +124,155 @@ class ExecutableTool(Protocol):
     ) -> ToolExecutionResult: ...
 
 
+WebTextRunner = Callable[[str], str]
+
+
+def _required_tool_string(
+    arguments: Mapping[str, JsonValue],
+    field: str,
+    *,
+    max_length: int,
+) -> str:
+    if set(arguments) != {field}:
+        raise ToolValidationError(f"{field} is required and no other fields are accepted")
+    raw_value = arguments.get(field)
+    if not isinstance(raw_value, str):
+        raise ToolValidationError(f"{field} must be text")
+    value = raw_value.strip()
+    if not value:
+        raise ToolValidationError(f"{field} must not be blank")
+    if len(value) > max_length:
+        raise ToolValidationError(f"{field} is too long")
+    return value
+
+
+def _public_web_url(raw_url: str) -> str:
+    parsed = urlsplit(raw_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ToolValidationError("url must be an absolute HTTP or HTTPS URL")
+    if parsed.username is not None or parsed.password is not None:
+        raise ToolValidationError("url must not contain credentials")
+
+    try:
+        address_info = socket.getaddrinfo(
+            parsed.hostname,
+            parsed.port or (443 if parsed.scheme == "https" else 80),
+            type=socket.SOCK_STREAM,
+        )
+    except (OSError, ValueError) as error:
+        raise ToolValidationError("url hostname could not be resolved") from error
+    addresses = {item[4][0] for item in address_info if isinstance(item[4][0], str)}
+    if not addresses or any(
+        not ipaddress.ip_address(address.split("%", 1)[0]).is_global for address in addresses
+    ):
+        raise ToolValidationError("url must resolve only to public internet addresses")
+    return raw_url
+
+
+class PublicWebSearchTool:
+    """Search the public web through an injected smolagents search implementation."""
+
+    id = WEB_SEARCH_TOOL_ID
+    description = (
+        "Search the public web for current information. Results are preliminary links and "
+        "snippets, not verified page contents; open relevant results before relying on them. "
+        "Distinguish public information from information supplied by the user."
+    )
+    input_schema: ClassVar[dict[str, JsonValue]] = {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "A focused public-web search query.",
+                "minLength": 1,
+                "maxLength": _MAX_WEB_QUERY_LENGTH,
+            }
+        },
+        "required": ["query"],
+        "additionalProperties": False,
+    }
+
+    def __init__(self, search: WebTextRunner) -> None:
+        self._search = search
+
+    async def execute(
+        self,
+        arguments: Mapping[str, JsonValue],
+        context: ToolExecutionContext,
+    ) -> ToolExecutionResult:
+        del context
+        query = _required_tool_string(
+            arguments,
+            "query",
+            max_length=_MAX_WEB_QUERY_LENGTH,
+        )
+        try:
+            result = await asyncio.to_thread(self._search, query)
+        except Exception as error:
+            raise ToolValidationError(
+                "Public web search failed. Try a shorter or more specific query."
+            ) from error
+        content = result.strip()
+        if not content:
+            raise ToolValidationError("Public web search returned no results.")
+        return ToolExecutionResult(
+            content=content[:_MAX_WEB_RESULT_LENGTH],
+            summary="Searched the public web.",
+            storage_policy="server_summary",
+        )
+
+
+class PublicVisitWebpageTool:
+    """Read a public webpage through an injected smolagents page-view implementation."""
+
+    id = VISIT_WEBPAGE_TOOL_ID
+    description = (
+        "Open and read a relevant public webpage returned by web search. Do not access local, "
+        "private-network, credential-bearing, or non-HTTP URLs."
+    )
+    input_schema: ClassVar[dict[str, JsonValue]] = {
+        "type": "object",
+        "properties": {
+            "url": {
+                "type": "string",
+                "description": "An absolute public HTTP or HTTPS URL.",
+                "minLength": 1,
+                "maxLength": _MAX_WEB_URL_LENGTH,
+            }
+        },
+        "required": ["url"],
+        "additionalProperties": False,
+    }
+
+    def __init__(self, visit: WebTextRunner) -> None:
+        self._visit = visit
+
+    async def execute(
+        self,
+        arguments: Mapping[str, JsonValue],
+        context: ToolExecutionContext,
+    ) -> ToolExecutionResult:
+        del context
+        raw_url = _required_tool_string(
+            arguments,
+            "url",
+            max_length=_MAX_WEB_URL_LENGTH,
+        )
+        url = await asyncio.to_thread(_public_web_url, raw_url)
+        try:
+            result = await asyncio.to_thread(self._visit, url)
+        except Exception as error:
+            raise ToolValidationError("The public webpage could not be read.") from error
+        content = result.strip()
+        if not content:
+            raise ToolValidationError("The public webpage returned no readable content.")
+        return ToolExecutionResult(
+            content=content[:_MAX_WEB_RESULT_LENGTH],
+            summary="Read a public webpage.",
+            storage_policy="server_summary",
+        )
+
+
 @dataclass(frozen=True)
 class ResourceDefinition:
     """Registered text resource backed by a repository-owned file."""
@@ -81,6 +281,52 @@ class ResourceDefinition:
     title: str
     media_type: str
     path: Path
+    description: str = ""
+    visibility: ResourceVisibility = "public"
+    status: ResourceStatus = "published"
+
+
+class ResourceRegistryEntry(BaseModel):
+    """Validated entry from the repository-owned public resource registry."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    uri: str
+    title: str
+    description: str = ""
+    media_type: str
+    path: str
+    visibility: ResourceVisibility = "public"
+    status: ResourceStatus = "published"
+
+
+class ResourceRegistry(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal[1] = 1
+    resources: list[ResourceRegistryEntry]
+
+
+class ResourceSummary(BaseModel):
+    """Safe public metadata; backing server paths are intentionally absent."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    uri: str
+    title: str
+    description: str
+    media_type: str
+    status: ResourceStatus
+
+
+class CourseSearchResult(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    uri: str
+    title: str
+    excerpt: str
+    score: int = Field(ge=1)
+    status: ResourceStatus
 
 
 class ResourceContents(BaseModel):
@@ -96,6 +342,18 @@ class ResourceContents(BaseModel):
 
 class ResourceProvider(Protocol):
     async def read(self, uri: str) -> ResourceContents: ...
+
+
+class CourseResourceCatalog(ResourceProvider, Protocol):
+    def list_public(self) -> list[ResourceSummary]: ...
+
+    async def search(
+        self,
+        query: str,
+        *,
+        limit: int,
+        resource_uris: frozenset[str],
+    ) -> list[CourseSearchResult]: ...
 
 
 class FileResourceProvider:
@@ -122,18 +380,178 @@ class FileResourceProvider:
             text=text,
         )
 
+    def list_public(self) -> list[ResourceSummary]:
+        return [
+            ResourceSummary(
+                uri=resource.uri,
+                title=resource.title,
+                description=resource.description,
+                media_type=resource.media_type,
+                status=resource.status,
+            )
+            for resource in self._resources.values()
+            if resource.visibility == "public"
+        ]
+
+    async def search(
+        self,
+        query: str,
+        *,
+        limit: int = 5,
+        resource_uris: frozenset[str] | None = None,
+    ) -> list[CourseSearchResult]:
+        normalized_query = query.strip()
+        if not normalized_query:
+            raise ValueError("search query must not be blank")
+        if len(normalized_query) > _MAX_SEARCH_QUERY_LENGTH:
+            raise ValueError("search query is too long")
+        if not 1 <= limit <= _MAX_SEARCH_LIMIT:
+            raise ValueError(f"search limit must be between 1 and {_MAX_SEARCH_LIMIT}")
+
+        allowed = resource_uris if resource_uris is not None else frozenset(self._resources)
+        terms = tuple(dict.fromkeys(_search_terms(normalized_query)))
+        if not terms:
+            raise ValueError("search query must contain searchable text")
+
+        matches: list[CourseSearchResult] = []
+        for resource in self._resources.values():
+            if resource.uri not in allowed or resource.visibility != "public":
+                continue
+            contents = await self.read(resource.uri)
+            for block in _search_blocks(contents.text):
+                score = _search_score(block, normalized_query, terms)
+                if score:
+                    matches.append(
+                        CourseSearchResult(
+                            uri=resource.uri,
+                            title=resource.title,
+                            excerpt=_search_excerpt(block, terms),
+                            score=score,
+                            status=resource.status,
+                        )
+                    )
+        matches.sort(key=lambda match: (-match.score, match.uri, match.excerpt))
+        return matches[:limit]
+
+    @classmethod
+    def from_registry(
+        cls,
+        registry_path: Path = DEFAULT_RESOURCE_REGISTRY_PATH,
+    ) -> FileResourceProvider:
+        return cls(load_resource_definitions(registry_path))
+
     @classmethod
     def with_sample_syllabus(cls) -> FileResourceProvider:
         return cls(
             [
                 ResourceDefinition(
                     uri=COURSE_SYLLABUS_URI,
-                    title="Sample Class Agent Syllabus",
+                    title="AI Agents for Cognitive Augmentation Syllabus",
                     media_type="text/markdown",
                     path=DEFAULT_SYLLABUS_PATH,
                 )
             ]
         )
+
+
+def load_resource_definitions(
+    registry_path: Path = DEFAULT_RESOURCE_REGISTRY_PATH,
+) -> list[ResourceDefinition]:
+    """Load and confine registry paths to the repository's shared data root."""
+
+    try:
+        raw_registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ResourceNotFound(str(registry_path)) from error
+    registry = ResourceRegistry.model_validate(raw_registry)
+    shared_root = registry_path.parent.parent.resolve()
+    resources: list[ResourceDefinition] = []
+    for entry in registry.resources:
+        path = (shared_root / entry.path).resolve()
+        if not path.is_relative_to(shared_root):
+            raise ValueError(f"resource path leaves shared root: {entry.path}")
+        if not path.is_file():
+            raise ResourceNotFound(entry.uri)
+        resources.append(
+            ResourceDefinition(
+                uri=entry.uri,
+                title=entry.title,
+                description=entry.description,
+                media_type=entry.media_type,
+                path=path,
+                visibility=entry.visibility,
+                status=entry.status,
+            )
+        )
+    return resources
+
+
+def _search_terms(query: str) -> list[str]:
+    return [match.group(0).casefold() for match in _SEARCH_WORD.finditer(query)]
+
+
+def _search_blocks(text: str) -> list[str]:
+    blocks = [" ".join(block.split()) for block in re.split(r"\n\s*\n", text)]
+    return [block for block in blocks if block]
+
+
+def _search_score(block: str, query: str, terms: tuple[str, ...]) -> int:
+    normalized_block = block.casefold()
+    score = sum(normalized_block.count(term) for term in terms)
+    if query.casefold() in normalized_block:
+        score += len(terms) + 2
+    return score
+
+
+def _search_excerpt(
+    block: str,
+    terms: tuple[str, ...],
+    max_length: int = 480,
+) -> str:
+    if len(block) <= max_length:
+        return block
+    normalized = block.casefold()
+    positions = [normalized.find(term) for term in terms]
+    first_match = min((position for position in positions if position >= 0), default=0)
+    start = max(0, first_match - max_length // 3)
+    end = min(len(block), start + max_length)
+    if end - start < max_length:
+        start = max(0, end - max_length)
+    excerpt = block[start:end].strip()
+    return f"{'…' if start else ''}{excerpt}{'…' if end < len(block) else ''}"
+
+
+def _reject_unknown_arguments(
+    arguments: Mapping[str, JsonValue],
+    allowed: frozenset[str],
+) -> None:
+    unknown = set(arguments) - allowed
+    if unknown:
+        raise ValueError(f"unexpected tool arguments: {', '.join(sorted(unknown))}")
+
+
+def _required_text_argument(
+    arguments: Mapping[str, JsonValue],
+    name: str,
+    *,
+    max_length: int,
+    preserve_whitespace: bool = False,
+) -> str:
+    value = arguments.get(name)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{name} must be a non-empty string")
+    if len(value) > max_length:
+        raise ValueError(f"{name} exceeds the maximum length")
+    return value if preserve_whitespace else value.strip()
+
+
+def _optional_limit(arguments: Mapping[str, JsonValue], default: int = 5) -> int:
+    value = arguments.get("limit", default)
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ValueError("limit must be an integer")
+    if not 1 <= value <= _MAX_SEARCH_LIMIT:
+        raise ValueError(f"limit must be between 1 and {_MAX_SEARCH_LIMIT}")
+    return value
 
 
 class CourseReadSyllabusTool:
@@ -168,6 +586,513 @@ class CourseReadSyllabusTool:
         )
 
 
+class CourseReadPublicFileTool:
+    """Read one pre-authorized registered public resource by canonical URI."""
+
+    id = READ_PUBLIC_FILE_TOOL_ID
+    description = (
+        "Read a public course file by its course:// URI. Use course.show_public_files "
+        "first when the appropriate URI is unknown."
+    )
+    input_schema: ClassVar[dict[str, JsonValue]] = {
+        "type": "object",
+        "properties": {
+            "resource_uri": {
+                "type": "string",
+                "description": "Canonical course:// URI returned by course.show_public_files.",
+            }
+        },
+        "required": ["resource_uri"],
+        "additionalProperties": False,
+    }
+
+    def __init__(self, resources: ResourceProvider) -> None:
+        self._resources = resources
+
+    async def execute(
+        self,
+        arguments: Mapping[str, JsonValue],
+        context: ToolExecutionContext,
+    ) -> ToolExecutionResult:
+        _reject_unknown_arguments(arguments, frozenset({"resource_uri"}))
+        uri = _required_text_argument(arguments, "resource_uri", max_length=200)
+        if uri not in context.permitted_resource_uris:
+            raise PermissionError(f"{uri} is not authorized for this run")
+        resource = await self._resources.read(uri)
+        return ToolExecutionResult(
+            content=resource.text,
+            summary=f"Read public course resource {resource.uri}.",
+            storage_policy="server_full",
+            resource_uris=[resource.uri],
+        )
+
+
+class CourseGetScheduleTool:
+    """Read the official schedule while preserving its provisional status."""
+
+    id = GET_SCHEDULE_TOOL_ID
+    description = (
+        "Read the current course schedule. Preserve its provisional status and do not "
+        "supply dates or details absent from the resource."
+    )
+    input_schema: ClassVar[dict[str, JsonValue]] = {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": False,
+    }
+
+    def __init__(self, resources: ResourceProvider) -> None:
+        self._resources = resources
+
+    async def execute(
+        self,
+        arguments: Mapping[str, JsonValue],
+        context: ToolExecutionContext,
+    ) -> ToolExecutionResult:
+        if arguments:
+            raise ValueError("course.get_schedule does not accept arguments")
+        if COURSE_SCHEDULE_URI not in context.permitted_resource_uris:
+            raise PermissionError("course://schedule is not authorized for this run")
+        resource = await self._resources.read(COURSE_SCHEDULE_URI)
+        return ToolExecutionResult(
+            content=resource.text,
+            summary="Read the provisional public course schedule.",
+            storage_policy="server_full",
+            resource_uris=[resource.uri],
+        )
+
+
+class CourseGetApplicationTool:
+    """Read the official application facts and required fields."""
+
+    id = GET_APPLICATION_TOOL_ID
+    description = (
+        "Read the official application capacity, priority order, deadlines, required "
+        "fields, photo requirement, and interaction instructions. Call this first when a "
+        "user wants to apply or asks about applying; do not substitute general application "
+        "advice."
+    )
+    input_schema: ClassVar[dict[str, JsonValue]] = {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": False,
+    }
+
+    def __init__(self, resources: ResourceProvider) -> None:
+        self._resources = resources
+
+    async def execute(
+        self,
+        arguments: Mapping[str, JsonValue],
+        context: ToolExecutionContext,
+    ) -> ToolExecutionResult:
+        if arguments:
+            raise ValueError("course.get_application does not accept arguments")
+        if COURSE_APPLICATION_URI not in context.permitted_resource_uris:
+            raise PermissionError("application information is not authorized for this run")
+        resource = await self._resources.read(COURSE_APPLICATION_URI)
+        return ToolExecutionResult(
+            content=resource.text,
+            summary="Read the public course application information.",
+            storage_policy="server_full",
+            resource_uris=[resource.uri],
+        )
+
+
+class CourseShowPublicFilesTool:
+    """List public resource metadata without leaking server filesystem paths."""
+
+    id = SHOW_PUBLIC_FILES_TOOL_ID
+    description = "List the public course files available to the current visitor."
+    input_schema: ClassVar[dict[str, JsonValue]] = {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": False,
+    }
+
+    def __init__(self, resources: CourseResourceCatalog) -> None:
+        self._resources = resources
+
+    async def execute(
+        self,
+        arguments: Mapping[str, JsonValue],
+        context: ToolExecutionContext,
+    ) -> ToolExecutionResult:
+        if arguments:
+            raise ValueError("course.show_public_files does not accept arguments")
+        visible = [
+            summary.model_dump(mode="json")
+            for summary in self._resources.list_public()
+            if summary.uri in context.permitted_resource_uris
+        ]
+        return ToolExecutionResult(
+            content=visible,
+            summary=f"Listed {len(visible)} public course resources.",
+            storage_policy="server_full",
+        )
+
+
+class CourseSearchTool:
+    """Search authorized public course resources using inspectable lexical matching."""
+
+    id = SEARCH_COURSE_TOOL_ID
+    description = (
+        "Search the official syllabus, provisional schedule, repository overview, "
+        "public FAQ, and application guide."
+    )
+    input_schema: ClassVar[dict[str, JsonValue]] = {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "Words or phrase to find in official course resources.",
+            },
+            "limit": {
+                "type": "integer",
+                "description": "Maximum results, from 1 through 10.",
+                "minimum": 1,
+                "maximum": 10,
+            },
+        },
+        "required": ["query"],
+        "additionalProperties": False,
+    }
+
+    def __init__(self, resources: CourseResourceCatalog) -> None:
+        self._resources = resources
+
+    async def execute(
+        self,
+        arguments: Mapping[str, JsonValue],
+        context: ToolExecutionContext,
+    ) -> ToolExecutionResult:
+        _reject_unknown_arguments(arguments, frozenset({"query", "limit"}))
+        query = _required_text_argument(
+            arguments,
+            "query",
+            max_length=_MAX_SEARCH_QUERY_LENGTH,
+        )
+        results = await self._resources.search(
+            query,
+            limit=_optional_limit(arguments),
+            resource_uris=context.permitted_resource_uris,
+        )
+        searched_uris = [
+            resource.uri
+            for resource in self._resources.list_public()
+            if resource.uri in context.permitted_resource_uris
+        ]
+        return ToolExecutionResult(
+            content=[result.model_dump(mode="json") for result in results],
+            summary=f"Found {len(results)} public course resource matches.",
+            storage_policy="server_full",
+            resource_uris=searched_uris,
+        )
+
+
+class CourseSearchFaqTool:
+    """Search only the published public FAQ resource."""
+
+    id = SEARCH_FAQ_TOOL_ID
+    description = "Search published answers in the public course FAQ."
+    input_schema = CourseSearchTool.input_schema
+
+    def __init__(self, resources: CourseResourceCatalog) -> None:
+        self._resources = resources
+
+    async def execute(
+        self,
+        arguments: Mapping[str, JsonValue],
+        context: ToolExecutionContext,
+    ) -> ToolExecutionResult:
+        _reject_unknown_arguments(arguments, frozenset({"query", "limit"}))
+        if COURSE_FAQ_URI not in context.permitted_resource_uris:
+            raise PermissionError("course://faq is not authorized for this run")
+        query = _required_text_argument(
+            arguments,
+            "query",
+            max_length=_MAX_SEARCH_QUERY_LENGTH,
+        )
+        results = await self._resources.search(
+            query,
+            limit=_optional_limit(arguments),
+            resource_uris=frozenset({COURSE_FAQ_URI}),
+        )
+        return ToolExecutionResult(
+            content=[result.model_dump(mode="json") for result in results],
+            summary=f"Found {len(results)} public FAQ matches.",
+            storage_policy="server_full",
+            resource_uris=[COURSE_FAQ_URI],
+        )
+
+
+class ApplicationReceipt(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    application_id: UUID
+    submitted_at: datetime
+
+
+class CourseApplication(BaseModel):
+    """Complete structured application; every field must contain meaningful input."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
+
+    email_address: EmailStr
+    name: str = Field(min_length=2, max_length=200)
+    email: EmailStr
+    department_research_group_year_of_study_mit: str = Field(min_length=1, max_length=1_000)
+    personal_webpage: str = Field(min_length=1, max_length=2_000)
+    interests: str = Field(min_length=1, max_length=4_000)
+    why_take_this_class: str = Field(min_length=1, max_length=4_000)
+    knowledgeable_about: str = Field(min_length=1, max_length=4_000)
+    skill_set: str = Field(min_length=1, max_length=4_000)
+    registration_status: str = Field(min_length=1, max_length=500)
+    listener_willing_to_do_weekly_builds: str = Field(min_length=1, max_length=500)
+    questions_or_comments_for_instructors: str = Field(min_length=1, max_length=4_000)
+    photo_upload_id: UUID
+
+    @field_validator(
+        "name",
+        "department_research_group_year_of_study_mit",
+        "personal_webpage",
+        "interests",
+        "why_take_this_class",
+        "knowledgeable_about",
+        "skill_set",
+        "registration_status",
+        "listener_willing_to_do_weekly_builds",
+        "questions_or_comments_for_instructors",
+    )
+    @classmethod
+    def reject_placeholders(cls, value: str) -> str:
+        if value.strip().casefold() in {"-", "tbd", "unknown"}:
+            raise ValueError("placeholder answers are not accepted")
+        return value
+
+
+class ApplicantStore(Protocol):
+    async def submit(
+        self,
+        *,
+        application: CourseApplication,
+        principal: PrincipalContext,
+        photo: StoredTemporaryUpload,
+    ) -> ApplicationReceipt: ...
+
+
+class FileApplicantStore:
+    """Private server-side applicant storage with generated, non-user-controlled paths."""
+
+    def __init__(self, directory: Path = DEFAULT_APPLICANT_DATA_PATH) -> None:
+        self._directory = directory
+
+    async def submit(
+        self,
+        *,
+        application: CourseApplication,
+        principal: PrincipalContext,
+        photo: StoredTemporaryUpload,
+    ) -> ApplicationReceipt:
+        receipt = ApplicationReceipt(application_id=uuid4(), submitted_at=datetime.now(UTC))
+        payload: dict[str, JsonValue] = {
+            "schema_version": 1,
+            "application_id": str(receipt.application_id),
+            "submitted_at": receipt.submitted_at.isoformat(),
+            "application": application.model_dump(mode="json"),
+            "photo_filename": f"photo{_photo_extension(photo.receipt.media_type)}",
+            "original_photo_filename": photo.receipt.filename,
+            "principal": {
+                "authenticated": principal.authenticated,
+                "user_id": str(principal.user_id) if principal.user_id else None,
+                "anonymous_session_id": (
+                    str(principal.anonymous_session_id) if principal.anonymous_session_id else None
+                ),
+            },
+        }
+        await asyncio.to_thread(self._write_private_application, receipt, payload, photo)
+        return receipt
+
+    def _write_private_application(
+        self,
+        receipt: ApplicationReceipt,
+        payload: dict[str, JsonValue],
+        photo: StoredTemporaryUpload,
+    ) -> None:
+        self._directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        self._directory.chmod(0o700)
+        timestamp = receipt.submitted_at.strftime("%Y%m%dT%H%M%SZ")
+        final_directory = self._directory / f"{timestamp}_{receipt.application_id}"
+        temporary_directory = self._directory / f".{receipt.application_id}.tmp"
+        temporary_directory.mkdir(mode=0o700)
+        try:
+            application_path = temporary_directory / "application.json"
+            descriptor = os.open(
+                application_path,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+            )
+            with os.fdopen(descriptor, "w", encoding="utf-8") as applicant_file:
+                json.dump(payload, applicant_file, ensure_ascii=False, indent=2, sort_keys=True)
+                applicant_file.write("\n")
+            photo_path = temporary_directory / str(payload["photo_filename"])
+            shutil.copyfile(photo.path, photo_path)
+            photo_path.chmod(0o600)
+            temporary_directory.rename(final_directory)
+        except Exception:
+            shutil.rmtree(temporary_directory, ignore_errors=True)
+            raise
+
+
+class CourseSubmitApplicationTool:
+    """Store an explicitly requested course application outside the public catalog."""
+
+    id = SUBMIT_APPLICATION_TOOL_ID
+    redact_arguments_in_events = True
+    description = (
+        "Submit a course application only after the user explicitly approves the complete "
+        "application. Every field must come from the user. Gather any missing field and a "
+        "temporary face-photo upload before calling this tool."
+    )
+    input_schema: ClassVar[dict[str, JsonValue]] = {
+        "type": "object",
+        "properties": {
+            "email_address": {
+                "type": "string",
+                "description": "Email Address field.",
+            },
+            "name": {
+                "type": "string",
+                "description": "Name field.",
+            },
+            "email": {
+                "type": "string",
+                "description": "Email field.",
+            },
+            "department_research_group_year_of_study_mit": {
+                "type": "string",
+                "description": "Department / Research Group / Year of Study MIT field.",
+            },
+            "personal_webpage": {
+                "type": "string",
+                "description": "Personal Webpage field; state explicitly if there is none.",
+            },
+            "interests": {
+                "type": "string",
+                "description": "Interests field.",
+            },
+            "why_take_this_class": {
+                "type": "string",
+                "description": "Why do you want to take this class? field.",
+            },
+            "knowledgeable_about": {
+                "type": "string",
+                "description": "Knowledgeable about field.",
+            },
+            "skill_set": {
+                "type": "string",
+                "description": "Skill-set field.",
+            },
+            "registration_status": {
+                "type": "string",
+                "description": "Registration Status field.",
+            },
+            "listener_willing_to_do_weekly_builds": {
+                "type": "string",
+                "description": (
+                    "For listeners: whether the applicant is willing to complete the "
+                    "weekly builds; use not applicable for non-listeners."
+                ),
+            },
+            "questions_or_comments_for_instructors": {
+                "type": "string",
+                "description": (
+                    "Questions or comments for instructors field; state explicitly if none."
+                ),
+            },
+            "photo_upload_id": {
+                "type": "string",
+                "description": (
+                    "UUID returned after the applicant uploads a recent face photo in chat."
+                ),
+            },
+        },
+        "required": [
+            "email_address",
+            "name",
+            "email",
+            "department_research_group_year_of_study_mit",
+            "personal_webpage",
+            "interests",
+            "why_take_this_class",
+            "knowledgeable_about",
+            "skill_set",
+            "registration_status",
+            "listener_willing_to_do_weekly_builds",
+            "questions_or_comments_for_instructors",
+            "photo_upload_id",
+        ],
+        "additionalProperties": False,
+    }
+
+    def __init__(
+        self,
+        applicants: ApplicantStore,
+        uploads: TemporaryUploadStore,
+    ) -> None:
+        self._applicants = applicants
+        self._uploads = uploads
+
+    async def execute(
+        self,
+        arguments: Mapping[str, JsonValue],
+        context: ToolExecutionContext,
+    ) -> ToolExecutionResult:
+        try:
+            application = CourseApplication.model_validate(arguments)
+        except ValidationError as error:
+            invalid_fields = sorted(
+                {
+                    str(item["loc"][0]) if item["loc"] else "application"
+                    for item in error.errors(include_url=False)
+                }
+            )
+            raise ToolValidationError(
+                "Application incomplete or invalid. Ask the user for: "
+                + ", ".join(invalid_fields)
+                + "."
+            ) from error
+        try:
+            photo = await self._uploads.get_for_principal(
+                application.photo_upload_id,
+                context.principal,
+            )
+        except UploadError as error:
+            raise ToolValidationError(
+                "The application photo is unavailable or expired. Ask the user to upload it again."
+            ) from error
+        if photo.receipt.media_type not in APPLICATION_PHOTO_MEDIA_TYPES:
+            raise ToolValidationError("The application photo must be a JPEG, PNG, or WebP image.")
+        if not await asyncio.to_thread(_has_valid_image_signature, photo):
+            raise ToolValidationError(
+                "The application photo content is not a valid JPEG, PNG, or WebP image."
+            )
+        receipt = await self._applicants.submit(
+            application=application,
+            principal=context.principal,
+            photo=photo,
+        )
+        return ToolExecutionResult(
+            content={
+                "application_id": str(receipt.application_id),
+                "status": "received",
+                "message": "The course application was stored for review.",
+            },
+            summary=f"Stored course application {receipt.application_id} for review.",
+            storage_policy="server_summary",
+        )
+
+
 class ToolCatalog:
     """Registry that fails closed if trusted context names an unknown tool."""
 
@@ -194,11 +1119,60 @@ class AuthorizedCapabilities:
 
 
 class PublicCapabilityPolicy:
-    """Phase 3 policy: every principal receives only the public syllabus capability."""
+    """Every principal receives the Phase 6 public course capabilities."""
+
+    def __init__(self, resource_uris: Iterable[str] | None = None) -> None:
+        resolved = tuple(
+            resource_uris
+            if resource_uris is not None
+            else (
+                COURSE_SYLLABUS_URI,
+                COURSE_SCHEDULE_URI,
+                COURSE_REPOSITORIES_URI,
+                COURSE_FAQ_URI,
+                COURSE_INSTRUCTORS_URI,
+                COURSE_APPLICATION_URI,
+            )
+        )
+        if len(resolved) != len(set(resolved)):
+            raise ValueError("public resource URIs must be unique")
+        if any(not uri.startswith("course://") for uri in resolved):
+            raise ValueError("public resource URIs must use the course:// scheme")
+        self._resource_uris = resolved
 
     def authorize(self, principal: PrincipalContext) -> AuthorizedCapabilities:
         del principal
         return AuthorizedCapabilities(
-            tool_ids=(READ_SYLLABUS_TOOL_ID,),
-            resource_uris=(COURSE_SYLLABUS_URI,),
+            tool_ids=(
+                READ_SYLLABUS_TOOL_ID,
+                READ_PUBLIC_FILE_TOOL_ID,
+                GET_SCHEDULE_TOOL_ID,
+                GET_APPLICATION_TOOL_ID,
+                SHOW_PUBLIC_FILES_TOOL_ID,
+                SEARCH_FAQ_TOOL_ID,
+                SEARCH_COURSE_TOOL_ID,
+                SUBMIT_APPLICATION_TOOL_ID,
+                WEB_SEARCH_TOOL_ID,
+                VISIT_WEBPAGE_TOOL_ID,
+            ),
+            resource_uris=self._resource_uris,
         )
+
+
+def _photo_extension(media_type: str) -> str:
+    return {
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/webp": ".webp",
+    }[media_type]
+
+
+def _has_valid_image_signature(upload: StoredTemporaryUpload) -> bool:
+    header = upload.path.read_bytes()[:12]
+    if upload.receipt.media_type == "image/jpeg":
+        return header.startswith(b"\xff\xd8\xff")
+    if upload.receipt.media_type == "image/png":
+        return header.startswith(b"\x89PNG\r\n\x1a\n")
+    if upload.receipt.media_type == "image/webp":
+        return len(header) >= 12 and header[:4] == b"RIFF" and header[8:12] == b"WEBP"
+    return False

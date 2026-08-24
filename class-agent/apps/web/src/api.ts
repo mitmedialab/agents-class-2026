@@ -8,6 +8,15 @@ export interface ConversationDetail {
   events: Event[];
 }
 
+export interface TemporaryUpload {
+  id: Uuid;
+  filename: string;
+  media_type: string;
+  size_bytes: number;
+  created_at: string;
+  expires_at: string;
+}
+
 export type AgentActivityKind =
   | "status"
   | "run"
@@ -111,6 +120,34 @@ export function getConversation(conversationId: Uuid): Promise<ConversationDetai
   return requestJson<ConversationDetail>(`/conversations/${conversationId}`);
 }
 
+function uploadMediaType(file: File): string {
+  if (file.type) return file.type;
+  const extension = file.name.split(".").at(-1)?.toLowerCase();
+  return (
+    {
+      csv: "text/csv",
+      json: "application/json",
+      md: "text/markdown",
+      pdf: "application/pdf",
+      txt: "text/plain",
+    }[extension ?? ""] ?? "application/octet-stream"
+  );
+}
+
+export async function uploadFile(file: File): Promise<TemporaryUpload> {
+  const query = new URLSearchParams({ filename: file.name });
+  const response = await fetch(`${API_BASE_URL}/uploads?${query.toString()}`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": uploadMediaType(file) },
+    body: file,
+  });
+  if (!response.ok) {
+    throw new ApiError(await errorMessage(response), response.status);
+  }
+  return (await response.json()) as TemporaryUpload;
+}
+
 function jsonDetail(value: unknown): string | undefined {
   if (value === undefined || value === null) return undefined;
   if (typeof value === "string") return value;
@@ -123,6 +160,34 @@ function activity(
   detail?: string,
 ): AgentActivity {
   return detail ? { kind, label, detail } : { kind, label };
+}
+
+const RESOURCE_ACTIVITY_LABELS: Record<string, string> = {
+  "course://application": "application information",
+  "course://faq": "course information index",
+  "course://instructors": "course staff",
+  "course://repositories": "student repositories",
+  "course://schedule": "course schedule",
+  "course://syllabus": "course syllabus",
+};
+
+const TOOL_ACTIVITY_LABELS: Record<string, string> = {
+  "course.get_application": "Reading application information",
+  "course.get_schedule": "Reading course schedule",
+  "course.read_public_file": "Reading course information",
+  "course.read_syllabus": "Reading course syllabus",
+  "course.search": "Searching course information",
+  "course.search_faq": "Searching course information",
+  "course.show_public_files": "Checking available course information",
+  "course.submit_application": "Submitting application",
+  "web.search": "Searching the public web",
+  "web.visit": "Reading a public webpage",
+};
+
+function toolActivityLabel(toolId: string | null): string {
+  return toolId
+    ? (TOOL_ACTIVITY_LABELS[toolId] ?? "Using course information")
+    : "Using course information";
 }
 
 function platformActivity(data: Record<string, unknown>): AgentActivity | null {
@@ -142,30 +207,32 @@ function platformActivity(data: Record<string, unknown>): AgentActivity | null {
   }
   if (type === "resource.read") {
     const uri = payload && typeof payload.uri === "string" ? payload.uri : null;
+    const resourceLabel = uri ? RESOURCE_ACTIVITY_LABELS[uri] : null;
     return activity(
       "resource",
-      uri ? `Reading ${uri}` : "Reading course material",
-      uri ?? undefined,
+      resourceLabel ? `Reading ${resourceLabel}` : "Reading course information",
     );
   }
   if (type === "agent.tool.requested" || type === "tool.started") {
+    const label = toolActivityLabel(toolId);
+    const rawArguments = payload?.arguments;
+    const argumentDetail =
+      isRecord(rawArguments) && Object.keys(rawArguments).length === 0
+        ? undefined
+        : jsonDetail(rawArguments);
     return activity(
       "tool",
-      toolId ? `Running ${toolId}` : "Running course tool",
-      jsonDetail(payload?.arguments),
+      label,
+      toolId === "course.submit_application" ? undefined : argumentDetail,
     );
   }
   if (type === "agent.tool.completed") {
-    return activity(
-      "complete",
-      toolId ? `Completed ${toolId}` : "Tool complete",
-      jsonDetail(payload?.result ?? payload?.resource_uris),
-    );
+    return activity("complete", `${toolActivityLabel(toolId)} complete`);
   }
   if (type === "agent.tool.failed") {
     return activity(
       "error",
-      toolId ? `${toolId} failed` : "Tool failed",
+      `${toolActivityLabel(toolId)} failed`,
       jsonDetail(payload?.error),
     );
   }

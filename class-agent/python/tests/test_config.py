@@ -17,7 +17,23 @@ def test_settings_accept_standard_openai_environment_without_exposing_secret() -
 
     assert settings.model_id == "test-model"
     assert settings.model_api_key.get_secret_value() == "test-secret-value"
+    assert settings.applicant_data_path.name == "applicants"
+    assert settings.upload_data_path.name == "uploads"
     assert "test-secret-value" not in repr(settings)
+
+
+def test_settings_accept_private_applicant_storage_path() -> None:
+    settings = AgentSettings.from_environment(
+        {
+            "DATABASE_URL": "postgresql://example",
+            "OPENAI_API_KEY": "test-secret-value",
+            "APPLICANT_DATA_PATH": "/srv/class-agent/applicants",
+            "UPLOAD_DATA_PATH": "/srv/class-agent/uploads",
+        }
+    )
+
+    assert str(settings.applicant_data_path) == "/srv/class-agent/applicants"
+    assert str(settings.upload_data_path) == "/srv/class-agent/uploads"
 
 
 def test_openai_provider_creates_transient_smolagents_model_without_network_call() -> None:

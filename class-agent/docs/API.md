@@ -1,6 +1,6 @@
-# Phase 4 HTTP API
+# HTTP API
 
-FastAPI is a transport adapter over `AuthenticationService`, `CourseAgentService`, and `ConversationStore`. It does not own identity, authorization, history, or runtime policy. The production application is created with `course_server.api:create_app`; tests inject in-memory adapters and a scripted runtime.
+FastAPI is a transport adapter over `AuthenticationService`, `CourseAgentService`, `ConversationStore`, and the public course resource catalog. It does not own identity, authorization, history, or runtime policy. The production application is created with `course_server.api:create_app`; tests inject in-memory adapters and a scripted runtime.
 
 ## Routes
 
@@ -13,6 +13,9 @@ POST /api/v1/auth/login
 POST /api/v1/auth/logout
 GET  /api/v1/auth/me
 
+GET  /api/v1/course/resources
+POST /api/v1/uploads?filename={filename}
+
 GET  /api/v1/conversations
 POST /api/v1/conversations
 GET  /api/v1/conversations/{conversation_id}
@@ -21,6 +24,17 @@ POST /api/v1/conversations/{conversation_id}/run
 POST /api/v1/conversations/{conversation_id}/run/stream
 POST /api/v1/agent/run
 ```
+
+`GET /api/v1/course/resources` returns path-free public metadata for the syllabus,
+provisional schedule, repository overview, FAQ, course staff, and application guide. It
+never returns private applicant files, temporary uploads, or server filesystem paths.
+
+`POST /api/v1/uploads` accepts the file as the raw request body, its original name in
+the required `filename` query parameter, and its media type in `Content-Type`. It
+returns a principal-scoped upload UUID, metadata, and expiry time. Uploads are limited
+to 10 MB and expire after 24 hours. Supported types are JPEG, PNG, WebP, GIF, PDF,
+JSON, CSV, Markdown, and plain text; course applications accept only JPEG, PNG, or WebP
+for the required photo. The same session cookie must own both upload and tool call.
 
 The final route accepts `conversation_id` and `text`. It returns JSON normally and SSE when the request sends `Accept: text/event-stream`. Unversioned aliases exist during Phase 4 development but are intentionally absent from OpenAPI.
 
