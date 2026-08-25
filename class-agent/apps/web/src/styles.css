@@ -390,6 +390,11 @@ textarea {
   overflow: hidden;
 }
 
+.workspace-panel > .ca-draft-document {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .workspace-pane[data-tabbed="false"] .workspace-panel {
   padding-top: 2.5rem;
 }
