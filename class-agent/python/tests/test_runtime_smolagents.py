@@ -343,6 +343,7 @@ def test_workspace_tool_emits_validated_portable_panel_event() -> None:
                             "id": str(draft_panel_id),
                             "component_id": "draft-document",
                             "title": "Course application",
+                            "resource_uri": "course://application",
                             "props": {
                                 "title": "Course application",
                                 "fields": [
@@ -388,6 +389,8 @@ def test_workspace_tool_emits_validated_portable_panel_event() -> None:
         assert "direct HTTPS image URL" in model.message_text
         assert "For any evolving written artifact" in model.message_text
         assert "proposals, reports" in model.message_text
+        assert "do not summarize, request confirmation" in model.message_text
+        assert "only that one field question" in model.message_text
         assert "Current trusted workspace state" in model.message_text
         assert str(draft_panel_id) in model.message_text
         assert "Ada Applicant" in model.message_text

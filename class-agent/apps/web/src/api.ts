@@ -158,6 +158,12 @@ export function applyWorkspacePanelAction(
   });
 }
 
+export function openApplicationDraft(conversationId: Uuid): Promise<Event> {
+  return requestJson<Event>(`/conversations/${conversationId}/workspace/application-draft`, {
+    method: "POST",
+  });
+}
+
 export function recordWorkspaceInteraction(
   conversationId: Uuid,
   panelId: Uuid,

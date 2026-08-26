@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response, status
@@ -67,6 +67,7 @@ from course_server.workspace import (
     CloseWorkspaceCommand,
     ComponentRegistry,
     FocusWorkspaceCommand,
+    OpenWorkspaceCommand,
     UpdateWorkspaceCommand,
     WorkspaceValidationError,
     load_component_registry,
@@ -374,6 +375,7 @@ async def _run_agent(
     except ConversationAccessDenied as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from error
     except Exception as error:
+        logger.exception("agent run failed")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="agent temporarily unavailable",
@@ -864,6 +866,79 @@ def create_app(
                         conversation_id=conversation_id,
                         session_id=UUID(raw_session_id),
                     )
+        return event
+
+    @router.post(
+        "/conversations/{conversation_id}/workspace/application-draft",
+        response_model=Event,
+    )
+    async def open_application_draft(
+        conversation_id: UUID,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> Event:
+        state = _get_app_state(request)
+        await _require_owned_conversation(
+            state=state,
+            principal=principal,
+            conversation_id=conversation_id,
+        )
+        assert state.services is not None
+        events = await state.services.conversations.list_events(conversation_id)
+        registry = state.services.workspace_registry or load_component_registry()
+        workspace = project_workspace_events(events, registry)
+        existing = next(
+            (
+                panel
+                for panel in workspace.panels
+                if panel.component_id == "draft-document"
+                and panel.resource_uri == "course://application"
+            ),
+            None,
+        )
+        if existing is not None:
+            command = FocusWorkspaceCommand(panel_id=existing.id)
+            event_type = "workspace.panel.updated"
+        else:
+            command = OpenWorkspaceCommand.model_validate(
+                {
+                    "type": "open",
+                    "panel": {
+                        "id": str(uuid4()),
+                        "component_id": "draft-document",
+                        "title": "Course application",
+                        "resource_uri": "course://application",
+                        "props": {
+                            "title": "Course application",
+                            "description": "Share information with the Course Agent to build this draft.",
+                            "status": "draft",
+                            "fields": [
+                                {"id": "name", "label": "Name", "status": "missing"},
+                                {"id": "email", "label": "Email", "status": "missing"},
+                                {"id": "background", "label": "Background", "status": "missing"},
+                                {"id": "webpage", "label": "Personal webpage", "status": "missing"},
+                                {"id": "interests", "label": "Interests", "status": "missing"},
+                                {"id": "why", "label": "Why this class", "status": "missing"},
+                                {"id": "skills", "label": "Skill set", "status": "missing"},
+                                {"id": "registration", "label": "Registration status", "status": "missing"},
+                                {"id": "photo", "label": "Photo", "status": "missing"},
+                            ],
+                        },
+                        "state": {},
+                    },
+                }
+            )
+            event_type = "workspace.panel.opened"
+        registry.apply(workspace, command)
+        event = Event(
+            type=event_type,
+            actor="user",
+            principal_user_id=principal.user_id,
+            anonymous_session_id=principal.anonymous_session_id,
+            conversation_id=conversation_id,
+            payload={"command": command.model_dump(mode="json", exclude_none=True)},
+        )
+        await state.services.conversations.append_events(conversation_id, [event])
         return event
 
     @router.post(

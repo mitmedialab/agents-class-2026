@@ -29,6 +29,8 @@ interface WorkspaceProps {
   conversationId: string;
   state: WorkspaceState;
   onPanelAction: (action: "focus" | "close", panelId: string) => Promise<void>;
+  onCloseWorkspace: () => Promise<void>;
+  onSubmitApplication: () => void;
   onInteraction: (panelId: string, action: string, value: JsonValue) => void;
   onBrowserScroll: (panelId: string, sessionId: string, deltaY: number) => Promise<void>;
   onBrowserResize: (
@@ -133,6 +135,7 @@ function ResourcePanel({
   onBrowserScroll,
   onBrowserResize,
   onInteraction,
+  onSubmitApplication,
 }: {
   conversationId: string;
   panel: WorkspacePanel;
@@ -144,6 +147,7 @@ function ResourcePanel({
     height: number,
   ) => Promise<void>;
   onInteraction: (panelId: string, action: string, value: JsonValue) => void;
+  onSubmitApplication: () => void;
 }) {
   const [resource, setResource] = useState<CourseResourceContent | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -154,6 +158,15 @@ function ResourcePanel({
   const draftFields =
     panel.props.fields === undefined ? [] : draftDocumentFields(panel.props.fields);
   const draftContent = stringProp(panel.props, "content");
+  const applicationFields =
+    panel.resourceUri === "course://application" && draftFields ? draftFields : null;
+  const applicationProgress = applicationFields
+    ? applicationFields.filter(
+        (field) => field.status !== "missing" && Boolean(field.value?.trim()),
+      ).length
+    : null;
+  const applicationComplete =
+    applicationProgress !== null && applicationProgress === applicationFields?.length;
 
   useEffect(() => {
     let disposed = false;
@@ -294,17 +307,38 @@ function ResourcePanel({
   ) {
     const status = stringProp(panel.props, "status");
     return (
-      <DraftDocument
-        description={stringProp(panel.props, "description")}
-        content={draftContent}
-        fields={draftFields}
-        status={
-          status === "ready" || status === "final" || status === "submitted"
-            ? (status as DraftDocumentStatus)
-            : "draft"
-        }
-        title={stringProp(panel.props, "title") ?? panel.title ?? "Draft document"}
-      />
+      <>
+        <DraftDocument
+          description={stringProp(panel.props, "description")}
+          content={draftContent}
+          fields={draftFields}
+          status={
+            status === "ready" || status === "final" || status === "submitted"
+              ? (status as DraftDocumentStatus)
+              : "draft"
+          }
+          title={stringProp(panel.props, "title") ?? panel.title ?? "Draft document"}
+        />
+        {applicationFields && applicationProgress !== null ? (
+          <footer className="workspace-application-submit">
+            <span
+              title={
+                applicationComplete
+                  ? undefined
+                  : `Only ${applicationProgress}/${applicationFields.length} required material has been recorded`
+              }
+            >
+              <button
+                disabled={!applicationComplete}
+                onClick={onSubmitApplication}
+                type="button"
+              >
+                Submit application
+              </button>
+            </span>
+          </footer>
+        ) : null}
+      </>
     );
   }
   if (panel.componentId === "draft-document") {
@@ -350,6 +384,8 @@ export function Workspace({
   conversationId,
   state,
   onPanelAction,
+  onCloseWorkspace,
+  onSubmitApplication,
   onInteraction,
   onBrowserScroll,
   onBrowserResize,
@@ -358,6 +394,12 @@ export function Workspace({
     state.panels.find((panel) => panel.id === state.focusedPanelId) ?? state.panels.at(-1);
   if (!focused) return null;
   const tabbed = state.panels.length > 1;
+  const closeWorkspace = () => void onCloseWorkspace();
+  const handleClosePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    closeWorkspace();
+  };
 
   return (
     <aside
@@ -381,9 +423,10 @@ export function Workspace({
             ))}
           </div>
           <button
-            aria-label={`Close ${focused.title ?? focused.componentId}`}
+            aria-label="Close workspace"
             className="workspace-close"
-            onClick={() => void onPanelAction("close", focused.id)}
+            onClick={closeWorkspace}
+            onPointerDown={handleClosePointerDown}
             type="button"
           >
             <span aria-hidden="true">×</span>
@@ -391,9 +434,10 @@ export function Workspace({
         </header>
       ) : (
         <button
-          aria-label={`Close ${focused.title ?? focused.componentId}`}
+          aria-label="Close workspace"
           className="workspace-close workspace-single-close"
-          onClick={() => void onPanelAction("close", focused.id)}
+          onClick={closeWorkspace}
+          onPointerDown={handleClosePointerDown}
           type="button"
         >
           <span aria-hidden="true">×</span>
@@ -405,6 +449,7 @@ export function Workspace({
           onBrowserResize={onBrowserResize}
           onBrowserScroll={onBrowserScroll}
           onInteraction={onInteraction}
+          onSubmitApplication={onSubmitApplication}
           panel={focused}
         />
       </div>

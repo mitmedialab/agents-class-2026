@@ -194,7 +194,6 @@ export function Calendar({
       <header className="ca-viewer-toolbar ca-calendar-toolbar">
         <div>
           <strong>Course schedule</strong>
-          {data.status ? <span>{data.status}</span> : null}
         </div>
         <div aria-label="Calendar view" className="ca-calendar-view-switch" role="group">
           <button

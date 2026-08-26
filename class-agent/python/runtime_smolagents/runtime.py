@@ -134,6 +134,25 @@ def _agent_instructions(
                 "Current trusted workspace state for follow-up tool arguments only:\n"
                 + json.dumps(workspace_state, ensure_ascii=False, sort_keys=True)
             )
+            panels = workspace_state.get("panels")
+            if isinstance(panels, list) and any(
+                isinstance(panel, dict)
+                and panel.get("component_id") == "draft-document"
+                and panel.get("resource_uri") == "course://application"
+                for panel in panels
+            ):
+                sections.append(
+                    "The trusted workspace contains the active course application draft. "
+                    "Treat every user message as part of that interview. Extract and update "
+                    "only information the user explicitly supplies, preserving candidate values "
+                    "until they are confirmed or corrected. Candidate and inferred values are "
+                    "stored for their own later field; do not summarize, request confirmation "
+                    "of, or mention them before that field is displayed. After updating the "
+                    "existing draft, ask exactly one next missing required field in its displayed "
+                    "order. The final answer must contain only that one field question, with no "
+                    "blanket request to confirm candidate details. Never end an application turn "
+                    "with only an acknowledgement such as 'Okay.'"
+                )
     if public_resource_index:
         entries = "\n".join(f"- {entry}" for entry in public_resource_index)
         sections.append(f"Official information available through tools:\n{entries}")

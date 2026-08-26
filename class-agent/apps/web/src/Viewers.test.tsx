@@ -371,7 +371,6 @@ describe("DraftDocument", () => {
       <DraftDocument
         fields={[
           { id: "name", label: "Name", value: "Ada Example", status: "confirmed" },
-          { id: "interests", label: "Interests", status: "missing" },
           {
             id: "skills",
             label: "Skills",
@@ -379,6 +378,7 @@ describe("DraftDocument", () => {
             status: "inferred",
             source: "Portfolio",
           },
+          { id: "interests", label: "Interests", status: "missing" },
         ]}
         title="Course application"
       />,

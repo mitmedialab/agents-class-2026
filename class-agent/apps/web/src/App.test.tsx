@@ -13,6 +13,7 @@ vi.mock("./api.js", () => ({
   listConversations: vi.fn(),
   login: vi.fn(),
   logout: vi.fn(),
+  openApplicationDraft: vi.fn(),
   recordWorkspaceInteraction: vi.fn(),
   streamAgentRun: vi.fn(),
   uploadFile: vi.fn(),
@@ -105,6 +106,28 @@ beforeEach(() => {
   });
   vi.mocked(api.login).mockResolvedValue(studentPrincipal);
   vi.mocked(api.logout).mockResolvedValue();
+  vi.mocked(api.openApplicationDraft).mockResolvedValue({
+    ...previousEvent,
+    id: "30000000-0000-4000-8000-000000000010",
+    type: "workspace.panel.opened",
+    actor: "user",
+    payload: {
+      command: {
+        type: "open",
+        panel: {
+          id: "40000000-0000-4000-8000-000000000010",
+          component_id: "draft-document",
+          title: "Course application",
+          resource_uri: "course://application",
+          props: {
+            title: "Course application",
+            fields: [{ id: "name", label: "Name", status: "missing" }],
+          },
+          state: {},
+        },
+      },
+    },
+  });
   vi.mocked(api.recordWorkspaceInteraction).mockResolvedValue({
     ...previousEvent,
     id: "30000000-0000-4000-8000-000000000008",
@@ -135,7 +158,7 @@ describe("Course Agent interface", () => {
     expect(await screen.findByText("The earlier response.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "MIT" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "MIT Media Lab" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Show chat history" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Your logs" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Apply" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Schedule" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Grading" })).toBeInTheDocument();
@@ -167,6 +190,101 @@ describe("Course Agent interface", () => {
         expect.any(AbortSignal),
       ),
     );
+  });
+
+  it("opens the application draft in the workspace before prompting the agent", async () => {
+    render(<App />);
+    await screen.findByText("The earlier response.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    expect(await screen.findByRole("article", { name: "Course application" })).toBeInTheDocument();
+    expect(api.openApplicationDraft).toHaveBeenCalledWith(conversation.id);
+    expect(api.streamAgentRun).toHaveBeenCalledWith(
+      conversation.id,
+      "I'd like to apply for the course.",
+      expect.any(Function),
+      expect.any(AbortSignal),
+    );
+  });
+
+  it("returns to the prior conversation after closing the application workspace", async () => {
+    render(<App />);
+    await screen.findByText("The earlier response.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    expect(await screen.findByRole("complementary", { name: "Workspace" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close workspace" }));
+
+    expect(screen.queryByRole("complementary", { name: "Workspace" })).not.toBeInTheDocument();
+    expect(screen.getByText("The earlier response.")).toBeInTheDocument();
+    expect(screen.getByText("To continue, send a message to the Course Agent.")).toBeInTheDocument();
+  });
+
+  it("shows a disabled composer submission action until application material is complete", async () => {
+    vi.mocked(api.openApplicationDraft).mockResolvedValue({
+      ...previousEvent,
+      type: "workspace.panel.opened",
+      payload: {
+        command: {
+          type: "open",
+          panel: {
+            id: "40000000-0000-4000-8000-000000000010",
+            component_id: "draft-document",
+            title: "Course application",
+            resource_uri: "course://application",
+            props: {
+              title: "Course application",
+              fields: [
+                { id: "name", label: "Name", status: "missing" },
+                { id: "email", label: "Email", status: "missing" },
+                { id: "background", label: "Background", status: "missing" },
+                { id: "webpage", label: "Personal webpage", status: "missing" },
+                { id: "interests", label: "Interests", status: "missing" },
+                { id: "why", label: "Why this class", status: "missing" },
+                { id: "skills", label: "Skill set", status: "missing" },
+                { id: "registration", label: "Registration status", status: "missing" },
+                { id: "photo", label: "Photo", status: "missing" },
+              ],
+            },
+            state: {},
+          },
+        },
+      },
+    });
+    render(<App />);
+    await screen.findByText("The earlier response.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    const submit = await screen.findByRole("button", { name: "Submit application" });
+    expect(submit).toBeDisabled();
+    expect(submit.parentElement).toHaveAttribute(
+      "title",
+      "Only 0/9 required material has been recorded",
+    );
+  });
+
+  it("allows only one shortcut operation while an agent run is active", async () => {
+    let finishRun = () => {};
+    vi.mocked(api.streamAgentRun).mockImplementation(
+      async (_id, _text, _onEvent, signal) =>
+        new Promise<void>((resolve) => {
+          finishRun = resolve;
+          signal?.addEventListener("abort", () => resolve());
+        }),
+    );
+    render(<App />);
+    await screen.findByText("The earlier response.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Schedule" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    expect(api.streamAgentRun).toHaveBeenCalledTimes(1);
+    expect(api.openApplicationDraft).not.toHaveBeenCalled();
+
+    finishRun();
   });
 
   it("replaces the previous response after a new message", async () => {
@@ -279,7 +397,7 @@ describe("Course Agent interface", () => {
     render(<App />);
     await screen.findByText("The earlier response.");
 
-    fireEvent.click(screen.getByRole("button", { name: "Show chat history" }));
+    fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
 
     expect(screen.getByRole("dialog", { name: "Chat history" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Week one/ })).toBeInTheDocument();
@@ -448,6 +566,7 @@ describe("Course Agent interface", () => {
       "false",
     );
     expect(screen.queryByRole("tablist", { name: "Workspace panels" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Apply" })).not.toBeInTheDocument();
     expect(api.getCourseResourceContent).toHaveBeenCalledWith("course://schedule");
     fireEvent.click(await screen.findByRole("button", { name: /Project review/ }));
     await waitFor(() =>
@@ -458,7 +577,7 @@ describe("Course Agent interface", () => {
         "review",
       ),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Close Course schedule" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close workspace" }));
     await waitFor(() =>
       expect(api.applyWorkspacePanelAction).toHaveBeenCalledWith(
         conversation.id,
@@ -469,6 +588,7 @@ describe("Course Agent interface", () => {
     await waitFor(() =>
       expect(screen.queryByRole("complementary", { name: "Workspace" })).not.toBeInTheDocument(),
     );
+    expect(screen.getByRole("button", { name: "Apply" })).toBeInTheDocument();
   });
 
   it("shows workspace tabs only when more than one panel is open", async () => {
@@ -509,12 +629,25 @@ describe("Course Agent interface", () => {
       "aria-selected",
       "true",
     );
+
+    vi.mocked(api.applyWorkspacePanelAction).mockImplementation(async (_id, _action, panelId) => ({
+      ...previousEvent,
+      type: "workspace.panel.closed",
+      actor: "user",
+      payload: { command: { type: "close", panel_id: panelId } },
+    }));
+    fireEvent.click(screen.getByRole("button", { name: "Close workspace" }));
+
+    await waitFor(() =>
+      expect(api.applyWorkspacePanelAction).toHaveBeenCalledTimes(2),
+    );
+    expect(await screen.findByRole("button", { name: "Apply" })).toBeInTheDocument();
   });
 
   it("logs students in from the secondary drawer", async () => {
     render(<App />);
     await screen.findByText("The earlier response.");
-    fireEvent.click(screen.getByRole("button", { name: "Show chat history" }));
+    fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
 
     fireEvent.change(screen.getByLabelText("Username"), { target: { value: "alice" } });
     fireEvent.change(screen.getByLabelText("Access code"), {

@@ -36,6 +36,9 @@ export function DraftDocument({
   const populated = fields.filter(
     (field) => field.status !== "missing" && Boolean(field.value?.trim()),
   ).length;
+  const nextMissingIndex = fields.findIndex((field) => field.status === "missing");
+  const visibleFields =
+    nextMissingIndex < 0 ? fields : fields.slice(0, nextMissingIndex + 1);
 
   return (
     <article aria-label={title} className="ca-draft-document">
@@ -69,8 +72,9 @@ export function DraftDocument({
 
       {fields.length ? (
         <ol className="ca-draft-fields">
-          {fields.map((field) => (
+          {visibleFields.map((field) => (
             <li data-status={field.status} key={field.id}>
+              <span aria-hidden="true" className="ca-draft-field-node" />
               <header>
                 <strong>{field.label}</strong>
                 <span>{FIELD_STATUS_LABELS[field.status]}</span>
@@ -81,6 +85,7 @@ export function DraftDocument({
           ))}
         </ol>
       ) : null}
+
     </article>
   );
 }

@@ -16,6 +16,7 @@ import {
   listConversations,
   login,
   logout,
+  openApplicationDraft,
   recordWorkspaceInteraction,
   resizeBrowserSession,
   scrollBrowserSession,
@@ -29,7 +30,15 @@ import { ActivityTrace } from "./ActivityTrace.js";
 import { AgentResponse } from "./AgentResponse.js";
 import { SyllabusPage } from "./SyllabusPage.js";
 import { Workspace } from "./Workspace.js";
-import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type FormEvent,
+  type KeyboardEvent,
+  type PointerEvent,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 const CONNECTION_ERROR = "I couldn’t reach the Course Agent. Please try again.";
 const WELCOME_MESSAGE =
@@ -118,10 +127,13 @@ export default function App() {
   const [accessCode, setAccessCode] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSubmitting, setAuthSubmitting] = useState(false);
+  const [workspaceWidth, setWorkspaceWidth] = useState<number | null>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const historyRef = useRef<HTMLElement>(null);
   const activeRun = useRef<AbortController | null>(null);
+  const operationInFlight = useRef(false);
+  const applicationReturnResponse = useRef<string | null>(null);
 
   async function showConversation(conversation: Conversation): Promise<void> {
     setCurrentAction("Loading conversation");
@@ -258,7 +270,11 @@ export default function App() {
     };
   }, [historyOpen]);
 
-  async function sendMessage(suggestedMessage?: string): Promise<void> {
+  async function sendMessage(
+    suggestedMessage?: string,
+    existingConversationId?: string,
+    operationAlreadyClaimed = false,
+  ): Promise<void> {
     const isSuggestedPrompt = suggestedMessage !== undefined;
     const visibleText = (suggestedMessage ?? message).trim();
     const pendingUploads = isSuggestedPrompt ? [] : uploads;
@@ -266,10 +282,12 @@ export default function App() {
       (!visibleText && pendingUploads.length === 0) ||
       isInitializing ||
       isRunning ||
-      isUploading
+      isUploading ||
+      (!operationAlreadyClaimed && operationInFlight.current)
     ) {
       return;
     }
+    if (!operationAlreadyClaimed) operationInFlight.current = true;
     const text = messageWithUploads(visibleText, pendingUploads);
 
     if (!isSuggestedPrompt) {
@@ -282,7 +300,7 @@ export default function App() {
     setCurrentAction("Preparing conversation context");
     setActivities([]);
     setLatestResponse("");
-    let conversationId = selectedConversationId;
+    let conversationId = existingConversationId ?? selectedConversationId;
     let receivedError = false;
     let writingActivityRecorded = false;
     let progressText = "";
@@ -300,6 +318,7 @@ export default function App() {
       }
 
       const handleStreamEvent = (event: AgentStreamEvent) => {
+        if (controller.signal.aborted) return;
         if (event.kind === "text") {
           setIsStreamingText(true);
           setCurrentAction("Writing final response");
@@ -377,10 +396,35 @@ export default function App() {
       }
     } finally {
       activeRun.current = null;
+      operationInFlight.current = false;
       setCurrentAction(null);
       setIsStreamingText(false);
       setIsRunning(false);
       requestAnimationFrame(() => composerRef.current?.focus());
+    }
+  }
+
+  async function startApplication(): Promise<void> {
+    if (isInitializing || isRunning || isUploading || operationInFlight.current) return;
+    operationInFlight.current = true;
+    applicationReturnResponse.current = latestResponse;
+    setAboutOpen(false);
+    let conversationId = selectedConversationId;
+    try {
+      if (!conversationId) {
+        const created = await createConversation("Course application");
+        conversationId = created.id;
+        setSelectedConversationId(created.id);
+        setConversations((current) => newestFirst([created, ...current]));
+      }
+      const event = await openApplicationDraft(conversationId);
+      setWorkspaceState((current) =>
+        builtInComponentRegistry.apply(current, event.payload.command),
+      );
+      void sendMessage(HEADER_PROMPTS[0].message, conversationId, true);
+    } catch {
+      setLatestResponse(CONNECTION_ERROR);
+      operationInFlight.current = false;
     }
   }
 
@@ -505,6 +549,72 @@ export default function App() {
     }
   }
 
+  async function handleCloseWorkspace(): Promise<void> {
+    const panels = workspaceState.panels;
+    const isApplicationWorkspace = panels.some(
+      (panel) => panel.resourceUri === "course://application",
+    );
+    if (isApplicationWorkspace) {
+      activeRun.current?.abort();
+    }
+    setWorkspaceState(emptyWorkspaceState());
+    if (isApplicationWorkspace) {
+      setActivities([]);
+      setCurrentAction(null);
+      setIsStreamingText(false);
+      const previousResponse = applicationReturnResponse.current;
+      setLatestResponse(
+        previousResponse && previousResponse !== WELCOME_MESSAGE
+          ? `${previousResponse}\n\nTo continue, send a message to the Course Agent.`
+          : WELCOME_MESSAGE,
+      );
+      applicationReturnResponse.current = null;
+    }
+    if (!selectedConversationId) return;
+    try {
+      await Promise.all(
+        panels.map((panel) =>
+          applyWorkspacePanelAction(selectedConversationId, "close", panel.id),
+        ),
+      );
+    } catch {
+      setActivities((current) => [
+        ...current,
+        { kind: "error", label: "Workspace could not be closed" },
+      ]);
+    }
+  }
+
+  function setWorkspaceWidthFromPointer(clientX: number): void {
+    const minimumWidth = 320;
+    const maximumWidth = Math.floor(window.innerWidth / 2);
+    setWorkspaceWidth(
+      Math.min(maximumWidth, Math.max(minimumWidth, window.innerWidth - clientX)),
+    );
+  }
+
+  function handleWorkspaceResizeStart(event: PointerEvent<HTMLDivElement>): void {
+    if (window.matchMedia("(max-width: 900px)").matches) return;
+    event.preventDefault();
+    setWorkspaceWidthFromPointer(event.clientX);
+    const handlePointerMove = (moveEvent: globalThis.PointerEvent) =>
+      setWorkspaceWidthFromPointer(moveEvent.clientX);
+    const handlePointerUp = () => {
+      document.removeEventListener("pointermove", handlePointerMove);
+      document.removeEventListener("pointerup", handlePointerUp);
+    };
+    document.addEventListener("pointermove", handlePointerMove);
+    document.addEventListener("pointerup", handlePointerUp);
+  }
+
+  function handleWorkspaceResizeKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    const currentWidth = workspaceWidth ?? Math.round(window.innerWidth / 3);
+    const delta = event.key === "ArrowLeft" ? 24 : -24;
+    setWorkspaceWidthFromPointer(window.innerWidth - currentWidth - delta);
+  }
+
   function handleWorkspaceInteraction(
     panelId: string,
     action: string,
@@ -589,25 +699,14 @@ export default function App() {
       className="course-agent"
       data-about-open={aboutOpen}
       data-workspace-open={!aboutOpen && workspaceState.panels.length > 0}
+      style={
+        {
+          "--workspace-width": workspaceWidth ? `${workspaceWidth}px` : "33.333vw",
+        } as CSSProperties
+      }
     >
       <header className="agent-header">
         <div className="header-left">
-          <Button
-            aria-expanded={historyOpen}
-            aria-haspopup="dialog"
-            aria-label="Show chat history"
-            className="history-toggle"
-            onClick={() => {
-              setAboutOpen(false);
-              setHistoryOpen(true);
-            }}
-          >
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <rect height="16" rx="1" width="18" x="3" y="4" />
-              <path d="M9 4v16" />
-              <path d="m8 10-2-2m2 2-2 2" />
-            </svg>
-          </Button>
           <div aria-label="MIT and MIT Media Lab" className="institutional-marks">
             <a aria-label="MIT" href="https://www.mit.edu/">
               <img alt="" className="mit-mark" src="/mit-logo.svg" />
@@ -617,28 +716,42 @@ export default function App() {
             </a>
           </div>
         </div>
-        <nav aria-label="Course shortcuts" className="header-actions">
-          {HEADER_PROMPTS.map((prompt) => (
+        {workspaceState.panels.length === 0 || aboutOpen ? (
+          <nav aria-label="Course shortcuts" className="header-actions">
+            {HEADER_PROMPTS.map((prompt) => (
+              <Button
+                className="header-prompt"
+                disabled={isInitializing || isRunning || isUploading}
+                key={prompt.label}
+                onClick={() =>
+                  prompt.label === "Apply"
+                    ? void startApplication()
+                    : (setAboutOpen(false), void sendMessage(prompt.message))
+                }
+              >
+                {prompt.label}
+              </Button>
+            ))}
             <Button
-              className="header-prompt"
-              disabled={isInitializing || isRunning || isUploading}
-              key={prompt.label}
+              aria-current={aboutOpen ? "page" : undefined}
+              className="about-link"
+              onClick={() => void toggleAbout()}
+            >
+              About
+            </Button>
+            <Button
+              aria-expanded={historyOpen}
+              aria-haspopup="dialog"
+              className="logs-link"
               onClick={() => {
                 setAboutOpen(false);
-                void sendMessage(prompt.message);
+                setHistoryOpen(true);
               }}
             >
-              {prompt.label}
+              Your logs
             </Button>
-          ))}
-          <Button
-            aria-current={aboutOpen ? "page" : undefined}
-            className="about-link"
-            onClick={() => void toggleAbout()}
-          >
-            About
-          </Button>
-        </nav>
+          </nav>
+        ) : null}
       </header>
 
       {aboutOpen ? (
@@ -660,14 +773,32 @@ export default function App() {
           ) : null}
         </section>
         {workspaceState.panels.length > 0 ? (
-          <Workspace
-            conversationId={selectedConversationId!}
-            onBrowserResize={handleBrowserResize}
-            onBrowserScroll={handleBrowserScroll}
-            onInteraction={handleWorkspaceInteraction}
-            onPanelAction={handleWorkspacePanelAction}
-            state={workspaceState}
-          />
+          <>
+            <div
+              aria-label="Resize workspace"
+              aria-orientation="vertical"
+              aria-valuemax={50}
+              aria-valuemin={20}
+              aria-valuenow={Math.round(
+                ((workspaceWidth ?? window.innerWidth / 3) / window.innerWidth) * 100,
+              )}
+              className="workspace-resizer"
+              onKeyDown={handleWorkspaceResizeKeyDown}
+              onPointerDown={handleWorkspaceResizeStart}
+              role="separator"
+              tabIndex={0}
+            />
+            <Workspace
+              conversationId={selectedConversationId!}
+              onBrowserResize={handleBrowserResize}
+              onBrowserScroll={handleBrowserScroll}
+              onInteraction={handleWorkspaceInteraction}
+              onCloseWorkspace={handleCloseWorkspace}
+              onPanelAction={handleWorkspacePanelAction}
+              onSubmitApplication={() => void sendMessage("Please submit my application.")}
+              state={workspaceState}
+            />
+          </>
         ) : null}
       </main>
 
@@ -688,15 +819,6 @@ export default function App() {
             onChange={(event) => void handleFileSelection(event.target.files)}
             type="file"
           />
-          <button
-            aria-label="Attach files"
-            className="attachment-button"
-            disabled={isInitializing || isRunning || isUploading}
-            onClick={() => fileInputRef.current?.click()}
-            type="button"
-          >
-            {isUploading ? "Uploading" : "Attach"}
-          </button>
           <div className="composer-entry">
             {uploads.length > 0 ? (
               <ul aria-label="Temporary uploads" className="upload-list">
@@ -738,6 +860,20 @@ export default function App() {
                 {uploadError}
               </p>
             ) : null}
+            <div className="composer-actions">
+              <button
+                aria-label="Attach files"
+                className="attachment-button"
+                disabled={isInitializing || isRunning || isUploading}
+                onClick={() => fileInputRef.current?.click()}
+                type="button"
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="m8.5 12.5 6.8-6.8a3 3 0 1 1 4.2 4.2l-8.2 8.2a5 5 0 0 1-7.1-7.1l7.5-7.5" />
+                </svg>
+                {isUploading ? "Uploading" : "Attach"}
+              </button>
+            </div>
           </div>
         </div>
         <button aria-hidden="true" className="visually-hidden" tabIndex={-1} type="submit">
@@ -765,7 +901,7 @@ export default function App() {
               <span>Course Agent</span>
               <Button
                 aria-label="Hide chat history"
-                className="history-toggle"
+                className="drawer-close"
                 onClick={() => setHistoryOpen(false)}
               >
                 <svg aria-hidden="true" viewBox="0 0 24 24">
