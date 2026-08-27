@@ -1,3 +1,5 @@
+import { useEffect, useMemo, useState } from "react";
+
 import { DocumentViewer } from "./DocumentViewer.js";
 
 export type DraftFieldStatus = "missing" | "candidate" | "inferred" | "confirmed";
@@ -17,6 +19,7 @@ export interface DraftDocumentProps {
   status?: DraftDocumentStatus | undefined;
   content?: string | undefined;
   fields?: readonly DraftDocumentField[] | undefined;
+  onChange?: ((id: string, value: string) => void) | undefined;
 }
 
 const FIELD_STATUS_LABELS: Record<DraftFieldStatus, string> = {
@@ -32,9 +35,18 @@ export function DraftDocument({
   status = "draft",
   content,
   fields = [],
+  onChange,
 }: DraftDocumentProps) {
+  const fieldSignature = useMemo(
+    () => JSON.stringify(fields.map((field) => [field.id, field.value ?? ""])),
+    [fields],
+  );
+  const [values, setValues] = useState<Record<string, string>>({});
+  useEffect(() => {
+    setValues(Object.fromEntries(fields.map((field) => [field.id, field.value ?? ""])));
+  }, [fieldSignature]);
   const populated = fields.filter(
-    (field) => field.status !== "missing" && Boolean(field.value?.trim()),
+    (field) => Boolean((values[field.id] ?? field.value)?.trim()),
   ).length;
 
   return (
@@ -75,7 +87,23 @@ export function DraftDocument({
                 <strong>{field.label}</strong>
                 <span>{FIELD_STATUS_LABELS[field.status]}</span>
               </header>
-              <p>{field.value?.trim() || "Waiting for information"}</p>
+              <textarea
+                aria-label={field.label}
+                onBlur={(event) => {
+                  if (event.currentTarget.value !== (field.value ?? "")) {
+                    onChange?.(field.id, event.currentTarget.value);
+                  }
+                }}
+                onChange={(event) =>
+                  setValues((current) => ({
+                    ...current,
+                    [field.id]: event.target.value,
+                  }))
+                }
+                placeholder="Waiting for information"
+                rows={Math.max(2, Math.min(8, (values[field.id] ?? "").split("\n").length))}
+                value={values[field.id] ?? ""}
+              />
               {field.source ? <small>Source: {field.source}</small> : null}
             </li>
           ))}

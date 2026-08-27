@@ -958,6 +958,35 @@
   white-space: pre-wrap;
 }
 
+.ca-draft-fields textarea {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  min-height: 3.25rem;
+  padding: var(--space-2);
+  resize: vertical;
+  width: 100%;
+}
+
+.ca-draft-fields textarea:hover {
+  border-color: var(--color-border);
+}
+
+.ca-draft-fields textarea:focus-visible {
+  background: var(--color-surface);
+  border-color: var(--color-text);
+  outline: 0;
+}
+
+.ca-draft-fields textarea::placeholder {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
 .ca-draft-fields li[data-status="missing"] p {
   color: var(--color-text-muted);
   font-style: italic;

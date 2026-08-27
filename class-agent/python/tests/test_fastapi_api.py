@@ -556,6 +556,53 @@ def test_workspace_actions_validate_existing_panels_and_persist_events() -> None
     )
 
 
+def test_application_draft_opens_complete_and_persists_user_edits() -> None:
+    client, _, _ = _build_client()
+    conversation_id = _create_conversation(client, title="Apply")
+
+    opened = client.post(f"/conversations/{conversation_id}/application-draft")
+    assert opened.status_code == 200
+    command = opened.json()["payload"]["command"]
+    assert command["type"] == "open"
+    panel = command["panel"]
+    assert panel["component_id"] == "draft-document"
+    assert panel["state"]["document_kind"] == "course-application"
+    assert len(panel["props"]["fields"]) == 12
+    assert all(field["value"] == "" for field in panel["props"]["fields"])
+
+    changed = client.post(
+        f"/conversations/{conversation_id}/workspace/interactions",
+        json={
+            "panel_id": panel["id"],
+            "action": "draft.change",
+            "value": {"field_id": "name", "value": "Ada Example"},
+        },
+    )
+    assert changed.status_code == 200
+
+    focused = client.post(f"/conversations/{conversation_id}/application-draft")
+    assert focused.status_code == 200
+    assert focused.json()["payload"]["command"] == {
+        "type": "focus",
+        "panel_id": panel["id"],
+    }
+
+    detail = client.get(f"/conversations/{conversation_id}").json()
+    updates = [
+        event["payload"]["command"]
+        for event in detail["events"]
+        if event["type"] == "workspace.panel.updated"
+        and event["payload"]["command"]["type"] == "update"
+    ]
+    assert updates[-1]["props"]["fields"][0] == {
+        "id": "name",
+        "label": "Name",
+        "value": "Ada Example",
+        "status": "candidate",
+        "source": "Entered by applicant",
+    }
+
+
 def test_visual_composition_records_only_bounded_editable_field_changes() -> None:
     client, _, _ = _build_client()
     principal = PrincipalContext.model_validate(client.get("/auth/me").json())

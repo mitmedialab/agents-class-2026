@@ -298,6 +298,12 @@ function ResourcePanel({
         description={stringProp(panel.props, "description")}
         content={draftContent}
         fields={draftFields}
+        onChange={(fieldId, value) =>
+          onInteraction(panel.id, "draft.change", {
+            field_id: fieldId,
+            value,
+          })
+        }
         status={
           status === "ready" || status === "final" || status === "submitted"
             ? (status as DraftDocumentStatus)

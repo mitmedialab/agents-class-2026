@@ -385,10 +385,30 @@ describe("DraftDocument", () => {
     );
 
     expect(screen.getByLabelText("2 of 3 fields populated")).toBeInTheDocument();
-    expect(screen.getByText("Ada Example")).toBeInTheDocument();
-    expect(screen.getByText("Waiting for information")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("Ada Example");
+    expect(screen.getByRole("textbox", { name: "Interests" })).toHaveAttribute(
+      "placeholder",
+      "Waiting for information",
+    );
     expect(screen.getByText("Inferred")).toBeInTheDocument();
     expect(screen.getByText("Source: Portfolio")).toBeInTheDocument();
+  });
+
+  it("lets users edit every draft field and saves changes on blur", () => {
+    const onChange = vi.fn();
+    render(
+      <DraftDocument
+        fields={[{ id: "name", label: "Name", value: "Ada", status: "candidate" }]}
+        onChange={onChange}
+        title="Course application"
+      />,
+    );
+
+    const field = screen.getByRole("textbox", { name: "Name" });
+    fireEvent.change(field, { target: { value: "Grace Hopper" } });
+    fireEvent.blur(field);
+    expect(field).toHaveValue("Grace Hopper");
+    expect(onChange).toHaveBeenCalledWith("name", "Grace Hopper");
   });
 
   it("renders a general prose draft without requiring form fields", () => {

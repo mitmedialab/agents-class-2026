@@ -1,12 +1,13 @@
 import type { Conversation, PrincipalContext } from "@class-agent/protocol";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import App from "./App.js";
+import App, { startsApplication } from "./App.js";
 import * as api from "./api.js";
 
 vi.mock("./api.js", () => ({
   applyWorkspacePanelAction: vi.fn(),
   createConversation: vi.fn(),
+  ensureApplicationDraft: vi.fn(),
   getCourseResourceContent: vi.fn(),
   getConversation: vi.fn(),
   getPrincipal: vi.fn(),
@@ -71,6 +72,26 @@ beforeEach(() => {
     events: [previousEvent],
   });
   vi.mocked(api.createConversation).mockResolvedValue(conversation);
+  vi.mocked(api.ensureApplicationDraft).mockResolvedValue({
+    ...previousEvent,
+    id: "30000000-0000-4000-8000-000000000009",
+    type: "workspace.panel.opened",
+    payload: {
+      command: {
+        type: "open",
+        panel: {
+          id: "40000000-0000-4000-8000-000000000009",
+          component_id: "draft-document",
+          title: "Course Application Draft",
+          props: {
+            title: "Course Application Draft",
+            fields: [{ id: "name", label: "Name", value: "", status: "missing" }],
+          },
+          state: { document_kind: "course-application" },
+        },
+      },
+    },
+  });
   vi.mocked(api.getCourseResourceContent).mockImplementation(async (uri) => {
     if (uri === "course://syllabus") {
       return {
@@ -129,6 +150,19 @@ beforeEach(() => {
 });
 
 describe("Course Agent interface", () => {
+  it.each([
+    "Apply",
+    "I'd like to apply for the course",
+    "Start my application form",
+    "Can we begin filling out the application?",
+  ])("recognizes application-start intent: %s", (message) => {
+    expect(startsApplication(message)).toBe(true);
+  });
+
+  it("does not open the form for informational application questions", () => {
+    expect(startsApplication("What is the application deadline?")).toBe(false);
+  });
+
   it("shows only the latest agent response in the main workspace", async () => {
     render(<App />);
 
@@ -167,6 +201,13 @@ describe("Course Agent interface", () => {
         expect.any(AbortSignal),
       ),
     );
+    if (label === "Apply") {
+      expect(api.ensureApplicationDraft).toHaveBeenCalledWith(conversation.id);
+      expect(vi.mocked(api.ensureApplicationDraft).mock.invocationCallOrder[0]).toBeLessThan(
+        vi.mocked(api.streamAgentRun).mock.invocationCallOrder[0]!,
+      );
+      expect(screen.getByRole("textbox", { name: "Name" })).toBeInTheDocument();
+    }
   });
 
   it("replaces the previous response after a new message", async () => {

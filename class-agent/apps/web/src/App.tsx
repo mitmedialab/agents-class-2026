@@ -10,6 +10,7 @@ import {
 import {
   applyWorkspacePanelAction,
   createConversation,
+  ensureApplicationDraft,
   getCourseResourceContent,
   getConversation,
   getPrincipal,
@@ -63,6 +64,15 @@ function conversationTitle(conversation: Conversation): string {
 function titleFromMessage(message: string): string {
   const singleLine = message.replaceAll(/\s+/g, " ").trim();
   return singleLine.length > 56 ? `${singleLine.slice(0, 55)}…` : singleLine;
+}
+
+export function startsApplication(message: string): boolean {
+  const normalized = message.toLowerCase().replaceAll(/[^a-z0-9]+/g, " ").trim();
+  if (/\b(apply|applying)\b/.test(normalized)) return true;
+  return (
+    /\bapplication(?: form)?\b/.test(normalized) &&
+    /\b(start|begin|open|fill|complete|work)\b/.test(normalized)
+  );
 }
 
 function messageWithUploads(message: string, uploads: TemporaryUpload[]): string {
@@ -299,6 +309,13 @@ export default function App() {
         setConversations((current) => newestFirst([created, ...current]));
       }
 
+      if (startsApplication(visibleText)) {
+        const event = await ensureApplicationDraft(conversationId);
+        setWorkspaceState((current) =>
+          builtInComponentRegistry.apply(current, event.payload.command),
+        );
+      }
+
       const handleStreamEvent = (event: AgentStreamEvent) => {
         if (event.kind === "text") {
           setIsStreamingText(true);
@@ -517,7 +534,8 @@ export default function App() {
       action !== "document.change_page" &&
       action !== "document.find_text" &&
       action !== "page_cards.select" &&
-      action !== "visual.change"
+      action !== "visual.change" &&
+      action !== "draft.change"
     ) {
       return;
     }
