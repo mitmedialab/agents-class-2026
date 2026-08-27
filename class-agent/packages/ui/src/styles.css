@@ -845,6 +845,9 @@
 }
 
 .ca-draft-document {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
   overflow: auto;
   padding: clamp(1rem, 3vw, 2rem);
 }
@@ -899,8 +902,10 @@
 }
 
 .ca-draft-fields {
+  --ca-draft-node-offset: 1.4375rem;
+  --ca-draft-node-size: 0.625rem;
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-4);
   list-style: none;
   margin: 0;
   padding: 0;
@@ -932,11 +937,81 @@
   border-radius: var(--radius-md);
   display: grid;
   gap: var(--space-2);
+  margin-left: 1.75rem;
   padding: var(--space-4);
+  position: relative;
+}
+
+.ca-draft-fields li[data-active="true"] {
+  scroll-margin-block: 5rem;
+}
+
+.ca-draft-fields li[data-active="true"] .ca-draft-field-node {
+  border-color: var(--color-text);
+  box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--color-text) 12%, transparent);
+}
+
+.ca-draft-field-node {
+  background: var(--color-background);
+  border: 1px solid var(--color-text-muted);
+  border-radius: 50%;
+  height: var(--ca-draft-node-size);
+  left: calc(-1 * var(--ca-draft-node-offset));
+  position: absolute;
+  top: 1.25rem;
+  width: var(--ca-draft-node-size);
+  z-index: 1;
+}
+
+.ca-draft-fields li:not(:last-child)::after {
+  border-left: 1px dashed color-mix(in srgb, var(--color-text) 38%, transparent);
+  content: "";
+  height: calc(100% + var(--space-4) - var(--ca-draft-node-size));
+  left: calc(var(--ca-draft-node-size) / 2 - var(--ca-draft-node-offset));
+  position: absolute;
+  top: calc(1.25rem + var(--ca-draft-node-size));
+  z-index: 0;
+}
+
+.ca-draft-fields li[data-status="missing"] .ca-draft-field-node {
+  border-style: dashed;
+}
+
+.ca-draft-fields li[data-status="missing"]:not(:last-child)::after {
+  border-left-style: dashed;
+}
+
+.ca-draft-fields li[data-status="missing"]:last-child::after {
+  border-left: 1px dashed color-mix(in srgb, var(--color-text) 38%, transparent);
+  content: "";
+  height: 1.75rem;
+  left: calc(var(--ca-draft-node-size) / 2 - var(--ca-draft-node-offset));
+  position: absolute;
+  top: calc(1.25rem + var(--ca-draft-node-size));
+  z-index: 0;
 }
 
 .ca-draft-fields li[data-status="confirmed"] {
   background: color-mix(in srgb, var(--color-text) 11%, var(--color-surface-raised));
+}
+
+.ca-draft-fields li[data-status="confirmed"] .ca-draft-field-node {
+  animation: ca-draft-field-complete 1.8s ease-in-out infinite;
+  background: #fff;
+  border-color: #fff;
+}
+
+@keyframes ca-draft-field-complete {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, #fff 0%, transparent);
+    opacity: 0.82;
+  }
+
+  50% {
+    box-shadow: 0 0 0 0.25rem color-mix(in srgb, #fff 16%, transparent);
+    opacity: 1;
+  }
 }
 
 .ca-draft-fields header {
@@ -991,6 +1066,12 @@
   letter-spacing: 0;
   line-height: 1.4;
   text-transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ca-draft-fields li[data-status="confirmed"] .ca-draft-field-node {
+    animation: none;
+  }
 }
 
 .ca-webpage-toolbar {
@@ -1288,22 +1369,39 @@
 }
 
 .ca-calendar-view-switch {
+  align-items: center;
   display: flex;
   gap: var(--space-1);
+  position: relative;
+  z-index: 1;
 }
 
 .ca-calendar-view-switch button {
+  align-items: center;
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
   color: var(--color-text-muted);
+  cursor: pointer;
+  display: inline-flex;
   font-size: 0.6875rem;
+  height: 2rem;
+  justify-content: center;
   letter-spacing: 0.08em;
-  padding: var(--space-2);
+  padding: 0 var(--space-2);
   text-transform: uppercase;
 }
 
 .ca-calendar-view-switch button[aria-pressed="true"] {
   background: var(--color-surface-raised);
+  border-color: var(--color-text-muted);
   border-radius: 999px;
   color: var(--color-text);
+}
+
+.ca-calendar-view-switch button:focus-visible {
+  outline: 1px solid var(--color-text);
+  outline-offset: 2px;
 }
 
 .ca-calendar-month,

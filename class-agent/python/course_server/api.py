@@ -394,6 +394,15 @@ APPLICATION_DRAFT_FIELDS: tuple[tuple[str, str], ...] = (
     ("photo_upload_id", "Recent profile photo"),
 )
 
+LEGACY_APPLICATION_FIELD_IDS: dict[str, str] = {
+    "department_research_group_year_of_study_mit": "background",
+    "personal_webpage": "webpage",
+    "why_take_this_class": "why",
+    "skill_set": "skills",
+    "registration_status": "registration",
+    "photo_upload_id": "photo",
+}
+
 
 def _empty_application_draft_props() -> dict[str, JsonValue]:
     return {
@@ -405,6 +414,38 @@ def _empty_application_draft_props() -> dict[str, JsonValue]:
             for field_id, label in APPLICATION_DRAFT_FIELDS
         ],
     }
+
+
+def _normalized_application_draft_props(
+    existing_props: dict[str, JsonValue],
+) -> dict[str, JsonValue]:
+    normalized = _empty_application_draft_props()
+    existing_fields = _draft_fields(existing_props) or []
+    fields_by_id = {
+        field_id: field
+        for field in existing_fields
+        if isinstance((field_id := field.get("id")), str)
+    }
+    normalized_fields = cast(list[dict[str, JsonValue]], normalized["fields"])
+    for field in normalized_fields:
+        field_id = cast(str, field["id"])
+        prior = fields_by_id.get(field_id) or fields_by_id.get(
+            LEGACY_APPLICATION_FIELD_IDS.get(field_id, "")
+        )
+        if prior is None:
+            continue
+        value = prior.get("value")
+        field["value"] = value if isinstance(value, str) else ""
+        status_value = prior.get("status")
+        field["status"] = (
+            status_value
+            if status_value in {"missing", "candidate", "inferred", "confirmed"}
+            else ("candidate" if field["value"] else "missing")
+        )
+        source = prior.get("source")
+        if isinstance(source, str) and source:
+            field["source"] = source
+    return normalized
 
 
 async def _run_agent(
@@ -430,6 +471,7 @@ async def _run_agent(
     except ConversationAccessDenied as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from error
     except Exception as error:
+        logger.exception("agent run failed")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="agent temporarily unavailable",
@@ -883,21 +925,40 @@ def create_app(
                 panel
                 for panel in workspace.panels
                 if panel.component_id == "draft-document"
-                and panel.state.get("document_kind") == "course-application"
+                and (
+                    panel.state.get("document_kind") == "course-application"
+                    or panel.resource_uri == "course://application"
+                )
             ),
             None,
         )
         if existing is None:
-            command: OpenWorkspaceCommand | FocusWorkspaceCommand = OpenWorkspaceCommand(
-                panel=WorkspacePanel(
-                    id=uuid4(),
-                    component_id="draft-document",
-                    title="Course Application Draft",
-                    props=_empty_application_draft_props(),
-                    state={"document_kind": "course-application"},
+            command: OpenWorkspaceCommand | FocusWorkspaceCommand | UpdateWorkspaceCommand = (
+                OpenWorkspaceCommand(
+                    panel=WorkspacePanel(
+                        id=uuid4(),
+                        component_id="draft-document",
+                        title="Course Application Draft",
+                        resource_uri="course://application",
+                        props=_empty_application_draft_props(),
+                        state={"document_kind": "course-application"},
+                    )
                 )
             )
             event_type = "workspace.panel.opened"
+        elif (
+            existing.resource_uri != "course://application"
+            or existing.state.get("document_kind") != "course-application"
+            or [field.get("id") for field in (_draft_fields(existing.props) or [])]
+            != [field_id for field_id, _ in APPLICATION_DRAFT_FIELDS]
+        ):
+            command = UpdateWorkspaceCommand(
+                panel_id=existing.id,
+                props=_normalized_application_draft_props(existing.props),
+                resource_uri="course://application",
+                state={"document_kind": "course-application"},
+            )
+            event_type = "workspace.panel.updated"
         else:
             command = FocusWorkspaceCommand(panel_id=existing.id)
             event_type = "workspace.panel.updated"
@@ -1077,8 +1138,8 @@ def create_app(
                 updated = dict(field)
                 if updated.get("id") == field_id:
                     updated["value"] = changed_value
-                    updated["status"] = "candidate" if changed_value.strip() else "missing"
-                    updated["source"] = "Entered by applicant" if changed_value.strip() else ""
+                    updated["status"] = "confirmed" if changed_value.strip() else "missing"
+                    updated["source"] = "Confirmed by applicant" if changed_value.strip() else ""
                 updated_fields.append(updated)
             command = UpdateWorkspaceCommand(
                 panel_id=panel.id,
@@ -1095,7 +1156,7 @@ def create_app(
                 )
             )
         await state.services.conversations.append_events(conversation_id, persisted_events)
-        return event
+        return persisted_events[-1]
 
     @router.get(
         "/conversations/{conversation_id}/browser/{session_id}/snapshot",

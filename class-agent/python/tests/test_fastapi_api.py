@@ -566,8 +566,23 @@ def test_application_draft_opens_complete_and_persists_user_edits() -> None:
     assert command["type"] == "open"
     panel = command["panel"]
     assert panel["component_id"] == "draft-document"
+    assert panel["resource_uri"] == "course://application"
     assert panel["state"]["document_kind"] == "course-application"
     assert len(panel["props"]["fields"]) == 12
+    assert [field["id"] for field in panel["props"]["fields"]] == [
+        "name",
+        "email",
+        "department_research_group_year_of_study_mit",
+        "personal_webpage",
+        "interests",
+        "why_take_this_class",
+        "knowledgeable_about",
+        "skill_set",
+        "registration_status",
+        "listener_willing_to_do_weekly_builds",
+        "questions_or_comments_for_instructors",
+        "photo_upload_id",
+    ]
     assert all(field["value"] == "" for field in panel["props"]["fields"])
 
     changed = client.post(
@@ -579,6 +594,7 @@ def test_application_draft_opens_complete_and_persists_user_edits() -> None:
         },
     )
     assert changed.status_code == 200
+    assert changed.json()["type"] == "workspace.panel.updated"
 
     focused = client.post(f"/conversations/{conversation_id}/application-draft")
     assert focused.status_code == 200
@@ -598,8 +614,79 @@ def test_application_draft_opens_complete_and_persists_user_edits() -> None:
         "id": "name",
         "label": "Name",
         "value": "Ada Example",
-        "status": "candidate",
-        "source": "Entered by applicant",
+        "status": "confirmed",
+        "source": "Confirmed by applicant",
+    }
+
+
+def test_application_draft_migrates_legacy_nine_field_panel() -> None:
+    client, _, _ = _build_client()
+    principal = PrincipalContext.model_validate(client.get("/auth/me").json())
+    conversation_id = _create_conversation(client, title="Legacy application")
+    panel_id = uuid4()
+    legacy = Event(
+        type="workspace.panel.opened",
+        actor="user",
+        principal_user_id=principal.user_id,
+        anonymous_session_id=principal.anonymous_session_id,
+        conversation_id=UUID(conversation_id),
+        payload={
+            "command": {
+                "type": "open",
+                "panel": {
+                    "id": str(panel_id),
+                    "component_id": "draft-document",
+                    "title": "Course application",
+                    "resource_uri": "course://application",
+                    "props": {
+                        "title": "Course application",
+                        "status": "draft",
+                        "fields": [
+                            {
+                                "id": "name",
+                                "label": "Name",
+                                "value": "Ada Example",
+                                "status": "confirmed",
+                            },
+                            {
+                                "id": "background",
+                                "label": "Background",
+                                "value": "MIT Media Lab",
+                                "status": "inferred",
+                                "source": "Public profile",
+                            },
+                        ]
+                    },
+                    "state": {},
+                },
+            }
+        },
+    )
+    app = cast(Any, client.app)
+    asyncio.run(
+        app.state.course_state.services.conversations.append_events(
+            UUID(conversation_id),
+            [legacy],
+        )
+    )
+
+    migrated = client.post(f"/conversations/{conversation_id}/application-draft")
+
+    assert migrated.status_code == 200
+    command = migrated.json()["payload"]["command"]
+    assert command["type"] == "update"
+    assert command["panel_id"] == str(panel_id)
+    assert command["resource_uri"] == "course://application"
+    assert command["state"] == {"document_kind": "course-application"}
+    fields = command["props"]["fields"]
+    assert len(fields) == 12
+    assert fields[0]["value"] == "Ada Example"
+    assert fields[2] == {
+        "id": "department_research_group_year_of_study_mit",
+        "label": "Department / Research Group / Year of Study MIT",
+        "value": "MIT Media Lab",
+        "status": "inferred",
+        "source": "Public profile",
     }
 
 

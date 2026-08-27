@@ -88,6 +88,15 @@ export function DraftDocument({
   const populated = fields.filter(
     (field) => Boolean((values[field.id] ?? field.value)?.trim()),
   ).length;
+  const nextMissingIndex = fields.findIndex((field) => field.status !== "confirmed");
+  const visibleFields =
+    nextMissingIndex < 0 ? fields : fields.slice(0, nextMissingIndex + 1);
+  const activeFieldId = nextMissingIndex < 0 ? null : fields[nextMissingIndex]?.id;
+  const activeFieldRef = useRef<HTMLLIElement>(null);
+
+  useEffect(() => {
+    activeFieldRef.current?.scrollIntoView?.({ block: "center", behavior: "auto" });
+  }, [activeFieldId]);
 
   return (
     <article aria-label={title} className="ca-draft-document">
@@ -121,8 +130,14 @@ export function DraftDocument({
 
       {fields.length ? (
         <ol className="ca-draft-fields">
-          {fields.map((field) => (
-            <li data-status={field.status} key={field.id}>
+          {visibleFields.map((field) => (
+            <li
+              data-active={field.id === activeFieldId}
+              data-status={field.status}
+              key={field.id}
+              ref={field.id === activeFieldId ? activeFieldRef : undefined}
+            >
+              <span aria-hidden="true" className="ca-draft-field-node" />
               <header>
                 <strong>{field.label}</strong>
                 <span>{FIELD_STATUS_LABELS[field.status]}</span>

@@ -343,6 +343,7 @@ def test_workspace_tool_emits_validated_portable_panel_event() -> None:
                             "id": str(draft_panel_id),
                             "component_id": "draft-document",
                             "title": "Course application",
+                            "resource_uri": "course://application",
                             "props": {
                                 "title": "Course application",
                                 "fields": [
@@ -391,6 +392,11 @@ def test_workspace_tool_emits_validated_portable_panel_event() -> None:
         assert "Workspace focus is silent UI housekeeping" in model.message_text
         assert "Do not call workspace.focus_component when" in model.message_text
         assert "call it without a preceding progress message" in model.message_text
+        assert "proactively use authorized public-web search" in model.message_text
+        assert "sourced candidate or inferred values" in model.message_text
+        assert "too shallow" in model.message_text
+        assert "same field instead of advancing" in model.message_text
+        assert "all canonical fields are confirmed" in model.message_text
         assert "Current trusted workspace state" in model.message_text
         assert str(draft_panel_id) in model.message_text
         assert "Ada Applicant" in model.message_text

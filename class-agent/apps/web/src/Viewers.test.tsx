@@ -366,12 +366,11 @@ describe("VisualComposition", () => {
 });
 
 describe("DraftDocument", () => {
-  it("renders progressive field values and distinguishes confirmation state", () => {
+  it("renders confirmed fields plus the next unresolved field", () => {
     render(
       <DraftDocument
         fields={[
           { id: "name", label: "Name", value: "Ada Example", status: "confirmed" },
-          { id: "interests", label: "Interests", status: "missing" },
           {
             id: "skills",
             label: "Skills",
@@ -379,6 +378,7 @@ describe("DraftDocument", () => {
             status: "inferred",
             source: "Portfolio",
           },
+          { id: "interests", label: "Interests", status: "missing" },
         ]}
         title="Course application"
       />,
@@ -386,9 +386,11 @@ describe("DraftDocument", () => {
 
     expect(screen.getByLabelText("2 of 3 fields populated")).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("Ada Example");
-    expect(screen.getByRole("textbox", { name: "Interests" })).toHaveAttribute(
-      "placeholder",
-      "Waiting for information",
+    expect(screen.getByRole("textbox", { name: "Skills" })).toHaveValue("Creative coding");
+    expect(screen.queryByRole("textbox", { name: "Interests" })).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Skills" }).closest("li")).toHaveAttribute(
+      "data-active",
+      "true",
     );
     expect(screen.getByText("Inferred")).toBeInTheDocument();
     expect(screen.getByText("Source: Portfolio")).toBeInTheDocument();

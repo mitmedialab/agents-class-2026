@@ -39,7 +39,7 @@ textarea {
   height: 5rem;
   justify-content: space-between;
   left: 0;
-  padding: 0 var(--space-6);
+  padding: 0 calc(var(--space-6) + 24px);
   position: fixed;
   right: 0;
   top: 0;
@@ -50,39 +50,6 @@ textarea {
   align-items: center;
   display: flex;
   gap: 1.25rem;
-}
-
-.history-toggle {
-  align-items: center;
-  color: var(--color-text-muted);
-  display: flex;
-  flex: none;
-  height: 1.75rem;
-  justify-content: center;
-  line-height: 0;
-  padding: 0;
-  transition: color 140ms ease;
-  width: 1.75rem;
-}
-
-.history-toggle:hover,
-.history-toggle:focus-visible {
-  color: var(--color-text);
-}
-
-.history-toggle:focus-visible {
-  outline: 0;
-}
-
-.history-toggle svg {
-  display: block;
-  fill: none;
-  height: 1.4rem;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.35;
-  width: 1.4rem;
 }
 
 .institutional-marks {
@@ -107,7 +74,7 @@ textarea {
 }
 
 .media-lab-mark {
-  height: 1.75rem;
+  height: 1.45rem;
   width: auto;
 }
 
@@ -118,6 +85,7 @@ textarea {
 }
 
 .header-prompt,
+.logs-link,
 .about-link {
   color: var(--color-text);
   font-size: 0.6875rem;
@@ -126,11 +94,13 @@ textarea {
 }
 
 .header-prompt,
+.logs-link,
 .about-link {
   transition: color 140ms ease;
 }
 
 .header-prompt:hover,
+.logs-link:hover,
 .about-link:hover {
   color: var(--color-text-muted);
 }
@@ -283,28 +253,47 @@ textarea {
 .course-agent[data-workspace-open="true"] .workspace-shell {
   align-items: stretch;
   gap: 0;
-  grid-template-columns: minmax(18rem, 42vw) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 50vw;
   padding: 0;
   place-items: initial;
 }
 
+.course-agent[data-workspace-open="true"] .agent-header {
+  right: 50vw;
+}
+
 .course-agent[data-workspace-open="true"] .response-stage {
+  box-sizing: border-box;
+  height: 100dvh;
   justify-self: stretch;
   max-width: none;
-  padding: 6rem clamp(2rem, 4vw, 5rem) 9rem;
+  min-height: 0;
+  overflow: hidden;
+  padding: 5.5rem clamp(2rem, 4vw, 5rem) 8rem;
 }
 
 .course-agent[data-workspace-open="true"] .latest-response {
+  flex: 0 1 auto;
   font-size: clamp(1.2rem, 2vw, 2.35rem);
   letter-spacing: -0.025em;
   line-height: 1.18;
-  max-height: 50dvh;
+  max-height: calc(100dvh - 15rem);
   max-width: 31ch;
+  min-height: 0;
 }
 
 .course-agent[data-workspace-open="true"] .composer {
+  bottom: 2rem;
   padding-inline: clamp(2rem, 4vw, 5rem);
-  right: 58%;
+  right: 50vw;
+}
+
+.course-agent[data-workspace-open="true"] .response-stage:has(.activity-trace[open]) {
+  transform: none;
+}
+
+.course-agent[data-workspace-open="true"] .activity-list {
+  width: min(42rem, calc(50vw - 4rem));
 }
 
 .workspace-pane {
@@ -325,8 +314,8 @@ textarea {
   flex: none;
   gap: var(--space-3);
   justify-content: space-between;
-  min-height: 7rem;
-  padding: 4.75rem 1.5rem 0.75rem;
+  min-height: 3.75rem;
+  padding: 0.75rem 1.5rem;
 }
 
 .workspace-tabs > div {
@@ -371,6 +360,7 @@ textarea {
   justify-content: center;
   line-height: 0;
   padding: 0 !important;
+  cursor: pointer;
   transition: color 140ms ease;
   width: 2.25rem;
 }
@@ -398,7 +388,7 @@ textarea {
 .workspace-single-close {
   position: absolute;
   right: 1.5rem;
-  top: 4.75rem;
+  top: 0.75rem;
   z-index: 4;
 }
 
@@ -406,7 +396,14 @@ textarea {
   flex: 1;
   min-height: 0;
   min-width: 0;
+  overflow-y: auto;
   padding: 0 1.5rem 2rem;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.workspace-panel::-webkit-scrollbar {
+  display: none;
 }
 
 .workspace-panel > * {
@@ -415,12 +412,68 @@ textarea {
 }
 
 .workspace-panel > .ca-draft-document {
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  background: var(--color-background);
+  height: auto;
+  min-height: 100%;
+  overflow: visible;
+}
+
+.workspace-application-submit {
+  background: transparent;
+  display: flex;
+  justify-content: center;
+  padding: 1.5rem 0 2rem;
+  width: 100%;
+}
+
+.workspace-application-submit > span {
+  display: block;
+  width: min(100%, 16rem);
+}
+
+.workspace-application-submit button {
+  appearance: none;
+  background: var(--color-text);
+  border: 1px solid var(--color-text);
+  border-radius: 999px;
+  color: var(--color-background);
+  cursor: pointer;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  padding: 0.8rem 1.5rem;
+  text-transform: uppercase;
+  transition:
+    background 140ms ease,
+    color 140ms ease,
+    opacity 140ms ease;
+  width: 100%;
+}
+
+.workspace-application-submit button:hover:not(:disabled) {
+  background: transparent;
+  color: var(--color-text);
+}
+
+.workspace-application-submit button:focus-visible {
+  outline: 1px solid var(--color-text);
+  outline-offset: 3px;
+}
+
+.workspace-application-submit button:disabled {
+  background: var(--color-surface-raised);
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 
 .workspace-pane[data-tabbed="false"] .workspace-panel {
-  padding-top: 5rem;
+  padding-top: 0;
+}
+
+.workspace-pane[data-tabbed="false"] .ca-draft-document-header {
+  padding-right: 3.25rem;
 }
 
 .workspace-pane[data-tabbed="false"] .ca-viewer-toolbar {
@@ -482,7 +535,7 @@ textarea {
   flex: none;
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 0.775rem;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1;
 }
 
@@ -511,6 +564,14 @@ textarea {
     max-width 260ms cubic-bezier(0.22, 1, 0.36, 1),
     padding 260ms cubic-bezier(0.22, 1, 0.36, 1);
   width: 100%;
+}
+
+.course-agent:not([data-workspace-open="true"]) .latest-response {
+  text-align: center;
+}
+
+.course-agent[data-workspace-open="true"] .latest-response {
+  text-align: left;
 }
 
 .latest-response[data-streaming="true"] > :last-child::after {
@@ -567,6 +628,7 @@ textarea {
   margin: 0;
   max-width: min(42rem, calc(100vw - 9rem));
   min-width: 0;
+  position: relative;
   text-align: left;
   width: auto;
 }
@@ -584,6 +646,8 @@ textarea {
 
 .activity-trace > summary {
   cursor: pointer;
+  position: relative;
+  z-index: 3;
 }
 
 .activity-trace-summary {
@@ -739,19 +803,28 @@ textarea {
 }
 
 .composer-inner {
-  align-items: flex-end;
-  display: flex;
-  gap: 1rem;
+  align-items: flex-start;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   justify-content: center;
   max-width: 52rem;
+  position: relative;
   width: 100%;
 }
 
 .composer-entry {
   display: grid;
-  flex: 1;
-  gap: 0.55rem;
+  gap: 0;
+  justify-self: center;
+  max-width: 46rem;
   min-width: 0;
+  width: 100%;
+}
+
+.composer-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 1rem;
 }
 
 .attachment-button,
@@ -765,6 +838,22 @@ textarea {
   letter-spacing: 0.12em;
   padding: 0.4rem 0;
   text-transform: uppercase;
+}
+
+.attachment-button {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.35rem;
+}
+
+.attachment-button svg {
+  fill: none;
+  height: 0.875rem;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+  width: 0.875rem;
 }
 
 .attachment-button:disabled {
@@ -881,10 +970,11 @@ textarea {
 .agent-drawer {
   animation: drawer-in 160ms ease-out;
   background: var(--color-surface);
-  border-right: 1px solid var(--color-border);
+  border-left: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
   height: 100%;
+  margin-left: auto;
   max-width: 26rem;
   overflow-y: auto;
   padding: 1.5rem;
@@ -1013,7 +1103,7 @@ textarea {
 
 @keyframes drawer-in {
   from {
-    transform: translateX(-1rem);
+    transform: translateX(1rem);
   }
   to {
     transform: translateX(0);
@@ -1036,6 +1126,10 @@ textarea {
 }
 
 @media (max-width: 900px) {
+  .course-agent[data-workspace-open="true"] .agent-header {
+    right: 0;
+  }
+
   .course-agent[data-workspace-open="true"] .workspace-shell {
     display: block;
     padding: 4.5rem 1rem 7rem;
@@ -1104,19 +1198,10 @@ textarea {
   }
 
   .header-prompt,
+  .logs-link,
   .about-link {
     font-size: 0.6rem;
     letter-spacing: 0.08em;
-  }
-
-  .history-toggle {
-    height: 1.4rem;
-    width: 1.4rem;
-  }
-
-  .history-toggle svg {
-    height: 1.2rem;
-    width: 1.2rem;
   }
 
   .syllabus-page {
@@ -1159,7 +1244,7 @@ textarea {
   }
 
   .media-lab-mark {
-    height: 1.45rem;
+    height: 1.2rem;
   }
 
   .response-agent-line {
@@ -1195,6 +1280,12 @@ textarea {
 
   .composer-inner {
     gap: 0.75rem;
+  }
+
+  .application-submit-tooltip {
+    grid-area: auto;
+    justify-self: center;
+    margin-top: 1rem;
   }
 }
 

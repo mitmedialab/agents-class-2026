@@ -83,6 +83,7 @@ beforeEach(() => {
           id: "40000000-0000-4000-8000-000000000009",
           component_id: "draft-document",
           title: "Course Application Draft",
+          resource_uri: "course://application",
           props: {
             title: "Course Application Draft",
             fields: [{ id: "name", label: "Name", value: "", status: "missing" }],
@@ -156,7 +157,7 @@ describe("Course Agent interface", () => {
     expect(await screen.findByText("The earlier response.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "MIT" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "MIT Media Lab" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Show chat history" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Your logs" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Apply" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Schedule" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Grading" })).toBeInTheDocument();
@@ -216,6 +217,122 @@ describe("Course Agent interface", () => {
       ),
     );
     expect(api.ensureApplicationDraft).not.toHaveBeenCalled();
+  });
+
+  it("opens the application draft in the workspace before prompting the agent", async () => {
+    render(<App />);
+    await screen.findByText("The earlier response.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    expect(
+      await screen.findByRole("article", { name: "Course Application Draft" }),
+    ).toBeInTheDocument();
+    expect(api.ensureApplicationDraft).toHaveBeenCalledWith(conversation.id);
+    expect(api.streamAgentRun).toHaveBeenCalledWith(
+      conversation.id,
+      "I'd like to apply for the course.",
+      expect.any(Function),
+      expect.any(AbortSignal),
+    );
+  });
+
+  it("returns to the prior conversation after closing the application workspace", async () => {
+    render(<App />);
+    await screen.findByText("The earlier response.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    expect(await screen.findByRole("complementary", { name: "Workspace" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close workspace" }));
+
+    expect(screen.queryByRole("complementary", { name: "Workspace" })).not.toBeInTheDocument();
+    expect(screen.getByText("The earlier response.")).toBeInTheDocument();
+    expect(screen.getByText("To continue, send a message to the Course Agent.")).toBeInTheDocument();
+  });
+
+  it("shows a disabled composer submission action until application material is complete", async () => {
+    vi.mocked(api.ensureApplicationDraft).mockResolvedValue({
+      ...previousEvent,
+      type: "workspace.panel.opened",
+      payload: {
+        command: {
+          type: "open",
+          panel: {
+            id: "40000000-0000-4000-8000-000000000010",
+            component_id: "draft-document",
+            title: "Course Application Draft",
+            resource_uri: "course://application",
+            props: {
+              title: "Course Application Draft",
+              fields: [
+                { id: "name", label: "Name", status: "missing" },
+                { id: "email", label: "Email", status: "missing" },
+                {
+                  id: "department_research_group_year_of_study_mit",
+                  label: "Department / Research Group / Year of Study MIT",
+                  status: "missing",
+                },
+                { id: "personal_webpage", label: "Personal Webpage", status: "missing" },
+                { id: "interests", label: "Interests", status: "missing" },
+                {
+                  id: "why_take_this_class",
+                  label: "Why do you want to take this class?",
+                  status: "missing",
+                },
+                { id: "knowledgeable_about", label: "Knowledgeable about", status: "missing" },
+                { id: "skill_set", label: "Skill-set", status: "missing" },
+                { id: "registration_status", label: "Registration Status", status: "missing" },
+                {
+                  id: "listener_willing_to_do_weekly_builds",
+                  label: "For listeners: willing to do weekly builds",
+                  status: "missing",
+                },
+                {
+                  id: "questions_or_comments_for_instructors",
+                  label: "Questions or comments for instructors",
+                  status: "missing",
+                },
+                { id: "photo_upload_id", label: "Recent profile photo", status: "missing" },
+              ],
+            },
+            state: {},
+          },
+        },
+      },
+    });
+    render(<App />);
+    await screen.findByText("The earlier response.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    const submit = await screen.findByRole("button", { name: "Submit application" });
+    expect(submit).toBeDisabled();
+    expect(submit.parentElement).toHaveAttribute(
+      "title",
+      "0/12 required fields confirmed",
+    );
+  });
+
+  it("allows only one shortcut operation while an agent run is active", async () => {
+    let finishRun = () => {};
+    vi.mocked(api.streamAgentRun).mockImplementation(
+      async (_id, _text, _onEvent, signal) =>
+        new Promise<void>((resolve) => {
+          finishRun = resolve;
+          signal?.addEventListener("abort", () => resolve());
+        }),
+    );
+    render(<App />);
+    await screen.findByText("The earlier response.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Schedule" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    expect(api.streamAgentRun).toHaveBeenCalledTimes(1);
+    expect(api.ensureApplicationDraft).not.toHaveBeenCalled();
+
+    finishRun();
   });
 
   it("replaces the previous response after a new message", async () => {
@@ -328,7 +445,7 @@ describe("Course Agent interface", () => {
     render(<App />);
     await screen.findByText("The earlier response.");
 
-    fireEvent.click(screen.getByRole("button", { name: "Show chat history" }));
+    fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
 
     expect(screen.getByRole("dialog", { name: "Chat history" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Week one/ })).toBeInTheDocument();
@@ -451,7 +568,10 @@ describe("Course Agent interface", () => {
     expect(screen.getByText("Reading course syllabus")).not.toBeVisible();
     fireEvent.click(trace);
     expect(trace.closest("details")).toHaveAttribute("open");
-    expect(screen.getByText("Reading course syllabus")).toBeInTheDocument();
+    expect(screen.getByText("Reading course syllabus")).toBeVisible();
+    fireEvent.click(trace);
+    expect(trace.closest("details")).not.toHaveAttribute("open");
+    expect(screen.getByText("Reading course syllabus")).not.toBeVisible();
   });
 
   it("opens a validated calendar from the agent stream and persists user close", async () => {
@@ -497,6 +617,7 @@ describe("Course Agent interface", () => {
       "false",
     );
     expect(screen.queryByRole("tablist", { name: "Workspace panels" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Apply" })).not.toBeInTheDocument();
     expect(api.getCourseResourceContent).toHaveBeenCalledWith("course://schedule");
     fireEvent.click(await screen.findByRole("button", { name: /Project review/ }));
     await waitFor(() =>
@@ -507,7 +628,7 @@ describe("Course Agent interface", () => {
         "review",
       ),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Close Course schedule" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close workspace" }));
     await waitFor(() =>
       expect(api.applyWorkspacePanelAction).toHaveBeenCalledWith(
         conversation.id,
@@ -518,6 +639,7 @@ describe("Course Agent interface", () => {
     await waitFor(() =>
       expect(screen.queryByRole("complementary", { name: "Workspace" })).not.toBeInTheDocument(),
     );
+    expect(screen.getByRole("button", { name: "Apply" })).toBeInTheDocument();
   });
 
   it("shows workspace tabs only when more than one panel is open", async () => {
@@ -558,12 +680,25 @@ describe("Course Agent interface", () => {
       "aria-selected",
       "true",
     );
+
+    vi.mocked(api.applyWorkspacePanelAction).mockImplementation(async (_id, _action, panelId) => ({
+      ...previousEvent,
+      type: "workspace.panel.closed",
+      actor: "user",
+      payload: { command: { type: "close", panel_id: panelId } },
+    }));
+    fireEvent.click(screen.getByRole("button", { name: "Close workspace" }));
+
+    await waitFor(() =>
+      expect(api.applyWorkspacePanelAction).toHaveBeenCalledTimes(2),
+    );
+    expect(await screen.findByRole("button", { name: "Apply" })).toBeInTheDocument();
   });
 
   it("logs students in from the secondary drawer", async () => {
     render(<App />);
     await screen.findByText("The earlier response.");
-    fireEvent.click(screen.getByRole("button", { name: "Show chat history" }));
+    fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
 
     fireEvent.change(screen.getByLabelText("Username"), { target: { value: "alice" } });
     fireEvent.change(screen.getByLabelText("Access code"), {

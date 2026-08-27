@@ -142,6 +142,40 @@ def _agent_instructions(
                 "Current trusted workspace state for follow-up tool arguments only:\n"
                 + json.dumps(workspace_state, ensure_ascii=False, sort_keys=True)
             )
+            panels = workspace_state.get("panels")
+            if isinstance(panels, list) and any(
+                isinstance(panel, dict)
+                and panel.get("component_id") == "draft-document"
+                and (
+                    panel.get("resource_uri") == "course://application"
+                    or (
+                        isinstance(panel.get("state"), dict)
+                        and cast(dict[str, JsonValue], panel["state"]).get("document_kind")
+                        == "course-application"
+                    )
+                )
+                for panel in panels
+            ):
+                sections.append(
+                    "The trusted workspace contains the active course application draft. "
+                    "Treat every user message as part of a field-by-field application interview. "
+                    "Keep the canonical fields and their displayed order. When the applicant has "
+                    "provided enough identifying information, proactively use authorized "
+                    "public-web search and page-reading tools to find relevant professional "
+                    "or academic material. Add useful public findings to the appropriate draft "
+                    "fields as sourced candidate or inferred values; never infer private contact "
+                    "information, registration choice, weekly-build commitment, instructor "
+                    "questions, or a photo upload. You may prepare later fields from research, "
+                    "but discuss only the current unresolved field. Mark a field confirmed only "
+                    "when the applicant supplies, edits, or explicitly confirms it. Ask exactly "
+                    "one focused question at a time in displayed order. If an answer is vague or "
+                    "too shallow to make that application field useful, ask a specific follow-up "
+                    "about the same field instead of advancing. When a researched candidate "
+                    "becomes current, ask the applicant to confirm, correct, or deepen it. Never "
+                    "use a blanket confirmation request and never end with only an acknowledgement "
+                    "such as 'Okay.' Submit only after all canonical fields are confirmed and the "
+                    "applicant explicitly requests submission."
+                )
     if public_resource_index:
         entries = "\n".join(f"- {entry}" for entry in public_resource_index)
         sections.append(f"Official information available through tools:\n{entries}")
