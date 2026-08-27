@@ -1,7 +1,7 @@
 import type { Conversation, PrincipalContext } from "@class-agent/protocol";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import App, { startsApplication } from "./App.js";
+import App from "./App.js";
 import * as api from "./api.js";
 
 vi.mock("./api.js", () => ({
@@ -150,19 +150,6 @@ beforeEach(() => {
 });
 
 describe("Course Agent interface", () => {
-  it.each([
-    "Apply",
-    "I'd like to apply for the course",
-    "Start my application form",
-    "Can we begin filling out the application?",
-  ])("recognizes application-start intent: %s", (message) => {
-    expect(startsApplication(message)).toBe(true);
-  });
-
-  it("does not open the form for informational application questions", () => {
-    expect(startsApplication("What is the application deadline?")).toBe(false);
-  });
-
   it("shows only the latest agent response in the main workspace", async () => {
     render(<App />);
 
@@ -207,7 +194,28 @@ describe("Course Agent interface", () => {
         vi.mocked(api.streamAgentRun).mock.invocationCallOrder[0]!,
       );
       expect(screen.getByRole("textbox", { name: "Name" })).toBeInTheDocument();
+    } else {
+      expect(api.ensureApplicationDraft).not.toHaveBeenCalled();
     }
+  });
+
+  it("does not open the application draft from typed message text", async () => {
+    render(<App />);
+    await screen.findByText("The earlier response.");
+
+    const composer = screen.getByRole("textbox", { name: "Message" });
+    fireEvent.change(composer, { target: { value: "I'd like to apply for the course." } });
+    fireEvent.keyDown(composer, { key: "Enter" });
+
+    await waitFor(() =>
+      expect(api.streamAgentRun).toHaveBeenCalledWith(
+        conversation.id,
+        "I'd like to apply for the course.",
+        expect.any(Function),
+        expect.any(AbortSignal),
+      ),
+    );
+    expect(api.ensureApplicationDraft).not.toHaveBeenCalled();
   });
 
   it("replaces the previous response after a new message", async () => {

@@ -43,6 +43,15 @@ const DEFAULT_COMPONENT_RESOURCES: Readonly<Record<string, string>> = {
   calendar: "course://schedule",
 };
 
+function CloseIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="9.25" />
+      <path d="m9 9 6 6m0-6-6 6" />
+    </svg>
+  );
+}
+
 function stringProp(props: JsonObject, name: string): string | undefined {
   const value = props[name];
   return typeof value === "string" ? value : undefined;
@@ -392,7 +401,7 @@ export function Workspace({
             onClick={() => void onPanelAction("close", focused.id)}
             type="button"
           >
-            <span aria-hidden="true">×</span>
+            <CloseIcon />
           </button>
         </header>
       ) : (
@@ -402,7 +411,7 @@ export function Workspace({
           onClick={() => void onPanelAction("close", focused.id)}
           type="button"
         >
-          <span aria-hidden="true">×</span>
+          <CloseIcon />
         </button>
       )}
       <div className="workspace-panel" role="tabpanel">

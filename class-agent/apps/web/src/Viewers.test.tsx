@@ -405,7 +405,10 @@ describe("DraftDocument", () => {
     );
 
     const field = screen.getByRole("textbox", { name: "Name" });
+    expect(field).toHaveAttribute("rows", "1");
+    Object.defineProperty(field, "scrollHeight", { configurable: true, value: 72 });
     fireEvent.change(field, { target: { value: "Grace Hopper" } });
+    expect(field).toHaveStyle({ height: "72px" });
     fireEvent.blur(field);
     expect(field).toHaveValue("Grace Hopper");
     expect(onChange).toHaveBeenCalledWith("name", "Grace Hopper");

@@ -36,9 +36,21 @@ const CONNECTION_ERROR = "I couldn’t reach the Course Agent. Please try again.
 const WELCOME_MESSAGE =
   "Welcome. I’m the Course Agent. This agent is the class website—ask me for class information, or talk with me if you’d like to apply.";
 const HEADER_PROMPTS = [
-  { label: "Apply", message: "I'd like to apply for the course." },
-  { label: "Schedule", message: "Show me the course schedule." },
-  { label: "Grading", message: "How is grading handled in this course?" },
+  {
+    label: "Apply",
+    message: "I'd like to apply for the course.",
+    openApplication: true,
+  },
+  {
+    label: "Schedule",
+    message: "Show me the course schedule.",
+    openApplication: false,
+  },
+  {
+    label: "Grading",
+    message: "How is grading handled in this course?",
+    openApplication: false,
+  },
 ] as const;
 
 function newestFirst(conversations: Conversation[]): Conversation[] {
@@ -66,12 +78,21 @@ function titleFromMessage(message: string): string {
   return singleLine.length > 56 ? `${singleLine.slice(0, 55)}…` : singleLine;
 }
 
-export function startsApplication(message: string): boolean {
-  const normalized = message.toLowerCase().replaceAll(/[^a-z0-9]+/g, " ").trim();
-  if (/\b(apply|applying)\b/.test(normalized)) return true;
+function ChatHistoryIcon() {
   return (
-    /\bapplication(?: form)?\b/.test(normalized) &&
-    /\b(start|begin|open|fill|complete|work)\b/.test(normalized)
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <rect height="16" rx="1.5" width="18" x="3" y="4" />
+      <path d="M9 4v16M7.5 9 5 12l2.5 3" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="9.25" />
+      <path d="m9 9 6 6m0-6-6 6" />
+    </svg>
   );
 }
 
@@ -268,7 +289,10 @@ export default function App() {
     };
   }, [historyOpen]);
 
-  async function sendMessage(suggestedMessage?: string): Promise<void> {
+  async function sendMessage(
+    suggestedMessage?: string,
+    openApplication = false,
+  ): Promise<void> {
     const isSuggestedPrompt = suggestedMessage !== undefined;
     const visibleText = (suggestedMessage ?? message).trim();
     const pendingUploads = isSuggestedPrompt ? [] : uploads;
@@ -309,7 +333,7 @@ export default function App() {
         setConversations((current) => newestFirst([created, ...current]));
       }
 
-      if (startsApplication(visibleText)) {
+      if (openApplication) {
         const event = await ensureApplicationDraft(conversationId);
         setWorkspaceState((current) =>
           builtInComponentRegistry.apply(current, event.payload.command),
@@ -620,11 +644,7 @@ export default function App() {
               setHistoryOpen(true);
             }}
           >
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <rect height="16" rx="1" width="18" x="3" y="4" />
-              <path d="M9 4v16" />
-              <path d="m8 10-2-2m2 2-2 2" />
-            </svg>
+            <ChatHistoryIcon />
           </Button>
           <div aria-label="MIT and MIT Media Lab" className="institutional-marks">
             <a aria-label="MIT" href="https://www.mit.edu/">
@@ -643,7 +663,7 @@ export default function App() {
               key={prompt.label}
               onClick={() => {
                 setAboutOpen(false);
-                void sendMessage(prompt.message);
+                void sendMessage(prompt.message, prompt.openApplication);
               }}
             >
               {prompt.label}
@@ -786,11 +806,7 @@ export default function App() {
                 className="history-toggle"
                 onClick={() => setHistoryOpen(false)}
               >
-                <svg aria-hidden="true" viewBox="0 0 24 24">
-                  <rect height="16" rx="1" width="18" x="3" y="4" />
-                  <path d="M9 4v16" />
-                  <path d="m6 10 2-2m-2 2 2 2" />
-                </svg>
+                <CloseIcon />
               </Button>
             </div>
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { DocumentViewer } from "./DocumentViewer.js";
 
@@ -28,6 +28,46 @@ const FIELD_STATUS_LABELS: Record<DraftFieldStatus, string> = {
   inferred: "Inferred",
   confirmed: "Confirmed",
 };
+
+function resizeToContent(element: HTMLTextAreaElement): void {
+  element.style.height = "0px";
+  element.style.height = `${element.scrollHeight}px`;
+}
+
+interface DraftFieldEditorProps {
+  field: DraftDocumentField;
+  value: string;
+  onChange: (value: string) => void;
+  onCommit: (value: string) => void;
+}
+
+function DraftFieldEditor({
+  field,
+  value,
+  onChange,
+  onCommit,
+}: DraftFieldEditorProps) {
+  const editorRef = useRef<HTMLTextAreaElement>(null);
+
+  useLayoutEffect(() => {
+    if (editorRef.current) resizeToContent(editorRef.current);
+  }, [value]);
+
+  return (
+    <textarea
+      ref={editorRef}
+      aria-label={field.label}
+      onBlur={(event) => onCommit(event.currentTarget.value)}
+      onChange={(event) => {
+        resizeToContent(event.currentTarget);
+        onChange(event.currentTarget.value);
+      }}
+      placeholder="Waiting for information"
+      rows={1}
+      value={value}
+    />
+  );
+}
 
 export function DraftDocument({
   title,
@@ -87,21 +127,14 @@ export function DraftDocument({
                 <strong>{field.label}</strong>
                 <span>{FIELD_STATUS_LABELS[field.status]}</span>
               </header>
-              <textarea
-                aria-label={field.label}
-                onBlur={(event) => {
-                  if (event.currentTarget.value !== (field.value ?? "")) {
-                    onChange?.(field.id, event.currentTarget.value);
-                  }
-                }}
-                onChange={(event) =>
-                  setValues((current) => ({
-                    ...current,
-                    [field.id]: event.target.value,
-                  }))
+              <DraftFieldEditor
+                field={field}
+                onChange={(value) =>
+                  setValues((current) => ({ ...current, [field.id]: value }))
                 }
-                placeholder="Waiting for information"
-                rows={Math.max(2, Math.min(8, (values[field.id] ?? "").split("\n").length))}
+                onCommit={(value) => {
+                  if (value !== (field.value ?? "")) onChange?.(field.id, value);
+                }}
                 value={values[field.id] ?? ""}
               />
               {field.source ? <small>Source: {field.source}</small> : null}
