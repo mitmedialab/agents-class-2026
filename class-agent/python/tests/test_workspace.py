@@ -154,6 +154,229 @@ def test_workspace_tools_reject_unknown_component_invalid_props_and_resource() -
     asyncio.run(scenario())
 
 
+def test_concrete_visual_composition_requires_available_image_candidates() -> None:
+    async def scenario() -> None:
+        registry = load_component_registry()
+        tool = WorkspaceOpenComponentTool(registry)
+        context = execution_context()
+        props: dict[str, JsonValue] = {
+            "root_id": "root",
+            "elements": [
+                {
+                    "id": "root",
+                    "type": "group",
+                    "children": ["title", "description"],
+                },
+                {
+                    "id": "title",
+                    "type": "heading",
+                    "text": "SixthSense prototype",
+                },
+                {
+                    "id": "description",
+                    "type": "text",
+                    "text": "A wearable gestural interface.",
+                },
+            ],
+        }
+
+        with pytest.raises(ToolValidationError, match=r"Call web\.search_images"):
+            await tool.execute(
+                {"component_id": "visual-composition", "props": props},
+                context,
+            )
+        assert WorkspaceState.model_validate(context.workspace_state).panels == []
+
+        context.transient_state.update(
+            {
+                "image_search_attempted": True,
+                "image_search_candidates": ["https://example.com/sixthsense.jpg"],
+            }
+        )
+        with pytest.raises(ToolValidationError, match="Include at least one suitable candidate"):
+            await tool.execute(
+                {"component_id": "visual-composition", "props": props},
+                context,
+            )
+
+        elements = props["elements"]
+        assert isinstance(elements, list)
+        root = elements[0]
+        assert isinstance(root, dict)
+        children = root["children"]
+        assert isinstance(children, list)
+        children.insert(1, "image")
+        elements.append(
+            {
+                "id": "image",
+                "type": "image",
+                "url": "https://example.com/sixthsense.jpg",
+                "alt": "SixthSense wearable prototype",
+                "aspect": "wide",
+            }
+        )
+        opened = await tool.execute(
+            {"component_id": "visual-composition", "props": props},
+            context,
+        )
+
+        assert isinstance(opened.content, dict)
+        assert opened.content["status"] == "opened"
+
+        fallback_context = execution_context()
+        fallback_context.transient_state["image_search_attempted"] = True
+        fallback = await tool.execute(
+            {
+                "component_id": "visual-composition",
+                "props": {
+                    "root_id": "root",
+                    "elements": [
+                        {
+                            "id": "root",
+                            "type": "text",
+                            "text": "A physical prototype with no usable public image.",
+                        }
+                    ],
+                },
+            },
+            fallback_context,
+        )
+        assert isinstance(fallback.content, dict)
+        assert fallback.content["status"] == "opened"
+
+    asyncio.run(scenario())
+
+
+def test_chart_workspace_requires_comparable_quantitative_provenance() -> None:
+    async def scenario() -> None:
+        registry = load_component_registry()
+        tool = WorkspaceOpenComponentTool(registry)
+        base_chart: dict[str, JsonValue] = {
+            "root_id": "results",
+            "elements": [
+                {
+                    "id": "results",
+                    "type": "chart",
+                    "title": "Section scores",
+                    "chart_type": "bar",
+                    "labels": ["Section A", "Section B"],
+                    "series": [{"label": "Average", "values": [72, 84]}],
+                }
+            ],
+        }
+
+        with pytest.raises(ToolValidationError, match="quantitative provenance"):
+            await tool.execute(
+                {"component_id": "visual-composition", "props": base_chart},
+                execution_context(),
+            )
+
+        chart_elements = base_chart["elements"]
+        assert isinstance(chart_elements, list)
+        chart = chart_elements[0]
+        assert isinstance(chart, dict)
+        chart.update(
+            {
+                "data_kind": "measured",
+                "data_source": "Course records, 2026",
+                "comparison_basis": "Both sections use the same 0-100 score scale.",
+                "unit": "percent",
+            }
+        )
+        opened = await tool.execute(
+            {"component_id": "visual-composition", "props": base_chart},
+            execution_context(),
+        )
+        assert isinstance(opened.content, dict)
+        assert opened.content["status"] == "opened"
+
+        chart["description"] = "A qualitative 3-2-1 relative pattern, not raw measurements."
+        with pytest.raises(ToolValidationError, match="actual comparable numeric values"):
+            await tool.execute(
+                {"component_id": "visual-composition", "props": base_chart},
+                execution_context(),
+            )
+
+        chart.pop("description")
+        chart["comparison_basis"] = "Distinct outcomes use different measures."
+        with pytest.raises(ToolValidationError, match="do not share a comparable scale"):
+            await tool.execute(
+                {"component_id": "visual-composition", "props": base_chart},
+                execution_context(),
+            )
+
+    asyncio.run(scenario())
+
+
+def test_searched_image_dimensions_control_primary_visual_placement() -> None:
+    async def scenario() -> None:
+        registry = load_component_registry()
+        tool = WorkspaceOpenComponentTool(registry)
+        image_url = "https://example.com/shallow-study-figure.png"
+        context = execution_context()
+        context.transient_state["image_search_metadata"] = [
+            {
+                "image_url": image_url,
+                "dimensions_known": True,
+                "width": 600,
+                "height": 200,
+                "resolution_tier": "small",
+            }
+        ]
+        props: dict[str, JsonValue] = {
+            "root_id": "figure",
+            "elements": [
+                {
+                    "id": "figure",
+                    "type": "image",
+                    "url": image_url,
+                    "alt": "Study procedure figure",
+                    "presentation": "banner",
+                    "fit": "contain",
+                }
+            ],
+        }
+
+        with pytest.raises(ToolValidationError, match="600x200px"):
+            await tool.execute({"component_id": "visual-composition", "props": props}, context)
+
+        image_elements = props["elements"]
+        assert isinstance(image_elements, list)
+        image = image_elements[0]
+        assert isinstance(image, dict)
+        image.update({"source_width": 600, "source_height": 200})
+        with pytest.raises(ToolValidationError, match="too small for banner"):
+            await tool.execute({"component_id": "visual-composition", "props": props}, context)
+
+        metadata = context.transient_state["image_search_metadata"]
+        assert isinstance(metadata, list)
+        candidate = metadata[0]
+        assert isinstance(candidate, dict)
+        candidate["resolution_tier"] = "large"
+        image.update({"presentation": "feature", "width": "half"})
+        with pytest.raises(ToolValidationError, match="split feature would waste vertical space"):
+            await tool.execute({"component_id": "visual-composition", "props": props}, context)
+
+        image.update({"presentation": "standard", "width": "full"})
+        opened = await tool.execute({"component_id": "visual-composition", "props": props}, context)
+        assert isinstance(opened.content, dict)
+        assert opened.content["status"] == "opened"
+
+        unknown_context = execution_context()
+        unknown_context.transient_state["image_search_metadata"] = [
+            {"image_url": image_url, "dimensions_known": False}
+        ]
+        image.pop("source_width")
+        image.pop("source_height")
+        image["presentation"] = "feature"
+        with pytest.raises(ToolValidationError, match="unknown dimensions"):
+            await tool.execute(
+                {"component_id": "visual-composition", "props": props}, unknown_context
+            )
+
+    asyncio.run(scenario())
+
+
 def test_workspace_events_reconstruct_state_without_framework_objects() -> None:
     registry = load_component_registry()
     panel_id = uuid4()
@@ -163,7 +386,7 @@ def test_workspace_events_reconstruct_state_without_framework_objects() -> None:
         "panel": {
             "id": str(panel_id),
             "component_id": "document-viewer",
-            "title": "Syllabus",
+            "title": "Research paper",
             "resource_uri": "course://syllabus",
             "props": {"page": 1},
             "state": {},

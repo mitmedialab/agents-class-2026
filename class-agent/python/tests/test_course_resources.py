@@ -399,42 +399,114 @@ def test_public_image_search_normalizes_https_candidates_for_workspace_images() 
                 },
             ]
 
+        context = execution_context()
         result = await PublicImageSearchTool(search).execute(
             {"query": "MIT Media Lab Fluid Interfaces", "limit": 4},
-            execution_context(),
+            context,
         )
 
         assert calls == [("MIT Media Lab Fluid Interfaces", 4)]
+        unknown_layout_hint = (
+            "Dimensions unavailable. Do not assume this image is suitable for a banner; "
+            "prefer standard or card presentation until its size is verified."
+        )
+        expected_results: list[dict[str, object]] = [
+            {
+                "title": "Fluid Interfaces",
+                "image_url": "https://images.example.org/fluid.jpg",
+                "thumbnail_url": "https://images.example.org/fluid-thumb.jpg",
+                "source_page_url": "https://www.example.org/fluid",
+                "source": "Example",
+                "width": 1600,
+                "height": 900,
+                "dimensions_known": True,
+                "aspect_ratio": 1.778,
+                "orientation": "landscape",
+                "resolution_tier": "large",
+                "recommended_aspect": "wide",
+                "recommended_presentation": "banner",
+                "recommended_width": "full",
+                "split_layout_safe": True,
+                "layout_hint": (
+                    "1600x900px landscape, large resolution. Prefer presentation=banner, "
+                    "aspect=wide, width=full. A split feature is safe when the adjacent copy is "
+                    "concise. Use fit=contain for figures, diagrams, and screenshots, or "
+                    "fit=cover for photographs."
+                ),
+            },
+            {
+                "title": "HTTPS thumbnail fallback",
+                "image_url": "https://images.example.org/fallback-thumb.jpg",
+                "thumbnail_url": "https://images.example.org/fallback-thumb.jpg",
+                "dimensions_known": False,
+                "layout_hint": unknown_layout_hint,
+            },
+            {
+                "title": "Second result",
+                "image_url": "https://cdn.example.org/second.jpg",
+                "dimensions_known": False,
+                "layout_hint": unknown_layout_hint,
+            },
+        ]
         assert result.content == {
             "query": "MIT Media Lab Fluid Interfaces",
-            "results": [
-                {
-                    "title": "Fluid Interfaces",
-                    "image_url": "https://images.example.org/fluid.jpg",
-                    "thumbnail_url": "https://images.example.org/fluid-thumb.jpg",
-                    "source_page_url": "https://www.example.org/fluid",
-                    "source": "Example",
-                    "width": 1600,
-                    "height": 900,
-                },
-                {
-                    "title": "HTTPS thumbnail fallback",
-                    "image_url": "https://images.example.org/fallback-thumb.jpg",
-                    "thumbnail_url": "https://images.example.org/fallback-thumb.jpg",
-                },
-                {
-                    "title": "Second result",
-                    "image_url": "https://cdn.example.org/second.jpg",
-                },
-            ],
+            "results": expected_results,
         }
         assert result.summary == "Found 3 public image candidates."
         assert result.storage_policy == "server_summary"
+        assert context.transient_state == {
+            "image_search_attempted": True,
+            "image_search_candidates": [
+                "https://images.example.org/fluid.jpg",
+                "https://images.example.org/fallback-thumb.jpg",
+                "https://cdn.example.org/second.jpg",
+            ],
+            "image_search_metadata": expected_results,
+        }
 
+        fallback_calls: list[tuple[str, int]] = []
+
+        def fallback_search(query: str, limit: int) -> list[dict[str, object]]:
+            fallback_calls.append((query, limit))
+            if "site:" in query:
+                raise RuntimeError("provider rejected advanced syntax")
+            return [
+                {
+                    "title": "Paper figure",
+                    "image": "https://images.example.org/paper-figure.jpg",
+                    "width": 2400,
+                    "height": 800,
+                }
+            ]
+
+        fallback_result = await PublicImageSearchTool(fallback_search).execute(
+            {
+                "query": 'site:media.mit.edu "Feeling-the-Facts" FactNudger diagram',
+                "limit": 3,
+            },
+            execution_context(),
+        )
+        assert fallback_calls == [
+            ('site:media.mit.edu "Feeling-the-Facts" FactNudger diagram', 3),
+            ("Feeling the Facts FactNudger diagram", 3),
+        ]
+        assert isinstance(fallback_result.content, dict)
+        assert fallback_result.content["executed_query"] == ("Feeling the Facts FactNudger diagram")
+        fallback_results = fallback_result.content["results"]
+        assert isinstance(fallback_results, list)
+        first_fallback = fallback_results[0]
+        assert isinstance(first_fallback, dict)
+        assert first_fallback["aspect_ratio"] == 3.0
+        assert first_fallback["split_layout_safe"] is False
+        assert first_fallback["recommended_width"] == "full"
+        assert "do not put it in a half-width split" in str(first_fallback["layout_hint"])
+
+        empty_context = execution_context()
         with pytest.raises(ToolValidationError, match="no usable HTTPS images"):
             await PublicImageSearchTool(
                 lambda _query, _limit: [{"image": "http://example.org/image.jpg"}]
-            ).execute({"query": "example"}, execution_context())
+            ).execute({"query": "example"}, empty_context)
+        assert empty_context.transient_state == {"image_search_attempted": True}
 
     asyncio.run(scenario())
 

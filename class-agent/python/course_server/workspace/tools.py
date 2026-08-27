@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from typing import ClassVar
 from uuid import UUID, uuid4
@@ -40,6 +41,24 @@ _JSON_OBJECT_SCHEMA: dict[str, JsonValue] = {
     "additionalProperties": True,
 }
 _DEFAULT_COMPONENT_RESOURCES = {"calendar": COURSE_SCHEDULE_URI}
+_CONCRETE_VISUAL_SUBJECT = re.compile(
+    r"\b(?:people|person|staff|instructors?|researchers?|authors?|profiles?|portraits?|"
+    r"projects?|prototypes?|products?|devices?|wearables?|interfaces?|robots?|artworks?|"
+    r"installations?|places?|buildings?|campuses|architecture)\b",
+    re.IGNORECASE,
+)
+_NON_QUANTITATIVE_CHART = re.compile(
+    r"\b(?:qualitative|ordinal encoding|relative (?:rank|ranking|pattern|ordering)|"
+    r"rank order|directional (?:claim|finding)|illustrative (?:rank|score))\b|"
+    r"\bnot (?:raw|original|actual) (?:data|measurements?|scores?)\b",
+    re.IGNORECASE,
+)
+_NONCOMPARABLE_CHART = re.compile(
+    r"\b(?:not comparable|not (?:a |on a )?shared scale|different measures?|"
+    r"distinct (?:measures?|outcomes?)|incompatible units?)\b",
+    re.IGNORECASE,
+)
+_CHART_PROVENANCE_FIELDS = ("data_kind", "data_source", "comparison_basis", "unit")
 
 
 def _reject_unknown(
@@ -91,6 +110,240 @@ def _authorize_resource(resource_uri: str | None, context: ToolExecutionContext)
         raise PermissionError(f"{resource_uri} is not authorized for this run")
 
 
+def _visual_composition_text(panel: WorkspacePanel) -> str:
+    values: list[str] = [panel.title or ""]
+    for name in ("title", "description"):
+        value = panel.props.get(name)
+        if isinstance(value, str):
+            values.append(value)
+    elements = panel.props.get("elements")
+    if isinstance(elements, list):
+        for element in elements:
+            if not isinstance(element, dict):
+                continue
+            for name in ("text", "label", "caption"):
+                value = element.get(name)
+                if isinstance(value, str):
+                    values.append(value)
+            items = element.get("items")
+            if isinstance(items, list):
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    values.extend(
+                        value
+                        for name in ("label", "value")
+                        if isinstance((value := item.get(name)), str)
+                    )
+    return "\n".join(values)
+
+
+def _visual_composition_has_image(panel: WorkspacePanel) -> bool:
+    elements = panel.props.get("elements")
+    return isinstance(elements, list) and any(
+        isinstance(element, dict)
+        and element.get("type") == "image"
+        and isinstance(element.get("url"), str)
+        for element in elements
+    )
+
+
+def _enforce_chart_data_contract(
+    *,
+    command: WorkspaceCommand,
+    state: WorkspaceState,
+) -> None:
+    if isinstance(command, OpenWorkspaceCommand):
+        panel_id = command.panel.id
+    elif isinstance(command, UpdateWorkspaceCommand):
+        panel_id = command.panel_id
+    else:
+        return
+    panel = next((candidate for candidate in state.panels if candidate.id == panel_id), None)
+    if panel is None or panel.component_id != "visual-composition":
+        return
+    elements = panel.props.get("elements")
+    if not isinstance(elements, list):
+        return
+    for element in elements:
+        if not isinstance(element, dict) or element.get("type") != "chart":
+            continue
+        missing = [
+            field
+            for field in _CHART_PROVENANCE_FIELDS
+            if not isinstance(element.get(field), str) or not str(element[field]).strip()
+        ]
+        if missing:
+            raise ToolValidationError(
+                "Chart elements require explicit quantitative provenance. Add non-blank "
+                f"{', '.join(missing)} fields before opening the chart. data_kind must be "
+                "measured, user-provided, or derived; comparison_basis must explain why all "
+                "values share one quantitative scale."
+            )
+        chart_context = " ".join(
+            str(element.get(field, ""))
+            for field in (
+                "title",
+                "description",
+                "value_suffix",
+                "unit",
+                "data_source",
+                "comparison_basis",
+            )
+        )
+        if _NON_QUANTITATIVE_CHART.search(chart_context):
+            raise ToolValidationError(
+                "Charts may display only actual comparable numeric values, not qualitative "
+                "3-2-1 encodings, relative ranks, or directional placeholders. Use a comparison "
+                "grid, process, or facts for qualitative findings."
+            )
+        comparison_basis = str(element.get("comparison_basis", ""))
+        if _NONCOMPARABLE_CHART.search(comparison_basis):
+            raise ToolValidationError(
+                "The chart comparison_basis says the outcomes do not share a comparable scale. "
+                "Use separate facts or sections instead of a chart."
+            )
+
+
+def _enforce_visual_media(
+    *,
+    command: WorkspaceCommand,
+    state: WorkspaceState,
+    context: ToolExecutionContext,
+) -> None:
+    if isinstance(command, OpenWorkspaceCommand):
+        panel_id = command.panel.id
+    elif isinstance(command, UpdateWorkspaceCommand):
+        panel_id = command.panel_id
+    else:
+        return
+    panel = next((candidate for candidate in state.panels if candidate.id == panel_id), None)
+    if (
+        panel is None
+        or panel.component_id != "visual-composition"
+        or _visual_composition_has_image(panel)
+        or _CONCRETE_VISUAL_SUBJECT.search(_visual_composition_text(panel)) is None
+    ):
+        return
+    candidates = context.transient_state.get("image_search_candidates")
+    if isinstance(candidates, list) and any(isinstance(value, str) for value in candidates):
+        raise ToolValidationError(
+            "Relevant image candidates are available from web.search_images. Include at least "
+            "one suitable candidate as a visual-composition image element using the `url` field "
+            "before opening this concrete-subject UI."
+        )
+    if context.transient_state.get("image_search_attempted") is not True:
+        raise ToolValidationError(
+            "This visual composition describes a concrete person, project, prototype, device, "
+            "interface, or place. Call web.search_images before opening it. If no usable image "
+            "is found, retry with the schematic composition."
+        )
+
+
+def _enforce_image_layout_metadata(
+    *,
+    command: WorkspaceCommand,
+    state: WorkspaceState,
+    context: ToolExecutionContext,
+) -> None:
+    if isinstance(command, OpenWorkspaceCommand):
+        panel_id = command.panel.id
+    elif isinstance(command, UpdateWorkspaceCommand):
+        panel_id = command.panel_id
+    else:
+        return
+    panel = next((candidate for candidate in state.panels if candidate.id == panel_id), None)
+    if panel is None or panel.component_id != "visual-composition":
+        return
+    elements = panel.props.get("elements")
+    if not isinstance(elements, list):
+        return
+    raw_metadata = context.transient_state.get("image_search_metadata")
+    metadata = (
+        {
+            str(candidate["image_url"]): candidate
+            for candidate in raw_metadata
+            if isinstance(candidate, dict) and isinstance(candidate.get("image_url"), str)
+        }
+        if isinstance(raw_metadata, list)
+        else {}
+    )
+    parents: dict[str, dict[str, JsonValue]] = {}
+    for candidate_parent in elements:
+        if not isinstance(candidate_parent, dict) or candidate_parent.get("type") != "group":
+            continue
+        children = candidate_parent.get("children")
+        if not isinstance(children, list):
+            continue
+        for child_id in children:
+            if isinstance(child_id, str):
+                parents[child_id] = candidate_parent
+    for element in elements:
+        if (
+            not isinstance(element, dict)
+            or element.get("type") != "image"
+            or not isinstance(element.get("url"), str)
+        ):
+            continue
+        candidate = metadata.get(str(element["url"]))
+        presentation = element.get("presentation", "standard")
+        width = element.get("source_width")
+        height = element.get("source_height")
+        if candidate is not None:
+            dimensions_known = candidate.get("dimensions_known") is True
+            if not dimensions_known:
+                if presentation in {"banner", "feature"}:
+                    raise ToolValidationError(
+                        "This searched image has unknown dimensions, so banner or feature "
+                        "placement is unsafe. Use standard/card presentation or choose a "
+                        "dimensioned result."
+                    )
+                continue
+            candidate_width = candidate.get("width")
+            candidate_height = candidate.get("height")
+            if not isinstance(candidate_width, int) or not isinstance(candidate_height, int):
+                continue
+            if width != candidate_width or height != candidate_height:
+                raise ToolValidationError(
+                    "Image search reported this image as "
+                    f"{candidate_width}x{candidate_height}px. Copy those values to source_width "
+                    "and source_height so its layout remains dimension-aware."
+                )
+            width = candidate_width
+            height = candidate_height
+            if candidate.get("resolution_tier") == "small" and presentation in {
+                "banner",
+                "feature",
+            }:
+                raise ToolValidationError(
+                    f"The {width}x{height}px image is too small for {presentation} presentation. "
+                    "Use card/standard or select a larger image candidate."
+                )
+        if not isinstance(width, int) or not isinstance(height, int):
+            continue
+        parent = parents.get(str(element.get("id", "")))
+        parent_columns = parent.get("columns", 2) if isinstance(parent, dict) else 2
+        parent_is_split = isinstance(parent, dict) and (
+            parent.get("layout") == "row"
+            or (
+                parent.get("layout") == "grid"
+                and isinstance(parent_columns, int)
+                and parent_columns > 1
+            )
+        )
+        shallow_contained = element.get("fit", "cover") == "contain" and width / height >= 2.0
+        if shallow_contained and (
+            parent_is_split
+            or element.get("width", "auto") != "full"
+            or presentation not in {"banner", "standard"}
+        ):
+            raise ToolValidationError(
+                f"The {width}x{height}px image is shallow ({width / height:.2f}:1) and uses "
+                "fit=contain. A split feature would waste vertical space. Place it in a stack "
+                "with width=full and presentation=banner or standard."
+            )
+
+
 def _apply_command(
     *,
     registry: ComponentRegistry,
@@ -101,6 +354,9 @@ def _apply_command(
         state = registry.apply(_current_state(context), command)
     except WorkspaceValidationError as error:
         raise ToolValidationError(str(error)) from error
+    _enforce_chart_data_contract(command=command, state=state)
+    _enforce_visual_media(command=command, state=state, context=context)
+    _enforce_image_layout_metadata(command=command, state=state, context=context)
     context.workspace_state.clear()
     context.workspace_state.update(state.model_dump(mode="json", exclude_none=True))
     return state
@@ -168,8 +424,15 @@ class WorkspaceOpenComponentTool:
     description = (
         "Open a trusted first-party component in the conversation workspace. Use only a "
         "component returned by workspace.list_components and a resource URI already available "
-        "to this run. Prefer this for suitable schedules, documents, profiles, composed visual "
-        "layouts, and structured results instead of reproducing their full contents in chat."
+        "to this run. Use document-viewer only for close work with a specific artifact; use "
+        "webpage-viewer or the remote browser for a specific website; use specialized components "
+        "for schedules and other structured resources; and use visual-composition for synthesized "
+        "knowledge. Opening a component replaces the prior workspace surface when focus changes. "
+        "A visual composition must be clear and presentation-ready on its first open. For a "
+        "concrete person, project, prototype, device, interface, or place, the platform requires "
+        "an image search before the first open call and requires a suitable result when one is "
+        "available. Very wide contained figures belong full-width in a stack, never in a split "
+        "feature beside taller content."
     )
     input_schema: ClassVar[dict[str, JsonValue]] = {
         "type": "object",
@@ -253,7 +516,10 @@ class WorkspaceUpdateComponentTool:
     id = UPDATE_COMPONENT_TOOL_ID
     description = (
         "Update validated props or state on an existing workspace panel. Props are merged "
-        "with current props and the result must satisfy the registered schema."
+        "with current props and the result must satisfy the registered schema. Use this only "
+        "when the user is iterating on the current UI; a new question or analytical angle should "
+        "open a new component, which replaces the previous surface. Concrete-subject visual "
+        "compositions must also satisfy the platform's image-search requirement."
     )
     input_schema: ClassVar[dict[str, JsonValue]] = {
         "type": "object",

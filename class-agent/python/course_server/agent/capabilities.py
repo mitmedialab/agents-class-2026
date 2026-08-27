@@ -18,7 +18,7 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import ClassVar, Literal, Protocol
+from typing import ClassVar, Literal, Protocol, cast
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
@@ -138,6 +138,7 @@ class ToolExecutionContext:
     conversation_id: UUID
     permitted_resource_uris: frozenset[str]
     workspace_state: dict[str, JsonValue] = field(default_factory=lambda: {"panels": []})
+    transient_state: dict[str, JsonValue] = field(default_factory=dict)
 
 
 class ExecutableTool(Protocol):
@@ -291,11 +292,117 @@ def _image_dimension(value: object) -> int | None:
     return dimension if 1 <= dimension <= 100_000 else None
 
 
+def _image_layout_metadata(width: int | None, height: int | None) -> dict[str, JsonValue]:
+    if width is None or height is None:
+        return {
+            "dimensions_known": False,
+            "layout_hint": (
+                "Dimensions unavailable. Do not assume this image is suitable for a banner; "
+                "prefer standard or card presentation until its size is verified."
+            ),
+        }
+    ratio = width / height
+    if 0.9 <= ratio <= 1.1:
+        orientation = "square"
+        aspect = "square"
+    elif ratio > 1.1:
+        orientation = "landscape"
+        aspect = "wide" if ratio >= 1.6 else "landscape"
+    else:
+        orientation = "portrait"
+        aspect = "portrait"
+    if width >= 1_600 and height >= 900:
+        resolution_tier = "large"
+    elif width >= 1_000 and height >= 600:
+        resolution_tier = "medium"
+    else:
+        resolution_tier = "small"
+    if resolution_tier == "small":
+        presentation = "card"
+    elif aspect == "wide":
+        presentation = "banner"
+    else:
+        presentation = "feature"
+    shallow_wide = ratio >= 2.0
+    recommended_width = "full" if shallow_wide or presentation == "banner" else "half"
+    split_layout_safe = not shallow_wide
+    placement_hint = (
+        "This is a shallow image: place it full-width in a stack as a banner or standard "
+        "figure; do not put it in a half-width split beside taller content."
+        if shallow_wide
+        else "A split feature is safe when the adjacent copy is concise."
+    )
+    return {
+        "dimensions_known": True,
+        "aspect_ratio": round(ratio, 3),
+        "orientation": orientation,
+        "resolution_tier": resolution_tier,
+        "recommended_aspect": aspect,
+        "recommended_presentation": presentation,
+        "recommended_width": recommended_width,
+        "split_layout_safe": split_layout_safe,
+        "layout_hint": (
+            f"{width}x{height}px {orientation}, {resolution_tier} resolution. "
+            f"Prefer presentation={presentation}, aspect={aspect}, width={recommended_width}. "
+            f"{placement_hint} Use fit=contain for figures, diagrams, and screenshots, or "
+            "fit=cover for photographs."
+        ),
+    }
+
+
 def _optional_result_text(value: object, *, max_length: int) -> str | None:
     if not isinstance(value, str):
         return None
     text = value.strip()
     return text[:max_length] if text else None
+
+
+def _simplify_image_search_query(query: str) -> str | None:
+    simplified = re.sub(r"\bsite:\S+", " ", query, flags=re.IGNORECASE)
+    simplified = simplified.replace('"', "").replace("'", "")
+    simplified = re.sub(r"(?<=\w)-(?=\w)", " ", simplified)
+    simplified = " ".join(simplified.split())
+    return simplified if simplified and simplified != query else None
+
+
+def _normalize_image_results(
+    raw_results: Iterable[Mapping[str, object]],
+    *,
+    limit: int,
+) -> list[dict[str, JsonValue]]:
+    results: list[dict[str, JsonValue]] = []
+    seen_urls: set[str] = set()
+    for raw_result in raw_results:
+        thumbnail_url = _https_result_url(raw_result.get("thumbnail"))
+        image_url = _https_result_url(raw_result.get("image")) or thumbnail_url
+        if image_url is None or image_url in seen_urls:
+            continue
+        seen_urls.add(image_url)
+        candidate: dict[str, JsonValue] = {
+            "title": _optional_result_text(raw_result.get("title"), max_length=500)
+            or "Image result",
+            "image_url": image_url,
+        }
+        optional_values: dict[str, JsonValue | None] = {
+            "thumbnail_url": thumbnail_url,
+            "source_page_url": _https_result_url(raw_result.get("url")),
+            "source": _optional_result_text(raw_result.get("source"), max_length=200),
+            "width": _image_dimension(raw_result.get("width")),
+            "height": _image_dimension(raw_result.get("height")),
+        }
+        candidate.update(
+            {name: value for name, value in optional_values.items() if value is not None}
+        )
+        candidate.update(
+            _image_layout_metadata(
+                optional_values["width"] if isinstance(optional_values["width"], int) else None,
+                optional_values["height"] if isinstance(optional_values["height"], int) else None,
+            )
+        )
+        results.append(candidate)
+        if len(results) >= limit:
+            break
+    return results
 
 
 class PublicImageSearchTool:
@@ -304,16 +411,24 @@ class PublicImageSearchTool:
     id = WEB_IMAGE_SEARCH_TOOL_ID
     description = (
         "Search public images through a DuckDuckGo-first provider for use in a registered "
-        "visual workspace component. Returns direct HTTPS image and thumbnail URLs plus "
-        "source-page "
-        "metadata. Use focused queries that include the person, place, project, or concept."
+        "visual workspace component. Returns direct HTTPS image and thumbnail URLs, source-page "
+        "metadata, pixel dimensions when available, aspect ratio, resolution tier, and a layout "
+        "recommendation including whether a split layout is safe. Start with a simple descriptive "
+        "query rather than site operators or quoted syntax; the tool automatically simplifies an "
+        "over-constrained query once before failing. Before composing a UI about a named person, "
+        "physical project or "
+        "product, place, artwork, interface, device, or visual example, use a focused query when "
+        "no suitable verified imagery is already available. Prefer primary-source figures, "
+        "diagrams, screenshots, prototypes, and official portraits over decorative filler."
     )
     input_schema: ClassVar[dict[str, JsonValue]] = {
         "type": "object",
         "properties": {
             "query": {
                 "type": "string",
-                "description": "A focused public image-search query.",
+                "description": (
+                    "A simple descriptive image query without site: or quoted search operators."
+                ),
                 "minLength": 1,
                 "maxLength": _MAX_WEB_QUERY_LENGTH,
             },
@@ -336,7 +451,6 @@ class PublicImageSearchTool:
         arguments: Mapping[str, JsonValue],
         context: ToolExecutionContext,
     ) -> ToolExecutionResult:
-        del context
         _reject_unknown_arguments(arguments, frozenset({"query", "limit"}))
         query = _required_text_argument(
             arguments,
@@ -344,44 +458,69 @@ class PublicImageSearchTool:
             max_length=_MAX_WEB_QUERY_LENGTH,
         )
         limit = _optional_limit(arguments, default=6)
-        try:
-            raw_results = await asyncio.to_thread(self._search, query, limit)
-        except Exception as error:
-            raise ToolValidationError(
-                "Public image search failed. Try a shorter or more specific query."
-            ) from error
-
+        context.transient_state["image_search_attempted"] = True
+        simplified_query = _simplify_image_search_query(query)
+        search_queries = [query] + ([simplified_query] if simplified_query is not None else [])
         results: list[dict[str, JsonValue]] = []
-        seen_urls: set[str] = set()
-        for raw_result in raw_results:
-            thumbnail_url = _https_result_url(raw_result.get("thumbnail"))
-            image_url = _https_result_url(raw_result.get("image")) or thumbnail_url
-            if image_url is None or image_url in seen_urls:
+        executed_query = query
+        last_error: Exception | None = None
+        for candidate_query in search_queries:
+            try:
+                raw_results = await asyncio.to_thread(self._search, candidate_query, limit)
+            except Exception as error:
+                last_error = error
                 continue
-            seen_urls.add(image_url)
-            candidate: dict[str, JsonValue] = {
-                "title": _optional_result_text(raw_result.get("title"), max_length=500)
-                or "Image result",
-                "image_url": image_url,
-            }
-            optional_values: dict[str, JsonValue | None] = {
-                "thumbnail_url": thumbnail_url,
-                "source_page_url": _https_result_url(raw_result.get("url")),
-                "source": _optional_result_text(raw_result.get("source"), max_length=200),
-                "width": _image_dimension(raw_result.get("width")),
-                "height": _image_dimension(raw_result.get("height")),
-            }
-            candidate.update(
-                {name: value for name, value in optional_values.items() if value is not None}
-            )
-            results.append(candidate)
-            if len(results) >= limit:
+            normalized = _normalize_image_results(raw_results, limit=limit)
+            if normalized:
+                results = normalized
+                executed_query = candidate_query
                 break
 
         if not results:
+            if last_error is not None:
+                raise ToolValidationError(
+                    "Public image search failed after one simplified retry. Try a shorter plain "
+                    "description of the subject."
+                ) from last_error
             raise ToolValidationError("Public image search returned no usable HTTPS images.")
+        existing_candidates = context.transient_state.get("image_search_candidates", [])
+        candidate_urls = (
+            [value for value in existing_candidates if isinstance(value, str)]
+            if isinstance(existing_candidates, list)
+            else []
+        )
+        candidate_urls.extend(
+            str(result["image_url"])
+            for result in results
+            if isinstance(result.get("image_url"), str)
+        )
+        context.transient_state["image_search_candidates"] = list(dict.fromkeys(candidate_urls))
+        existing_metadata = context.transient_state.get("image_search_metadata", [])
+        metadata_by_url: dict[str, JsonValue] = {}
+        if isinstance(existing_metadata, list):
+            metadata_by_url.update(
+                {
+                    str(value["image_url"]): value
+                    for value in existing_metadata
+                    if isinstance(value, dict) and isinstance(value.get("image_url"), str)
+                }
+            )
+        metadata_by_url.update(
+            {
+                str(result["image_url"]): result
+                for result in results
+                if isinstance(result.get("image_url"), str)
+            }
+        )
+        context.transient_state["image_search_metadata"] = list(metadata_by_url.values())
+        content: dict[str, JsonValue] = {
+            "query": query,
+            "results": cast(list[JsonValue], results),
+        }
+        if executed_query != query:
+            content["executed_query"] = executed_query
         return ToolExecutionResult(
-            content={"query": query, "results": results},
+            content=content,
             summary=f"Found {len(results)} public image candidates.",
             storage_policy="server_summary",
         )

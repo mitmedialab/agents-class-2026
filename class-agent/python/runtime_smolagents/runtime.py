@@ -107,14 +107,85 @@ def _agent_instructions(
             "preceding progress message and continue with the substantive task."
         )
         sections.append(
-            "Use visual-composition when a result benefits from a composed interface rather "
-            "than one specialized viewer: profiles of instructors or students, people cards, "
-            "image-and-text layouts, facts, links, and lightweight editable fields. Build the "
-            "surface from registered group, image, heading, text, badge, link, facts, input, "
-            "textarea, divider, and spacer elements. Element IDs are objects and group children "
-            "reference those IDs. Use semantic variants only; never emit HTML, CSS, JavaScript, "
-            "style strings, or class names. Update the existing composition when its content "
-            "changes instead of opening duplicates."
+            "Use visual-composition by default when a result benefits from a composed interface "
+            "rather than one specialized viewer: course overviews, profiles of instructors or "
+            "students, people cards, image-and-text layouts, facts, links, and lightweight "
+            "editable fields. Build the surface from registered group, image, heading, text, "
+            "badge, link, facts, chart, input, textarea, divider, and spacer elements. Element "
+            "IDs are objects and group children reference those IDs. Use semantic variants only; "
+            "never emit HTML, CSS, JavaScript, style strings, or class names. Default to opening "
+            "a new visual composition for each new user question or analytical angle, even when it "
+            "uses the same source; opening it replaces the prior surface. For example, a project "
+            "overview and a later question about that study's methods are distinct compositions. "
+            "Update the existing composition only when the user is explicitly iterating on it by "
+            "asking to revise, correct, restyle, add, remove, or otherwise change that current UI. "
+            "Complete a presentation pass before the first open: use strong type hierarchy, "
+            "generous outer padding and spacing, balanced composition, and surfaced grouping when "
+            "those choices suit the information. Treat stack, row, and grid as equal layout "
+            "options, not a preference for columns. Begin from the content's natural visual flow. "
+            "Use side-by-side columns only when items are genuinely parallel, directly compared, "
+            "or form a coherent gallery; otherwise prefer one strong continuous visual sequence. "
+            "Do not repeat multiple two-column sections merely to make the page look designed. "
+            "Choose the clearest structure for the content "
+            "instead of repeating one hero-and-card template. A visual composition must not be a "
+            "stack of long paragraphs. Keep each explanatory text element to a short paragraph, "
+            "turn enumerations into compact cards or facts, and break the answer into scannable "
+            "visual units. Use the non-image visual primitives to make actual schematic figures: "
+            "numbered surfaced stages for methods and processes, optional side-by-side treatment "
+            "for a direct comparison, ordered sections for timelines, facts for key measures, and "
+            "badges for meaningful categories or status. Put a diagrammatic group or meaningful "
+            "image in the first visible section "
+            "whenever the subject supports one. Choose an image presentation deliberately: use "
+            "banner for one strong panoramic or wide paper figure across the top; feature for a "
+            "large image beside concise copy; card for repeated project or example imagery in a "
+            "grid; and avatar for a compact person profile. For diagrams and screenshots use "
+            "fit=contain so labels are not cropped; use fit=cover for photographic banners and "
+            "cards. Use source dimensions to decide the surrounding layout, not only the image's "
+            "aspect field. A contained image with an aspect ratio of 2:1 or wider is shallow: put "
+            "it at width=full inside a stack with banner or standard presentation. Never put that "
+            "shallow image in a row, multi-column grid, half-width feature, or beside a much "
+            "taller text card because the sibling height creates dead space. Reserve split "
+            "features for "
+            "portrait, square, or moderately landscape imagery with concise adjacent copy. "
+            "Available page patterns include banner-led editorial, split feature, visual gallery, "
+            "compact profile, process flow, timeline, and comparison grid. These are options, not "
+            "a checklist: choose one coherent visual direction according to the content. Do not "
+            "default every answer to a centered raised hero with an image on "
+            "the left. Use a display heading at most once, keep it short, and use size=large for a "
+            "long title. Never open an unstructured plain facts dump with "
+            "the intention of making it attractive later. Treat primary imagery "
+            "as a visual anchor: in a hero or feature row, give it roughly one-third to one-half "
+            "of the available width or a full-width region. Never place a tiny thumbnail beside "
+            "display-scale text, and reduce type scale when it crowds out the media or supporting "
+            "content. When a visual composition opens or changes successfully, the workspace is "
+            "the answer: the final chat message must be one short handoff sentence and must not "
+            "list, summarize, or restate facts already shown there. Refer to the workspace without "
+            "saying it is above or below. Use the chart element when verified quantitative data "
+            "makes a comparison or trend easier to understand: bar for categorical comparisons, "
+            "line for change across an ordered sequence or time, and area only when magnitude or "
+            "accumulation matters. Charts may contain up to 16 labels and four series. Every chart "
+            "must declare data_kind, data_source, comparison_basis, and unit. data_kind is "
+            "measured, user-provided, or derived. data_source identifies the exact table, figure, "
+            "dataset, "
+            "calculation input, or user request. comparison_basis explains why every value shares "
+            "one quantitative scale and unit. The workspace rejects qualitative 3-2-1 ranks, "
+            "directional placeholders, and outcomes that are not genuinely comparable. Never "
+            "invent, estimate, or visually imply numeric data merely to make a page "
+            "look richer; when defensible numbers are unavailable, use a process, timeline, facts, "
+            "or another non-chart visual instead. Treat a chart as a primary editorial section: "
+            "normally give it the full content width, do not wrap it in another raised or accent "
+            "card, and do not repeat all of its values in adjacent metric cards or prose. Choose "
+            "chart colors deliberately from the vivid workspace palette: coral, secondary "
+            "(sky), success (mint), warning (amber), violet, or accent (ivory). Use tone for an "
+            "entire series. For a single-series categorical bar chart, use the per-value tones "
+            "array when individual categories should be distinguished. Prefer one to three "
+            "chromatic tones in one chart; avoid arbitrary rainbow coloring. A chart element "
+            "requires title, chart_type, labels, series, data_kind, data_source, comparison_basis, "
+            "and unit. Every series object uses label and "
+            "values—never name—with optional tone or tones. The tones array belongs inside its "
+            "series object and aligns one-for-one with labels; for example: "
+            '[{"label":"Care","values":[20,90],"tones":["secondary","coral"]}]. '
+            "Never put tones or value_tones on the chart element itself."
         )
         if READ_UPLOAD_TOOL_ID in context.permitted_tool_ids:
             sections.append(
@@ -127,10 +198,36 @@ def _agent_instructions(
             )
         if WEB_IMAGE_SEARCH_TOOL_ID in context.permitted_tool_ids:
             sections.append(
-                "When a visual composition would benefit from real public imagery and no "
-                "appropriate official image is already available, search for image candidates. "
-                "Use a returned direct HTTPS image URL in the registered image element, with "
-                "accurate alt text. Prefer a focused query and a small set of relevant results. "
+                "Before composing, explicitly assess whether the subject has meaningful visual "
+                "material. Treat imagery as normally relevant for named people, physical projects "
+                "or products, places, artworks, interfaces, devices, and visually distinguishable "
+                "examples. When such imagery is relevant and the source does not already provide "
+                "suitable verified image URLs, call image search without waiting for the user to "
+                "ask and include the strongest useful result or small coherent set in the first "
+                "composition. For any concrete subject that needs image search, complete the "
+                "search before the first workspace open call; do not draft a text-only composition "
+                "and rely on validation to remind you. Prefer figures, diagrams, screenshots, and "
+                "photos from the primary "
+                "source or an official project or institutional page over generic search imagery. "
+                "For a research project, search for the paper title or project name plus figure, "
+                "diagram, prototype, or interface when that is more useful than a portrait. Start "
+                "with a short natural-language query without site: filters or quoted syntax; those "
+                "often reduce image-provider reliability. If it returns nothing, retry once with "
+                "only the distinctive title or name plus one visual noun. Do not "
+                "call image search for forms, administrative answers, or "
+                "abstract topics where an image would be merely decorative; use a schematic visual "
+                "structure instead. Inspect dimensions_known, width, height, orientation, "
+                "resolution_tier, split_layout_safe, recommended_width, and layout_hint on every "
+                "image result before composing. When "
+                "dimensions are known, copy width and height into the image element as "
+                "source_width and source_height so later turns retain them. Prefer the suggested "
+                "presentation and aspect unless the content calls for a more suitable treatment. "
+                "Never use an unknown-dimension or small result as a banner or feature image. Use "
+                "returned direct HTTPS image URLs with accurate alt text and consistent aspect "
+                "ratios. "
+                "The workspace platform enforces this for concrete visual subjects: it will reject "
+                "a composition that skipped image search, and when usable candidates were returned "
+                "it will reject a composition that omitted them. "
                 "Image results are candidates, so do not infer identity or facts from an image "
                 "alone."
             )
@@ -407,6 +504,44 @@ class _EventCollector:
             return list(self._events)
 
 
+def _presented_visual_composition(
+    events: Iterable[Event], workspace_state: Mapping[str, JsonValue]
+) -> bool:
+    panels = workspace_state.get("panels")
+    focused_panel_id = workspace_state.get("focused_panel_id")
+    if not isinstance(panels, list) or not isinstance(focused_panel_id, str):
+        return False
+    focused_panel = next(
+        (
+            panel
+            for panel in panels
+            if isinstance(panel, dict) and panel.get("id") == focused_panel_id
+        ),
+        None,
+    )
+    if (
+        not isinstance(focused_panel, dict)
+        or focused_panel.get("component_id") != "visual-composition"
+    ):
+        return False
+    for event in events:
+        if event.type not in {"workspace.panel.opened", "workspace.panel.updated"}:
+            continue
+        command = event.payload.get("command")
+        if not isinstance(command, dict):
+            continue
+        if command.get("type") == "update" and command.get("panel_id") == focused_panel_id:
+            return True
+        panel = command.get("panel")
+        if (
+            command.get("type") == "open"
+            and isinstance(panel, dict)
+            and panel.get("id") == focused_panel_id
+        ):
+            return True
+    return False
+
+
 class _SmolagentsToolAdapter(Tool):  # type: ignore[misc]
     skip_forward_signature_validation = True
 
@@ -643,14 +778,26 @@ class SmolagentsRuntime:
         if text_delta_observer is None and progress_delta_observer is None:
             output = await asyncio.to_thread(agent.run, input.text, reset=True)
         else:
+
+            def observe_final_text(text_delta: str) -> None:
+                if _presented_visual_composition(
+                    collector.snapshot(), execution_context.workspace_state
+                ):
+                    return
+                if text_delta_observer is not None:
+                    text_delta_observer(text_delta)
+
             output = await asyncio.to_thread(
                 _run_streaming_agent,
                 agent,
                 input.text,
-                text_delta_observer or (lambda _delta: None),
+                observe_final_text,
                 progress_delta_observer,
             )
+        collected_events = collector.snapshot()
         output_text = str(output)
+        if _presented_visual_composition(collected_events, execution_context.workspace_state):
+            output_text = "I've organized the answer into a visual workspace."
         agent_message = Event(
             type="agent.message",
             payload={"text": output_text, "input_id": str(input.id)},
@@ -669,7 +816,7 @@ class SmolagentsRuntime:
             input_id=input.id,
             conversation_id=context.conversation_id,
             output_text=output_text,
-            events=[started, *collector.snapshot(), agent_message, completed],
+            events=[started, *collected_events, agent_message, completed],
             metadata={
                 "runtime": "smolagents-toolcalling",
                 "provider": self._model_provider.provider_id,
