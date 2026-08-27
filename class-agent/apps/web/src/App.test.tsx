@@ -155,8 +155,8 @@ describe("Course Agent interface", () => {
     render(<App />);
 
     expect(await screen.findByText("The earlier response.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "MIT" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "MIT Media Lab" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "MIT" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "MIT Media Lab" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Your logs" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Apply" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Schedule" })).toBeInTheDocument();
@@ -170,6 +170,27 @@ describe("Course Agent interface", () => {
     expect(screen.getByTestId("workspace-shell")).toBeInTheDocument();
     expect(screen.queryByText("Week one")).not.toBeInTheDocument();
   });
+
+  it.each(["MIT", "MIT Media Lab"])(
+    "starts a fresh chat from the %s logo",
+    async (logoName) => {
+      render(<App />);
+      await screen.findByText("The earlier response.");
+
+      const composer = screen.getByRole("textbox", { name: "Message" });
+      fireEvent.change(composer, { target: { value: "Unsent draft" } });
+      fireEvent.click(screen.getByRole("button", { name: logoName }));
+
+      expect(screen.getByText(/Welcome\. I’m the Course Agent/)).toBeInTheDocument();
+      expect(composer).toHaveValue("");
+
+      fireEvent.change(composer, { target: { value: "A fresh question" } });
+      fireEvent.keyDown(composer, { key: "Enter" });
+      await waitFor(() =>
+        expect(api.createConversation).toHaveBeenCalledWith("A fresh question"),
+      );
+    },
+  );
 
   it.each([
     ["Apply", "I'd like to apply for the course."],

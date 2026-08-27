@@ -58,9 +58,14 @@ textarea {
   gap: 1.1rem;
 }
 
-.institutional-marks a {
+.institutional-marks button {
   align-items: center;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
   display: flex;
+  padding: 0;
 }
 
 .institutional-marks img {

@@ -459,11 +459,20 @@ export default function App() {
   }
 
   function startNewConversation() {
+    activeRun.current?.abort();
+    activeRun.current = null;
+    operationInFlight.current = false;
+    applicationReturnResponse.current = null;
     setSelectedConversationId(null);
     setLatestResponse(WELCOME_MESSAGE);
     setActivities([]);
     setWorkspaceState(emptyWorkspaceState());
     setCurrentAction(null);
+    setMessage("");
+    setUploads([]);
+    setUploadError(null);
+    setIsRunning(false);
+    setIsStreamingText(false);
     setHistoryOpen(false);
     setAboutOpen(false);
     requestAnimationFrame(() => composerRef.current?.focus());
@@ -689,12 +698,16 @@ export default function App() {
       <header className="agent-header">
         <div className="header-left">
           <div aria-label="MIT and MIT Media Lab" className="institutional-marks">
-            <a aria-label="MIT" href="https://www.mit.edu/">
+            <button aria-label="MIT" onClick={startNewConversation} type="button">
               <img alt="" className="mit-mark" src="/mit-logo.svg" />
-            </a>
-            <a aria-label="MIT Media Lab" href="https://www.media.mit.edu/">
+            </button>
+            <button
+              aria-label="MIT Media Lab"
+              onClick={startNewConversation}
+              type="button"
+            >
               <img alt="" className="media-lab-mark" src="/media-lab-logo.svg" />
-            </a>
+            </button>
           </div>
         </div>
         {workspaceState.panels.length === 0 || aboutOpen ? (
