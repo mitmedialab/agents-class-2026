@@ -135,6 +135,16 @@ class BrowserSessionService(Protocol):
         delta_y: int,
     ) -> BrowserPage: ...
 
+    async def click(
+        self,
+        *,
+        principal: PrincipalContext,
+        conversation_id: UUID,
+        session_id: UUID,
+        x: int,
+        y: int,
+    ) -> BrowserPage: ...
+
     async def resize(
         self,
         *,

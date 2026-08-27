@@ -129,6 +129,12 @@ class BrowserScrollRequest(ApiModel):
     delta_y: int = Field(ge=-1_600, le=1_600)
 
 
+class BrowserClickRequest(ApiModel):
+    panel_id: UUID
+    x: int = Field(ge=0, le=4_095)
+    y: int = Field(ge=0, le=15_999)
+
+
 class BrowserResizeRequest(ApiModel):
     panel_id: UUID
     width: int = Field(ge=320, le=4_096)
@@ -1456,6 +1462,102 @@ def create_app(
             conversation_id=conversation_id,
             payload={"command": command.model_dump(mode="json", exclude_none=True)},
             metadata={"interaction": "browser.resize"},
+        )
+        await state.services.conversations.append_events(conversation_id, [event])
+        return event
+
+    @router.post(
+        "/conversations/{conversation_id}/browser/{session_id}/click",
+        response_model=Event,
+    )
+    async def click_browser_session(
+        conversation_id: UUID,
+        session_id: UUID,
+        payload: BrowserClickRequest,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> Event:
+        state = _get_app_state(request)
+        await _require_owned_conversation(
+            state=state,
+            principal=principal,
+            conversation_id=conversation_id,
+        )
+        assert state.services is not None
+        browser = state.services.browser
+        if browser is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="remote browser unavailable",
+            )
+        events = await state.services.conversations.list_events(conversation_id)
+        registry = state.services.workspace_registry or load_component_registry()
+        workspace = project_workspace_events(events, registry)
+        panel = next(
+            (
+                candidate
+                for candidate in workspace.panels
+                if candidate.id == payload.panel_id
+                and candidate.component_id == BROWSER_COMPONENT_ID
+                and candidate.props.get("session_id") == str(session_id)
+            ),
+            None,
+        )
+        if panel is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="browser panel not found",
+            )
+        try:
+            try:
+                page = await browser.click(
+                    principal=principal,
+                    conversation_id=conversation_id,
+                    session_id=session_id,
+                    x=payload.x,
+                    y=payload.y,
+                )
+            except BrowserSessionNotFound:
+                raw_url = panel.props.get("url")
+                if not isinstance(raw_url, str):
+                    raise
+                recovered = await browser.open(
+                    principal=principal,
+                    conversation_id=conversation_id,
+                    url=raw_url,
+                )
+                page = await browser.click(
+                    principal=principal,
+                    conversation_id=conversation_id,
+                    session_id=recovered.session_id,
+                    x=payload.x,
+                    y=payload.y,
+                )
+            command = UpdateWorkspaceCommand(
+                panel_id=panel.id,
+                title=page.title,
+                props=browser_page_props(page),
+            )
+            registry.apply(workspace, command)
+        except BrowserError as error:
+            raise _browser_http_error(error) from error
+        except WorkspaceValidationError as error:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(error),
+            ) from error
+        event = Event(
+            type="workspace.panel.updated",
+            actor="user",
+            principal_user_id=principal.user_id,
+            anonymous_session_id=principal.anonymous_session_id,
+            conversation_id=conversation_id,
+            payload={"command": command.model_dump(mode="json", exclude_none=True)},
+            metadata={
+                "interaction": "browser.click",
+                "url": page.url,
+                "title": page.title,
+            },
         )
         await state.services.conversations.append_events(conversation_id, [event])
         return event

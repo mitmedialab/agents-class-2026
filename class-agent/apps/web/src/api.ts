@@ -222,6 +222,22 @@ export function scrollBrowserSession(
   );
 }
 
+export function clickBrowserSession(
+  conversationId: Uuid,
+  panelId: Uuid,
+  sessionId: Uuid,
+  x: number,
+  y: number,
+): Promise<Event> {
+  return requestJson<Event>(
+    `/conversations/${conversationId}/browser/${sessionId}/click`,
+    {
+      method: "POST",
+      body: JSON.stringify({ panel_id: panelId, x, y }),
+    },
+  );
+}
+
 export function resizeBrowserSession(
   conversationId: Uuid,
   panelId: Uuid,

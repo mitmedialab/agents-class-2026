@@ -8,6 +8,7 @@ import socket
 import threading
 from collections.abc import Coroutine
 from concurrent.futures import Future
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -329,6 +330,63 @@ class PlaywrightBrowserSessionService:
         async with session.operation_lock:
             await session.page.mouse.wheel(0, delta_y)
             await session.page.wait_for_timeout(150)
+            return await self._refresh(session_id, session)
+
+    async def click(
+        self,
+        *,
+        principal: PrincipalContext,
+        conversation_id: UUID,
+        session_id: UUID,
+        x: int,
+        y: int,
+    ) -> BrowserPage:
+        session = await self._require(principal, conversation_id, session_id)
+        if not 0 <= x < session.state.viewport_width or not 0 <= y < session.state.document_height:
+            raise BrowserNavigationError("Click coordinates are outside the captured page.")
+        async with session.operation_lock:
+            page = session.page
+            target_scroll = max(
+                0,
+                min(
+                    y - session.state.viewport_height // 2,
+                    max(0, session.state.document_height - session.state.viewport_height),
+                ),
+            )
+            await page.evaluate("scrollY => window.scrollTo(0, scrollY)", target_scroll)
+            await page.wait_for_timeout(100)
+            actual_scroll = int(
+                await page.evaluate("() => Math.max(0, Math.round(window.scrollY))")
+            )
+            viewport_y = y - actual_scroll
+            if not 0 <= viewport_y < session.state.viewport_height:
+                raise BrowserNavigationError("The selected point could not be brought into view.")
+            previous_pages = set(session.context.pages)
+            try:
+                await page.mouse.click(x, viewport_y)
+                await page.wait_for_timeout(350)
+                new_pages = [
+                    candidate
+                    for candidate in session.context.pages
+                    if candidate not in previous_pages
+                ]
+                if new_pages:
+                    target = new_pages[-1]
+                    with suppress(PlaywrightTimeoutError):
+                        await target.wait_for_load_state("domcontentloaded", timeout=3_000)
+                    await validate_public_https_url(target.url)
+                    session.page = target
+                    await page.close()
+                else:
+                    with suppress(PlaywrightTimeoutError):
+                        await page.wait_for_load_state("domcontentloaded", timeout=3_000)
+                    await validate_public_https_url(page.url)
+            except BrowserSecurityError:
+                raise
+            except PlaywrightError as error:
+                raise BrowserNavigationError(
+                    "The selected page element could not be opened."
+                ) from error
             return await self._refresh(session_id, session)
 
     async def resize(
@@ -754,6 +812,26 @@ class ThreadedPlaywrightBrowserSessionService:
                 conversation_id=conversation_id,
                 session_id=session_id,
                 delta_y=delta_y,
+            )
+        )
+
+    async def click(
+        self,
+        *,
+        principal: PrincipalContext,
+        conversation_id: UUID,
+        session_id: UUID,
+        x: int,
+        y: int,
+    ) -> BrowserPage:
+        service = self._require_service()
+        return await self._call(
+            service.click(
+                principal=principal,
+                conversation_id=conversation_id,
+                session_id=session_id,
+                x=x,
+                y=y,
             )
         )
 

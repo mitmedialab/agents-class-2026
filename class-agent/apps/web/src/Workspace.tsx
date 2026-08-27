@@ -33,6 +33,12 @@ interface WorkspaceProps {
   onSubmitApplication: () => void;
   onInteraction: (panelId: string, action: string, value: JsonValue) => void;
   onBrowserScroll: (panelId: string, sessionId: string, deltaY: number) => Promise<void>;
+  onBrowserActivate: (
+    panelId: string,
+    sessionId: string,
+    x: number,
+    y: number,
+  ) => Promise<void>;
   onBrowserResize: (
     panelId: string,
     sessionId: string,
@@ -141,6 +147,7 @@ function pageCardItems(
 function ResourcePanel({
   conversationId,
   panel,
+  onBrowserActivate,
   onBrowserScroll,
   onBrowserResize,
   onInteraction,
@@ -148,6 +155,12 @@ function ResourcePanel({
 }: {
   conversationId: string;
   panel: WorkspacePanel;
+  onBrowserActivate: (
+    panelId: string,
+    sessionId: string,
+    x: number,
+    y: number,
+  ) => Promise<void>;
   onBrowserScroll: (panelId: string, sessionId: string, deltaY: number) => Promise<void>;
   onBrowserResize: (
     panelId: string,
@@ -243,6 +256,7 @@ function ResourcePanel({
     return (
       <BrowserViewer
         imageUrl={browserSnapshotUrl(conversationId, sessionId, revision)}
+        onActivate={(x, y) => onBrowserActivate(panel.id, sessionId, x, y)}
         onScroll={(deltaY) => onBrowserScroll(panel.id, sessionId, deltaY)}
         onResize={(width, height) =>
           onBrowserResize(panel.id, sessionId, width, height)
@@ -406,6 +420,7 @@ export function Workspace({
   onSubmitApplication,
   onInteraction,
   onBrowserScroll,
+  onBrowserActivate,
   onBrowserResize,
 }: WorkspaceProps) {
   const focused =
@@ -464,6 +479,7 @@ export function Workspace({
       <div className="workspace-panel" role="tabpanel">
         <ResourcePanel
           conversationId={conversationId}
+          onBrowserActivate={onBrowserActivate}
           onBrowserResize={onBrowserResize}
           onBrowserScroll={onBrowserScroll}
           onInteraction={onInteraction}

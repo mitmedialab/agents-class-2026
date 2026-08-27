@@ -41,6 +41,7 @@ class FakeBrowserSessionService:
     def __init__(self) -> None:
         self.sessions: dict[UUID, tuple[UUID, UUID, BrowserPage]] = {}
         self.previews: dict[UUID, tuple[UUID, UUID, BrowserPreview]] = {}
+        self.clicks: list[tuple[int, int]] = []
 
     async def start(self) -> None:
         return None
@@ -123,6 +124,27 @@ class FakeBrowserSessionService:
             principal,
             conversation_id,
             self._page(session_id, current.url, current.revision + 1),
+        )
+
+    async def click(
+        self,
+        *,
+        principal: PrincipalContext,
+        conversation_id: UUID,
+        session_id: UUID,
+        x: int,
+        y: int,
+    ) -> BrowserPage:
+        current = self._require(principal, conversation_id, session_id)
+        self.clicks.append((x, y))
+        return self._replace(
+            principal,
+            conversation_id,
+            self._page(
+                session_id,
+                "https://example.com/clicked",
+                current.revision + 1,
+            ),
         )
 
     async def resize(
@@ -250,6 +272,13 @@ def test_browser_tools_open_control_and_update_one_registered_panel() -> None:
         reopened = await BrowserOpenTool(service, registry).execute(
             {"url": "https://example.com/about"}, context
         )
+        clicked = await service.click(
+            principal=principal,
+            conversation_id=context.conversation_id,
+            session_id=UUID(session_id),
+            x=320,
+            y=480,
+        )
 
         assert navigated.emitted_events[0].type == "workspace.panel.updated"
         assert scrolled.emitted_events[0].type == "workspace.panel.updated"
@@ -261,6 +290,8 @@ def test_browser_tools_open_control_and_update_one_registered_panel() -> None:
         state = WorkspaceState.model_validate(context.workspace_state)
         assert len(state.panels) == 1
         assert state.panels[0].props["revision"] == 4
+        assert clicked.url == "https://example.com/clicked"
+        assert service.clicks == [(320, 480)]
 
         service.sessions.clear()  # Simulate an API restart without durable browser state.
         recovered = await BrowserScrollTool(service, registry).execute({"delta_y": 640}, context)

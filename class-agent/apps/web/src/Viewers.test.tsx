@@ -10,7 +10,7 @@ import {
   normalizeVisualElements,
   resolveTextAnchor,
 } from "@class-agent/ui";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 describe("DocumentViewer", () => {
@@ -186,7 +186,7 @@ describe("BrowserViewer", () => {
       "src",
       "/api/v1/browser/session/snapshot?revision=2",
     );
-    expect(screen.getByText("Isolated read-only session · content is rendered on the Course Agent server"))
+    expect(screen.getByText(/click links and controls directly/))
       .toBeInTheDocument();
     const viewport = screen.getByRole("region", {
       name: "Scrollable remote browser image",
@@ -195,6 +195,36 @@ describe("BrowserViewer", () => {
     fireEvent.click(screen.getByRole("button", { name: "Scroll page down" }));
     expect(scrollBy).toHaveBeenCalledWith({ top: 640, behavior: "smooth" });
     expect(onScroll).not.toHaveBeenCalled();
+  });
+
+  it("maps a snapshot click into remote document coordinates", async () => {
+    const onActivate = vi.fn().mockResolvedValue(undefined);
+    render(
+      <BrowserViewer
+        imageUrl="/snapshot.png"
+        onActivate={onActivate}
+        title="Example"
+        url="https://example.com/"
+      />,
+    );
+    const image = screen.getByAltText("Remote browser showing Example");
+    Object.defineProperty(image, "naturalWidth", { value: 1280 });
+    Object.defineProperty(image, "naturalHeight", { value: 1600 });
+    vi.spyOn(image, "getBoundingClientRect").mockReturnValue({
+      bottom: 270,
+      height: 250,
+      left: 10,
+      right: 510,
+      top: 20,
+      width: 500,
+      x: 10,
+      y: 20,
+      toJSON: () => ({}),
+    });
+    fireEvent.load(image);
+    fireEvent.click(image, { clientX: 260, clientY: 145 });
+
+    await waitFor(() => expect(onActivate).toHaveBeenCalledWith(640, 800));
   });
 
   it("leaves mouse-wheel input local instead of issuing remote frame requests", () => {

@@ -7,6 +7,7 @@ export interface BrowserViewerProps {
   viewportWidth?: number;
   viewportHeight?: number;
   focusScrollY?: number;
+  onActivate?: (x: number, y: number) => void | Promise<void>;
   onScroll?: (deltaY: number) => void | Promise<void>;
   onResize?: (width: number, height: number) => void | Promise<void>;
 }
@@ -18,6 +19,7 @@ export function BrowserViewer({
   viewportWidth = 1280,
   viewportHeight = 800,
   focusScrollY = 0,
+  onActivate,
   onScroll,
   onResize,
 }: BrowserViewerProps) {
@@ -95,6 +97,29 @@ export function BrowserViewer({
     }
   }
 
+  async function activate(event: React.MouseEvent<HTMLImageElement>) {
+    if (!onActivate || busy || failed || loading) return;
+    const image = event.currentTarget;
+    const bounds = image.getBoundingClientRect();
+    if (bounds.width <= 0 || bounds.height <= 0) return;
+    const sourceWidth = image.naturalWidth || viewportWidth;
+    const sourceHeight = image.naturalHeight || viewportHeight;
+    const x = Math.max(
+      0,
+      Math.min(sourceWidth - 1, Math.round(((event.clientX - bounds.left) / bounds.width) * sourceWidth)),
+    );
+    const y = Math.max(
+      0,
+      Math.min(sourceHeight - 1, Math.round(((event.clientY - bounds.top) / bounds.height) * sourceHeight)),
+    );
+    setBusy(true);
+    try {
+      await onActivate(x, y);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <section aria-label={title} className="ca-browser-viewer">
       <header className="ca-browser-toolbar">
@@ -149,6 +174,7 @@ export function BrowserViewer({
         ) : (
           <img
             alt={`Remote browser showing ${title}`}
+            data-interactive={onActivate ? "true" : undefined}
             draggable={false}
             onError={() => {
               setFailed(true);
@@ -158,13 +184,14 @@ export function BrowserViewer({
               setLoading(false);
               requestAnimationFrame(() => focusRemotePosition("auto"));
             }}
+            onClick={(event) => void activate(event)}
             ref={imageRef}
             src={imageUrl}
           />
         )}
       </div>
       <p className="ca-browser-status">
-        Isolated read-only session · content is rendered on the Course Agent server
+        Isolated session · click links and controls directly · page state is shared with the agent
       </p>
     </section>
   );

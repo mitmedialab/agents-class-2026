@@ -816,6 +816,10 @@
   width: 100%;
 }
 
+.ca-browser-canvas img[data-interactive="true"] {
+  cursor: pointer;
+}
+
 .ca-browser-error {
   align-content: center;
   color: #222;

@@ -192,6 +192,29 @@ class SnapshotBrowserService:
         self.sessions[session_id] = (principal.session_id, conversation_id, page)
         return page
 
+    async def click(
+        self,
+        *,
+        principal: PrincipalContext,
+        conversation_id: UUID,
+        session_id: UUID,
+        x: int,
+        y: int,
+    ) -> BrowserPage:
+        del x, y
+        stored = self.sessions.get(session_id)
+        if stored is None or stored[:2] != (principal.session_id, conversation_id):
+            raise BrowserSessionNotFound("Browser session not found.")
+        page = stored[2].model_copy(
+            update={
+                "url": "https://example.com/clicked",
+                "title": "Clicked page",
+                "revision": stored[2].revision + 1,
+            }
+        )
+        self.sessions[session_id] = (principal.session_id, conversation_id, page)
+        return page
+
     async def resize(
         self,
         *,
@@ -663,7 +686,7 @@ def test_application_draft_migrates_legacy_nine_field_panel() -> None:
                                 "status": "inferred",
                                 "source": "Public profile",
                             },
-                        ]
+                        ],
                     },
                     "state": {},
                 },
@@ -876,6 +899,75 @@ def test_browser_scroll_recovers_a_stale_post_restart_session_in_place() -> None
     assert command["panel_id"] == str(panel_id)
     assert command["props"]["session_id"] != str(stale_session_id)
     assert command["props"]["revision"] == 2
+
+
+def test_browser_click_navigates_and_exposes_the_current_page_to_the_next_turn() -> None:
+    browser = SnapshotBrowserService()
+    client, _, runtime = _build_client(browser=browser)
+    principal = PrincipalContext.model_validate(client.get("/auth/me").json())
+    conversation_id = UUID(_create_conversation(client, title="Clickable browser"))
+    panel_id = uuid4()
+    page = asyncio.run(
+        browser.open(
+            principal=principal,
+            conversation_id=conversation_id,
+            url="https://example.com/",
+        )
+    )
+    opened = Event(
+        type="workspace.panel.opened",
+        actor="course-agent",
+        anonymous_session_id=principal.anonymous_session_id,
+        conversation_id=conversation_id,
+        payload={
+            "command": {
+                "type": "open",
+                "panel": {
+                    "id": str(panel_id),
+                    "component_id": "browser-viewer",
+                    "title": page.title,
+                    "props": {
+                        "session_id": str(page.session_id),
+                        "url": page.url,
+                        "title": page.title,
+                        "revision": page.revision,
+                        "viewport_width": page.viewport_width,
+                        "viewport_height": page.viewport_height,
+                    },
+                    "state": {},
+                },
+            }
+        },
+    )
+    app = cast(Any, client.app)
+    asyncio.run(
+        app.state.course_state.services.conversations.append_events(
+            conversation_id,
+            [opened],
+        )
+    )
+
+    clicked = client.post(
+        f"/conversations/{conversation_id}/browser/{page.session_id}/click",
+        json={"panel_id": str(panel_id), "x": 320, "y": 480},
+    )
+    followed_up = client.post(
+        f"/conversations/{conversation_id}/run",
+        json={"text": "Which page am I on?"},
+    )
+
+    assert clicked.status_code == 200
+    assert clicked.json()["payload"]["command"]["props"]["url"] == ("https://example.com/clicked")
+    assert followed_up.status_code == 200
+    workspace = runtime.contexts[-1].metadata["workspace_state"]
+    assert isinstance(workspace, dict)
+    panels = workspace["panels"]
+    assert isinstance(panels, list)
+    panel = panels[0]
+    assert isinstance(panel, dict)
+    props = panel["props"]
+    assert isinstance(props, dict)
+    assert props["url"] == "https://example.com/clicked"
 
 
 def test_versioned_agent_run_supports_json_and_streaming() -> None:

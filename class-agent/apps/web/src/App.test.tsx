@@ -6,6 +6,7 @@ import * as api from "./api.js";
 
 vi.mock("./api.js", () => ({
   applyWorkspacePanelAction: vi.fn(),
+  clickBrowserSession: vi.fn(),
   createConversation: vi.fn(),
   ensureApplicationDraft: vi.fn(),
   getCourseResourceContent: vi.fn(),
@@ -15,6 +16,8 @@ vi.mock("./api.js", () => ({
   login: vi.fn(),
   logout: vi.fn(),
   recordWorkspaceInteraction: vi.fn(),
+  resizeBrowserSession: vi.fn(),
+  scrollBrowserSession: vi.fn(),
   streamAgentRun: vi.fn(),
   uploadFile: vi.fn(),
 }));

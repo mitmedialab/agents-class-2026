@@ -9,6 +9,7 @@ import {
 } from "@class-agent/workspace";
 import {
   applyWorkspacePanelAction,
+  clickBrowserSession,
   createConversation,
   ensureApplicationDraft,
   getCourseResourceContent,
@@ -663,6 +664,32 @@ export default function App() {
     }
   }
 
+  async function handleBrowserActivate(
+    panelId: string,
+    sessionId: string,
+    x: number,
+    y: number,
+  ): Promise<void> {
+    if (!selectedConversationId) return;
+    try {
+      const event = await clickBrowserSession(
+        selectedConversationId,
+        panelId,
+        sessionId,
+        x,
+        y,
+      );
+      setWorkspaceState((current) =>
+        builtInComponentRegistry.apply(current, event.payload.command),
+      );
+    } catch {
+      setActivities((current) => [
+        ...current,
+        { kind: "error", label: "Browser link could not be opened" },
+      ]);
+    }
+  }
+
   async function handleBrowserResize(
     panelId: string,
     sessionId: string,
@@ -769,6 +796,7 @@ export default function App() {
         {workspaceState.panels.length > 0 ? (
           <Workspace
             conversationId={selectedConversationId!}
+            onBrowserActivate={handleBrowserActivate}
             onBrowserResize={handleBrowserResize}
             onBrowserScroll={handleBrowserScroll}
             onInteraction={handleWorkspaceInteraction}

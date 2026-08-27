@@ -207,9 +207,11 @@ def _updated_result(
 class BrowserOpenTool:
     id = BROWSER_OPEN_TOOL_ID
     description = (
-        "Open a public HTTPS page in an isolated server-side browser and display its live "
-        "screenshot in the trusted workspace. Use this instead of webpage-viewer live mode "
-        "when the site blocks iframe embedding. The result includes readable page text."
+        "Open or inspect a public HTTPS page in an isolated server-side browser and display its "
+        "live screenshot in the trusted workspace. Calling this with the active panel's current "
+        "URL snapshots that existing session, including any page the user reached by clicking, "
+        "and returns readable page text without opening a duplicate panel. Use this instead of "
+        "webpage-viewer live mode when the site blocks iframe embedding."
     )
     input_schema: ClassVar[dict[str, JsonValue]] = {
         "type": "object",
