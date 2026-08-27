@@ -331,6 +331,7 @@ describe("VisualComposition", () => {
       type: "image" as const,
       url: "https://example.com/photo.jpg",
       alt: "Ada Example",
+      presentation: "avatar" as const,
       radius: "round" as const,
       width: "third" as const,
     },
@@ -361,15 +362,146 @@ describe("VisualComposition", () => {
     );
 
     expect(screen.getByRole("heading", { name: "Ada Example" })).toBeInTheDocument();
+    expect(document.querySelector('[data-element-id="profile"]')).toHaveAttribute(
+      "data-root",
+      "true",
+    );
     expect(screen.getByAltText("Ada Example")).toHaveAttribute(
       "referrerpolicy",
       "no-referrer",
+    );
+    expect(screen.getByAltText("Ada Example").closest("figure")).toHaveAttribute(
+      "data-presentation",
+      "avatar",
     );
     expect(screen.getByText("Instructor")).toBeInTheDocument();
     const bio = screen.getByRole("textbox", { name: "Bio" });
     fireEvent.change(bio, { target: { value: "Updated biography." } });
     fireEvent.blur(bio);
     expect(onChange).toHaveBeenCalledWith("bio", "Updated biography.");
+  });
+
+  it("gives minimally specified root layouts polished spacing defaults", () => {
+    render(
+      <VisualComposition
+        elements={[
+          {
+            id: "overview",
+            type: "group",
+            children: ["heading"],
+          },
+          { id: "heading", type: "heading", text: "Overview" },
+        ]}
+        rootId="overview"
+      />,
+    );
+
+    const root = document.querySelector('[data-element-id="overview"]');
+    expect(root).toHaveAttribute("data-root", "true");
+    expect(root).toHaveAttribute("data-padding", "large");
+    expect(root).toHaveAttribute("data-gap", "loose");
+  });
+
+  it("preserves searched image dimensions for uncropped visual layouts", () => {
+    render(
+      <VisualComposition
+        elements={[
+          {
+            id: "figure",
+            type: "image",
+            url: "https://example.com/wide-study-figure.png",
+            alt: "Study procedure",
+            source_width: 2400,
+            source_height: 600,
+            presentation: "feature",
+            fit: "contain",
+          },
+        ]}
+        rootId="figure"
+      />,
+    );
+
+    const image = screen.getByAltText("Study procedure");
+    expect(image).toHaveAttribute("width", "2400");
+    expect(image).toHaveAttribute("height", "600");
+    expect(image.closest("figure")).toHaveAttribute("data-source-dimensions", "known");
+    expect(
+      normalizeVisualElements(
+        [
+          {
+            id: "invalid",
+            type: "image",
+            url: "https://example.com/image.png",
+            alt: "Invalid dimensions",
+            source_width: 1200,
+          },
+        ],
+        "invalid",
+      ),
+    ).toBeNull();
+  });
+
+  it("renders accessible bar and line charts from declarative data", () => {
+    const chartElements = [
+      {
+        id: "results",
+        type: "group" as const,
+        layout: "grid" as const,
+        children: ["comparison", "trend"],
+      },
+      {
+        id: "comparison",
+        type: "chart" as const,
+        title: "Section comparison",
+        chart_type: "bar" as const,
+        labels: ["Section A", "Section B"],
+        series: [
+          {
+            label: "Average score",
+            values: [72, 84],
+            tones: ["coral" as const, "violet" as const],
+          },
+        ],
+        comparison_basis: "Both sections use the same 0–100 score scale.",
+        data_kind: "measured" as const,
+        data_source: "Course records, 2026",
+        unit: "percent",
+        value_suffix: "%",
+      },
+      {
+        id: "trend",
+        type: "chart" as const,
+        title: "Weekly participation",
+        chart_type: "line" as const,
+        labels: ["Week 1", "Week 2", "Week 3"],
+        series: [
+          { label: "Attended", values: [18, 22, 25], tone: "success" as const },
+          { label: "Submitted", values: [15, 19, 24], tone: "secondary" as const },
+        ],
+        comparison_basis: "Each series counts students per course week.",
+        data_kind: "measured" as const,
+        data_source: "Weekly attendance records",
+        unit: "students",
+      },
+    ];
+
+    expect(normalizeVisualElements(chartElements, "results")).not.toBeNull();
+    const { container } = render(
+      <VisualComposition elements={chartElements} rootId="results" />,
+    );
+
+    expect(screen.getByRole("img", { name: "Section comparison" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Weekly participation" })).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "Section comparison" })).toHaveTextContent(
+      "84%",
+    );
+    expect(screen.getByRole("list", { name: "Chart legend" })).toHaveTextContent(
+      "Submitted",
+    );
+    expect(screen.getByText("Source · Course records, 2026")).toBeInTheDocument();
+    const bars = container.querySelectorAll(".ca-chart-bars > g");
+    expect(bars[0]).toHaveAttribute("data-tone", "coral");
+    expect(bars[1]).toHaveAttribute("data-tone", "violet");
   });
 
   it("rejects cycles, shared children, and unreachable visual objects", () => {
@@ -390,6 +522,21 @@ describe("VisualComposition", () => {
           { id: "orphan", type: "text", text: "Hidden" },
         ],
         "root",
+      ),
+    ).toBeNull();
+    expect(
+      normalizeVisualElements(
+        [
+          {
+            id: "invalid-chart",
+            type: "chart",
+            title: "Invalid",
+            chart_type: "bar",
+            labels: ["A", "B"],
+            series: [{ label: "Value", values: [1] }],
+          },
+        ],
+        "invalid-chart",
       ),
     ).toBeNull();
   });

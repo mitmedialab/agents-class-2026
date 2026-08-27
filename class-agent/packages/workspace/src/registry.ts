@@ -208,6 +208,26 @@ function validateVisualGraph(props: JsonObject): void {
     if (!isRecord(raw) || typeof raw.id !== "string" || byId.has(raw.id)) {
       throw new WorkspaceValidationError("visual composition element IDs must be unique");
     }
+    if (raw.type === "chart") {
+      if (!Array.isArray(raw.labels) || !Array.isArray(raw.series)) {
+        throw new WorkspaceValidationError("chart labels and series must be arrays");
+      }
+      for (const item of raw.series) {
+        if (!isRecord(item) || !Array.isArray(item.values) || item.values.length !== raw.labels.length) {
+          throw new WorkspaceValidationError("chart series values must match chart labels");
+        }
+        if (item.tones !== undefined && (!Array.isArray(item.tones) || item.tones.length !== raw.labels.length)) {
+          throw new WorkspaceValidationError("chart point tones must match chart labels");
+        }
+      }
+      if (
+        typeof raw.y_min === "number" &&
+        typeof raw.y_max === "number" &&
+        raw.y_max <= raw.y_min
+      ) {
+        throw new WorkspaceValidationError("chart y_max must exceed y_min");
+      }
+    }
     byId.set(raw.id, raw);
   }
   if (!byId.has(rootId)) {

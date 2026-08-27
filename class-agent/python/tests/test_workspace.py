@@ -237,6 +237,7 @@ def test_visual_composition_requires_a_valid_bounded_component_tree() -> None:
                 "type": "image",
                 "url": "https://example.com/person.jpg",
                 "alt": "Portrait",
+                "presentation": "avatar",
                 "radius": "round",
             },
             {"id": "name-one", "type": "heading", "text": "Ada Example"},
@@ -251,6 +252,81 @@ def test_visual_composition_requires_a_valid_bounded_component_tree() -> None:
     }
 
     registry.validate_props("visual-composition", valid_props)
+
+    chart_props: dict[str, JsonValue] = {
+        "root_id": "trend",
+        "elements": [
+            {
+                "id": "trend",
+                "type": "chart",
+                "title": "Weekly participation",
+                "chart_type": "line",
+                "labels": ["Week 1", "Week 2", "Week 3"],
+                "series": [
+                    {
+                        "label": "Students",
+                        "values": [12, 18, 24],
+                        "tone": "success",
+                        "tones": ["coral", "secondary", "violet"],
+                    }
+                ],
+                "value_suffix": " students",
+            }
+        ],
+    }
+    registry.validate_props("visual-composition", chart_props)
+
+    invalid_chart: dict[str, JsonValue] = {
+        **chart_props,
+        "elements": [
+            {
+                "id": "trend",
+                "type": "chart",
+                "title": "Weekly participation",
+                "chart_type": "line",
+                "labels": ["Week 1", "Week 2", "Week 3"],
+                "series": [{"label": "Students", "values": [12, 18]}],
+            }
+        ],
+    }
+    with pytest.raises(WorkspaceValidationError, match="series values must match"):
+        registry.validate_props("visual-composition", invalid_chart)
+
+    invalid_chart_tones: dict[str, JsonValue] = {
+        **chart_props,
+        "elements": [
+            {
+                "id": "trend",
+                "type": "chart",
+                "title": "Weekly participation",
+                "chart_type": "line",
+                "labels": ["Week 1", "Week 2", "Week 3"],
+                "series": [
+                    {
+                        "label": "Students",
+                        "values": [12, 18, 24],
+                        "tones": ["coral", "violet"],
+                    }
+                ],
+            }
+        ],
+    }
+    with pytest.raises(WorkspaceValidationError, match="point tones must match"):
+        registry.validate_props("visual-composition", invalid_chart_tones)
+
+    valid_elements = valid_props["elements"]
+    assert isinstance(valid_elements, list)
+    invalid_presentation = {
+        **valid_props,
+        "elements": [
+            {**element, "presentation": "billboard"}
+            if isinstance(element, dict) and element.get("type") == "image"
+            else element
+            for element in valid_elements
+        ],
+    }
+    with pytest.raises(WorkspaceValidationError, match="invalid props"):
+        registry.validate_props("visual-composition", invalid_presentation)
 
     cyclic: dict[str, JsonValue] = {
         "root_id": "first",

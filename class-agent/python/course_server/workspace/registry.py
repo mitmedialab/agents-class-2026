@@ -52,6 +52,30 @@ def _validate_visual_graph(props: Mapping[str, JsonValue]) -> None:
         element_id = raw.get("id")
         if not isinstance(element_id, str) or element_id in by_id:
             raise WorkspaceValidationError("visual composition element IDs must be unique")
+        if raw.get("type") == "chart":
+            labels = raw.get("labels")
+            series = raw.get("series")
+            if not isinstance(labels, list) or not isinstance(series, list):
+                raise WorkspaceValidationError("chart labels and series must be arrays")
+            for item in series:
+                if not isinstance(item, dict):
+                    raise WorkspaceValidationError("chart series must be objects")
+                values = item.get("values")
+                if not isinstance(values, list) or len(values) != len(labels):
+                    raise WorkspaceValidationError("chart series values must match chart labels")
+                tones = item.get("tones")
+                if tones is not None and (not isinstance(tones, list) or len(tones) != len(labels)):
+                    raise WorkspaceValidationError("chart point tones must match chart labels")
+            y_min = raw.get("y_min")
+            y_max = raw.get("y_max")
+            if (
+                isinstance(y_min, int | float)
+                and not isinstance(y_min, bool)
+                and isinstance(y_max, int | float)
+                and not isinstance(y_max, bool)
+                and y_max <= y_min
+            ):
+                raise WorkspaceValidationError("chart y_max must exceed y_min")
         by_id[element_id] = raw
     if root_id not in by_id:
         raise WorkspaceValidationError("visual composition root does not exist")

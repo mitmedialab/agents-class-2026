@@ -1,6 +1,14 @@
 export { Button, type ButtonProps } from "./Button.js";
 export { BrowserViewer, type BrowserViewerProps } from "./BrowserViewer.js";
 export {
+  Chart,
+  type ChartDataKind,
+  type ChartProps,
+  type ChartSeries,
+  type ChartTone,
+  type ChartType,
+} from "./Chart.js";
+export {
   PageCards,
   type PageCardItem,
   type PageCardsProps,

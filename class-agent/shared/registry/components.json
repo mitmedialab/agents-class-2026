@@ -153,7 +153,7 @@
       "id": "visual-composition",
       "version": "1.0.0",
       "title": "Visual Composition",
-      "description": "Composes trusted image, text, profile, form, and layout primitives into one visual surface. Use groups and element IDs instead of HTML or CSS.",
+      "description": "Builds a polished, presentation-ready visual surface rather than a stack of paragraphs. Match structure to the content's natural visual flow. Stack, row, and grid are equal options; use columns only for genuinely parallel items, direct comparisons, or coherent galleries—not as the default page pattern. Available elements include surfaced process stages, timelines, facts, charts for quantitative comparisons or trends, and cards for distinct entities. Charts use a vivid coral, sky, mint, amber, violet, and ivory palette. Image presentations include panoramic banners, split-layout features, repeated cards, and profile avatars. Use short text blocks, strong hierarchy, balanced composition, and meaningful available imagery with enough space to act as a visual anchor—not a tiny thumbnail beside oversized text. Use groups and element IDs instead of HTML or CSS.",
       "props_schema": {
         "type": "object",
         "properties": {
@@ -204,12 +204,19 @@
                     "url": { "type": "string", "format": "uri", "pattern": "^https://[^\\s]+$", "maxLength": 2048 },
                     "alt": { "type": "string", "maxLength": 500 },
                     "caption": { "type": "string", "maxLength": 1000 },
+                    "source_width": { "type": "integer", "description": "Intrinsic pixel width reported by image search, when known.", "minimum": 1, "maximum": 100000 },
+                    "source_height": { "type": "integer", "description": "Intrinsic pixel height reported by image search, when known.", "minimum": 1, "maximum": 100000 },
+                    "presentation": { "type": "string", "enum": ["standard", "banner", "feature", "card", "avatar"] },
                     "aspect": { "type": "string", "enum": ["auto", "square", "portrait", "landscape", "wide"] },
                     "fit": { "type": "string", "enum": ["cover", "contain"] },
                     "radius": { "type": "string", "enum": ["none", "small", "medium", "large", "round"] },
                     "width": { "type": "string", "enum": ["auto", "full", "half", "third"] }
                   },
                   "required": ["id", "type", "url", "alt"],
+                  "dependentRequired": {
+                    "source_width": ["source_height"],
+                    "source_height": ["source_width"]
+                  },
                   "additionalProperties": false
                 },
                 {
@@ -288,6 +295,60 @@
                     "width": { "type": "string", "enum": ["auto", "full", "half", "third"] }
                   },
                   "required": ["id", "type", "items"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$", "maxLength": 100 },
+                    "type": { "const": "chart" },
+                    "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+                    "description": { "type": "string", "maxLength": 1000 },
+                    "data_kind": { "type": "string", "description": "Whether values are measured, supplied by the user, or derived.", "enum": ["measured", "user-provided", "derived"] },
+                    "data_source": { "type": "string", "description": "Specific provenance for the numeric values, such as a table or user request.", "minLength": 1, "maxLength": 500 },
+                    "comparison_basis": { "type": "string", "description": "Why every plotted value is comparable on the same quantitative scale.", "minLength": 1, "maxLength": 500 },
+                    "unit": { "type": "string", "description": "Shared unit for all values, such as %, participants, USD, or score (0–100).", "minLength": 1, "maxLength": 50 },
+                    "chart_type": { "type": "string", "enum": ["bar", "line", "area"] },
+                    "labels": {
+                      "type": "array",
+                      "minItems": 2,
+                      "maxItems": 16,
+                      "items": { "type": "string", "minLength": 1, "maxLength": 80 }
+                    },
+                    "series": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 4,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "label": { "type": "string", "minLength": 1, "maxLength": 100 },
+                          "values": {
+                            "type": "array",
+                            "minItems": 2,
+                            "maxItems": 16,
+                            "items": { "type": "number", "minimum": -1000000000, "maximum": 1000000000 }
+                          },
+                          "tone": { "type": "string", "description": "One palette color for the complete series.", "enum": ["accent", "coral", "secondary", "success", "warning", "violet"] },
+                          "tones": {
+                            "type": "array",
+                            "description": "Optional per-value colors aligned one-for-one with chart labels.",
+                            "minItems": 2,
+                            "maxItems": 16,
+                            "items": { "type": "string", "enum": ["accent", "coral", "secondary", "success", "warning", "violet"] }
+                          }
+                        },
+                        "required": ["label", "values"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "value_suffix": { "type": "string", "maxLength": 20 },
+                    "y_min": { "type": "number", "minimum": -1000000000, "maximum": 1000000000 },
+                    "y_max": { "type": "number", "minimum": -1000000000, "maximum": 1000000000 },
+                    "show_legend": { "type": "boolean" },
+                    "width": { "type": "string", "enum": ["auto", "full", "half", "third"] }
+                  },
+                  "required": ["id", "type", "title", "chart_type", "labels", "series"],
                   "additionalProperties": false
                 },
                 {

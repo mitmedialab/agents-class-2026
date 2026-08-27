@@ -258,13 +258,13 @@ textarea {
 .course-agent[data-workspace-open="true"] .workspace-shell {
   align-items: stretch;
   gap: 0;
-  grid-template-columns: minmax(0, 1fr) 50vw;
+  grid-template-columns: minmax(0, 1fr) 60vw;
   padding: 0;
   place-items: initial;
 }
 
 .course-agent[data-workspace-open="true"] .agent-header {
-  right: 50vw;
+  right: 60vw;
 }
 
 .course-agent[data-workspace-open="true"] .response-stage {
@@ -290,7 +290,7 @@ textarea {
 .course-agent[data-workspace-open="true"] .composer {
   bottom: 2rem;
   padding-inline: clamp(2rem, 4vw, 5rem);
-  right: 50vw;
+  right: 60vw;
 }
 
 .course-agent[data-workspace-open="true"] .response-stage:has(.activity-trace[open]) {
@@ -298,7 +298,7 @@ textarea {
 }
 
 .course-agent[data-workspace-open="true"] .activity-list {
-  width: min(42rem, calc(50vw - 4rem));
+  width: min(42rem, calc(40vw - 4rem));
 }
 
 .workspace-pane {
@@ -491,7 +491,7 @@ textarea {
 }
 
 .workspace-pane[data-tabbed="false"] .ca-visual-canvas {
-  padding: 0 0 2rem;
+  padding: 3.75rem 0 2rem;
 }
 
 .workspace-panel-message {

@@ -172,8 +172,11 @@ describe("component registry", () => {
       }),
     ).toThrow("invalid props");
 
+    const calendarManifest = BUILT_IN_COMPONENT_MANIFESTS.find(
+      (manifest) => manifest.id === "calendar",
+    )!;
     const openOnly = new ComponentRegistry([
-      { ...BUILT_IN_COMPONENT_MANIFESTS[1]!, supportedOperations: ["open"] },
+      { ...calendarManifest, supportedOperations: ["open"] },
     ]);
     const state = openOnly.apply(emptyWorkspaceState(), openCalendar());
     expect(() =>
@@ -218,6 +221,7 @@ describe("component registry", () => {
               type: "image",
               url: "https://example.com/photo.jpg",
               alt: "Portrait",
+              presentation: "banner",
               radius: "round",
             },
             { id: "name", type: "heading", text: "Ada Example" },
@@ -245,6 +249,82 @@ describe("component registry", () => {
         },
       }),
     ).toThrow("unreachable");
+  });
+
+  it("validates bounded chart data inside visual compositions", () => {
+    const registry = new ComponentRegistry(BUILT_IN_COMPONENT_MANIFESTS);
+    const visual = {
+      type: "open",
+      panel: {
+        id: "40000000-0000-4000-8000-000000000010",
+        component_id: "visual-composition",
+        props: {
+          root_id: "trend",
+          elements: [
+            {
+              id: "trend",
+              type: "chart",
+              title: "Weekly participation",
+              chart_type: "area",
+              labels: ["Week 1", "Week 2", "Week 3"],
+              series: [
+                {
+                  label: "Students",
+                  values: [12, 18, 24],
+                  tone: "success",
+                  tones: ["coral", "secondary", "violet"],
+                },
+              ],
+              value_suffix: " students",
+            },
+          ],
+        },
+        state: {},
+      },
+    };
+
+    expect(registry.apply(emptyWorkspaceState(), visual).panels).toHaveLength(1);
+    expect(() =>
+      registry.apply(emptyWorkspaceState(), {
+        ...visual,
+        panel: {
+          ...visual.panel,
+          props: {
+            ...visual.panel.props,
+            elements: [
+              {
+                ...visual.panel.props.elements[0],
+                series: [{ label: "Students", values: [12, 18] }],
+              },
+            ],
+          },
+        },
+      }),
+    ).toThrow("chart series values must match chart labels");
+
+    expect(() =>
+      registry.apply(emptyWorkspaceState(), {
+        ...visual,
+        panel: {
+          ...visual.panel,
+          props: {
+            ...visual.panel.props,
+            elements: [
+              {
+                ...visual.panel.props.elements[0],
+                series: [
+                  {
+                    label: "Students",
+                    values: [12, 18, 24],
+                    tones: ["coral", "violet"],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      }),
+    ).toThrow("chart point tones must match chart labels");
   });
 
   it("rejects invented command fields before state changes", () => {

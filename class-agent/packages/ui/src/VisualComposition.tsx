@@ -1,5 +1,13 @@
 import { createElement, useEffect, useMemo, useState } from "react";
 
+import {
+  Chart,
+  type ChartDataKind,
+  type ChartSeries,
+  type ChartTone,
+  type ChartType,
+} from "./Chart.js";
+
 type VisualWidth = "auto" | "full" | "half" | "third";
 
 interface VisualBase {
@@ -27,6 +35,9 @@ export interface VisualImage extends VisualBase {
   url: string;
   alt: string;
   caption?: string;
+  source_width?: number;
+  source_height?: number;
+  presentation?: "standard" | "banner" | "feature" | "card" | "avatar";
   aspect?: "auto" | "square" | "portrait" | "landscape" | "wide";
   fit?: "cover" | "contain";
   radius?: "none" | "small" | "medium" | "large" | "round";
@@ -67,6 +78,23 @@ export interface VisualFacts extends VisualBase {
   items: Array<{ label: string; value: string }>;
 }
 
+export interface VisualChart extends VisualBase {
+  type: "chart";
+  title: string;
+  chart_type: ChartType;
+  labels: string[];
+  series: Array<ChartSeries & { tone?: ChartTone }>;
+  comparison_basis?: string;
+  data_kind?: ChartDataKind;
+  data_source?: string;
+  description?: string;
+  unit?: string;
+  value_suffix?: string;
+  y_min?: number;
+  y_max?: number;
+  show_legend?: boolean;
+}
+
 export interface VisualInput extends VisualBase {
   type: "input";
   label: string;
@@ -102,6 +130,7 @@ export type VisualElement =
   | VisualBadge
   | VisualLink
   | VisualFacts
+  | VisualChart
   | VisualInput
   | VisualTextarea
   | VisualDivider
@@ -123,6 +152,7 @@ const VISUAL_TYPES = new Set([
   "badge",
   "link",
   "facts",
+  "chart",
   "input",
   "textarea",
   "divider",
@@ -155,6 +185,66 @@ export function normalizeVisualElements(
       (!Array.isArray(raw.children) || !raw.children.every((id) => typeof id === "string"))
     ) {
       return null;
+    }
+    if (
+      raw.type === "image" &&
+      ((raw.source_width === undefined) !== (raw.source_height === undefined) ||
+        (raw.source_width !== undefined &&
+          (typeof raw.source_width !== "number" ||
+            !Number.isInteger(raw.source_width) ||
+            raw.source_width <= 0)) ||
+        (raw.source_height !== undefined &&
+          (typeof raw.source_height !== "number" ||
+            !Number.isInteger(raw.source_height) ||
+            raw.source_height <= 0)))
+    ) {
+      return null;
+    }
+    if (raw.type === "chart") {
+      const labels = raw.labels;
+      const series = raw.series;
+      if (
+        typeof raw.title !== "string" ||
+        !["bar", "line", "area"].includes(String(raw.chart_type)) ||
+        !Array.isArray(labels) ||
+        labels.length < 2 ||
+        labels.length > 16 ||
+        !labels.every((label) => typeof label === "string") ||
+        !Array.isArray(series) ||
+        series.length < 1 ||
+        series.length > 4 ||
+        !series.every(
+          (item) =>
+            isRecord(item) &&
+            typeof item.label === "string" &&
+            Array.isArray(item.values) &&
+            item.values.length === labels.length &&
+            item.values.every((itemValue) =>
+              typeof itemValue === "number" && Number.isFinite(itemValue)
+            ) &&
+            (item.tone === undefined ||
+              ["accent", "coral", "secondary", "success", "warning", "violet"].includes(
+                String(item.tone),
+              )) &&
+            (item.tones === undefined ||
+              (Array.isArray(item.tones) &&
+                item.tones.length === labels.length &&
+                item.tones.every((tone) =>
+                  ["accent", "coral", "secondary", "success", "warning", "violet"].includes(
+                    String(tone),
+                  ),
+                ))),
+        ) ||
+        (raw.y_min !== undefined &&
+          (typeof raw.y_min !== "number" || !Number.isFinite(raw.y_min))) ||
+        (raw.y_max !== undefined &&
+          (typeof raw.y_max !== "number" || !Number.isFinite(raw.y_max))) ||
+        (typeof raw.y_min === "number" &&
+          typeof raw.y_max === "number" &&
+          raw.y_max <= raw.y_min)
+      ) {
+        return null;
+      }
     }
     const element = raw as unknown as VisualElement;
     elements.push(element);
@@ -239,16 +329,18 @@ export function VisualComposition({
     if (!element) return null;
     const attributes = elementAttributes(element);
     if (element.type === "group") {
+      const isRoot = id === rootId;
       return (
         <div
           {...attributes}
           data-align={element.align ?? "stretch"}
           data-columns={element.columns ?? 2}
-          data-gap={element.gap ?? "normal"}
+          data-gap={element.gap ?? (isRoot ? "loose" : "normal")}
           data-justify={element.justify ?? "start"}
           data-layout={element.layout ?? "stack"}
-          data-padding={element.padding ?? "none"}
-          data-radius={element.radius ?? "medium"}
+          data-padding={element.padding ?? (isRoot ? "large" : "none")}
+          data-radius={element.radius ?? (isRoot ? "large" : "medium")}
+          data-root={isRoot || undefined}
           data-surface={element.surface ?? "plain"}
           data-wrap={element.wrap || undefined}
         >
@@ -262,20 +354,32 @@ export function VisualComposition({
     }
     if (element.type === "image") {
       const url = safeHttpsUrl(element.url);
+      const hasSourceDimensions =
+        element.source_width !== undefined && element.source_height !== undefined;
       return (
         <figure
           {...attributes}
           className={`${attributes.className} ca-visual-image`}
           data-aspect={element.aspect ?? "auto"}
           data-fit={element.fit ?? "cover"}
+          data-presentation={element.presentation ?? "standard"}
           data-radius={element.radius ?? "medium"}
+          data-source-dimensions={hasSourceDimensions ? "known" : "unknown"}
+          data-source-height={element.source_height}
+          data-source-width={element.source_width}
         >
           {url ? (
             <img
               alt={element.alt}
+              {...(element.source_height === undefined
+                ? {}
+                : { height: element.source_height })}
               loading="lazy"
               referrerPolicy="no-referrer"
               src={url}
+              {...(element.source_width === undefined
+                ? {}
+                : { width: element.source_width })}
             />
           ) : (
             <span>Image unavailable</span>
@@ -346,6 +450,37 @@ export function VisualComposition({
             </div>
           ))}
         </dl>
+      );
+    }
+    if (element.type === "chart") {
+      return (
+        <div {...attributes} className={`${attributes.className} ca-visual-chart`}>
+          <Chart
+            chartType={element.chart_type}
+            labels={element.labels}
+            series={element.series}
+            title={element.title}
+            {...(element.comparison_basis === undefined
+              ? {}
+              : { comparisonBasis: element.comparison_basis })}
+            {...(element.data_kind === undefined ? {} : { dataKind: element.data_kind })}
+            {...(element.data_source === undefined
+              ? {}
+              : { dataSource: element.data_source })}
+            {...(element.description === undefined
+              ? {}
+              : { description: element.description })}
+            {...(element.unit === undefined ? {} : { unit: element.unit })}
+            {...(element.value_suffix === undefined
+              ? {}
+              : { valueSuffix: element.value_suffix })}
+            {...(element.y_min === undefined ? {} : { yMin: element.y_min })}
+            {...(element.y_max === undefined ? {} : { yMax: element.y_max })}
+            {...(element.show_legend === undefined
+              ? {}
+              : { showLegend: element.show_legend })}
+          />
+        </div>
       );
     }
     if (element.type === "input" || element.type === "textarea") {

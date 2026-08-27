@@ -193,6 +193,12 @@
   scrollbar-width: thin;
 }
 
+.ca-visual-canvas > .ca-visual-element {
+  margin-inline: auto;
+  max-width: 80rem;
+  width: 100%;
+}
+
 .ca-visual-status {
   flex: none;
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
@@ -215,11 +221,13 @@
 }
 
 .ca-visual-element[data-width="half"] {
+  flex-shrink: 0;
   flex-basis: calc(50% - var(--space-2));
   width: calc(50% - var(--space-2));
 }
 
 .ca-visual-element[data-width="third"] {
+  flex-shrink: 0;
   flex-basis: calc(33.333% - var(--space-2));
   width: calc(33.333% - var(--space-2));
 }
@@ -241,9 +249,36 @@
   flex-direction: row;
 }
 
+.ca-visual-element[data-layout="row"]
+  > .ca-visual-child
+  > .ca-visual-element[data-width="auto"] {
+  flex: 1 1 0;
+}
+
+.ca-visual-element[data-layout="row"]
+  > .ca-visual-child
+  > .ca-visual-image:not([data-radius="round"])[data-width="auto"] {
+  flex: 0 0 calc(40% - var(--space-2));
+  width: calc(40% - var(--space-2));
+}
+
 .ca-visual-element[data-layout="grid"] {
+  align-items: stretch;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ca-visual-element[data-layout="grid"] > .ca-visual-child > .ca-visual-element {
+  height: 100%;
+}
+
+.ca-visual-element[data-layout="grid"]
+  > .ca-visual-child
+  > .ca-visual-element[data-surface="plain"],
+.ca-visual-element[data-layout="grid"] > .ca-visual-child > .ca-visual-facts {
+  background: var(--color-surface-raised);
+  border-radius: var(--radius-lg);
+  padding: clamp(var(--space-4), 2vw, var(--space-6));
 }
 
 .ca-visual-element[data-layout="grid"][data-columns="1"] {
@@ -387,6 +422,49 @@
   font-size: 0.625rem;
 }
 
+.ca-visual-image[data-presentation="banner"] {
+  flex: 0 0 100%;
+  width: 100%;
+}
+
+.ca-visual-image[data-presentation="banner"] img {
+  aspect-ratio: 21 / 8;
+  max-height: clamp(15rem, 38vh, 27rem);
+}
+
+.ca-visual-image[data-presentation="feature"] img {
+  aspect-ratio: 4 / 3;
+  min-height: clamp(15rem, 30vw, 24rem);
+}
+
+.ca-visual-image[data-presentation="card"] img {
+  aspect-ratio: 4 / 3;
+  max-height: 22rem;
+}
+
+.ca-visual-image[data-presentation="avatar"] {
+  flex: 0 0 clamp(6rem, 12vw, 10rem) !important;
+  width: clamp(6rem, 12vw, 10rem) !important;
+}
+
+.ca-visual-image[data-presentation="avatar"] img {
+  aspect-ratio: 1;
+  border-radius: 50%;
+}
+
+/*
+ * Diagrams and screenshots should occupy their intrinsic ratio rather than sit
+ * inside a fixed photo crop with empty space above and below. This also works when
+ * the URL came from a webpage and no dimensions were known before load. `cover`
+ * presentations retain the editorial crop selected by the composition.
+ */
+.ca-visual-image[data-fit="contain"] img {
+  aspect-ratio: auto;
+  height: auto;
+  max-height: none;
+  min-height: 0;
+}
+
 .ca-visual-heading,
 .ca-visual-text {
   margin: 0;
@@ -407,7 +485,7 @@
 }
 
 .ca-visual-heading[data-size="display"] {
-  font-size: clamp(2rem, 5vw, 4.5rem);
+  font-size: clamp(2rem, 4vw, 4rem);
   letter-spacing: -0.04em;
 }
 
@@ -497,6 +575,7 @@
 }
 
 .ca-visual-facts {
+  align-content: start;
   display: grid;
   gap: var(--space-2);
   margin: 0;
@@ -516,6 +595,226 @@
 .ca-visual-facts dd {
   font-size: 0.8125rem;
   margin: 0;
+}
+
+.ca-visual-chart {
+  width: 100%;
+}
+
+.ca-chart {
+  background: transparent;
+  border-bottom: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-border);
+  display: grid;
+  gap: var(--space-6);
+  margin: 0;
+  min-width: 0;
+  padding: clamp(var(--space-6), 3vw, calc(var(--space-8) * 1.5)) 0 var(--space-4);
+  width: 100%;
+}
+
+.ca-chart > header {
+  align-items: end;
+  display: flex;
+  gap: var(--space-6);
+  justify-content: space-between;
+}
+
+.ca-chart-title {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.ca-chart-title > span {
+  color: var(--color-text-muted);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.625rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ca-chart-title > strong {
+  font-size: clamp(1.35rem, 2.6vw, 2.25rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+}
+
+.ca-chart-title > p {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0;
+  max-width: 48rem;
+}
+
+.ca-chart svg {
+  display: block;
+  height: auto;
+  overflow: visible;
+  width: 100%;
+}
+
+.ca-chart-grid line {
+  stroke: var(--color-border);
+  stroke-width: 1;
+}
+
+.ca-chart-grid text,
+.ca-chart-labels text {
+  fill: var(--color-text-muted);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.625rem;
+  letter-spacing: 0.04em;
+}
+
+.ca-chart-grid text {
+  text-anchor: end;
+}
+
+.ca-chart-labels text {
+  text-transform: uppercase;
+}
+
+.ca-chart-axis {
+  stroke: color-mix(in srgb, var(--color-text) 42%, transparent);
+  stroke-width: 1.25;
+}
+
+.ca-chart [data-tone="accent"] {
+  --chart-tone: var(--color-text);
+}
+
+.ca-chart [data-tone="coral"] {
+  --chart-tone: #ff5c52;
+}
+
+.ca-chart [data-tone="secondary"] {
+  --chart-tone: #3f9cff;
+}
+
+.ca-chart [data-tone="success"] {
+  --chart-tone: #35d494;
+}
+
+.ca-chart [data-tone="warning"] {
+  --chart-tone: #ffc14d;
+}
+
+.ca-chart [data-tone="violet"] {
+  --chart-tone: #ad7cff;
+}
+
+.ca-chart-bars [data-tone] rect {
+  fill: var(--chart-tone);
+}
+
+.ca-chart-line {
+  fill: none !important;
+  stroke: var(--chart-tone);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
+}
+
+.ca-chart-lines [data-tone="secondary"] .ca-chart-line {
+  stroke-dasharray: 12 7;
+}
+
+.ca-chart-lines [data-tone="success"] .ca-chart-line {
+  stroke-dasharray: 3 6;
+}
+
+.ca-chart-lines [data-tone="warning"] .ca-chart-line {
+  stroke-dasharray: 14 5 3 5;
+}
+
+.ca-chart-lines [data-tone="violet"] .ca-chart-line {
+  stroke-dasharray: 8 5;
+}
+
+.ca-chart-area {
+  fill: var(--chart-tone);
+  opacity: 0.12;
+  stroke: none !important;
+}
+
+.ca-chart-lines circle {
+  fill: var(--color-surface);
+  stroke: var(--chart-tone);
+  stroke-width: 2.5;
+}
+
+.ca-chart-value {
+  fill: var(--color-text) !important;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.625rem;
+  letter-spacing: 0.02em;
+}
+
+.ca-chart-legend {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  justify-content: end;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ca-chart-legend li {
+  align-items: center;
+  color: var(--color-text-muted);
+  display: inline-flex;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.6875rem;
+  gap: var(--space-2);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.ca-chart-legend li > span {
+  background: var(--chart-tone);
+  border-radius: 999px;
+  display: inline-block;
+  height: 0.3rem;
+  width: 1.5rem;
+}
+
+.ca-chart-meta {
+  align-items: start;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  gap: var(--space-4);
+  justify-content: space-between;
+  padding-top: var(--space-3);
+}
+
+.ca-chart-meta p,
+.ca-chart-meta cite {
+  color: var(--color-text-muted);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.625rem;
+  font-style: normal;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.ca-chart-meta p {
+  max-width: 48rem;
+}
+
+.ca-chart-meta cite {
+  text-align: right;
+}
+
+.ca-chart-error {
+  border-bottom: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  margin: 0;
+  padding: var(--space-6) 0;
 }
 
 .ca-visual-field {
@@ -568,12 +867,36 @@
 }
 
 @media (max-width: 700px) {
+  .ca-chart > header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ca-chart-legend {
+    justify-content: start;
+  }
+
+  .ca-chart-meta {
+    flex-direction: column;
+  }
+
+  .ca-chart-meta cite {
+    text-align: left;
+  }
+
+  .ca-visual-element[data-layout="row"] {
+    flex-direction: column;
+  }
+
   .ca-visual-element[data-layout="grid"] {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .ca-visual-element[data-width="half"],
-  .ca-visual-element[data-width="third"] {
+  .ca-visual-element[data-width="third"],
+  .ca-visual-element[data-layout="row"]
+    > .ca-visual-child
+    > .ca-visual-image:not([data-radius="round"])[data-width="auto"] {
     flex-basis: 100%;
     width: 100%;
   }
