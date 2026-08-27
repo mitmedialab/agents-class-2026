@@ -58,8 +58,9 @@ def _agent_instructions(
         [
             (
                 "Before using a non-final tool, briefly state the user-facing action without "
-                "naming the tool or resource identifier. Do not reveal private reasoning, and "
-                "do not include a progress message alongside the final_answer tool."
+                "naming the tool or resource identifier, except for workspace focus operations, "
+                "which are silent UI housekeeping. Do not reveal private reasoning, and do not "
+                "include a progress message alongside the final_answer tool."
             ),
             f"Trusted principal roles: {', '.join(context.principal.roles)}.",
         ]
@@ -86,6 +87,13 @@ def _agent_instructions(
             "or supplies it. A draft document is a progress view, not a submission; still "
             "require explicit approval before any external-effect submission tool. Do not "
             "open duplicate draft panels."
+        )
+        sections.append(
+            "Workspace focus is silent UI housekeeping, not meaningful user-facing "
+            "progress. Never announce that you will focus, refocus, keep focused, or keep "
+            "a draft visible. Do not call workspace.focus_component when the intended panel "
+            "is already focused. If a focus call is genuinely needed, call it without a "
+            "preceding progress message and continue with the substantive task."
         )
         sections.append(
             "Use visual-composition when a result benefits from a composed interface rather "

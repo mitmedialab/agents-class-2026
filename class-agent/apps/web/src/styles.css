@@ -56,8 +56,11 @@ textarea {
   align-items: center;
   color: var(--color-text-muted);
   display: flex;
+  flex: none;
   height: 1.75rem;
   justify-content: center;
+  line-height: 0;
+  padding: 0;
   transition: color 140ms ease;
   width: 1.75rem;
 }
@@ -67,7 +70,12 @@ textarea {
   color: var(--color-text);
 }
 
+.history-toggle:focus-visible {
+  outline: 0;
+}
+
 .history-toggle svg {
+  display: block;
   fill: none;
   height: 1.4rem;
   stroke: currentColor;
@@ -352,30 +360,46 @@ textarea {
 
 .workspace-close {
   align-items: center;
-  background: var(--color-surface-raised) !important;
-  border-radius: 50% !important;
+  appearance: none;
+  background: transparent !important;
+  border: 0;
+  border-radius: 50%;
+  color: var(--color-text-muted);
   display: flex;
-  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif !important;
-  font-size: 1.2rem !important;
-  height: 2rem;
+  flex: none;
+  height: 2.25rem;
   justify-content: center;
-  line-height: 1;
+  line-height: 0;
   padding: 0 !important;
+  transition: color 140ms ease;
+  width: 2.25rem;
+}
+
+.workspace-close svg {
+  display: block;
+  fill: none;
+  height: 2rem;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.25;
   width: 2rem;
 }
 
+.workspace-close:hover,
+.workspace-close:focus-visible {
+  color: var(--color-text);
+}
+
+.workspace-close:focus-visible {
+  outline: 0;
+}
+
 .workspace-single-close {
-  opacity: 0.55;
   position: absolute;
   right: 1.5rem;
   top: 4.75rem;
-  transition: opacity 140ms ease;
   z-index: 4;
-}
-
-.workspace-single-close:hover,
-.workspace-single-close:focus-visible {
-  opacity: 1;
 }
 
 .workspace-panel {
@@ -390,8 +414,13 @@ textarea {
   overflow: hidden;
 }
 
+.workspace-panel > .ca-draft-document {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .workspace-pane[data-tabbed="false"] .workspace-panel {
-  padding-top: 2.5rem;
+  padding-top: 5rem;
 }
 
 .workspace-pane[data-tabbed="false"] .ca-viewer-toolbar {

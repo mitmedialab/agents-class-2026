@@ -158,6 +158,12 @@ export function applyWorkspacePanelAction(
   });
 }
 
+export function ensureApplicationDraft(conversationId: Uuid): Promise<Event> {
+  return requestJson<Event>(`/conversations/${conversationId}/application-draft`, {
+    method: "POST",
+  });
+}
+
 export function recordWorkspaceInteraction(
   conversationId: Uuid,
   panelId: Uuid,
@@ -167,7 +173,8 @@ export function recordWorkspaceInteraction(
     | "document.change_page"
     | "document.find_text"
     | "page_cards.select"
-    | "visual.change",
+    | "visual.change"
+    | "draft.change",
   value: JsonValue,
 ): Promise<Event> {
   return requestJson<Event>(`/conversations/${conversationId}/workspace/interactions`, {

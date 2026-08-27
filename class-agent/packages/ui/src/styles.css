@@ -958,6 +958,30 @@
   white-space: pre-wrap;
 }
 
+.ca-draft-fields textarea {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  min-height: 1.5em;
+  overflow: hidden;
+  padding: 0;
+  resize: none;
+  width: 100%;
+}
+
+.ca-draft-fields textarea:focus-visible {
+  outline: 0;
+}
+
+.ca-draft-fields textarea::placeholder {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
 .ca-draft-fields li[data-status="missing"] p {
   color: var(--color-text-muted);
   font-style: italic;

@@ -7,6 +7,7 @@ import * as api from "./api.js";
 vi.mock("./api.js", () => ({
   applyWorkspacePanelAction: vi.fn(),
   createConversation: vi.fn(),
+  ensureApplicationDraft: vi.fn(),
   getCourseResourceContent: vi.fn(),
   getConversation: vi.fn(),
   getPrincipal: vi.fn(),
@@ -71,6 +72,26 @@ beforeEach(() => {
     events: [previousEvent],
   });
   vi.mocked(api.createConversation).mockResolvedValue(conversation);
+  vi.mocked(api.ensureApplicationDraft).mockResolvedValue({
+    ...previousEvent,
+    id: "30000000-0000-4000-8000-000000000009",
+    type: "workspace.panel.opened",
+    payload: {
+      command: {
+        type: "open",
+        panel: {
+          id: "40000000-0000-4000-8000-000000000009",
+          component_id: "draft-document",
+          title: "Course Application Draft",
+          props: {
+            title: "Course Application Draft",
+            fields: [{ id: "name", label: "Name", value: "", status: "missing" }],
+          },
+          state: { document_kind: "course-application" },
+        },
+      },
+    },
+  });
   vi.mocked(api.getCourseResourceContent).mockImplementation(async (uri) => {
     if (uri === "course://syllabus") {
       return {
@@ -167,6 +188,34 @@ describe("Course Agent interface", () => {
         expect.any(AbortSignal),
       ),
     );
+    if (label === "Apply") {
+      expect(api.ensureApplicationDraft).toHaveBeenCalledWith(conversation.id);
+      expect(vi.mocked(api.ensureApplicationDraft).mock.invocationCallOrder[0]).toBeLessThan(
+        vi.mocked(api.streamAgentRun).mock.invocationCallOrder[0]!,
+      );
+      expect(screen.getByRole("textbox", { name: "Name" })).toBeInTheDocument();
+    } else {
+      expect(api.ensureApplicationDraft).not.toHaveBeenCalled();
+    }
+  });
+
+  it("does not open the application draft from typed message text", async () => {
+    render(<App />);
+    await screen.findByText("The earlier response.");
+
+    const composer = screen.getByRole("textbox", { name: "Message" });
+    fireEvent.change(composer, { target: { value: "I'd like to apply for the course." } });
+    fireEvent.keyDown(composer, { key: "Enter" });
+
+    await waitFor(() =>
+      expect(api.streamAgentRun).toHaveBeenCalledWith(
+        conversation.id,
+        "I'd like to apply for the course.",
+        expect.any(Function),
+        expect.any(AbortSignal),
+      ),
+    );
+    expect(api.ensureApplicationDraft).not.toHaveBeenCalled();
   });
 
   it("replaces the previous response after a new message", async () => {

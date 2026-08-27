@@ -1,3 +1,5 @@
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+
 import { DocumentViewer } from "./DocumentViewer.js";
 
 export type DraftFieldStatus = "missing" | "candidate" | "inferred" | "confirmed";
@@ -17,6 +19,7 @@ export interface DraftDocumentProps {
   status?: DraftDocumentStatus | undefined;
   content?: string | undefined;
   fields?: readonly DraftDocumentField[] | undefined;
+  onChange?: ((id: string, value: string) => void) | undefined;
 }
 
 const FIELD_STATUS_LABELS: Record<DraftFieldStatus, string> = {
@@ -26,15 +29,64 @@ const FIELD_STATUS_LABELS: Record<DraftFieldStatus, string> = {
   confirmed: "Confirmed",
 };
 
+function resizeToContent(element: HTMLTextAreaElement): void {
+  element.style.height = "0px";
+  element.style.height = `${element.scrollHeight}px`;
+}
+
+interface DraftFieldEditorProps {
+  field: DraftDocumentField;
+  value: string;
+  onChange: (value: string) => void;
+  onCommit: (value: string) => void;
+}
+
+function DraftFieldEditor({
+  field,
+  value,
+  onChange,
+  onCommit,
+}: DraftFieldEditorProps) {
+  const editorRef = useRef<HTMLTextAreaElement>(null);
+
+  useLayoutEffect(() => {
+    if (editorRef.current) resizeToContent(editorRef.current);
+  }, [value]);
+
+  return (
+    <textarea
+      ref={editorRef}
+      aria-label={field.label}
+      onBlur={(event) => onCommit(event.currentTarget.value)}
+      onChange={(event) => {
+        resizeToContent(event.currentTarget);
+        onChange(event.currentTarget.value);
+      }}
+      placeholder="Waiting for information"
+      rows={1}
+      value={value}
+    />
+  );
+}
+
 export function DraftDocument({
   title,
   description,
   status = "draft",
   content,
   fields = [],
+  onChange,
 }: DraftDocumentProps) {
+  const fieldSignature = useMemo(
+    () => JSON.stringify(fields.map((field) => [field.id, field.value ?? ""])),
+    [fields],
+  );
+  const [values, setValues] = useState<Record<string, string>>({});
+  useEffect(() => {
+    setValues(Object.fromEntries(fields.map((field) => [field.id, field.value ?? ""])));
+  }, [fieldSignature]);
   const populated = fields.filter(
-    (field) => field.status !== "missing" && Boolean(field.value?.trim()),
+    (field) => Boolean((values[field.id] ?? field.value)?.trim()),
   ).length;
 
   return (
@@ -75,7 +127,16 @@ export function DraftDocument({
                 <strong>{field.label}</strong>
                 <span>{FIELD_STATUS_LABELS[field.status]}</span>
               </header>
-              <p>{field.value?.trim() || "Waiting for information"}</p>
+              <DraftFieldEditor
+                field={field}
+                onChange={(value) =>
+                  setValues((current) => ({ ...current, [field.id]: value }))
+                }
+                onCommit={(value) => {
+                  if (value !== (field.value ?? "")) onChange?.(field.id, value);
+                }}
+                value={values[field.id] ?? ""}
+              />
               {field.source ? <small>Source: {field.source}</small> : null}
             </li>
           ))}
