@@ -1,7 +1,8 @@
 # Isolated remote browser
 
 The remote browser is a trusted first-party workspace capability for public websites
-that reject iframe embedding. It is intentionally read-only in this release.
+that reject iframe embedding. It supports direct user-driven clicking and navigation,
+while agent-driven typing, login, uploads, downloads, and form submission remain absent.
 
 ```text
 Course Agent → browser.* tool → BrowserSessionService
@@ -26,6 +27,8 @@ without changing tool IDs, workspace events, or the frontend component.
 - `browser.scroll` scrolls the active panel and refreshes the view.
 - `browser.highlight_text` finds visible text, scrolls it into view, and marks the
   first matching element using fixed platform code.
+- The user can click the rendered page. The host maps the selected screenshot point to
+  the isolated browser, refreshes the capture, and persists the resulting URL and title.
 - The user can scroll with the mouse wheel over the image, the keyboard, or the native
   workspace toolbar.
 
@@ -39,12 +42,16 @@ surface. Captures are capped at 16,000 CSS pixels of document height.
 Follow-up control tools do not accept a model-provided session ID. Platform code resolves
 the focused browser panel from trusted workspace state. A redundant `browser.open` reuses
 that panel and live session; after an API restart it replaces the stale session in place
-instead of accumulating duplicate panels. Scroll, navigation, highlighting, and direct
-user scrolling also recover a stale context in-place before applying the requested action.
+instead of accumulating duplicate panels. Scroll, navigation, highlighting, clicking,
+and direct user scrolling also recover a stale context in-place before applying the
+requested action. Because a click updates the canonical workspace panel, the next agent
+turn receives the page the user reached. Calling `browser.open` with the panel's current
+URL snapshots that existing clicked session and returns its current readable text; it
+does not create a duplicate panel or start the page over.
 
 The model cannot execute arbitrary JavaScript, provide an identity, choose a screenshot
-endpoint, or bypass component validation. Click, type, login, uploads, downloads, and
-form submission are deliberately absent.
+endpoint, or bypass component validation. Only the user can initiate a screenshot click;
+agent-driven type, login, uploads, downloads, and form submission are deliberately absent.
 
 Comparison previews are static and short-lived. Chromium closes immediately after each
 capture; only the principal- and conversation-scoped PNG and safe page metadata remain
@@ -111,6 +118,7 @@ adding a `--no-sandbox` workaround.
 
 The constitution schedules generalized browser work after Phase 7. This narrow remote
 viewer was pulled forward by explicit product direction after iframe experiments failed.
-It does not implement the Phase 14 extension, arbitrary computer use, or browser actions.
+It does not implement the Phase 14 extension, arbitrary computer use, or agent-driven
+browser actions.
 The MCP-aligned tool boundary, registered component protocol, and application-owned
 adapter preserve the intended later architecture.

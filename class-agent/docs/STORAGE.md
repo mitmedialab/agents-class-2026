@@ -24,7 +24,9 @@ Later-phase tables from the constitution are added only when their owning applic
 UUID directories with mode `0700` and files with mode `0600`. They are scoped to the
 authenticated user or anonymous session that created them, limited to 10 MB, and expire
 after 24 hours. Expired directories are removed opportunistically. Temporary uploads do
-not belong in backups unless an operational policy explicitly requires them.
+not belong in backups unless an operational policy explicitly requires them. Owned
+documents are exposed only through expiring `upload://` resource authorization and the
+principal-scoped content endpoint.
 
 ## Course applications
 

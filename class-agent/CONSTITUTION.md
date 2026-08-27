@@ -1441,7 +1441,7 @@ CapabilityRequest
 
 DocumentViewer
 PDFViewer
-MarkdownViewer
+WebpageViewer
 Calendar
 DataTable
 JSONViewer
@@ -1555,8 +1555,9 @@ interface ComponentManifest {
 Examples:
 
 ```text
-document-viewer
 calendar
+document-viewer
+visual-composition
 data-table
 code-viewer
 timeline
@@ -1589,10 +1590,16 @@ Example call:
 
 ```json
 {
-  "component_id": "document-viewer",
-  "resource_uri": "course://syllabus.pdf",
+  "component_id": "visual-composition",
   "props": {
-    "page": 4
+    "root_id": "overview",
+    "elements": [
+      {
+        "id": "overview",
+        "type": "text",
+        "text": "A synthesized course overview"
+      }
+    ]
   }
 }
 ```
@@ -1612,35 +1619,40 @@ Another:
 
 ---
 
-# 36. Document highlighting
+# 36. Artifact and knowledge routing
 
-The DocumentViewer should support semantic highlighting.
+Choose the workspace surface from the user's intent, not merely the source format. The
+workspace has one current surface: a new subject, artifact, or view replaces the prior
+panel instead of retaining stale UI.
 
-Avoid fragile raw pixel coordinates where possible.
+Open a specific paper, PDF, text file, or other concrete artifact in DocumentViewer
+when the user wants to read it, navigate it, search it, or discuss particular passages.
+An artifact uploaded in chat remains the canonical artifact: the agent reads and opens
+that exact principal-scoped upload rather than silently substituting a public copy.
+Open a specific website in WebpageViewer, or use the remote browser when the user wants
+to interact with the live site. A direct user click updates the canonical browser panel,
+so the URL, title, and clicked session are available to the next agent turn.
 
-Represent highlight anchors using:
-
-```text
-resource URI
-page number
-text quote
-optional text-before
-optional text-after
-```
-
-Example:
-
-```json
-{
-  "resource_uri": "course://syllabus.pdf",
-  "page": 4,
-  "quote": "Final projects are due",
-  "prefix": "Presentation week",
-  "suffix": "at 11:59 PM"
-}
-```
-
-The viewer resolves this into a rendered highlight.
+For knowledge questions, summaries, comparisons, and overviews, the agent reads
+authorized source material, selects the useful information, and synthesizes it into a
+registered visual component even when the source happens to be Markdown. Prefer clear
+hierarchy, structured groups, headings, text, facts, and links. Include images only
+when relevant imagery would materially improve understanding, identity, comparison,
+or engagement. For people, physical projects, places, interfaces, devices, and other
+visually identifiable subjects, find and use suitable verified imagery without waiting
+for the user to request it. For abstract or administrative topics, create schematic
+process, comparison, timeline, or metric structures rather than adding decorative images.
+Avoid long paragraph stacks in either case.
+The trusted workspace layer enforces the concrete-subject rule: it requires an image
+search before opening the composition and, when that search yields usable candidates,
+requires the composition to include suitable imagery. No-result searches may fall back
+to a schematic composition.
+Visual imagery supports bounded semantic presentations: panoramic banner, editorial
+feature, repeated card, and profile avatar. The agent chooses among banner-led, split,
+gallery, profile, process, timeline, and comparison structures according to the answer;
+it does not repeat one centered hero layout for every query.
+A new question or analytical angle receives a fresh purpose-built composition; update
+the existing composition only when the user is explicitly iterating on that UI.
 
 ---
 
@@ -1714,9 +1726,8 @@ Agent:
 3. answers in text;
 4. calls `workspace.open_component` with `calendar`;
 5. calendar opens focused on review date;
-6. calls `workspace.open_component` with `document-viewer`;
-7. assignment document opens;
-8. relevant requirement paragraph is highlighted.
+6. synthesizes the assignment requirements into `visual-composition`;
+7. the visual overview opens beside the conversation.
 
 All of this happens in one conversation.
 
@@ -2548,7 +2559,7 @@ Use native `packages/ui` component when:
 Examples:
 
 ```text
-DocumentViewer
+VisualComposition
 Calendar
 DataTable
 CourseSchedule
@@ -3550,8 +3561,10 @@ Implement only these first:
 
 ```text
 Chat
-DocumentViewer
 Calendar
+DocumentViewer
+VisualComposition
+WebpageViewer
 DataTable
 CapabilityRequestCard
 PermissionRequestCard
@@ -3563,26 +3576,39 @@ Do not build ten speculative visualizations before basic architecture works.
 
 ---
 
-# 107. DocumentViewer v1
+# 107. DocumentViewer and VisualComposition v1
+
+DocumentViewer must support:
+
+```text
+specific Markdown, text, and PDF artifacts
+page or section navigation
+find within the artifact
+semantic highlighting for focused discussion
+```
+
+It must not be selected merely because knowledge was sourced from a document.
+
+VisualComposition must support:
 
 Must support:
 
 ```text
-Markdown
-plain text
-PDF
+groups
+headings and text
+facts and links
+images
+bounded bar, line, and area charts with accessible data
+bounded editable fields
 ```
-
-PDF can use PDF.js or equivalent local/open library.
 
 Functions:
 
 ```text
-open resource
-change page
-find text
-highlight text anchor
-scroll to highlight
+open composition
+update composition
+validate a single-parent element tree
+reject arbitrary HTML, CSS, and JavaScript
 ```
 
 ---
@@ -4132,6 +4158,7 @@ component registry
 WorkspaceState
 workspace MCP tools
 DocumentViewer
+VisualComposition
 Calendar
 ```
 
@@ -4269,7 +4296,7 @@ The first meaningful class-ready release is successful when:
 
 ✓ Public visitor can ask syllabus/schedule questions.
 
-✓ Agent can open DocumentViewer and Calendar during conversation.
+✓ Agent can open DocumentViewer for specific artifacts, VisualComposition for synthesized knowledge, and Calendar for schedules during conversation.
 
 ✓ Student logs in with username/access code.
 

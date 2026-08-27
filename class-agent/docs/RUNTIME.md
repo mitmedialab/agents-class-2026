@@ -59,9 +59,13 @@ filesystem path. The schedule tool identifies its source as provisional.
 `web.search` and `web.visit` wrap smolagents' toolkit implementations inside the same
 authorized platform boundary. `web.search_images` wraps DuckDuckGo-first DDGS image
 search, with another DDGS public-image backend as an availability fallback, and returns
-normalized direct HTTPS image candidates for registered workspace components. A fresh
-DDGS client is created per request, so concurrent conversations do not share search
-state. Page reads reject non-HTTP, credential-bearing, local, and private-network
+normalized direct HTTPS image candidates for registered workspace components. Results
+include provider pixel dimensions when available plus derived aspect, orientation,
+resolution, split-layout safety, and layout guidance; unknown dimensions are explicit
+rather than silently treated as banner-safe. Over-constrained queries with site or quoted
+syntax receive one automatic plain-language retry inside the same tool call. A fresh DDGS
+client is created per request, so concurrent conversations do not share search state. Page
+reads reject non-HTTP, credential-bearing, local, and private-network
 destinations. Web result bodies are returned to the current model turn but are not
 copied into durable event history; only a generic completion summary is stored.
 
@@ -97,7 +101,10 @@ application store remains canonical.
 Chat attachments are uploaded before a message is sent. The user message includes only
 the temporary receipt metadata—not file bytes or a server path—so an authorized tool can
 refer to the upload. Upload ownership is reconstructed from the trusted principal rather
-than accepted as a tool argument.
+than accepted as a tool argument. Owned document receipts become temporary `upload://`
+resources: the upload reader extracts their text for reasoning and DocumentViewer fetches
+the exact private artifact. The agent does not replace an available upload with a public
+web copy.
 
 smolagents requires Python-identifier tool names, so the adapter maps `course.read_syllabus` to `course_read_syllabus` only inside the transient runtime. Events and persistent state always retain the canonical dotted ID.
 

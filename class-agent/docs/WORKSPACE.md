@@ -44,16 +44,18 @@ separate from this stable contract.
 When workspace tools are authorized, runtime policy treats registered components as
 the preferred presentation surface. The agent should display schedules, documents,
 and other suitable structured results in a component rather than paste their complete
-contents into chat, while still giving a concise direct answer. This preference never
-bypasses component, prop, operation, or resource authorization validation, and it does
-not permit generated JavaScript or arbitrary UI.
+contents into chat. When a visual composition carries the answer, chat gives only a
+short handoff and does not restate its facts. This preference never bypasses component,
+prop, operation, or resource authorization validation, and it does not permit generated
+JavaScript or arbitrary UI.
 
 On desktop, the right column is the workspace canvas itself rather than a framed panel
-inside the column. A single open panel receives the full available height and omits tab
-chrome; its close action floats unobtrusively over the canvas. The tab strip appears
-only when two or more panels need navigation. Component content remains independently
-scrollable, so profile descriptions and other material below the initial viewport are
-not clipped. Mobile uses the same active-panel model below the conversation area.
+inside the column. The current panel receives the full available height and omits tab
+chrome; its close action floats unobtrusively over the canvas. Opening or focusing a
+different subject, artifact, or view replaces the previous panel. Component content
+remains independently scrollable, so profile descriptions and other material below the
+initial viewport are not clipped. Mobile uses the same current-panel model below the
+conversation area.
 
 The server reconstructs workspace state from all prior panel events before a run.
 Commands reject unknown components, invalid props, unsupported operations, duplicate
@@ -72,7 +74,9 @@ content endpoint and supplies it to the trusted renderer:
 
 ```text
 course://schedule → Calendar
-course://syllabus → DocumentViewer
+specific paper or file → DocumentViewer
+knowledge from one or more sources → VisualComposition
+specific website → WebpageViewer or BrowserViewer
 ```
 
 The endpoint accepts only a registered URI already visible to the principal. It never
@@ -87,10 +91,13 @@ conversations; it does not weaken the resource-content endpoint's authorization.
 
 ## Built-in components
 
-`document-viewer` accepts `page`, `find_text`, and a semantic `highlight`. Highlights
-contain a resource URI, one-based page number, exact quote, and optional prefix/suffix
-for disambiguation. Markdown is rendered as React text nodes rather than injected HTML.
-PDF.js renders PDF bytes locally and exposes searchable page text.
+`document-viewer` opens a specific Markdown, plain-text, or PDF artifact when the user
+wants to navigate, search, or discuss its particular content. It is not used merely
+because a knowledge source is stored as a document.
+
+`visual-composition` is the default presentation component for synthesized knowledge
+without a specialized view. The agent reads the source, selects the useful information,
+and builds the overview from registered semantic elements.
 
 `calendar` accepts `view` (`month` or `agenda`), `focus_date`, and
 `selected_event_id`. It consumes normalized event JSON. The Phase 6 weekly schedule is
@@ -119,7 +126,8 @@ It displays an authenticated screenshot from an isolated server-side browser ses
 so Google, the Media Lab, and similarly configured sites do not need to consent to being
 framed. Its session ID is issued by platform code and scoped to one principal and
 conversation. The agent can navigate, scroll, and highlight visible text through the
-read-only `browser.*` tools; the user can scroll with native controls. See
+isolated `browser.*` tools; the user can scroll and click the rendered page with native
+controls, and the resulting URL and title become current workspace state. See
 [`BROWSER.md`](BROWSER.md) for lifecycle, capacity, privacy, and network safeguards.
 
 `draft-document` is a general evolving-document surface, not an application-specific

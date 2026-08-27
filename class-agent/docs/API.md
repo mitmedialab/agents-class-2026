@@ -53,6 +53,8 @@ returns a principal-scoped upload UUID, metadata, and expiry time. Uploads are l
 to 10 MB and expire after 24 hours. Supported types are JPEG, PNG, WebP, GIF, PDF,
 JSON, CSV, Markdown, and plain text; course applications accept only JPEG, PNG, or WebP
 for the required photo. The same session cookie must own both upload and tool call.
+`GET /api/v1/uploads/{upload_id}/content` serves that same owned, unexpired artifact to
+DocumentViewer with private no-store caching; foreign and expired receipts return `404`.
 
 The final route accepts `conversation_id` and `text`. It returns JSON normally and SSE when the request sends `Accept: text/event-stream`. Unversioned aliases exist during Phase 4 development but are intentionally absent from OpenAPI.
 

@@ -218,20 +218,21 @@ before each run and places its JSON representation in trusted runtime metadata. 
 workspace tools apply each command against that state before returning success. Their
 internal wrappers use MCP tool IDs, descriptions, JSON input schemas, and JSON results;
 the later MCP transport/gateway can expose them without changing the workspace contract.
+Opening or focusing a new subject replaces the prior panel in this projection, keeping
+one current workspace surface across both live events and reloads.
 
 The browser reduces the same commands received over SSE and reconstructs panels from
 conversation events after navigation or reload. Native renderers remain an explicit
-trusted map for `document-viewer` and `calendar`; an unknown component or invalid prop
-set is rejected rather than mounted. Student/external interfaces remain sandboxed MCP
-Apps work for Phase 8.
+trusted map for registered components such as `document-viewer`, `visual-composition`,
+and `calendar`; an unknown component or invalid prop set is rejected rather than
+mounted. Student/external interfaces remain sandboxed MCP Apps work for Phase 8.
 
 Components receive resource URIs, not embedded course data. The authorized resource
 content endpoint resolves a registered URI to bytes without revealing its filesystem
-path. DocumentViewer uses PDF.js locally for PDF canvas rendering and searchable page
-text; Markdown and plain text are rendered without injecting HTML. Semantic highlights
-use resource URI, page, quote, and optional surrounding text. Calendar normalizes the
-published schedule for display but retains unknown dates as unknown instead of
-fabricating them.
+path. DocumentViewer is reserved for a concrete artifact the user wants to navigate,
+search, or discuss passage by passage. Knowledge summaries derived from documents are
+synthesized into registered visual elements instead. Calendar normalizes the published
+schedule for display but retains unknown dates as unknown instead of fabricating them.
 
 No database migration is required. Panel history uses the existing canonical event
 table. The new workspace schema is an independent additive v1 contract and does not

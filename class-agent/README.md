@@ -2,7 +2,7 @@
 
 Class Agent is the extensible Course Agent platform described in [CONSTITUTION.md](CONSTITUTION.md). It is designed for an MIT Media Lab course and favors explicit, portable contracts that students can inspect and extend.
 
-The repository is currently at **Phase 7**: validated native workspace components over the Phase 6 Course Agent. It contains stable core and workspace contracts, access-code and anonymous authentication, portable PostgreSQL conversation/event history, a `ToolCallingAgent` adapter, public course resources and search, private course applications, typed workspace tools, an event-derived panel workspace, a Markdown/plain-text/PDF DocumentViewer, and a month/agenda Calendar. It intentionally does not yet contain MCP Apps, Agent Bridge, or a browser extension.
+The repository is currently at **Phase 7**: validated native workspace components over the Phase 6 Course Agent. It contains stable core and workspace contracts, access-code and anonymous authentication, portable PostgreSQL conversation/event history, a `ToolCallingAgent` adapter, public course resources and search, private course applications, typed workspace tools, an event-derived panel workspace, visual compositions, a specific-artifact DocumentViewer, and a month/agenda Calendar. It intentionally does not yet contain MCP Apps, Agent Bridge, or a browser extension.
 
 ## Requirements
 
