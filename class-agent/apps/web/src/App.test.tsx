@@ -7,13 +7,13 @@ import * as api from "./api.js";
 vi.mock("./api.js", () => ({
   applyWorkspacePanelAction: vi.fn(),
   createConversation: vi.fn(),
+  ensureApplicationDraft: vi.fn(),
   getCourseResourceContent: vi.fn(),
   getConversation: vi.fn(),
   getPrincipal: vi.fn(),
   listConversations: vi.fn(),
   login: vi.fn(),
   logout: vi.fn(),
-  openApplicationDraft: vi.fn(),
   recordWorkspaceInteraction: vi.fn(),
   streamAgentRun: vi.fn(),
   uploadFile: vi.fn(),
@@ -72,6 +72,27 @@ beforeEach(() => {
     events: [previousEvent],
   });
   vi.mocked(api.createConversation).mockResolvedValue(conversation);
+  vi.mocked(api.ensureApplicationDraft).mockResolvedValue({
+    ...previousEvent,
+    id: "30000000-0000-4000-8000-000000000009",
+    type: "workspace.panel.opened",
+    payload: {
+      command: {
+        type: "open",
+        panel: {
+          id: "40000000-0000-4000-8000-000000000009",
+          component_id: "draft-document",
+          title: "Course Application Draft",
+          resource_uri: "course://application",
+          props: {
+            title: "Course Application Draft",
+            fields: [{ id: "name", label: "Name", value: "", status: "missing" }],
+          },
+          state: { document_kind: "course-application" },
+        },
+      },
+    },
+  });
   vi.mocked(api.getCourseResourceContent).mockImplementation(async (uri) => {
     if (uri === "course://syllabus") {
       return {
@@ -106,28 +127,6 @@ beforeEach(() => {
   });
   vi.mocked(api.login).mockResolvedValue(studentPrincipal);
   vi.mocked(api.logout).mockResolvedValue();
-  vi.mocked(api.openApplicationDraft).mockResolvedValue({
-    ...previousEvent,
-    id: "30000000-0000-4000-8000-000000000010",
-    type: "workspace.panel.opened",
-    actor: "user",
-    payload: {
-      command: {
-        type: "open",
-        panel: {
-          id: "40000000-0000-4000-8000-000000000010",
-          component_id: "draft-document",
-          title: "Course application",
-          resource_uri: "course://application",
-          props: {
-            title: "Course application",
-            fields: [{ id: "name", label: "Name", status: "missing" }],
-          },
-          state: {},
-        },
-      },
-    },
-  });
   vi.mocked(api.recordWorkspaceInteraction).mockResolvedValue({
     ...previousEvent,
     id: "30000000-0000-4000-8000-000000000008",
@@ -190,6 +189,34 @@ describe("Course Agent interface", () => {
         expect.any(AbortSignal),
       ),
     );
+    if (label === "Apply") {
+      expect(api.ensureApplicationDraft).toHaveBeenCalledWith(conversation.id);
+      expect(vi.mocked(api.ensureApplicationDraft).mock.invocationCallOrder[0]).toBeLessThan(
+        vi.mocked(api.streamAgentRun).mock.invocationCallOrder[0]!,
+      );
+      expect(screen.getByRole("textbox", { name: "Name" })).toBeInTheDocument();
+    } else {
+      expect(api.ensureApplicationDraft).not.toHaveBeenCalled();
+    }
+  });
+
+  it("does not open the application draft from typed message text", async () => {
+    render(<App />);
+    await screen.findByText("The earlier response.");
+
+    const composer = screen.getByRole("textbox", { name: "Message" });
+    fireEvent.change(composer, { target: { value: "I'd like to apply for the course." } });
+    fireEvent.keyDown(composer, { key: "Enter" });
+
+    await waitFor(() =>
+      expect(api.streamAgentRun).toHaveBeenCalledWith(
+        conversation.id,
+        "I'd like to apply for the course.",
+        expect.any(Function),
+        expect.any(AbortSignal),
+      ),
+    );
+    expect(api.ensureApplicationDraft).not.toHaveBeenCalled();
   });
 
   it("opens the application draft in the workspace before prompting the agent", async () => {
@@ -198,8 +225,10 @@ describe("Course Agent interface", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
-    expect(await screen.findByRole("article", { name: "Course application" })).toBeInTheDocument();
-    expect(api.openApplicationDraft).toHaveBeenCalledWith(conversation.id);
+    expect(
+      await screen.findByRole("article", { name: "Course Application Draft" }),
+    ).toBeInTheDocument();
+    expect(api.ensureApplicationDraft).toHaveBeenCalledWith(conversation.id);
     expect(api.streamAgentRun).toHaveBeenCalledWith(
       conversation.id,
       "I'd like to apply for the course.",
@@ -223,7 +252,7 @@ describe("Course Agent interface", () => {
   });
 
   it("shows a disabled composer submission action until application material is complete", async () => {
-    vi.mocked(api.openApplicationDraft).mockResolvedValue({
+    vi.mocked(api.ensureApplicationDraft).mockResolvedValue({
       ...previousEvent,
       type: "workspace.panel.opened",
       payload: {
@@ -232,20 +261,39 @@ describe("Course Agent interface", () => {
           panel: {
             id: "40000000-0000-4000-8000-000000000010",
             component_id: "draft-document",
-            title: "Course application",
+            title: "Course Application Draft",
             resource_uri: "course://application",
             props: {
-              title: "Course application",
+              title: "Course Application Draft",
               fields: [
                 { id: "name", label: "Name", status: "missing" },
                 { id: "email", label: "Email", status: "missing" },
-                { id: "background", label: "Background", status: "missing" },
-                { id: "webpage", label: "Personal webpage", status: "missing" },
+                {
+                  id: "department_research_group_year_of_study_mit",
+                  label: "Department / Research Group / Year of Study MIT",
+                  status: "missing",
+                },
+                { id: "personal_webpage", label: "Personal Webpage", status: "missing" },
                 { id: "interests", label: "Interests", status: "missing" },
-                { id: "why", label: "Why this class", status: "missing" },
-                { id: "skills", label: "Skill set", status: "missing" },
-                { id: "registration", label: "Registration status", status: "missing" },
-                { id: "photo", label: "Photo", status: "missing" },
+                {
+                  id: "why_take_this_class",
+                  label: "Why do you want to take this class?",
+                  status: "missing",
+                },
+                { id: "knowledgeable_about", label: "Knowledgeable about", status: "missing" },
+                { id: "skill_set", label: "Skill-set", status: "missing" },
+                { id: "registration_status", label: "Registration Status", status: "missing" },
+                {
+                  id: "listener_willing_to_do_weekly_builds",
+                  label: "For listeners: willing to do weekly builds",
+                  status: "missing",
+                },
+                {
+                  id: "questions_or_comments_for_instructors",
+                  label: "Questions or comments for instructors",
+                  status: "missing",
+                },
+                { id: "photo_upload_id", label: "Recent profile photo", status: "missing" },
               ],
             },
             state: {},
@@ -262,7 +310,7 @@ describe("Course Agent interface", () => {
     expect(submit).toBeDisabled();
     expect(submit.parentElement).toHaveAttribute(
       "title",
-      "Only 0/9 required material has been recorded",
+      "0/12 required fields confirmed",
     );
   });
 
@@ -282,7 +330,7 @@ describe("Course Agent interface", () => {
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
     expect(api.streamAgentRun).toHaveBeenCalledTimes(1);
-    expect(api.openApplicationDraft).not.toHaveBeenCalled();
+    expect(api.ensureApplicationDraft).not.toHaveBeenCalled();
 
     finishRun();
   });
@@ -520,7 +568,10 @@ describe("Course Agent interface", () => {
     expect(screen.getByText("Reading course syllabus")).not.toBeVisible();
     fireEvent.click(trace);
     expect(trace.closest("details")).toHaveAttribute("open");
-    expect(screen.getByText("Reading course syllabus")).toBeInTheDocument();
+    expect(screen.getByText("Reading course syllabus")).toBeVisible();
+    fireEvent.click(trace);
+    expect(trace.closest("details")).not.toHaveAttribute("open");
+    expect(screen.getByText("Reading course syllabus")).not.toBeVisible();
   });
 
   it("opens a validated calendar from the agent stream and persists user close", async () => {

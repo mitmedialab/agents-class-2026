@@ -58,8 +58,9 @@ def _agent_instructions(
         [
             (
                 "Before using a non-final tool, briefly state the user-facing action without "
-                "naming the tool or resource identifier. Do not reveal private reasoning, and "
-                "do not include a progress message alongside the final_answer tool."
+                "naming the tool or resource identifier, except for workspace focus operations, "
+                "which are silent UI housekeeping. Do not reveal private reasoning, and do not "
+                "include a progress message alongside the final_answer tool."
             ),
             f"Trusted principal roles: {', '.join(context.principal.roles)}.",
         ]
@@ -86,6 +87,13 @@ def _agent_instructions(
             "or supplies it. A draft document is a progress view, not a submission; still "
             "require explicit approval before any external-effect submission tool. Do not "
             "open duplicate draft panels."
+        )
+        sections.append(
+            "Workspace focus is silent UI housekeeping, not meaningful user-facing "
+            "progress. Never announce that you will focus, refocus, keep focused, or keep "
+            "a draft visible. Do not call workspace.focus_component when the intended panel "
+            "is already focused. If a focus call is genuinely needed, call it without a "
+            "preceding progress message and continue with the substantive task."
         )
         sections.append(
             "Use visual-composition when a result benefits from a composed interface rather "
@@ -138,20 +146,35 @@ def _agent_instructions(
             if isinstance(panels, list) and any(
                 isinstance(panel, dict)
                 and panel.get("component_id") == "draft-document"
-                and panel.get("resource_uri") == "course://application"
+                and (
+                    panel.get("resource_uri") == "course://application"
+                    or (
+                        isinstance(panel.get("state"), dict)
+                        and cast(dict[str, JsonValue], panel["state"]).get("document_kind")
+                        == "course-application"
+                    )
+                )
                 for panel in panels
             ):
                 sections.append(
                     "The trusted workspace contains the active course application draft. "
-                    "Treat every user message as part of that interview. Extract and update "
-                    "only information the user explicitly supplies, preserving candidate values "
-                    "until they are confirmed or corrected. Candidate and inferred values are "
-                    "stored for their own later field; do not summarize, request confirmation "
-                    "of, or mention them before that field is displayed. After updating the "
-                    "existing draft, ask exactly one next missing required field in its displayed "
-                    "order. The final answer must contain only that one field question, with no "
-                    "blanket request to confirm candidate details. Never end an application turn "
-                    "with only an acknowledgement such as 'Okay.'"
+                    "Treat every user message as part of a field-by-field application interview. "
+                    "Keep the canonical fields and their displayed order. When the applicant has "
+                    "provided enough identifying information, proactively use authorized "
+                    "public-web search and page-reading tools to find relevant professional "
+                    "or academic material. Add useful public findings to the appropriate draft "
+                    "fields as sourced candidate or inferred values; never infer private contact "
+                    "information, registration choice, weekly-build commitment, instructor "
+                    "questions, or a photo upload. You may prepare later fields from research, "
+                    "but discuss only the current unresolved field. Mark a field confirmed only "
+                    "when the applicant supplies, edits, or explicitly confirms it. Ask exactly "
+                    "one focused question at a time in displayed order. If an answer is vague or "
+                    "too shallow to make that application field useful, ask a specific follow-up "
+                    "about the same field instead of advancing. When a researched candidate "
+                    "becomes current, ask the applicant to confirm, correct, or deepen it. Never "
+                    "use a blanket confirmation request and never end with only an acknowledgement "
+                    "such as 'Okay.' Submit only after all canonical fields are confirmed and the "
+                    "applicant explicitly requests submission."
                 )
     if public_resource_index:
         entries = "\n".join(f"- {entry}" for entry in public_resource_index)

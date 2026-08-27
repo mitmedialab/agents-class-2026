@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import type { AgentActivity, AgentActivityKind } from "./api.js";
 
 function ActivityIcon({ kind }: { kind: AgentActivityKind }) {
@@ -53,6 +55,7 @@ export interface ActivityTraceProps {
 }
 
 export function ActivityTrace({ activities, currentLabel }: ActivityTraceProps) {
+  const [expanded, setExpanded] = useState(false);
   const latest = activities.at(-1);
   const presenting =
     currentLabel === "Writing final response" || currentLabel === "Presenting response";
@@ -79,8 +82,13 @@ export function ActivityTrace({ activities, currentLabel }: ActivityTraceProps) 
   }
 
   return (
-    <details className="activity-trace">
-      <summary>
+    <details className="activity-trace" open={expanded}>
+      <summary
+        onClick={(event) => {
+          event.preventDefault();
+          setExpanded((current) => !current);
+        }}
+      >
         <ActivityIcon kind={summaryKind} />
         <span aria-live="polite" className="activity-summary-label">
           {summaryLabel}

@@ -45,6 +45,15 @@ const DEFAULT_COMPONENT_RESOURCES: Readonly<Record<string, string>> = {
   calendar: "course://schedule",
 };
 
+function CloseIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="9.25" />
+      <path d="m9 9 6 6m0-6-6 6" />
+    </svg>
+  );
+}
+
 function stringProp(props: JsonObject, name: string): string | undefined {
   const value = props[name];
   return typeof value === "string" ? value : undefined;
@@ -158,11 +167,14 @@ function ResourcePanel({
   const draftFields =
     panel.props.fields === undefined ? [] : draftDocumentFields(panel.props.fields);
   const draftContent = stringProp(panel.props, "content");
+  const isApplicationPanel =
+    panel.resourceUri === "course://application" ||
+    panel.state.document_kind === "course-application";
   const applicationFields =
-    panel.resourceUri === "course://application" && draftFields ? draftFields : null;
+    isApplicationPanel && draftFields ? draftFields : null;
   const applicationProgress = applicationFields
     ? applicationFields.filter(
-        (field) => field.status !== "missing" && Boolean(field.value?.trim()),
+        (field) => field.status === "confirmed" && Boolean(field.value?.trim()),
       ).length
     : null;
   const applicationComplete =
@@ -312,6 +324,12 @@ function ResourcePanel({
           description={stringProp(panel.props, "description")}
           content={draftContent}
           fields={draftFields}
+          onChange={(fieldId, value) =>
+            onInteraction(panel.id, "draft.change", {
+              field_id: fieldId,
+              value,
+            })
+          }
           status={
             status === "ready" || status === "final" || status === "submitted"
               ? (status as DraftDocumentStatus)
@@ -325,7 +343,7 @@ function ResourcePanel({
               title={
                 applicationComplete
                   ? undefined
-                  : `Only ${applicationProgress}/${applicationFields.length} required material has been recorded`
+                  : `${applicationProgress}/${applicationFields.length} required fields confirmed`
               }
             >
               <button
@@ -429,7 +447,7 @@ export function Workspace({
             onPointerDown={handleClosePointerDown}
             type="button"
           >
-            <span aria-hidden="true">×</span>
+            <CloseIcon />
           </button>
         </header>
       ) : (
@@ -440,7 +458,7 @@ export function Workspace({
           onPointerDown={handleClosePointerDown}
           type="button"
         >
-          <span aria-hidden="true">×</span>
+          <CloseIcon />
         </button>
       )}
       <div className="workspace-panel" role="tabpanel">

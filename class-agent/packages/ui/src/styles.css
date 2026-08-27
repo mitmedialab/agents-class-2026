@@ -942,6 +942,15 @@
   position: relative;
 }
 
+.ca-draft-fields li[data-active="true"] {
+  scroll-margin-block: 5rem;
+}
+
+.ca-draft-fields li[data-active="true"] .ca-draft-field-node {
+  border-color: var(--color-text);
+  box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--color-text) 12%, transparent);
+}
+
 .ca-draft-field-node {
   background: var(--color-background);
   border: 1px solid var(--color-text-muted);
@@ -1022,6 +1031,30 @@
   line-height: 1.5;
   margin: 0;
   white-space: pre-wrap;
+}
+
+.ca-draft-fields textarea {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  min-height: 1.5em;
+  overflow: hidden;
+  padding: 0;
+  resize: none;
+  width: 100%;
+}
+
+.ca-draft-fields textarea:focus-visible {
+  outline: 0;
+}
+
+.ca-draft-fields textarea::placeholder {
+  color: var(--color-text-muted);
+  font-style: italic;
 }
 
 .ca-draft-fields li[data-status="missing"] p {

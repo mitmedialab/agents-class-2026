@@ -10,13 +10,13 @@ import {
 import {
   applyWorkspacePanelAction,
   createConversation,
+  ensureApplicationDraft,
   getCourseResourceContent,
   getConversation,
   getPrincipal,
   listConversations,
   login,
   logout,
-  openApplicationDraft,
   recordWorkspaceInteraction,
   resizeBrowserSession,
   scrollBrowserSession,
@@ -31,10 +31,8 @@ import { AgentResponse } from "./AgentResponse.js";
 import { SyllabusPage } from "./SyllabusPage.js";
 import { Workspace } from "./Workspace.js";
 import {
-  type CSSProperties,
   type FormEvent,
   type KeyboardEvent,
-  type PointerEvent,
   useEffect,
   useRef,
   useState,
@@ -72,6 +70,15 @@ function conversationTitle(conversation: Conversation): string {
 function titleFromMessage(message: string): string {
   const singleLine = message.replaceAll(/\s+/g, " ").trim();
   return singleLine.length > 56 ? `${singleLine.slice(0, 55)}…` : singleLine;
+}
+
+function CloseIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="9.25" />
+      <path d="m9 9 6 6m0-6-6 6" />
+    </svg>
+  );
 }
 
 function messageWithUploads(message: string, uploads: TemporaryUpload[]): string {
@@ -127,7 +134,6 @@ export default function App() {
   const [accessCode, setAccessCode] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSubmitting, setAuthSubmitting] = useState(false);
-  const [workspaceWidth, setWorkspaceWidth] = useState<number | null>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const historyRef = useRef<HTMLElement>(null);
@@ -417,7 +423,7 @@ export default function App() {
         setSelectedConversationId(created.id);
         setConversations((current) => newestFirst([created, ...current]));
       }
-      const event = await openApplicationDraft(conversationId);
+      const event = await ensureApplicationDraft(conversationId);
       setWorkspaceState((current) =>
         builtInComponentRegistry.apply(current, event.payload.command),
       );
@@ -552,7 +558,9 @@ export default function App() {
   async function handleCloseWorkspace(): Promise<void> {
     const panels = workspaceState.panels;
     const isApplicationWorkspace = panels.some(
-      (panel) => panel.resourceUri === "course://application",
+      (panel) =>
+        panel.resourceUri === "course://application" ||
+        panel.state.document_kind === "course-application",
     );
     if (isApplicationWorkspace) {
       activeRun.current?.abort();
@@ -585,36 +593,6 @@ export default function App() {
     }
   }
 
-  function setWorkspaceWidthFromPointer(clientX: number): void {
-    const minimumWidth = 320;
-    const maximumWidth = Math.floor(window.innerWidth / 2);
-    setWorkspaceWidth(
-      Math.min(maximumWidth, Math.max(minimumWidth, window.innerWidth - clientX)),
-    );
-  }
-
-  function handleWorkspaceResizeStart(event: PointerEvent<HTMLDivElement>): void {
-    if (window.matchMedia("(max-width: 900px)").matches) return;
-    event.preventDefault();
-    setWorkspaceWidthFromPointer(event.clientX);
-    const handlePointerMove = (moveEvent: globalThis.PointerEvent) =>
-      setWorkspaceWidthFromPointer(moveEvent.clientX);
-    const handlePointerUp = () => {
-      document.removeEventListener("pointermove", handlePointerMove);
-      document.removeEventListener("pointerup", handlePointerUp);
-    };
-    document.addEventListener("pointermove", handlePointerMove);
-    document.addEventListener("pointerup", handlePointerUp);
-  }
-
-  function handleWorkspaceResizeKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-    event.preventDefault();
-    const currentWidth = workspaceWidth ?? Math.round(window.innerWidth / 3);
-    const delta = event.key === "ArrowLeft" ? 24 : -24;
-    setWorkspaceWidthFromPointer(window.innerWidth - currentWidth - delta);
-  }
-
   function handleWorkspaceInteraction(
     panelId: string,
     action: string,
@@ -627,7 +605,8 @@ export default function App() {
       action !== "document.change_page" &&
       action !== "document.find_text" &&
       action !== "page_cards.select" &&
-      action !== "visual.change"
+      action !== "visual.change" &&
+      action !== "draft.change"
     ) {
       return;
     }
@@ -636,12 +615,19 @@ export default function App() {
       panelId,
       action,
       value,
-    ).catch(() => {
-      setActivities((current) => [
-        ...current,
-        { kind: "error", label: "Workspace interaction was not saved" },
-      ]);
-    });
+    )
+      .then((event) => {
+        if (action !== "draft.change") return;
+        setWorkspaceState((current) =>
+          builtInComponentRegistry.apply(current, event.payload.command),
+        );
+      })
+      .catch(() => {
+        setActivities((current) => [
+          ...current,
+          { kind: "error", label: "Workspace interaction was not saved" },
+        ]);
+      });
   }
 
   async function handleBrowserScroll(
@@ -699,11 +685,6 @@ export default function App() {
       className="course-agent"
       data-about-open={aboutOpen}
       data-workspace-open={!aboutOpen && workspaceState.panels.length > 0}
-      style={
-        {
-          "--workspace-width": workspaceWidth ? `${workspaceWidth}px` : "33.333vw",
-        } as CSSProperties
-      }
     >
       <header className="agent-header">
         <div className="header-left">
@@ -773,32 +754,16 @@ export default function App() {
           ) : null}
         </section>
         {workspaceState.panels.length > 0 ? (
-          <>
-            <div
-              aria-label="Resize workspace"
-              aria-orientation="vertical"
-              aria-valuemax={50}
-              aria-valuemin={20}
-              aria-valuenow={Math.round(
-                ((workspaceWidth ?? window.innerWidth / 3) / window.innerWidth) * 100,
-              )}
-              className="workspace-resizer"
-              onKeyDown={handleWorkspaceResizeKeyDown}
-              onPointerDown={handleWorkspaceResizeStart}
-              role="separator"
-              tabIndex={0}
-            />
-            <Workspace
-              conversationId={selectedConversationId!}
-              onBrowserResize={handleBrowserResize}
-              onBrowserScroll={handleBrowserScroll}
-              onInteraction={handleWorkspaceInteraction}
-              onCloseWorkspace={handleCloseWorkspace}
-              onPanelAction={handleWorkspacePanelAction}
-              onSubmitApplication={() => void sendMessage("Please submit my application.")}
-              state={workspaceState}
-            />
-          </>
+          <Workspace
+            conversationId={selectedConversationId!}
+            onBrowserResize={handleBrowserResize}
+            onBrowserScroll={handleBrowserScroll}
+            onInteraction={handleWorkspaceInteraction}
+            onCloseWorkspace={handleCloseWorkspace}
+            onPanelAction={handleWorkspacePanelAction}
+            onSubmitApplication={() => void sendMessage("Please submit my application.")}
+            state={workspaceState}
+          />
         ) : null}
       </main>
 
@@ -904,11 +869,7 @@ export default function App() {
                 className="drawer-close"
                 onClick={() => setHistoryOpen(false)}
               >
-                <svg aria-hidden="true" viewBox="0 0 24 24">
-                  <rect height="16" rx="1" width="18" x="3" y="4" />
-                  <path d="M9 4v16" />
-                  <path d="m6 10 2-2m-2 2 2 2" />
-                </svg>
+                <CloseIcon />
               </Button>
             </div>
 

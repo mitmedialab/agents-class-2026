@@ -366,7 +366,7 @@ describe("VisualComposition", () => {
 });
 
 describe("DraftDocument", () => {
-  it("renders progressive field values and distinguishes confirmation state", () => {
+  it("renders confirmed fields plus the next unresolved field", () => {
     render(
       <DraftDocument
         fields={[
@@ -385,10 +385,35 @@ describe("DraftDocument", () => {
     );
 
     expect(screen.getByLabelText("2 of 3 fields populated")).toBeInTheDocument();
-    expect(screen.getByText("Ada Example")).toBeInTheDocument();
-    expect(screen.getByText("Waiting for information")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("Ada Example");
+    expect(screen.getByRole("textbox", { name: "Skills" })).toHaveValue("Creative coding");
+    expect(screen.queryByRole("textbox", { name: "Interests" })).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Skills" }).closest("li")).toHaveAttribute(
+      "data-active",
+      "true",
+    );
     expect(screen.getByText("Inferred")).toBeInTheDocument();
     expect(screen.getByText("Source: Portfolio")).toBeInTheDocument();
+  });
+
+  it("lets users edit every draft field and saves changes on blur", () => {
+    const onChange = vi.fn();
+    render(
+      <DraftDocument
+        fields={[{ id: "name", label: "Name", value: "Ada", status: "candidate" }]}
+        onChange={onChange}
+        title="Course application"
+      />,
+    );
+
+    const field = screen.getByRole("textbox", { name: "Name" });
+    expect(field).toHaveAttribute("rows", "1");
+    Object.defineProperty(field, "scrollHeight", { configurable: true, value: 72 });
+    fireEvent.change(field, { target: { value: "Grace Hopper" } });
+    expect(field).toHaveStyle({ height: "72px" });
+    fireEvent.blur(field);
+    expect(field).toHaveValue("Grace Hopper");
+    expect(onChange).toHaveBeenCalledWith("name", "Grace Hopper");
   });
 
   it("renders a general prose draft without requiring form fields", () => {

@@ -9,7 +9,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, cast
 from uuid import UUID, uuid4
 
 from dotenv import load_dotenv
@@ -69,6 +69,7 @@ from course_server.workspace import (
     FocusWorkspaceCommand,
     OpenWorkspaceCommand,
     UpdateWorkspaceCommand,
+    WorkspacePanel,
     WorkspaceValidationError,
     load_component_registry,
     project_workspace_events,
@@ -118,6 +119,7 @@ class WorkspaceInteractionRequest(ApiModel):
         "document.find_text",
         "page_cards.select",
         "visual.change",
+        "draft.change",
     ]
     value: JsonValue
 
@@ -350,6 +352,100 @@ def _valid_visual_change(
         )
         for element in elements
     )
+
+
+def _draft_fields(props: dict[str, JsonValue]) -> list[dict[str, JsonValue]] | None:
+    fields = props.get("fields")
+    if not isinstance(fields, list) or not all(isinstance(field, dict) for field in fields):
+        return None
+    return cast(list[dict[str, JsonValue]], fields)
+
+
+def _valid_draft_change(props: dict[str, JsonValue], value: JsonValue) -> bool:
+    if not isinstance(value, dict):
+        return False
+    field_id = value.get("field_id")
+    changed_value = value.get("value")
+    fields = _draft_fields(props)
+    return (
+        isinstance(field_id, str)
+        and isinstance(changed_value, str)
+        and len(changed_value) <= 4_000
+        and fields is not None
+        and any(field.get("id") == field_id for field in fields)
+    )
+
+
+APPLICATION_DRAFT_FIELDS: tuple[tuple[str, str], ...] = (
+    ("name", "Name"),
+    ("email", "Email"),
+    (
+        "department_research_group_year_of_study_mit",
+        "Department / Research Group / Year of Study MIT",
+    ),
+    ("personal_webpage", "Personal Webpage"),
+    ("interests", "Interests"),
+    ("why_take_this_class", "Why do you want to take this class?"),
+    ("knowledgeable_about", "Knowledgeable about"),
+    ("skill_set", "Skill-set (practical knowledge and builder experience)"),
+    ("registration_status", "Registration Status"),
+    ("listener_willing_to_do_weekly_builds", "For listeners: willing to do weekly builds"),
+    ("questions_or_comments_for_instructors", "Questions or comments for instructors"),
+    ("photo_upload_id", "Recent profile photo"),
+)
+
+LEGACY_APPLICATION_FIELD_IDS: dict[str, str] = {
+    "department_research_group_year_of_study_mit": "background",
+    "personal_webpage": "webpage",
+    "why_take_this_class": "why",
+    "skill_set": "skills",
+    "registration_status": "registration",
+    "photo_upload_id": "photo",
+}
+
+
+def _empty_application_draft_props() -> dict[str, JsonValue]:
+    return {
+        "title": "Course Application Draft",
+        "description": "Complete every field below. Your changes are saved when you leave a field.",
+        "status": "draft",
+        "fields": [
+            {"id": field_id, "label": label, "value": "", "status": "missing"}
+            for field_id, label in APPLICATION_DRAFT_FIELDS
+        ],
+    }
+
+
+def _normalized_application_draft_props(
+    existing_props: dict[str, JsonValue],
+) -> dict[str, JsonValue]:
+    normalized = _empty_application_draft_props()
+    existing_fields = _draft_fields(existing_props) or []
+    fields_by_id = {
+        field_id: field
+        for field in existing_fields
+        if isinstance((field_id := field.get("id")), str)
+    }
+    normalized_fields = cast(list[dict[str, JsonValue]], normalized["fields"])
+    for field in normalized_fields:
+        field_id = cast(str, field["id"])
+        prior = fields_by_id.get(field_id) or fields_by_id.get(
+            LEGACY_APPLICATION_FIELD_IDS.get(field_id, "")
+        )
+        if prior is None:
+            continue
+        value = prior.get("value")
+        field["value"] = value if isinstance(value, str) else ""
+        status_value = prior.get("status")
+        field["status"] = (
+            status_value
+            if status_value in {"missing", "candidate", "inferred", "confirmed"}
+            else ("candidate" if field["value"] else "missing")
+        )
+        source = prior.get("source")
+        if isinstance(source, str) and source:
+            field["source"] = source
+    return normalized
 
 
 async def _run_agent(
@@ -806,6 +902,79 @@ def create_app(
         return ConversationDetailResponse(conversation=conversation, events=events)
 
     @router.post(
+        "/conversations/{conversation_id}/application-draft",
+        response_model=Event,
+    )
+    async def ensure_application_draft(
+        conversation_id: UUID,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> Event:
+        state = _get_app_state(request)
+        await _require_owned_conversation(
+            state=state,
+            principal=principal,
+            conversation_id=conversation_id,
+        )
+        assert state.services is not None
+        events = await state.services.conversations.list_events(conversation_id)
+        registry = state.services.workspace_registry or load_component_registry()
+        workspace = project_workspace_events(events, registry)
+        existing = next(
+            (
+                panel
+                for panel in workspace.panels
+                if panel.component_id == "draft-document"
+                and (
+                    panel.state.get("document_kind") == "course-application"
+                    or panel.resource_uri == "course://application"
+                )
+            ),
+            None,
+        )
+        if existing is None:
+            command: OpenWorkspaceCommand | FocusWorkspaceCommand | UpdateWorkspaceCommand = (
+                OpenWorkspaceCommand(
+                    panel=WorkspacePanel(
+                        id=uuid4(),
+                        component_id="draft-document",
+                        title="Course Application Draft",
+                        resource_uri="course://application",
+                        props=_empty_application_draft_props(),
+                        state={"document_kind": "course-application"},
+                    )
+                )
+            )
+            event_type = "workspace.panel.opened"
+        elif (
+            existing.resource_uri != "course://application"
+            or existing.state.get("document_kind") != "course-application"
+            or [field.get("id") for field in (_draft_fields(existing.props) or [])]
+            != [field_id for field_id, _ in APPLICATION_DRAFT_FIELDS]
+        ):
+            command = UpdateWorkspaceCommand(
+                panel_id=existing.id,
+                props=_normalized_application_draft_props(existing.props),
+                resource_uri="course://application",
+                state={"document_kind": "course-application"},
+            )
+            event_type = "workspace.panel.updated"
+        else:
+            command = FocusWorkspaceCommand(panel_id=existing.id)
+            event_type = "workspace.panel.updated"
+        registry.apply(workspace, command)
+        event = Event(
+            type=event_type,
+            actor="course-agent",
+            principal_user_id=principal.user_id,
+            anonymous_session_id=principal.anonymous_session_id,
+            conversation_id=conversation_id,
+            payload={"command": command.model_dump(mode="json", exclude_none=True)},
+        )
+        await state.services.conversations.append_events(conversation_id, [event])
+        return event
+
+    @router.post(
         "/conversations/{conversation_id}/workspace/actions",
         response_model=Event,
     )
@@ -866,79 +1035,6 @@ def create_app(
                         conversation_id=conversation_id,
                         session_id=UUID(raw_session_id),
                     )
-        return event
-
-    @router.post(
-        "/conversations/{conversation_id}/workspace/application-draft",
-        response_model=Event,
-    )
-    async def open_application_draft(
-        conversation_id: UUID,
-        request: Request,
-        principal: Annotated[PrincipalContext, Depends(_require_principal)],
-    ) -> Event:
-        state = _get_app_state(request)
-        await _require_owned_conversation(
-            state=state,
-            principal=principal,
-            conversation_id=conversation_id,
-        )
-        assert state.services is not None
-        events = await state.services.conversations.list_events(conversation_id)
-        registry = state.services.workspace_registry or load_component_registry()
-        workspace = project_workspace_events(events, registry)
-        existing = next(
-            (
-                panel
-                for panel in workspace.panels
-                if panel.component_id == "draft-document"
-                and panel.resource_uri == "course://application"
-            ),
-            None,
-        )
-        if existing is not None:
-            command = FocusWorkspaceCommand(panel_id=existing.id)
-            event_type = "workspace.panel.updated"
-        else:
-            command = OpenWorkspaceCommand.model_validate(
-                {
-                    "type": "open",
-                    "panel": {
-                        "id": str(uuid4()),
-                        "component_id": "draft-document",
-                        "title": "Course application",
-                        "resource_uri": "course://application",
-                        "props": {
-                            "title": "Course application",
-                            "description": "Share information with the Course Agent to build this draft.",
-                            "status": "draft",
-                            "fields": [
-                                {"id": "name", "label": "Name", "status": "missing"},
-                                {"id": "email", "label": "Email", "status": "missing"},
-                                {"id": "background", "label": "Background", "status": "missing"},
-                                {"id": "webpage", "label": "Personal webpage", "status": "missing"},
-                                {"id": "interests", "label": "Interests", "status": "missing"},
-                                {"id": "why", "label": "Why this class", "status": "missing"},
-                                {"id": "skills", "label": "Skill set", "status": "missing"},
-                                {"id": "registration", "label": "Registration status", "status": "missing"},
-                                {"id": "photo", "label": "Photo", "status": "missing"},
-                            ],
-                        },
-                        "state": {},
-                    },
-                }
-            )
-            event_type = "workspace.panel.opened"
-        registry.apply(workspace, command)
-        event = Event(
-            type=event_type,
-            actor="user",
-            principal_user_id=principal.user_id,
-            anonymous_session_id=principal.anonymous_session_id,
-            conversation_id=conversation_id,
-            payload={"command": command.model_dump(mode="json", exclude_none=True)},
-        )
-        await state.services.conversations.append_events(conversation_id, [event])
         return event
 
     @router.post(
@@ -1006,6 +1102,11 @@ def create_app(
                 and panel.component_id == "visual-composition"
                 and _valid_visual_change(panel.props, payload.value)
             )
+            or (
+                payload.action == "draft.change"
+                and panel.component_id == "draft-document"
+                and _valid_draft_change(panel.props, payload.value)
+            )
         )
         if not valid:
             raise HTTPException(
@@ -1025,8 +1126,37 @@ def create_app(
                 "value": payload.value,
             },
         )
-        await state.services.conversations.append_events(conversation_id, [event])
-        return event
+        persisted_events = [event]
+        if payload.action == "draft.change":
+            assert isinstance(payload.value, dict)
+            field_id = cast(str, payload.value["field_id"])
+            changed_value = cast(str, payload.value["value"])
+            fields = _draft_fields(panel.props)
+            assert fields is not None
+            updated_fields: list[dict[str, JsonValue]] = []
+            for field in fields:
+                updated = dict(field)
+                if updated.get("id") == field_id:
+                    updated["value"] = changed_value
+                    updated["status"] = "confirmed" if changed_value.strip() else "missing"
+                    updated["source"] = "Confirmed by applicant" if changed_value.strip() else ""
+                updated_fields.append(updated)
+            command = UpdateWorkspaceCommand(
+                panel_id=panel.id,
+                props={"fields": updated_fields},
+            )
+            persisted_events.append(
+                Event(
+                    type="workspace.panel.updated",
+                    actor="user",
+                    principal_user_id=principal.user_id,
+                    anonymous_session_id=principal.anonymous_session_id,
+                    conversation_id=conversation_id,
+                    payload={"command": command.model_dump(mode="json", exclude_none=True)},
+                )
+            )
+        await state.services.conversations.append_events(conversation_id, persisted_events)
+        return persisted_events[-1]
 
     @router.get(
         "/conversations/{conversation_id}/browser/{session_id}/snapshot",

@@ -253,34 +253,51 @@ textarea {
 .course-agent[data-workspace-open="true"] .workspace-shell {
   align-items: stretch;
   gap: 0;
-  grid-template-columns: minmax(0, 1fr) var(--workspace-width);
+  grid-template-columns: minmax(0, 1fr) 50vw;
   padding: 0;
   place-items: initial;
-  position: relative;
+}
+
+.course-agent[data-workspace-open="true"] .agent-header {
+  right: 50vw;
 }
 
 .course-agent[data-workspace-open="true"] .response-stage {
+  box-sizing: border-box;
+  height: 100dvh;
   justify-self: stretch;
   max-width: none;
-  padding: 6rem clamp(2rem, 4vw, 5rem) 9rem;
+  min-height: 0;
+  overflow: hidden;
+  padding: 5.5rem clamp(2rem, 4vw, 5rem) 8rem;
 }
 
 .course-agent[data-workspace-open="true"] .latest-response {
+  flex: 0 1 auto;
   font-size: clamp(1.2rem, 2vw, 2.35rem);
   letter-spacing: -0.025em;
   line-height: 1.18;
-  max-height: 50dvh;
+  max-height: calc(100dvh - 15rem);
   max-width: 31ch;
+  min-height: 0;
 }
 
 .course-agent[data-workspace-open="true"] .composer {
+  bottom: 2rem;
   padding-inline: clamp(2rem, 4vw, 5rem);
-  right: var(--workspace-width);
+  right: 50vw;
+}
+
+.course-agent[data-workspace-open="true"] .response-stage:has(.activity-trace[open]) {
+  transform: none;
+}
+
+.course-agent[data-workspace-open="true"] .activity-list {
+  width: min(42rem, calc(50vw - 4rem));
 }
 
 .workspace-pane {
-  background: color-mix(in srgb, var(--color-text) 5%, var(--color-background));
-  border-left: 3px solid color-mix(in srgb, var(--color-text) 8%, transparent);
+  background: var(--color-background);
   display: flex;
   flex-direction: column;
   height: 100dvh;
@@ -297,8 +314,8 @@ textarea {
   flex: none;
   gap: var(--space-3);
   justify-content: space-between;
-  min-height: 7rem;
-  padding: 4.75rem 1.5rem 0.75rem;
+  min-height: 3.75rem;
+  padding: 0.75rem 1.5rem;
 }
 
 .workspace-tabs > div {
@@ -332,69 +349,47 @@ textarea {
 
 .workspace-close {
   align-items: center;
-  background: var(--color-surface-raised) !important;
-  border: 1px solid color-mix(in srgb, var(--color-text) 45%, transparent) !important;
-  border-radius: 50% !important;
-  color: var(--color-text) !important;
+  appearance: none;
+  background: transparent !important;
+  border: 0;
+  border-radius: 50%;
+  color: var(--color-text-muted);
   display: flex;
-  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif !important;
-  font-size: 1.35rem !important;
-  font-weight: 400;
+  flex: none;
   height: 2.25rem;
   justify-content: center;
-  line-height: 1;
+  line-height: 0;
   padding: 0 !important;
-  pointer-events: auto;
   cursor: pointer;
+  transition: color 140ms ease;
   width: 2.25rem;
-  position: absolute;
-  right: 1.5rem;
-  top: 1.375rem;
-  z-index: 20;
 }
 
-.workspace-close > span {
+.workspace-close svg {
   display: block;
-  line-height: 1;
-  transform: translateY(-1px);
+  fill: none;
+  height: 2rem;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.25;
+  width: 2rem;
+}
+
+.workspace-close:hover,
+.workspace-close:focus-visible {
+  color: var(--color-text);
+}
+
+.workspace-close:focus-visible {
+  outline: 0;
 }
 
 .workspace-single-close {
-  opacity: 0.55;
-  transition: opacity 140ms ease;
-}
-
-.workspace-single-close:hover,
-.workspace-single-close:focus-visible {
-  opacity: 1;
-}
-
-.workspace-resizer {
-  align-items: center;
-  bottom: 0;
-  cursor: col-resize;
-  display: flex;
-  justify-content: center;
-  left: calc(100% - var(--workspace-width));
   position: absolute;
-  top: 0;
-  transform: translateX(-50%);
-  width: 0.875rem;
-  z-index: 6;
-}
-
-.workspace-resizer::after {
-  background: transparent;
-  content: "";
-  height: 100%;
-  transition: background 140ms ease, width 140ms ease;
-  width: 1px;
-}
-
-.workspace-resizer:hover::after,
-.workspace-resizer:focus-visible::after {
-  background: color-mix(in srgb, var(--color-text) 22%, transparent);
-  width: 3px;
+  right: 1.5rem;
+  top: 0.75rem;
+  z-index: 4;
 }
 
 .workspace-panel {
@@ -417,42 +412,68 @@ textarea {
 }
 
 .workspace-panel > .ca-draft-document {
+  background: var(--color-background);
   height: auto;
   min-height: 100%;
   overflow: visible;
 }
 
 .workspace-application-submit {
-  background: #1a1a1a;
-  bottom: 0;
+  background: transparent;
   display: flex;
   justify-content: center;
-  padding: 0.5rem 0;
-  position: sticky;
+  padding: 1.5rem 0 2rem;
   width: 100%;
-  z-index: 2;
+}
+
+.workspace-application-submit > span {
+  display: block;
+  width: min(100%, 16rem);
 }
 
 .workspace-application-submit button {
   appearance: none;
-  background: transparent;
-  border: 0;
-  color: var(--color-text-muted);
+  background: var(--color-text);
+  border: 1px solid var(--color-text);
+  border-radius: 999px;
+  color: var(--color-background);
   cursor: pointer;
-  font-size: 0.625rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
   letter-spacing: 0.12em;
-  padding: 0.65rem 1.25rem;
+  padding: 0.8rem 1.5rem;
   text-transform: uppercase;
-  width: min(100%, 16rem);
+  transition:
+    background 140ms ease,
+    color 140ms ease,
+    opacity 140ms ease;
+  width: 100%;
+}
+
+.workspace-application-submit button:hover:not(:disabled) {
+  background: transparent;
+  color: var(--color-text);
+}
+
+.workspace-application-submit button:focus-visible {
+  outline: 1px solid var(--color-text);
+  outline-offset: 3px;
 }
 
 .workspace-application-submit button:disabled {
+  background: var(--color-surface-raised);
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
   cursor: not-allowed;
-  opacity: 0.35;
+  opacity: 0.65;
 }
 
 .workspace-pane[data-tabbed="false"] .workspace-panel {
-  padding-top: 2.5rem;
+  padding-top: 0;
+}
+
+.workspace-pane[data-tabbed="false"] .ca-draft-document-header {
+  padding-right: 3.25rem;
 }
 
 .workspace-pane[data-tabbed="false"] .ca-viewer-toolbar {
@@ -607,6 +628,7 @@ textarea {
   margin: 0;
   max-width: min(42rem, calc(100vw - 9rem));
   min-width: 0;
+  position: relative;
   text-align: left;
   width: auto;
 }
@@ -624,6 +646,8 @@ textarea {
 
 .activity-trace > summary {
   cursor: pointer;
+  position: relative;
+  z-index: 3;
 }
 
 .activity-trace-summary {
@@ -1102,6 +1126,10 @@ textarea {
 }
 
 @media (max-width: 900px) {
+  .course-agent[data-workspace-open="true"] .agent-header {
+    right: 0;
+  }
+
   .course-agent[data-workspace-open="true"] .workspace-shell {
     display: block;
     padding: 4.5rem 1rem 7rem;
@@ -1125,10 +1153,6 @@ textarea {
     right: 0;
     top: max(38dvh, 15rem);
     z-index: 5;
-  }
-
-  .workspace-resizer {
-    display: none;
   }
 
   .workspace-tabs {
