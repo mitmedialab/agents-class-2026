@@ -149,7 +149,7 @@ class ComponentRegistry:
                 raise WorkspaceValidationError(f"panel already exists: {command.panel.id}")
             self.validate_props(command.panel.component_id, command.panel.props)
             return WorkspaceState(
-                panels=[*state.panels, command.panel],
+                panels=[command.panel],
                 focused_panel_id=command.panel.id,
             )
 
@@ -164,7 +164,7 @@ class ComponentRegistry:
         self._require_operation(manifest, command.type)
 
         if isinstance(command, FocusWorkspaceCommand):
-            return state.model_copy(update={"focused_panel_id": command.panel_id})
+            return WorkspaceState(panels=[panel], focused_panel_id=command.panel_id)
         if isinstance(command, CloseWorkspaceCommand):
             panels = [candidate for candidate in state.panels if candidate.id != command.panel_id]
             focused = state.focused_panel_id

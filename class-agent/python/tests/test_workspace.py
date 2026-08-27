@@ -13,6 +13,7 @@ from agent_core import Event, PrincipalContext
 from course_server.agent import ToolExecutionContext, ToolValidationError
 from course_server.workspace import (
     COMPONENT_REGISTRY_PATH,
+    WorkspacePanel,
     WorkspaceState,
     WorkspaceValidationError,
     load_component_registry,
@@ -181,7 +182,35 @@ def test_workspace_events_reconstruct_state_without_framework_objects() -> None:
 
     assert state.focused_panel_id == panel_id
     assert state.panels[0].resource_uri == "course://syllabus"
-    assert json.loads(state.model_dump_json())["panels"][0]["component_id"] == ("document-viewer")
+    assert json.loads(state.model_dump_json())["panels"][0]["component_id"] == "document-viewer"
+
+
+def test_opening_or_focusing_a_panel_replaces_the_prior_workspace_surface() -> None:
+    registry = load_component_registry()
+    first_id = uuid4()
+    second_id = uuid4()
+    first = WorkspacePanel(
+        id=first_id,
+        component_id="calendar",
+        props={"view": "agenda"},
+    )
+    second = WorkspacePanel(
+        id=second_id,
+        component_id="calendar",
+        props={"view": "month"},
+    )
+
+    opened = registry.apply(
+        WorkspaceState(panels=[first], focused_panel_id=first_id),
+        {"type": "open", "panel": second.model_dump(mode="json")},
+    )
+    assert [panel.id for panel in opened.panels] == [second_id]
+
+    focused = registry.apply(
+        WorkspaceState(panels=[first, second], focused_panel_id=second_id),
+        {"type": "focus", "panel_id": first_id},
+    )
+    assert [panel.id for panel in focused.panels] == [first_id]
 
 
 def test_visual_composition_requires_a_valid_bounded_component_tree() -> None:

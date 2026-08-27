@@ -335,7 +335,7 @@ class _PanelIdTool:
 
 class WorkspaceFocusComponentTool(_PanelIdTool):
     id = FOCUS_COMPONENT_TOOL_ID
-    description = "Focus an existing trusted workspace panel."
+    description = "Focus one trusted workspace panel and discard other stale surfaces."
 
     async def execute(
         self,

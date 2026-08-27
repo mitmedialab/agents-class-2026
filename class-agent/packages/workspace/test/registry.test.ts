@@ -91,6 +91,32 @@ describe("component registry", () => {
     });
   });
 
+  it("replaces the prior surface when the workspace focus changes", () => {
+    const registry = new ComponentRegistry(BUILT_IN_COMPONENT_MANIFESTS);
+    const first = registry.apply(emptyWorkspaceState(), openCalendar());
+    const nextId = "40000000-0000-4000-8000-000000000012";
+    const second = registry.apply(first, {
+      type: "open",
+      panel: {
+        ...openCalendar().panel,
+        id: nextId,
+        title: "Review dates",
+      },
+    });
+
+    expect(second.panels.map((panel) => panel.id)).toEqual([nextId]);
+    expect(second.focusedPanelId).toBe(nextId);
+
+    const focused = registry.apply(
+      {
+        panels: [first.panels[0]!, second.panels[0]!],
+        focusedPanelId: nextId,
+      },
+      { type: "focus", panel_id: panelId },
+    );
+    expect(focused.panels.map((panel) => panel.id)).toEqual([panelId]);
+  });
+
   it("rejects unknown components, bad props, and unsupported operations", () => {
     const registry = new ComponentRegistry(BUILT_IN_COMPONENT_MANIFESTS);
     expect(() =>

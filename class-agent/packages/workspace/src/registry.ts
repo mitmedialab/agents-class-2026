@@ -304,7 +304,7 @@ export class ComponentRegistry {
       }
       this.validateProps(command.panel.componentId, command.panel.props);
       return {
-        panels: [...state.panels, command.panel],
+        panels: [command.panel],
         focusedPanelId: command.panel.id,
       };
     }
@@ -322,7 +322,7 @@ export class ComponentRegistry {
     this.#assertOperation(manifest, command.type);
 
     if (command.type === "focus") {
-      return { ...state, focusedPanelId: command.panelId };
+      return { panels: [currentPanel], focusedPanelId: command.panelId };
     }
     if (command.type === "close") {
       const panels = state.panels.filter((panel) => panel.id !== command.panelId);

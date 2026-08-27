@@ -666,7 +666,7 @@ describe("Course Agent interface", () => {
     expect(screen.getByRole("button", { name: "Apply" })).toBeInTheDocument();
   });
 
-  it("shows workspace tabs only when more than one panel is open", async () => {
+  it("replaces the prior workspace panel when a new focus opens", async () => {
     vi.mocked(api.streamAgentRun).mockImplementation(async (_id, _text, onEvent) => {
       for (const [id, title] of [
         ["40000000-0000-4000-8000-000000000011", "Course schedule"],
@@ -686,7 +686,7 @@ describe("Course Agent interface", () => {
           },
         });
       }
-      onEvent({ kind: "text_final", text: "Both calendars are open." });
+      onEvent({ kind: "text_final", text: "The review dates are open." });
       onEvent({ kind: "done" });
     });
     render(<App />);
@@ -697,13 +697,8 @@ describe("Course Agent interface", () => {
     fireEvent.keyDown(composer, { key: "Enter" });
 
     const workspace = await screen.findByRole("complementary", { name: "Workspace" });
-    expect(workspace).toHaveAttribute("data-tabbed", "true");
-    expect(screen.getByRole("tablist", { name: "Workspace panels" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Course schedule" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Review dates" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    expect(workspace).toHaveAttribute("data-tabbed", "false");
+    expect(screen.queryByRole("tablist", { name: "Workspace panels" })).not.toBeInTheDocument();
 
     vi.mocked(api.applyWorkspacePanelAction).mockImplementation(async (_id, _action, panelId) => ({
       ...previousEvent,
@@ -713,8 +708,11 @@ describe("Course Agent interface", () => {
     }));
     fireEvent.click(screen.getByRole("button", { name: "Close workspace" }));
 
-    await waitFor(() =>
-      expect(api.applyWorkspacePanelAction).toHaveBeenCalledTimes(2),
+    await waitFor(() => expect(api.applyWorkspacePanelAction).toHaveBeenCalledTimes(1));
+    expect(api.applyWorkspacePanelAction).toHaveBeenCalledWith(
+      conversation.id,
+      "close",
+      "40000000-0000-4000-8000-000000000012",
     );
     expect(await screen.findByRole("button", { name: "Apply" })).toBeInTheDocument();
   });
