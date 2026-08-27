@@ -267,7 +267,11 @@ def _build_client(
     runtime = RecordingRuntime()
     services = AppServices(
         authentication=authentication,
-        agent=CourseAgentService(runtime=runtime, conversations=conversations),
+        agent=CourseAgentService(
+            runtime=runtime,
+            conversations=conversations,
+            uploads=upload_store,
+        ),
         conversations=conversations,
         uploads=upload_store,
         browser=browser,
@@ -391,6 +395,10 @@ def test_temporary_upload_route_stores_allowed_file_for_session(tmp_path: Path) 
     assert response.json()["media_type"] == "image/png"
     upload_directory = tmp_path / "uploads" / response.json()["id"]
     assert (upload_directory / "content.bin").is_file()
+    content = client.get(f"{API_PREFIX}/uploads/{response.json()['id']}/content")
+    assert content.status_code == 200
+    assert content.headers["content-type"] == "image/png"
+    assert content.content == b"\x89PNG\r\n\x1a\nphoto-data"
     assert (upload_directory / "metadata.json").is_file()
 
 

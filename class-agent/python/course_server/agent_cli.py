@@ -29,6 +29,7 @@ from course_server.agent import (
     PublicImageSearchTool,
     PublicVisitWebpageTool,
     PublicWebSearchTool,
+    ReadTemporaryUploadTool,
     ToolCatalog,
 )
 from course_server.agent.capabilities import ExecutableTool
@@ -120,6 +121,7 @@ def build_runtime(
         CourseShowPublicFilesTool(course_resources),
         CourseSearchFaqTool(course_resources),
         CourseSearchTool(course_resources),
+        ReadTemporaryUploadTool(upload_store),
         CourseSubmitApplicationTool(applicant_store, upload_store),
         PublicWebSearchTool(DuckDuckGoSearchTool(max_results=5).forward),
         PublicImageSearchTool(search_duckduckgo_images),

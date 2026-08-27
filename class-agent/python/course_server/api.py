@@ -666,6 +666,7 @@ def create_app(
                     browser_enabled=browser_service is not None,
                 ),
                 workspace_registry=component_registry,
+                uploads=upload_store,
             ),
             conversations=conversation_store,
             course_resources=course_resources,
@@ -859,6 +860,38 @@ def create_app(
                 else status.HTTP_400_BAD_REQUEST
             )
             raise HTTPException(status_code=response_status, detail=str(error)) from error
+
+    @router.get("/uploads/{upload_id}/content", response_model=None)
+    async def read_upload_content(
+        upload_id: UUID,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> Response:
+        state = _get_app_state(request)
+        assert state.services is not None
+        upload_store = state.services.uploads
+        if upload_store is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="temporary uploads are unavailable",
+            )
+        try:
+            upload = await upload_store.get_for_principal(upload_id, principal)
+            content = await asyncio.to_thread(upload.path.read_bytes)
+        except (UploadError, OSError) as error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="not found",
+            ) from error
+        return Response(
+            content=content,
+            media_type=upload.receipt.media_type,
+            headers={
+                "Cache-Control": "private, no-store",
+                "Content-Disposition": f'inline; filename="{upload.receipt.filename}"',
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
 
     @router.get("/conversations", response_model=list[Conversation])
     async def list_conversations(

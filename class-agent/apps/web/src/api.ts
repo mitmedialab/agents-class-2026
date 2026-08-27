@@ -131,11 +131,13 @@ export function getConversation(conversationId: Uuid): Promise<ConversationDetai
 export async function getCourseResourceContent(
   resourceUri: string,
 ): Promise<CourseResourceContent> {
-  const query = new URLSearchParams({ uri: resourceUri });
-  const response = await fetch(
-    `${API_BASE_URL}/course/resources/content?${query.toString()}`,
-    { credentials: "include" },
-  );
+  const uploadId = resourceUri.startsWith("upload://")
+    ? resourceUri.slice("upload://".length)
+    : null;
+  const path = uploadId
+    ? `/uploads/${encodeURIComponent(uploadId)}/content`
+    : `/course/resources/content?${new URLSearchParams({ uri: resourceUri }).toString()}`;
+  const response = await fetch(`${API_BASE_URL}${path}`, { credentials: "include" });
   if (!response.ok) {
     throw new ApiError(await errorMessage(response), response.status);
   }

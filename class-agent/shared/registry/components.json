@@ -5,7 +5,7 @@
       "id": "document-viewer",
       "version": "1.0.0",
       "title": "Document Viewer",
-      "description": "Displays Markdown, plain text, and PDF course resources.",
+      "description": "Opens a specific Markdown, plain-text, or PDF artifact for close reading, navigation, search, and focused discussion. Do not use it for synthesized knowledge overviews.",
       "props_schema": {
         "type": "object",
         "properties": {

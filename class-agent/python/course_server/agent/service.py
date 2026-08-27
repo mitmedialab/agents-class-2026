@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Protocol, cast
@@ -17,6 +18,7 @@ from agent_core import (
     Event,
     PrincipalContext,
 )
+from course_server.uploads import TemporaryUploadStore, UploadError
 from course_server.workspace import (
     ComponentRegistry,
     load_component_registry,
@@ -30,6 +32,11 @@ RECENT_EVENT_LIMIT = 50
 EventObserver = Callable[[Event], None]
 TextDeltaObserver = Callable[[str], None]
 ProgressDeltaObserver = Callable[[str, bool], None]
+_UPLOAD_REFERENCE = re.compile(
+    r"(?:upload_id:\s*|upload://)([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-"
+    r"[89ab][0-9a-f]{3}-[0-9a-f]{12})",
+    re.IGNORECASE,
+)
 
 
 class ObservableAgentRuntime(Protocol):
@@ -63,11 +70,42 @@ class CourseAgentService:
         conversations: ConversationStore,
         capability_policy: PublicCapabilityPolicy | None = None,
         workspace_registry: ComponentRegistry | None = None,
+        uploads: TemporaryUploadStore | None = None,
     ) -> None:
         self._runtime = runtime
         self._conversations = conversations
         self._capability_policy = capability_policy or PublicCapabilityPolicy()
         self._workspace_registry = workspace_registry or load_component_registry()
+        self._uploads = uploads
+
+    async def _authorized_upload_uris(
+        self,
+        *,
+        principal: PrincipalContext,
+        current_text: str,
+        previous_events: list[Event],
+    ) -> list[str]:
+        if self._uploads is None:
+            return []
+        texts = [current_text]
+        texts.extend(
+            text
+            for event in previous_events
+            if event.type == "user.message"
+            and event.actor == "user"
+            and isinstance((text := event.payload.get("text")), str)
+        )
+        upload_ids = dict.fromkeys(
+            UUID(match.group(1)) for text in texts for match in _UPLOAD_REFERENCE.finditer(text)
+        )
+        authorized: list[str] = []
+        for upload_id in upload_ids:
+            try:
+                await self._uploads.get_for_principal(upload_id, principal)
+            except UploadError:
+                continue
+            authorized.append(f"upload://{upload_id}")
+        return authorized
 
     async def create_conversation(
         self,
@@ -114,6 +152,11 @@ class CourseAgentService:
         await self._conversations.append_events(conversation_id, [user_event])
 
         authorized = self._capability_policy.authorize(principal)
+        authorized_uploads = await self._authorized_upload_uris(
+            principal=principal,
+            current_text=text,
+            previous_events=previous_events,
+        )
         workspace_state = project_workspace_events(
             previous_events,
             self._workspace_registry,
@@ -126,7 +169,7 @@ class CourseAgentService:
                 Capability(id=tool_id, status="available") for tool_id in authorized.tool_ids
             ],
             permitted_tool_ids=list(authorized.tool_ids),
-            permitted_resource_uris=list(authorized.resource_uris),
+            permitted_resource_uris=[*authorized.resource_uris, *authorized_uploads],
             metadata={
                 "workspace_state": workspace_state.model_dump(mode="json", exclude_none=True)
             },

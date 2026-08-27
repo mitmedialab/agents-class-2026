@@ -17,6 +17,7 @@ dependencies = [
   "jsonschema>=4.23,<5",
   "playwright>=1.55,<2",
   "pydantic>=2.10,<3",
+  "pypdf>=6,<7",
   "psycopg[binary,pool]>=3.2,<4",
   "python-dotenv>=1.0,<2",
   "smolagents[openai,toolkit]>=1.26,<2",

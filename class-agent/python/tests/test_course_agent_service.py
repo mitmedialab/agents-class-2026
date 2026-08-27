@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -14,6 +15,7 @@ from course_server.agent import (
     COURSE_SCHEDULE_URI,
     COURSE_SYLLABUS_URI,
     GET_APPLICATION_TOOL_ID,
+    READ_UPLOAD_TOOL_ID,
     SEARCH_COURSE_TOOL_ID,
     VISIT_WEBPAGE_TOOL_ID,
     WEB_IMAGE_SEARCH_TOOL_ID,
@@ -26,6 +28,7 @@ from course_server.agent import (
 from course_server.agent_cli import _safe_failure_message, run_cli_turn
 from course_server.auth import InMemoryAuthStore
 from course_server.browser import BROWSER_TOOL_IDS
+from course_server.uploads import FileTemporaryUploadStore
 
 
 def public_principal() -> PrincipalContext:
@@ -70,6 +73,7 @@ def test_public_policy_exposes_phase_six_course_capabilities() -> None:
 
     assert SEARCH_COURSE_TOOL_ID in authorized.tool_ids
     assert GET_APPLICATION_TOOL_ID in authorized.tool_ids
+    assert READ_UPLOAD_TOOL_ID in authorized.tool_ids
     assert WEB_SEARCH_TOOL_ID in authorized.tool_ids
     assert WEB_IMAGE_SEARCH_TOOL_ID in authorized.tool_ids
     assert VISIT_WEBPAGE_TOOL_ID in authorized.tool_ids
@@ -85,6 +89,45 @@ def test_public_policy_exposes_phase_six_course_capabilities() -> None:
 
     browser_authorized = PublicCapabilityPolicy(browser_enabled=True).authorize(public_principal())
     assert set(BROWSER_TOOL_IDS) <= set(browser_authorized.tool_ids)
+
+
+def test_course_agent_authorizes_owned_uploads_for_current_and_follow_up_turns(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        runtime = RecordingRuntime()
+        conversations = InMemoryConversationStore()
+        uploads = FileTemporaryUploadStore(tmp_path / "uploads")
+        principal = public_principal()
+        receipt = await uploads.store(
+            filename="paper.pdf",
+            media_type="application/pdf",
+            content=b"%PDF-1.4\n%%EOF",
+            principal=principal,
+        )
+        service = CourseAgentService(
+            runtime=runtime,
+            conversations=conversations,
+            uploads=uploads,
+        )
+        conversation = await service.create_conversation(principal)
+
+        await service.run(
+            principal=principal,
+            conversation_id=conversation.id,
+            text=f"Read this paper. [Temporary upload; upload_id: {receipt.id}]",
+        )
+        await service.run(
+            principal=principal,
+            conversation_id=conversation.id,
+            text="How was the study conducted?",
+        )
+
+        resource_uri = f"upload://{receipt.id}"
+        assert resource_uri in runtime.contexts[0].permitted_resource_uris
+        assert resource_uri in runtime.contexts[1].permitted_resource_uris
+
+    asyncio.run(scenario())
 
 
 def test_course_agent_persists_portable_history_and_isolates_anonymous_users() -> None:

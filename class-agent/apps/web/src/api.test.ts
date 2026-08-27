@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { streamAgentRun, uploadFile, type AgentStreamEvent } from "./api.js";
+import {
+  getCourseResourceContent,
+  streamAgentRun,
+  uploadFile,
+  type AgentStreamEvent,
+} from "./api.js";
 
 describe("agent event stream", () => {
   it("parses split CRLF events into process and text updates", async () => {
@@ -137,6 +142,30 @@ describe("temporary uploads", () => {
         headers: { "Content-Type": "image/png" },
         method: "POST",
       }),
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it("reads an upload resource from its principal-scoped content route", async () => {
+    const bytes = new Uint8Array([37, 80, 68, 70]);
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "application/pdf" }),
+      arrayBuffer: vi.fn().mockResolvedValue(bytes.buffer),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      getCourseResourceContent("upload://40000000-0000-4000-8000-000000000001"),
+    ).resolves.toEqual({
+      uri: "upload://40000000-0000-4000-8000-000000000001",
+      mediaType: "application/pdf",
+      data: bytes,
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/uploads/40000000-0000-4000-8000-000000000001/content",
+      { credentials: "include" },
     );
     vi.unstubAllGlobals();
   });

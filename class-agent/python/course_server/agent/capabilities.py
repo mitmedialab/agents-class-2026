@@ -31,6 +31,8 @@ from pydantic import (
     ValidationError,
     field_validator,
 )
+from pypdf import PdfReader
+from pypdf.errors import PdfReadError
 
 from agent_core import PrincipalContext
 from course_server.browser.constants import BROWSER_TOOL_IDS
@@ -50,6 +52,7 @@ SHOW_PUBLIC_FILES_TOOL_ID = "course.show_public_files"
 SEARCH_FAQ_TOOL_ID = "course.search_faq"
 SEARCH_COURSE_TOOL_ID = "course.search"
 SUBMIT_APPLICATION_TOOL_ID = "course.submit_application"
+READ_UPLOAD_TOOL_ID = "upload.read"
 WEB_SEARCH_TOOL_ID = "web.search"
 WEB_IMAGE_SEARCH_TOOL_ID = "web.search_images"
 VISIT_WEBPAGE_TOOL_ID = "web.visit"
@@ -70,6 +73,7 @@ _MAX_SEARCH_LIMIT = 10
 _MAX_WEB_QUERY_LENGTH = 300
 _MAX_WEB_URL_LENGTH = 2_048
 _MAX_WEB_RESULT_LENGTH = 20_000
+_MAX_UPLOAD_TEXT_LENGTH = 50_000
 
 StoragePolicy = Literal["server_full", "server_summary", "local_only", "ephemeral"]
 ResourceVisibility = Literal["public"]
@@ -824,6 +828,91 @@ class CourseReadPublicFileTool:
         )
 
 
+def _extract_upload_text(upload: StoredTemporaryUpload) -> str:
+    if upload.receipt.media_type == "application/pdf":
+        try:
+            reader = PdfReader(upload.path)
+            pages: list[str] = []
+            length = 0
+            for index, page in enumerate(reader.pages, start=1):
+                text = (page.extract_text() or "").strip()
+                if not text:
+                    continue
+                section = f"--- Page {index} ---\n{text}"
+                remaining = _MAX_UPLOAD_TEXT_LENGTH - length
+                if remaining <= 0:
+                    break
+                pages.append(section[:remaining])
+                length += len(section)
+            return "\n\n".join(pages)
+        except (OSError, PdfReadError, ValueError) as error:
+            raise ToolValidationError("The uploaded PDF could not be read.") from error
+    try:
+        return upload.path.read_text(encoding="utf-8")[:_MAX_UPLOAD_TEXT_LENGTH]
+    except (OSError, UnicodeDecodeError) as error:
+        raise ToolValidationError("The uploaded file does not contain readable text.") from error
+
+
+class ReadTemporaryUploadTool:
+    """Read one principal-owned temporary document without exposing its server path."""
+
+    id = READ_UPLOAD_TOOL_ID
+    description = (
+        "Read text from a temporary file the user attached in chat. For PDF, Markdown, "
+        "plain-text, CSV, or JSON artifacts, call this with the upload UUID, then open the "
+        "returned upload:// resource in document-viewer. Never substitute a public copy when "
+        "the attached artifact is available."
+    )
+    input_schema: ClassVar[dict[str, JsonValue]] = {
+        "type": "object",
+        "properties": {
+            "upload_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Temporary upload UUID supplied with the user's attachment.",
+            }
+        },
+        "required": ["upload_id"],
+        "additionalProperties": False,
+    }
+
+    def __init__(self, uploads: TemporaryUploadStore) -> None:
+        self._uploads = uploads
+
+    async def execute(
+        self,
+        arguments: Mapping[str, JsonValue],
+        context: ToolExecutionContext,
+    ) -> ToolExecutionResult:
+        _reject_unknown_arguments(arguments, frozenset({"upload_id"}))
+        try:
+            upload_id = UUID(_required_text_argument(arguments, "upload_id", max_length=36))
+        except ValueError as error:
+            raise ToolValidationError("upload_id must be a UUID.") from error
+        resource_uri = f"upload://{upload_id}"
+        if resource_uri not in context.permitted_resource_uris:
+            raise PermissionError("The temporary upload is not authorized for this run.")
+        try:
+            upload = await self._uploads.get_for_principal(upload_id, context.principal)
+        except UploadError as error:
+            raise ToolValidationError("The temporary upload is unavailable or expired.") from error
+        if upload.receipt.media_type.startswith("image/"):
+            content = (
+                f"Attached image: {upload.receipt.filename} "
+                f"({upload.receipt.media_type}, {upload.receipt.size_bytes} bytes)."
+            )
+        else:
+            content = await asyncio.to_thread(_extract_upload_text, upload)
+            if not content.strip():
+                content = "The document opened successfully but contains no extractable text."
+        return ToolExecutionResult(
+            content=content,
+            summary=f"Read temporary upload {upload.receipt.filename}.",
+            storage_policy="server_summary",
+            resource_uris=[resource_uri],
+        )
+
+
 class CourseGetScheduleTool:
     """Read the official schedule while preserving its provisional status."""
 
@@ -1353,6 +1442,7 @@ class PublicCapabilityPolicy:
                 SHOW_PUBLIC_FILES_TOOL_ID,
                 SEARCH_FAQ_TOOL_ID,
                 SEARCH_COURSE_TOOL_ID,
+                READ_UPLOAD_TOOL_ID,
                 SUBMIT_APPLICATION_TOOL_ID,
                 WEB_SEARCH_TOOL_ID,
                 WEB_IMAGE_SEARCH_TOOL_ID,

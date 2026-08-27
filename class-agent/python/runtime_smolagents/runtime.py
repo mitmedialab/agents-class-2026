@@ -16,6 +16,7 @@ from smolagents.monitoring import LogLevel
 from agent_core import AgentContext, AgentInput, AgentResult, Event, ModelProvider
 from course_server.agent.capabilities import (
     GET_APPLICATION_TOOL_ID,
+    READ_UPLOAD_TOOL_ID,
     VISIT_WEBPAGE_TOOL_ID,
     WEB_IMAGE_SEARCH_TOOL_ID,
     WEB_SEARCH_TOOL_ID,
@@ -105,6 +106,15 @@ def _agent_instructions(
             "style strings, or class names. Update the existing composition when its content "
             "changes instead of opening duplicates."
         )
+        if READ_UPLOAD_TOOL_ID in context.permitted_tool_ids:
+            sections.append(
+                "When the user attaches a PDF, Markdown, text, CSV, or JSON artifact, read the "
+                "temporary upload and open that exact upload resource in document-viewer. Do not "
+                "replace an available attachment with a public webpage or public copy. After the "
+                "artifact is open, answer questions from its extracted content and use a new "
+                "visual composition for synthesized views such as methods, findings, comparisons, "
+                "or conceptual explanations."
+            )
         if WEB_IMAGE_SEARCH_TOOL_ID in context.permitted_tool_ids:
             sections.append(
                 "When a visual composition would benefit from real public imagery and no "

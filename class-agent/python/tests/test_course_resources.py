@@ -3,10 +3,13 @@ from __future__ import annotations
 import asyncio
 import json
 import stat
+from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from pypdf import PdfWriter
+from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
 from agent_core import PrincipalContext
 from course_server.agent import (
@@ -26,6 +29,7 @@ from course_server.agent import (
     PublicImageSearchTool,
     PublicVisitWebpageTool,
     PublicWebSearchTool,
+    ReadTemporaryUploadTool,
     ToolExecutionContext,
     ToolValidationError,
     load_resource_definitions,
@@ -49,6 +53,85 @@ def execution_context(*resource_uris: str) -> ToolExecutionContext:
         conversation_id=uuid4(),
         permitted_resource_uris=frozenset(resource_uris),
     )
+
+
+def test_temporary_upload_tool_reads_the_owned_artifact_without_substitution(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        principal = public_principal()
+        uploads = FileTemporaryUploadStore(tmp_path / "uploads")
+        receipt = await uploads.store(
+            filename="methods.md",
+            media_type="text/markdown",
+            content=b"# Methods\n\nThirty-four participants completed the study.",
+            principal=principal,
+        )
+        resource_uri = f"upload://{receipt.id}"
+        result = await ReadTemporaryUploadTool(uploads).execute(
+            {"upload_id": str(receipt.id)},
+            ToolExecutionContext(
+                principal=principal,
+                conversation_id=uuid4(),
+                permitted_resource_uris=frozenset({resource_uri}),
+            ),
+        )
+
+        assert "Thirty-four participants" in str(result.content)
+        assert result.resource_uris == [resource_uri]
+        assert result.storage_policy == "server_summary"
+
+    asyncio.run(scenario())
+
+
+def test_temporary_upload_tool_extracts_text_from_the_uploaded_pdf(tmp_path: Path) -> None:
+    pdf = BytesIO()
+    writer = PdfWriter()
+    page = writer.add_blank_page(width=612, height=792)
+    page[NameObject("/Resources")] = DictionaryObject(
+        {
+            NameObject("/Font"): DictionaryObject(
+                {
+                    NameObject("/F1"): DictionaryObject(
+                        {
+                            NameObject("/Type"): NameObject("/Font"),
+                            NameObject("/Subtype"): NameObject("/Type1"),
+                            NameObject("/BaseFont"): NameObject("/Helvetica"),
+                        }
+                    )
+                }
+            )
+        }
+    )
+    stream = DecodedStreamObject()
+    stream.set_data(b"BT /F1 12 Tf 72 720 Td (Thirty-four participants completed the study.) Tj ET")
+    page[NameObject("/Contents")] = stream
+    writer.write(pdf)
+
+    async def scenario() -> None:
+        principal = public_principal()
+        uploads = FileTemporaryUploadStore(tmp_path / "uploads")
+        receipt = await uploads.store(
+            filename="study.pdf",
+            media_type="application/pdf",
+            content=pdf.getvalue(),
+            principal=principal,
+        )
+        resource_uri = f"upload://{receipt.id}"
+        result = await ReadTemporaryUploadTool(uploads).execute(
+            {"upload_id": str(receipt.id)},
+            ToolExecutionContext(
+                principal=principal,
+                conversation_id=uuid4(),
+                permitted_resource_uris=frozenset({resource_uri}),
+            ),
+        )
+
+        assert "--- Page 1 ---" in str(result.content)
+        assert "Thirty-four participants completed the study" in str(result.content)
+        assert result.resource_uris == [resource_uri]
+
+    asyncio.run(scenario())
 
 
 def test_public_resource_registry_includes_provisional_schedule() -> None:
