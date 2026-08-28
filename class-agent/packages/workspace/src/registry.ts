@@ -1,8 +1,3 @@
-import Ajv2020Package from "ajv/dist/2020.js";
-import addFormatsPackage from "ajv-formats";
-import type { Ajv2020 as Ajv2020Type, ValidateFunction } from "ajv/dist/2020.js";
-import type { FormatsPlugin } from "ajv-formats";
-
 import { BUILT_IN_COMPONENT_MANIFESTS } from "./manifests.js";
 import type {
   ComponentManifest,
@@ -15,8 +10,6 @@ import type {
   WorkspaceState,
 } from "./types.js";
 
-const Ajv2020 = Ajv2020Package as unknown as typeof Ajv2020Type;
-const addFormats = addFormatsPackage as unknown as FormatsPlugin;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const COMPONENT_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
@@ -52,6 +45,123 @@ function isJsonValue(value: unknown): value is JsonValue {
   }
   if (Array.isArray(value)) return value.every(isJsonValue);
   return isRecord(value) && Object.values(value).every(isJsonValue);
+}
+
+function valuesEqual(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function validateFormat(format: unknown, value: string): boolean {
+  if (format === "uuid") return UUID_PATTERN.test(value);
+  if (format === "uri") {
+    try {
+      const parsed = new URL(value);
+      return Boolean(parsed.protocol && parsed.hostname);
+    } catch {
+      return false;
+    }
+  }
+  if (format === "date") {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const date = new Date(`${value}T00:00:00Z`);
+    return !Number.isNaN(date.valueOf()) && date.toISOString().startsWith(value);
+  }
+  return true;
+}
+
+function schemaError(schema: JsonObject, value: unknown, path = "value"): string | undefined {
+  if (Array.isArray(schema.enum) && !schema.enum.some((candidate) => valuesEqual(candidate, value))) {
+    return `${path} is not an allowed value`;
+  }
+  if (schema.const !== undefined && !valuesEqual(schema.const, value)) {
+    return `${path} does not match its required value`;
+  }
+  const type = schema.type;
+  if (
+    type === "object" ||
+    (type === undefined &&
+      isRecord(value) &&
+      (isRecord(schema.properties) || Array.isArray(schema.required)))
+  ) {
+    if (!isRecord(value)) return `${path} must be an object`;
+    const properties = isRecord(schema.properties) ? schema.properties : {};
+    if (Array.isArray(schema.required)) {
+      for (const key of schema.required) {
+        if (typeof key === "string" && !(key in value)) return `${path}.${key} is required`;
+      }
+    }
+    if (schema.additionalProperties === false) {
+      const unknown = Object.keys(value).find((key) => !(key in properties));
+      if (unknown) return `${path}.${unknown} is not allowed`;
+    }
+    for (const [key, childValue] of Object.entries(value)) {
+      const childSchema = properties[key];
+      if (isRecord(childSchema)) {
+        const error = schemaError(childSchema as JsonObject, childValue, `${path}.${key}`);
+        if (error) return error;
+      }
+    }
+    if (isRecord(schema.dependentRequired)) {
+      for (const [key, dependencies] of Object.entries(schema.dependentRequired)) {
+        if (!(key in value) || !Array.isArray(dependencies)) continue;
+        const missing = dependencies.find(
+          (dependency) => typeof dependency === "string" && !(dependency in value),
+        );
+        if (typeof missing === "string") return `${path}.${missing} is required with ${key}`;
+      }
+    }
+  } else if (type === "array") {
+    if (!Array.isArray(value)) return `${path} must be an array`;
+    if (typeof schema.minItems === "number" && value.length < schema.minItems) {
+      return `${path} has too few items`;
+    }
+    if (typeof schema.maxItems === "number" && value.length > schema.maxItems) {
+      return `${path} has too many items`;
+    }
+    if (schema.uniqueItems === true) {
+      const encoded = value.map((item) => JSON.stringify(item));
+      if (new Set(encoded).size !== encoded.length) return `${path} items must be unique`;
+    }
+    if (isRecord(schema.items)) {
+      for (const [index, item] of value.entries()) {
+        const error = schemaError(schema.items as JsonObject, item, `${path}[${index}]`);
+        if (error) return error;
+      }
+    }
+  } else if (type === "string") {
+    if (typeof value !== "string") return `${path} must be a string`;
+    if (typeof schema.minLength === "number" && value.length < schema.minLength) {
+      return `${path} is too short`;
+    }
+    if (typeof schema.maxLength === "number" && value.length > schema.maxLength) {
+      return `${path} is too long`;
+    }
+    if (typeof schema.pattern === "string" && !new RegExp(schema.pattern, "u").test(value)) {
+      return `${path} has an invalid format`;
+    }
+    if (!validateFormat(schema.format, value)) return `${path} has an invalid format`;
+  } else if (type === "integer") {
+    if (typeof value !== "number" || !Number.isInteger(value)) return `${path} must be an integer`;
+  } else if (type === "number") {
+    if (typeof value !== "number" || !Number.isFinite(value)) return `${path} must be a number`;
+  } else if (type === "boolean" && typeof value !== "boolean") {
+    return `${path} must be a boolean`;
+  }
+  if (typeof value === "number") {
+    if (typeof schema.minimum === "number" && value < schema.minimum) return `${path} is too small`;
+    if (typeof schema.maximum === "number" && value > schema.maximum) return `${path} is too large`;
+  }
+  for (const keyword of ["allOf", "anyOf", "oneOf"] as const) {
+    const branches = schema[keyword];
+    if (!Array.isArray(branches)) continue;
+    const passing = branches.filter(
+      (branch) => isRecord(branch) && schemaError(branch as JsonObject, value, path) === undefined,
+    ).length;
+    if (keyword === "allOf" && passing !== branches.length) return `${path} is invalid`;
+    if (keyword === "anyOf" && passing === 0) return `${path} is invalid`;
+    if (keyword === "oneOf" && passing !== 1) return `${path} is invalid`;
+  }
+  return undefined;
 }
 
 function jsonObject(value: unknown, label: string): JsonObject {
@@ -275,18 +385,14 @@ function validateVisualGraph(props: JsonObject): void {
 
 export class ComponentRegistry {
   readonly #manifests = new Map<string, ComponentManifest>();
-  readonly #validators = new Map<string, ValidateFunction>();
 
   constructor(manifests: readonly ComponentManifest[]) {
-    const ajv = new Ajv2020({ allErrors: true, strict: true });
-    addFormats(ajv);
     for (const manifest of manifests) {
       assertManifest(manifest);
       if (this.#manifests.has(manifest.id)) {
         throw new WorkspaceValidationError(`duplicate component id: ${manifest.id}`);
       }
       this.#manifests.set(manifest.id, manifest);
-      this.#validators.set(manifest.id, ajv.compile(manifest.propsSchema));
     }
   }
 
@@ -300,12 +406,11 @@ export class ComponentRegistry {
 
   validateProps(componentId: string, props: JsonObject): void {
     const manifest = this.#manifests.get(componentId);
-    const validate = this.#validators.get(componentId);
-    if (!manifest || !validate) {
+    if (!manifest) {
       throw new WorkspaceValidationError(`unknown component: ${componentId}`);
     }
-    if (!validate(props)) {
-      const detail = validate.errors?.[0]?.message ?? "invalid component props";
+    const detail = schemaError(manifest.propsSchema, props);
+    if (detail) {
       throw new WorkspaceValidationError(`invalid props for ${componentId}: ${detail}`);
     }
     if (componentId === "visual-composition") validateVisualGraph(props);

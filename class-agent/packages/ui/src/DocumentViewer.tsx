@@ -186,13 +186,15 @@ function PdfDocument({
   useEffect(() => {
     let disposed = false;
     let loaded: import("pdfjs-dist").PDFDocumentProxy | null = null;
+    let loadingTask: import("pdfjs-dist").PDFDocumentLoadingTask | null = null;
     async function load() {
       try {
         const pdfjs = await import("pdfjs-dist");
         const workerUrl = (await import("pdfjs-dist/build/pdf.worker.min.mjs?url"))
           .default;
         pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
-        loaded = await pdfjs.getDocument({ data: resource.data.slice() }).promise;
+        loadingTask = pdfjs.getDocument({ data: resource.data.slice() });
+        loaded = await loadingTask.promise;
         if (!disposed) setDocument(loaded);
       } catch {
         if (!disposed) setError("This PDF could not be opened.");
@@ -201,7 +203,7 @@ function PdfDocument({
     void load();
     return () => {
       disposed = true;
-      void loaded?.destroy();
+      void loadingTask?.destroy();
     };
   }, [resource]);
 
