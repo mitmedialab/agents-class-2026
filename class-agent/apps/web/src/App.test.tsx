@@ -341,7 +341,7 @@ describe("Course Agent interface", () => {
 
   it("closes the application workspace after a successful submission", async () => {
     render(<App />);
-    await screen.findByText("The earlier response.");
+    await openExistingConversation();
 
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     expect(await screen.findByRole("complementary", { name: "Workspace" })).toBeInTheDocument();
