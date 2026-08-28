@@ -447,6 +447,7 @@ export default function App() {
         setSelectedConversationId(created.id);
         setConversations((current) => newestFirst([created, ...current]));
       }
+      const activeConversationId = conversationId;
 
       const handleStreamEvent = (event: AgentStreamEvent) => {
         if (controller.signal.aborted) return;
@@ -497,6 +498,26 @@ export default function App() {
               return current;
             }
           });
+        } else if (event.kind === "application_submitted") {
+          setWorkspaceState((current) => {
+            const applicationPanels = current.panels.filter(
+              (panel) =>
+                panel.resourceUri === "course://application" ||
+                panel.state.document_kind === "course-application",
+            );
+            let next = current;
+            for (const panel of applicationPanels) {
+              next = builtInComponentRegistry.apply(next, {
+                type: "close",
+                panel_id: panel.id,
+              });
+              void applyWorkspacePanelAction(activeConversationId, "close", panel.id).catch(
+                () => undefined,
+              );
+            }
+            return next;
+          });
+          applicationReturnResponse.current = null;
         } else if (event.kind === "done") {
           setActivities((current) => [
             ...current,
