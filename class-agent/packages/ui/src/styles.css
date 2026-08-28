@@ -1731,6 +1731,31 @@
   outline-offset: 2px;
 }
 
+.ca-calendar-notices {
+  border-bottom: 1px solid var(--color-border);
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+}
+
+.ca-calendar-notices p {
+  display: flex;
+  font-size: 0.6875rem;
+  gap: var(--space-2);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.ca-calendar-notices b {
+  flex: none;
+  font-weight: 500;
+}
+
+.ca-calendar-notices span,
+.ca-calendar-agenda-description {
+  color: var(--color-text-muted);
+}
+
 .ca-calendar-month,
 .ca-calendar-agenda {
   flex: 1;
@@ -1863,6 +1888,11 @@
   font-size: clamp(0.95rem, 1.35vw, 1.15rem);
   font-weight: 500;
   line-height: 1.35;
+}
+
+.ca-calendar-agenda-description {
+  font-size: 0.75rem;
+  line-height: 1.5;
 }
 
 .ca-calendar-agenda-activity {

@@ -18,8 +18,10 @@ export {
   normalizeCalendarData,
   type CalendarData,
   type CalendarEvent,
+  type CalendarNotice,
   type CalendarProps,
 } from "./Calendar.js";
+export { parseScheduleMarkdown } from "./ScheduleMarkdown.js";
 export {
   DocumentViewer,
   resolveTextAnchor,

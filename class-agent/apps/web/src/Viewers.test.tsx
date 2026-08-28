@@ -65,6 +65,65 @@ describe("DocumentViewer", () => {
 });
 
 describe("Calendar", () => {
+  it("parses the editable Markdown schedule into complete calendar events", () => {
+    const data = normalizeCalendarData(`# Schedule
+
+**Notes: Every lecture begins with a 15 minute show and tell.**
+**Application deadline: September 4th, midnight**
+**Acceptance notification**
+
+| Date / Week | Lecture Topics (45 min) | Hands-on tutorial (50 min) | Suggested Readings |
+| --- | --- | --- | --- |
+| Week 1 (9/15) | **Course introduction: What is an AI agent?** The history of AI agents. *Prof. Pattie Maes & Valdemar Danry* | Build a minimal agent loop. *Wazeer Zulfikar* | ReAct; [MCP](https://modelcontextprotocol.io/specification) |
+| Week 5 (10/13) | No class | No class | No class |
+| Week 14 TBD | **Final project presentations** Live demo \\+ failure analysis | Final demos | Final project reports |
+`);
+
+    expect(data.notices).toEqual([
+      { label: "Notes", text: "Every lecture begins with a 15 minute show and tell." },
+      { label: "Application deadline", text: "September 4th, midnight" },
+      { label: "Acceptance notification" },
+    ]);
+    expect(data.events).toEqual([
+      {
+        id: "week-1",
+        week: 1,
+        type: "class",
+        title: "Course introduction: What is an AI agent?",
+        description: "The history of AI agents.",
+        speakers: ["Prof. Pattie Maes", "Valdemar Danry"],
+        dateLabel: "9/15",
+        activity: "Build a minimal agent loop.",
+        tutorialSpeakers: ["Wazeer Zulfikar"],
+        readings: "ReAct; MCP (https://modelcontextprotocol.io/specification)",
+      },
+      {
+        id: "week-5",
+        week: 5,
+        type: "no-class",
+        title: "No class",
+        dateLabel: "10/13",
+      },
+      {
+        id: "week-14",
+        week: 14,
+        type: "class",
+        title: "Final project presentations",
+        description: "Live demo + failure analysis",
+        dateLabel: "TBD",
+        activity: "Final demos",
+        readings: "Final project reports",
+      },
+    ]);
+
+    render(<Calendar data={data} view="agenda" />);
+    expect(screen.getByRole("complementary", { name: "Schedule notices" })).toHaveTextContent(
+      "Application deadlineSeptember 4th, midnight",
+    );
+    expect(screen.getByText("The history of AI agents.")).toBeInTheDocument();
+    expect(screen.getByText("Tutorial lead: Wazeer Zulfikar")).toBeInTheDocument();
+  });
+
   it("normalizes the course schedule without inventing missing dates", () => {
     const data = normalizeCalendarData({
       status: "provisional",

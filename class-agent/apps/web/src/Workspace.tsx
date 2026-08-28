@@ -260,7 +260,9 @@ function ResourcePanel({
     if (!resource) return null;
     try {
       const decoded = new TextDecoder().decode(resource.data);
-      return normalizeCalendarData(JSON.parse(decoded) as unknown);
+      const source: unknown =
+        resource.mediaType === "application/json" ? JSON.parse(decoded) : decoded;
+      return normalizeCalendarData(source);
     } catch {
       return null;
     }

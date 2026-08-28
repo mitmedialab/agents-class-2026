@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 
+import { parseScheduleMarkdown } from "./ScheduleMarkdown.js";
+
 export interface CalendarEvent {
   id: string;
   title: string;
@@ -11,12 +13,19 @@ export interface CalendarEvent {
   dateLabel?: string;
   speakers?: string[];
   activity?: string;
+  tutorialSpeakers?: string[];
   readings?: string;
+}
+
+export interface CalendarNotice {
+  label: string;
+  text?: string;
 }
 
 export interface CalendarData {
   events: CalendarEvent[];
   status?: string;
+  notices?: CalendarNotice[];
 }
 
 export interface CalendarProps {
@@ -64,6 +73,8 @@ function normalizedEvent(value: unknown, index: number): CalendarEvent | null {
   const week = weekNumber(value.week);
   const speakers = textList(value.speakers);
   const activity = text(value.activity) ?? text(value.tutorial);
+  const tutorialSpeakers =
+    textList(value.tutorial_speakers) ?? textList(value.tutorialSpeakers);
   const readings = text(value.readings);
   if (week) event.week = week;
   if (start) event.start = start;
@@ -73,11 +84,13 @@ function normalizedEvent(value: unknown, index: number): CalendarEvent | null {
   if (dateLabel) event.dateLabel = dateLabel;
   if (speakers) event.speakers = speakers;
   if (activity) event.activity = activity;
+  if (tutorialSpeakers) event.tutorialSpeakers = tutorialSpeakers;
   if (readings) event.readings = readings;
   return event;
 }
 
 export function normalizeCalendarData(value: unknown): CalendarData {
+  if (typeof value === "string") return parseScheduleMarkdown(value);
   if (!isRecord(value)) return { events: [] };
   const status = text(value.status);
   if (Array.isArray(value.events)) {
@@ -213,6 +226,17 @@ export function Calendar({
         </div>
       </header>
 
+      {data.notices?.length ? (
+        <aside aria-label="Schedule notices" className="ca-calendar-notices">
+          {data.notices.map((notice, index) => (
+            <p key={`${notice.label}-${index}`}>
+              <b>{notice.label}</b>
+              {notice.text ? <span>{notice.text}</span> : null}
+            </p>
+          ))}
+        </aside>
+      ) : null}
+
       {activeView === "month" ? (
         <div className="ca-calendar-month">
           <div className="ca-calendar-month-navigation">
@@ -294,13 +318,24 @@ export function Calendar({
                       {event.speakers.length === 1 ? "Speaker" : "Speakers"}: {event.speakers.join(", ")}
                     </span>
                   ) : null}
+                  {event.description ? (
+                    <span className="ca-calendar-agenda-description">
+                      {event.description}
+                    </span>
+                  ) : null}
                   {event.activity ? (
                     <span className="ca-calendar-agenda-activity">
-                      <b>Build</b>
-                      {event.activity}
+                      <b>Hands-on tutorial</b>
+                      <span>{event.activity}</span>
+                      {event.tutorialSpeakers?.length ? (
+                        <span className="ca-calendar-agenda-speakers">
+                          {event.tutorialSpeakers.length === 1
+                            ? "Tutorial lead"
+                            : "Tutorial leads"}
+                          : {event.tutorialSpeakers.join(", ")}
+                        </span>
+                      ) : null}
                     </span>
-                  ) : event.description ? (
-                    <span className="ca-calendar-agenda-activity">{event.description}</span>
                   ) : null}
                 </span>
               </button>
