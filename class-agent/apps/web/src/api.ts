@@ -52,6 +52,7 @@ export type AgentStreamEvent =
   | { kind: "progress"; text: string; replace: boolean }
   | { kind: "activity"; activity: AgentActivity }
   | { kind: "workspace"; command: unknown }
+  | { kind: "application_submitted" }
   | { kind: "done" }
   | { kind: "error" };
 
@@ -464,6 +465,12 @@ function emitSseEvent(
     if (type.startsWith("workspace.panel.") && payload?.command !== undefined) {
       onEvent({ kind: "workspace", command: payload.command });
       return;
+    }
+    if (
+      type === "agent.tool.completed" &&
+      payload?.tool_id === "course.submit_application"
+    ) {
+      onEvent({ kind: "application_submitted" });
     }
     const activity = platformActivity(parsed.data);
     if (activity) {

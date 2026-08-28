@@ -75,6 +75,7 @@ beforeEach(() => {
     events: [previousEvent],
   });
   vi.mocked(api.createConversation).mockResolvedValue(conversation);
+  vi.mocked(api.applyWorkspacePanelAction).mockResolvedValue(previousEvent);
   vi.mocked(api.ensureApplicationDraft).mockResolvedValue({
     ...previousEvent,
     id: "30000000-0000-4000-8000-000000000009",
@@ -325,6 +326,29 @@ describe("Course Agent interface", () => {
     expect(screen.queryByRole("complementary", { name: "Workspace" })).not.toBeInTheDocument();
     expect(screen.getByText("The earlier response.")).toBeInTheDocument();
     expect(screen.getByText("To continue, send a message to the Course Agent.")).toBeInTheDocument();
+  });
+
+  it("closes the application workspace after a successful submission", async () => {
+    render(<App />);
+    await screen.findByText("The earlier response.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    expect(await screen.findByRole("complementary", { name: "Workspace" })).toBeInTheDocument();
+
+    const streamCall = vi.mocked(api.streamAgentRun).mock.calls.at(-1);
+    const onEvent = streamCall?.[2];
+    act(() => {
+      onEvent?.({ kind: "application_submitted" });
+      onEvent?.({ kind: "text_final", text: "Your application has been submitted." });
+    });
+
+    expect(screen.queryByRole("complementary", { name: "Workspace" })).not.toBeInTheDocument();
+    expect(screen.getByText("Your application has been submitted.")).toBeInTheDocument();
+    expect(api.applyWorkspacePanelAction).toHaveBeenCalledWith(
+      conversation.id,
+      "close",
+      "40000000-0000-4000-8000-000000000009",
+    );
   });
 
   it("shows a disabled composer submission action until application material is complete", async () => {
