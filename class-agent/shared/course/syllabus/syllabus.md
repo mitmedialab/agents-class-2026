@@ -1,12 +1,15 @@
 # **AI Agents for Cognitive Augmentation**
 
-**Instructors:** Valdemar Danry and Professor Pattie Maes
-**Format:** Weekly 2-hour session: 1-hour lecture \+ 1-hour hands-on tutorial
-**Course structure:** Classes, weekly technical implementation assignments, cumulative agentic website, final project or study
-**Teaching support:** Chitralekha Gupta, Rachel Poonsiriwong, Wazeer Zulfikar, Yasith Samaradivakara
-**Keywords:** AI agents, wearable AI, cognitive augmentation
+**Instructors:** Valdemar Danry and Professor Pattie Maes  
+**TAs:** Chitralekha Gupta, Rachel Poonsiriwong, Wazeer Zulfikar, Yasith Samaradivakara  
+**Format:** Weekly 2-hour session: 1-hour lecture \+ 1-hour hands-on tutorial  
+**Course structure:** Classes, weekly technical implementation assignments, cumulative agentic website, final project or study  
+**Credits:** 2-0-10  
+**Time:** 11am-1pm  
+**Classroom:** E15-341  
+**First class:** 9/15, T
 
-## **Course Overview**
+**Course Overview**
 
 *AI Agents for Cognitive Augmentation* is a hands-on graduate-level course exploring the design, implementation, evaluation, and human impact of AI agents. AI systems are shifting from passive tools that respond to prompts toward agentic systems that take actions in the world by perceiving the environment, planning, use of tools and coordination with people. The course will consider how agents can be used to augment human cognitive capabilities.
 
@@ -24,38 +27,40 @@ The Media Lab is uniquely positioned to host this course. The Lab has a long his
 
 By the end of the course, students will complete some of the following based on their interests:
 
-1. Build functional AI agents using large-language models, tool-calling, memory, planning, and environment loops.
-2. Connect agents to multimodal inputs such as vision, audio, wearables, or interaction traces.
-3. Design and evaluate agent environments, benchmarks, simulations, and failure cases.
-4. Understand techniques for improving agent performance, including fine-tuning, reinforcement learning approaches such as GRPO, preference optimization, and iterative evaluation.
-5. Prototype agents within a chosen domain that could include games, robotics, software control, organizations, personal productivity, education, and cognitive augmentation.
-6. Critically analyze the effects of AI agents on human cognition, agency, learning, overreliance, and social behavior.
+1. Build functional AI agents using large-language models, tool-calling, memory, planning, and environment loops.  
+2. Connect agents to multimodal inputs such as vision, audio, wearables, or interaction traces.  
+3. Design and evaluate agent environments, benchmarks, simulations, and failure cases.  
+4. Understand techniques for improving agent performance, including fine-tuning, reinforcement learning approaches such as GRPO, preference optimization, and iterative evaluation.  
+5. Prototype agents within a chosen domain that could include games, robotics, software control, organizations, personal productivity, education, and cognitive augmentation.  
+6. Critically analyze the effects of AI agents on human cognition, agency, learning, overreliance, and social behavior.  
 7. Design agents that augment human capabilities rather than simply automate human tasks.
 
 ## **Course Structure**
 
 The course will meet once per week for two hours. Each session will include a one hour lecture covering concepts, systems, papers, and design principles, followed by a one hour hands-on tutorial where students implement technical components.
 
-Every week, students will complete an open-ended agent build based on the lectures and tutorials. Similar in spirit to *How to Make (Almost) Anything*, the assignments will emphasize technical demonstration, creative interpretation, and personal exploration. Students will maintain an “agentic website” throughout the semester, updating it with each assignment, documenting what they built, how it works, what failed, and what they learned.
+Every two weeks, students will complete an open-ended agent build based on the previous lectures and tutorials. Similar in spirit to *How to Make (Almost) Anything*, the assignments will emphasize technical demonstration, creative interpretation, and personal exploration. Students will maintain an “agentic website” throughout the semester, updating it with each assignment, documenting what they built, how it works, what failed, and what they learned.
 
 The semester will culminate in a final project: either a substantial agentic system or an empirical study evaluating an agent’s capabilities, limitations, or effects on people.
+
+The course will be restricted to 20 people. Priority will be given to students from Media, Arts and Sciences and other MIT programs over students from other institutions. 
 
 ## **Modules**
 
 Possible course modules include:
 
-* Foundations of agents: perception, planning, action, memory, tools, environments
-* Running and fine-tuning large-language models (for agentic tasks)
-* Building API-based agents and tool-using systems
-* Computer-using agents and agents that operate software
-* Browser, coding, and website-improvement agents
-* Agents in video games and simulated worlds
-* Generative agents and multi-agent societies
-* Agent evaluation, benchmarks, sandboxes, and adversarial test environments
-* Multimodal agents with vision, audio, and interaction data
-* Reinforcement learning for agent improvement, including GRPO-style methods
-* Wearables, BCIs, and physiology-aware agents
-* Cognitive augmentation: agents for reasoning, learning, creativity, reflection, and decision-making
+* Foundations of agents: perception, planning, action, memory, tools, environments  
+* Running and fine-tuning large-language models (for agentic tasks)  
+* Building API-based agents and tool-using systems  
+* Computer-using agents and agents that operate software  
+* Browser, coding, and website-improvement agents  
+* Agents in video games and simulated worlds  
+* Generative agents and multi-agent societies  
+* Agent evaluation, benchmarks, sandboxes, and adversarial test environments  
+* Multimodal agents with vision, audio, and interaction data  
+* Reinforcement learning for agent improvement, including GRPO-style methods  
+* Wearables, BCIs, and physiology-aware agents  
+* Cognitive augmentation: agents for reasoning, learning, creativity, reflection, and decision-making  
 * Human risks: overreliance, deskilling, persuasion, privacy, autonomy, and delegation
 
 ## **Assignments and Evaluation**
@@ -73,3 +78,4 @@ For the final projects, students will work in small groups and build a functioni
 | In-class demos and critique | 15% |
 | Final project system or study | 25% |
 | Final paper-style report | 10% |
+
