@@ -154,6 +154,13 @@ beforeEach(() => {
   });
 });
 
+async function openExistingConversation(): Promise<void> {
+  await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
+  fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
+  fireEvent.click(await screen.findByRole("button", { name: /Week one/ }));
+  await screen.findByText("The earlier response.");
+}
+
 describe("Course Agent interface", () => {
   it("introduces the course before revealing the interface", async () => {
     vi.useFakeTimers();
@@ -163,7 +170,7 @@ describe("Course Agent interface", () => {
       expect(screen.getByTestId("opening-splash")).toBeInTheDocument();
       expect(
         screen.getByRole("heading", {
-          name: "AI Agents for Cognitive Augmentation",
+          name: "MAS.S60 · AI Agents for Cognitive Augmentation",
         }),
       ).toBeInTheDocument();
       expect(screen.getByTestId("course-agent-interface")).toHaveAttribute(
@@ -187,10 +194,15 @@ describe("Course Agent interface", () => {
     }
   });
 
-  it("shows only the latest agent response in the main workspace", async () => {
+  it("starts fresh on page load while retaining previous conversations in history", async () => {
     render(<App />);
 
-    expect(await screen.findByText("The earlier response.")).toBeInTheDocument();
+    await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
+    expect(document.querySelector(".latest-response")).toHaveTextContent(
+      /Welcome\. I’m the Course Agent/,
+    );
+    expect(api.getConversation).not.toHaveBeenCalled();
+    expect(api.createConversation).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "MIT" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "MIT Media Lab" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Your logs" })).toBeInTheDocument();
@@ -204,7 +216,8 @@ describe("Course Agent interface", () => {
       "Start typing to interact with the agent",
     );
     expect(screen.getByTestId("workspace-shell")).toBeInTheDocument();
-    expect(screen.queryByText("Week one")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
+    expect(screen.getByRole("button", { name: /Week one/ })).toBeInTheDocument();
   });
 
   it.each(["MIT", "MIT Media Lab"])(
@@ -219,8 +232,6 @@ describe("Course Agent interface", () => {
           await Promise.resolve();
           await Promise.resolve();
         });
-        expect(screen.getByText("The earlier response.")).toBeInTheDocument();
-
         const composer = screen.getByRole("textbox", { name: "Message" });
         fireEvent.change(composer, { target: { value: "Unsent draft" } });
         fireEvent.click(screen.getByRole("button", { name: logoName }));
@@ -254,7 +265,7 @@ describe("Course Agent interface", () => {
     ["Grading", "How is grading handled in this course?"],
   ])("sends the %s shortcut through the agent conversation", async (label, prompt) => {
     render(<App />);
-    await screen.findByText("The earlier response.");
+    await openExistingConversation();
 
     fireEvent.click(screen.getByRole("button", { name: label }));
 
@@ -279,7 +290,7 @@ describe("Course Agent interface", () => {
 
   it("does not open the application draft from typed message text", async () => {
     render(<App />);
-    await screen.findByText("The earlier response.");
+    await openExistingConversation();
 
     const composer = screen.getByRole("textbox", { name: "Message" });
     fireEvent.change(composer, { target: { value: "I'd like to apply for the course." } });
@@ -298,7 +309,7 @@ describe("Course Agent interface", () => {
 
   it("opens the application draft in the workspace before prompting the agent", async () => {
     render(<App />);
-    await screen.findByText("The earlier response.");
+    await openExistingConversation();
 
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
@@ -316,7 +327,7 @@ describe("Course Agent interface", () => {
 
   it("returns to the prior conversation after closing the application workspace", async () => {
     render(<App />);
-    await screen.findByText("The earlier response.");
+    await openExistingConversation();
 
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     expect(await screen.findByRole("complementary", { name: "Workspace" })).toBeInTheDocument();
@@ -402,7 +413,7 @@ describe("Course Agent interface", () => {
       },
     });
     render(<App />);
-    await screen.findByText("The earlier response.");
+    await openExistingConversation();
 
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
@@ -424,7 +435,7 @@ describe("Course Agent interface", () => {
         }),
     );
     render(<App />);
-    await screen.findByText("The earlier response.");
+    await openExistingConversation();
 
     fireEvent.click(screen.getByRole("button", { name: "Schedule" }));
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
@@ -450,7 +461,7 @@ describe("Course Agent interface", () => {
       onEvent({ kind: "done" });
     });
     render(<App />);
-    await screen.findByText("The earlier response.");
+    await openExistingConversation();
 
     const composer = screen.getByRole("textbox", { name: "Message" });
     fireEvent.change(composer, { target: { value: "What is due?" } });
@@ -477,7 +488,7 @@ describe("Course Agent interface", () => {
       onEvent({ kind: "done" });
     });
     render(<App />);
-    await screen.findByText("The earlier response.");
+    await openExistingConversation();
 
     const composer = screen.getByRole("textbox", { name: "Message" });
     fireEvent.change(composer, { target: { value: "Stream the answer" } });
@@ -516,7 +527,7 @@ describe("Course Agent interface", () => {
       onEvent({ kind: "done" });
     });
     render(<App />);
-    await screen.findByText("The earlier response.");
+    await openExistingConversation();
 
     const composer = screen.getByRole("textbox", { name: "Message" });
     fireEvent.change(composer, { target: { value: "What is covered?" } });
@@ -551,7 +562,7 @@ describe("Course Agent interface", () => {
 
   it("reveals conversation and account navigation from the history icon", async () => {
     render(<App />);
-    await screen.findByText("The earlier response.");
+    await openExistingConversation();
 
     fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
 
@@ -565,7 +576,7 @@ describe("Course Agent interface", () => {
 
   it("loads About directly from the registered syllabus resource", async () => {
     render(<App />);
-    await screen.findByText("The earlier response.");
+    await openExistingConversation();
 
     fireEvent.click(screen.getByRole("button", { name: "About" }));
 
@@ -608,7 +619,7 @@ describe("Course Agent interface", () => {
 
   it("uploads a temporary attachment and gives its receipt to the agent", async () => {
     render(<App />);
-    await screen.findByText("The earlier response.");
+    await openExistingConversation();
     const fileInput = document.querySelector<HTMLInputElement>('input[type="file"]');
     expect(fileInput).not.toBeNull();
     const photo = new File([new Uint8Array([137, 80, 78, 71])], "portrait.png", {
@@ -643,7 +654,7 @@ describe("Course Agent interface", () => {
         }),
     );
     render(<App />);
-    await screen.findByText("The earlier response.");
+    await openExistingConversation();
     const app = document.querySelector<HTMLElement>(".course-agent");
     expect(app).not.toBeNull();
     const photo = new File([new Uint8Array([137, 80, 78, 71])], "dropped.png", {
@@ -680,7 +691,7 @@ describe("Course Agent interface", () => {
 
   it("rejects an unsupported dropped archive without starting an upload", async () => {
     render(<App />);
-    await screen.findByText("The earlier response.");
+    await openExistingConversation();
     const app = document.querySelector<HTMLElement>(".course-agent");
     const archive = new File(["archive"], "materials.zip", {
       type: "application/zip",
@@ -730,7 +741,7 @@ describe("Course Agent interface", () => {
       });
 
       expect(document.querySelector(".latest-response")).toHaveTextContent(
-        "The earlier response.",
+        /Welcome\. I’m the Course Agent/,
       );
       const composer = screen.getByRole("textbox", { name: "Message" });
       fireEvent.change(composer, { target: { value: "An unfinished thought" } });
@@ -739,7 +750,7 @@ describe("Course Agent interface", () => {
       fireEvent.pointerMove(window);
       act(() => vi.advanceTimersByTime(5 * 60 * 1000 - 1));
       expect(document.querySelector(".latest-response")).toHaveTextContent(
-        "The earlier response.",
+        /Welcome\. I’m the Course Agent/,
       );
 
       act(() => vi.advanceTimersByTime(1));
@@ -771,7 +782,7 @@ describe("Course Agent interface", () => {
       onEvent({ kind: "done" });
     });
     render(<App />);
-    await screen.findByText("The earlier response.");
+    await openExistingConversation();
 
     const composer = screen.getByRole("textbox", { name: "Message" });
     fireEvent.change(composer, { target: { value: "Inspect the course" } });
@@ -826,7 +837,7 @@ describe("Course Agent interface", () => {
       metadata: {},
     });
     render(<App />);
-    await screen.findByText("The earlier response.");
+    await openExistingConversation();
 
     const composer = screen.getByRole("textbox", { name: "Message" });
     fireEvent.change(composer, { target: { value: "Show me the schedule" } });
@@ -887,7 +898,7 @@ describe("Course Agent interface", () => {
       onEvent({ kind: "done" });
     });
     render(<App />);
-    await screen.findByText("The earlier response.");
+    await openExistingConversation();
 
     const composer = screen.getByRole("textbox", { name: "Message" });
     fireEvent.change(composer, { target: { value: "Compare the dates" } });
@@ -916,7 +927,7 @@ describe("Course Agent interface", () => {
 
   it("logs students in from the secondary drawer", async () => {
     render(<App />);
-    await screen.findByText("The earlier response.");
+    await openExistingConversation();
     fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
 
     fireEvent.change(screen.getByLabelText("Username"), { target: { value: "alice" } });

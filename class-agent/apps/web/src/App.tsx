@@ -48,7 +48,7 @@ import {
 const CONNECTION_ERROR = "I couldn’t reach the Course Agent. Please try again.";
 const WELCOME_MESSAGE =
   "Welcome. I’m the Course Agent. This agent is the class website—ask me for class information, or talk with me if you’d like to apply.";
-const COURSE_TITLE = "AI Agents for Cognitive Augmentation";
+const COURSE_TITLE = "MAS.S60 · AI Agents for Cognitive Augmentation";
 const OPENING_SPLASH_DURATION_MS = 3_600;
 const WELCOME_MORPH_DELAY_MS = 3_000;
 const WELCOME_PRESENTATION_MS =
@@ -269,16 +269,12 @@ export default function App() {
         if (disposed) return;
         const sorted = newestFirst(loaded);
         setConversations(sorted);
-        const newest = sorted[0];
-        if (newest) {
-          const detail = await getConversation(newest.id);
-          if (disposed) return;
-          setSelectedConversationId(newest.id);
-          const response = latestAgentResponse(detail.events);
-          if (response) setLatestResponse(response);
-          else showWelcomeMessage();
-          setWorkspaceState(workspaceFromEvents(detail.events));
-        }
+        // A full page load always begins as a fresh, unsaved conversation. Existing
+        // conversations remain available from history and a new server record is
+        // created only when the visitor sends their first message.
+        setSelectedConversationId(null);
+        showWelcomeMessage();
+        setWorkspaceState(emptyWorkspaceState());
       } catch {
         if (!disposed) setLatestResponse(CONNECTION_ERROR);
       } finally {
