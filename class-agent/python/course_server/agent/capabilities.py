@@ -74,6 +74,9 @@ _MAX_SEARCH_LIMIT = 10
 _MAX_WEB_QUERY_LENGTH = 300
 _MAX_WEB_URL_LENGTH = 2_048
 _MAX_WEB_RESULT_LENGTH = 20_000
+_IMAGE_SEARCH_OVERSAMPLE_FACTOR = 4
+_IMAGE_SEARCH_MIN_CANDIDATES = 12
+_IMAGE_SEARCH_MAX_CANDIDATES = 30
 _MAX_UPLOAD_TEXT_LENGTH = 50_000
 
 StoragePolicy = Literal["server_full", "server_summary", "local_only", "ephemeral"]
@@ -163,6 +166,7 @@ class ExecutableTool(Protocol):
 
 WebTextRunner = Callable[[str], str]
 ImageSearchRunner = Callable[[str, int], list[dict[str, object]]]
+ImageProbeRunner = Callable[[str], str | None]
 
 
 def _required_tool_string(
@@ -366,6 +370,15 @@ def _simplify_image_search_query(query: str) -> str | None:
     return simplified if simplified and simplified != query else None
 
 
+def _image_search_candidate_limit(result_limit: int) -> int:
+    """Return a bounded overfetch pool used to fill verified result slots."""
+
+    return min(
+        _IMAGE_SEARCH_MAX_CANDIDATES,
+        max(_IMAGE_SEARCH_MIN_CANDIDATES, result_limit * _IMAGE_SEARCH_OVERSAMPLE_FACTOR),
+    )
+
+
 def _normalize_image_results(
     raw_results: Iterable[Mapping[str, object]],
     *,
@@ -406,13 +419,53 @@ def _normalize_image_results(
     return results
 
 
+async def _verified_image_results(
+    candidates: list[dict[str, JsonValue]],
+    *,
+    limit: int,
+    probe: ImageProbeRunner,
+) -> list[dict[str, JsonValue]]:
+    async def probe_candidate(candidate: dict[str, JsonValue]) -> str | None:
+        image_url = str(candidate["image_url"])
+        primary = await asyncio.to_thread(probe, image_url)
+        if primary is not None:
+            return primary
+        thumbnail_url = candidate.get("thumbnail_url")
+        if isinstance(thumbnail_url, str) and thumbnail_url != image_url:
+            return await asyncio.to_thread(probe, thumbnail_url)
+        return None
+
+    outcomes = await asyncio.gather(
+        *(probe_candidate(candidate) for candidate in candidates),
+        return_exceptions=True,
+    )
+    verified: list[dict[str, JsonValue]] = []
+    seen_urls: set[str] = set()
+    for candidate, outcome in zip(candidates, outcomes, strict=True):
+        final_url = _https_result_url(outcome) if isinstance(outcome, str) else None
+        if final_url is None or final_url in seen_urls:
+            continue
+        seen_urls.add(final_url)
+        result = dict(candidate)
+        result["image_url"] = final_url
+        if isinstance(result.get("thumbnail_url"), str) and final_url == result["thumbnail_url"]:
+            result["thumbnail_url"] = final_url
+        result["verified"] = True
+        verified.append(result)
+        if len(verified) >= limit:
+            break
+    return verified
+
+
 class PublicImageSearchTool:
     """Search public images through an injected DDGS adapter."""
 
     id = WEB_IMAGE_SEARCH_TOOL_ID
     description = (
         "Search public images through a DuckDuckGo-first provider for use in a registered "
-        "visual workspace component. Returns direct HTTPS image and thumbnail URLs, source-page "
+        "visual workspace component. Returns only server-fetched, verified HTTPS image URLs "
+        "and automatically overfetches candidates to fill the requested verified-result slots "
+        "together with thumbnail URLs, source-page "
         "metadata, pixel dimensions when available, aspect ratio, resolution tier, and a layout "
         "recommendation including whether a split layout is safe. Start with a simple descriptive "
         "query rather than site operators or quoted syntax; the tool automatically simplifies an "
@@ -444,8 +497,9 @@ class PublicImageSearchTool:
         "additionalProperties": False,
     }
 
-    def __init__(self, search: ImageSearchRunner) -> None:
+    def __init__(self, search: ImageSearchRunner, probe: ImageProbeRunner) -> None:
         self._search = search
+        self._probe = probe
 
     async def execute(
         self,
@@ -459,31 +513,46 @@ class PublicImageSearchTool:
             max_length=_MAX_WEB_QUERY_LENGTH,
         )
         limit = _optional_limit(arguments, default=6)
+        candidate_limit = _image_search_candidate_limit(limit)
         context.transient_state["image_search_attempted"] = True
         simplified_query = _simplify_image_search_query(query)
         search_queries = [query] + ([simplified_query] if simplified_query is not None else [])
         results: list[dict[str, JsonValue]] = []
         executed_query = query
         last_error: Exception | None = None
+        search_succeeded = False
         for candidate_query in search_queries:
             try:
-                raw_results = await asyncio.to_thread(self._search, candidate_query, limit)
+                raw_results = await asyncio.to_thread(
+                    self._search,
+                    candidate_query,
+                    candidate_limit,
+                )
             except Exception as error:
                 last_error = error
                 continue
-            normalized = _normalize_image_results(raw_results, limit=limit)
-            if normalized:
-                results = normalized
+            search_succeeded = True
+            normalized = _normalize_image_results(raw_results, limit=candidate_limit)
+            verified = await _verified_image_results(
+                normalized,
+                limit=limit,
+                probe=self._probe,
+            )
+            if verified:
+                results = verified
                 executed_query = candidate_query
                 break
 
         if not results:
-            if last_error is not None:
+            if last_error is not None and not search_succeeded:
                 raise ToolValidationError(
                     "Public image search failed after one simplified retry. Try a shorter plain "
                     "description of the subject."
                 ) from last_error
-            raise ToolValidationError("Public image search returned no usable HTTPS images.")
+            raise ToolValidationError(
+                "Public image search returned no accessible HTTPS images. Try a different "
+                "source or a simpler query."
+            )
         existing_candidates = context.transient_state.get("image_search_candidates", [])
         candidate_urls = (
             [value for value in existing_candidates if isinstance(value, str)]
@@ -522,7 +591,7 @@ class PublicImageSearchTool:
             content["executed_query"] = executed_query
         return ToolExecutionResult(
             content=content,
-            summary=f"Found {len(results)} public image candidates.",
+            summary=f"Found {len(results)} verified public image candidates.",
             storage_policy="server_summary",
         )
 

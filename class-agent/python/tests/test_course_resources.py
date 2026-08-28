@@ -365,6 +365,7 @@ def test_public_web_tools_wrap_search_and_page_reading_without_persisting_result
 def test_public_image_search_normalizes_https_candidates_for_workspace_images() -> None:
     async def scenario() -> None:
         calls: list[tuple[str, int]] = []
+        probed_urls: list[str] = []
 
         def search(query: str, limit: int) -> list[dict[str, object]]:
             calls.append((query, limit))
@@ -399,13 +400,17 @@ def test_public_image_search_normalizes_https_candidates_for_workspace_images() 
                 },
             ]
 
+        def probe(url: str) -> str:
+            probed_urls.append(url)
+            return url
+
         context = execution_context()
-        result = await PublicImageSearchTool(search).execute(
+        result = await PublicImageSearchTool(search, probe).execute(
             {"query": "MIT Media Lab Fluid Interfaces", "limit": 4},
             context,
         )
 
-        assert calls == [("MIT Media Lab Fluid Interfaces", 4)]
+        assert calls == [("MIT Media Lab Fluid Interfaces", 16)]
         unknown_layout_hint = (
             "Dimensions unavailable. Do not assume this image is suitable for a banner; "
             "prefer standard or card presentation until its size is verified."
@@ -427,6 +432,7 @@ def test_public_image_search_normalizes_https_candidates_for_workspace_images() 
                 "recommended_presentation": "banner",
                 "recommended_width": "full",
                 "split_layout_safe": True,
+                "verified": True,
                 "layout_hint": (
                     "1600x900px landscape, large resolution. Prefer presentation=banner, "
                     "aspect=wide, width=full. A split feature is safe when the adjacent copy is "
@@ -439,12 +445,14 @@ def test_public_image_search_normalizes_https_candidates_for_workspace_images() 
                 "image_url": "https://images.example.org/fallback-thumb.jpg",
                 "thumbnail_url": "https://images.example.org/fallback-thumb.jpg",
                 "dimensions_known": False,
+                "verified": True,
                 "layout_hint": unknown_layout_hint,
             },
             {
                 "title": "Second result",
                 "image_url": "https://cdn.example.org/second.jpg",
                 "dimensions_known": False,
+                "verified": True,
                 "layout_hint": unknown_layout_hint,
             },
         ]
@@ -452,8 +460,13 @@ def test_public_image_search_normalizes_https_candidates_for_workspace_images() 
             "query": "MIT Media Lab Fluid Interfaces",
             "results": expected_results,
         }
-        assert result.summary == "Found 3 public image candidates."
+        assert result.summary == "Found 3 verified public image candidates."
         assert result.storage_policy == "server_summary"
+        assert probed_urls == [
+            "https://images.example.org/fluid.jpg",
+            "https://images.example.org/fallback-thumb.jpg",
+            "https://cdn.example.org/second.jpg",
+        ]
         assert context.transient_state == {
             "image_search_attempted": True,
             "image_search_candidates": [
@@ -479,7 +492,7 @@ def test_public_image_search_normalizes_https_candidates_for_workspace_images() 
                 }
             ]
 
-        fallback_result = await PublicImageSearchTool(fallback_search).execute(
+        fallback_result = await PublicImageSearchTool(fallback_search, probe).execute(
             {
                 "query": 'site:media.mit.edu "Feeling-the-Facts" FactNudger diagram',
                 "limit": 3,
@@ -487,8 +500,8 @@ def test_public_image_search_normalizes_https_candidates_for_workspace_images() 
             execution_context(),
         )
         assert fallback_calls == [
-            ('site:media.mit.edu "Feeling-the-Facts" FactNudger diagram', 3),
-            ("Feeling the Facts FactNudger diagram", 3),
+            ('site:media.mit.edu "Feeling-the-Facts" FactNudger diagram', 12),
+            ("Feeling the Facts FactNudger diagram", 12),
         ]
         assert isinstance(fallback_result.content, dict)
         assert fallback_result.content["executed_query"] == ("Feeling the Facts FactNudger diagram")
@@ -502,11 +515,83 @@ def test_public_image_search_normalizes_https_candidates_for_workspace_images() 
         assert "do not put it in a half-width split" in str(first_fallback["layout_hint"])
 
         empty_context = execution_context()
-        with pytest.raises(ToolValidationError, match="no usable HTTPS images"):
+        with pytest.raises(ToolValidationError, match="no accessible HTTPS images"):
             await PublicImageSearchTool(
-                lambda _query, _limit: [{"image": "http://example.org/image.jpg"}]
+                lambda _query, _limit: [{"image": "http://example.org/image.jpg"}],
+                probe,
             ).execute({"query": "example"}, empty_context)
         assert empty_context.transient_state == {"image_search_attempted": True}
+
+        filtered_context = execution_context()
+        filtered_result = await PublicImageSearchTool(
+            lambda _query, _limit: [
+                {"title": "Blocked", "image": "https://images.example.org/blocked.jpg"},
+                {"title": "Available", "image": "https://images.example.org/available.jpg"},
+            ],
+            lambda url: url if url.endswith("available.jpg") else None,
+        ).execute({"query": "available example"}, filtered_context)
+        assert isinstance(filtered_result.content, dict)
+        assert filtered_result.content["results"] == [
+            {
+                "title": "Available",
+                "image_url": "https://images.example.org/available.jpg",
+                "dimensions_known": False,
+                "layout_hint": unknown_layout_hint,
+                "verified": True,
+            }
+        ]
+        assert filtered_context.transient_state["image_search_candidates"] == [
+            "https://images.example.org/available.jpg"
+        ]
+
+        thumbnail_result = await PublicImageSearchTool(
+            lambda _query, _limit: [
+                {
+                    "title": "Thumbnail fallback",
+                    "image": "https://images.example.org/blocked-full.jpg",
+                    "thumbnail": "https://images.example.org/available-thumb.jpg",
+                }
+            ],
+            lambda url: url if url.endswith("available-thumb.jpg") else None,
+        ).execute({"query": "thumbnail fallback"}, execution_context())
+        assert isinstance(thumbnail_result.content, dict)
+        thumbnail_results = thumbnail_result.content["results"]
+        assert isinstance(thumbnail_results, list)
+        assert isinstance(thumbnail_results[0], dict)
+        assert thumbnail_results[0]["image_url"] == (
+            "https://images.example.org/available-thumb.jpg"
+        )
+        assert thumbnail_results[0]["verified"] is True
+
+        refill_calls: list[int] = []
+
+        def refill_search(_query: str, candidate_limit: int) -> list[dict[str, object]]:
+            refill_calls.append(candidate_limit)
+            return [
+                {
+                    "title": f"Candidate {index}",
+                    "image": f"https://images.example.org/candidate-{index}.jpg",
+                }
+                for index in range(1, 7)
+            ]
+
+        refill_result = await PublicImageSearchTool(
+            refill_search,
+            lambda url: (
+                url
+                if url.endswith(("candidate-4.jpg", "candidate-5.jpg", "candidate-6.jpg"))
+                else None
+            ),
+        ).execute({"query": "refill verified slots", "limit": 3}, execution_context())
+        assert refill_calls == [12]
+        assert isinstance(refill_result.content, dict)
+        refilled_results = refill_result.content["results"]
+        assert isinstance(refilled_results, list)
+        assert [result["image_url"] for result in refilled_results if isinstance(result, dict)] == [
+            "https://images.example.org/candidate-4.jpg",
+            "https://images.example.org/candidate-5.jpg",
+            "https://images.example.org/candidate-6.jpg",
+        ]
 
     asyncio.run(scenario())
 

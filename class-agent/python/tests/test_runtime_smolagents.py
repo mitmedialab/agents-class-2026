@@ -370,7 +370,7 @@ def test_workspace_tool_emits_validated_portable_panel_event() -> None:
             tools=ToolCatalog(
                 [
                     WorkspaceOpenComponentTool(registry),
-                    PublicImageSearchTool(image_search),
+                    PublicImageSearchTool(image_search, lambda url: url),
                     PublicVisitWebpageTool(lambda _url: "# Readable page"),
                 ]
             ),

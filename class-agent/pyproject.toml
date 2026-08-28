@@ -14,6 +14,7 @@ dependencies = [
   "ddgs>=9.15,<10",
   "email-validator>=2.2,<3",
   "fastapi>=0.115,<1",
+  "httpx>=0.28,<1",
   "jsonschema>=4.23,<5",
   "playwright>=1.55,<2",
   "pydantic>=2.10,<3",

@@ -55,7 +55,7 @@ from course_server.uploads import (
     FileTemporaryUploadStore,
     TemporaryUploadStore,
 )
-from course_server.web_search import search_duckduckgo_images
+from course_server.web_search import probe_public_image_url, search_duckduckgo_images
 from course_server.workspace import ComponentRegistry, load_component_registry
 from course_server.workspace.tools import (
     WorkspaceCloseComponentTool,
@@ -124,7 +124,7 @@ def build_runtime(
         ReadTemporaryUploadTool(upload_store),
         CourseSubmitApplicationTool(applicant_store, upload_store),
         PublicWebSearchTool(DuckDuckGoSearchTool(max_results=5).forward),
-        PublicImageSearchTool(search_duckduckgo_images),
+        PublicImageSearchTool(search_duckduckgo_images, probe_public_image_url),
         PublicVisitWebpageTool(VisitWebpageTool(max_output_length=20_000).forward),
         WorkspaceListComponentsTool(component_registry),
         WorkspaceOpenComponentTool(component_registry, course_resources),
