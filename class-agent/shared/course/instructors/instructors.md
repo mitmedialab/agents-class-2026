@@ -117,20 +117,3 @@ Source: [MIT Media Lab profile](https://www.media.mit.edu/people/wazeer/overview
 > Over more than a decade, he has worked across research labs, startups, and large technology companies to build and deploy hardware, software, and AI-based systems. His research has been published in leading venues, including CHI, EMNLP, IUI, UIST, and Augmented Humans, and recognized by Prototypes for Humanity, the Meta Impact Innovation Awards, and Google Research.
 
 Source: [MIT Media Lab profile](https://www.media.mit.edu/people/yasith/overview/)
-
-## Application Fields
-
-1. Name
-2. Email
-3. Department
-4. Research Group
-5. Year of Study MIT
-6. Personal Webpage
-7. Interests
-8. Why do you want to take this class?
-9. Knowledgeable about
-10. Skill-set (practical knowledge and builder experience)
-11. Registration Status (MAS/MIT/other student, for credit/listener)
-12. For listeners: willingness to do the weekly builds
-13. Questions or comments for instructors
-14. Recent profile photo uploaded in chat (`JPEG`, `PNG`, or `WebP`)

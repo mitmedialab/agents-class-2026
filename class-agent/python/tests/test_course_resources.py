@@ -173,7 +173,7 @@ def test_public_resource_registry_includes_provisional_schedule() -> None:
     assert "Yasith Samaradivakara" in instructor_contents.text
     assert "portraits/pattie_maes.jpg" in instructor_contents.text
     assert "portraits/yasith_samaradivakara.jpg" in instructor_contents.text
-    assert "Recent profile photo uploaded in chat" in instructor_contents.text
+    assert "## Application Fields" not in instructor_contents.text
 
     instructors_definition = next(
         resource
