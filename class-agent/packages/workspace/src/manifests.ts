@@ -207,6 +207,13 @@ const VISUAL_ELEMENT_SCHEMA = {
           pattern: "^https://[^\\s]+$",
           maxLength: 2_048,
         },
+        asset_id: {
+          type: "string",
+          description:
+            "Registered asset ID returned with the course resource named by the panel resource_uri.",
+          pattern: "^[a-z][a-z0-9_]*$",
+          maxLength: 100,
+        },
         alt: { type: "string", maxLength: 500 },
         caption: { type: "string", maxLength: 1_000 },
         source_width: {
@@ -236,7 +243,11 @@ const VISUAL_ELEMENT_SCHEMA = {
         },
         width: VISUAL_WIDTH_SCHEMA,
       },
-      required: ["id", "type", "url", "alt"],
+      required: ["id", "type", "alt"],
+      oneOf: [
+        { properties: { url: {} }, required: ["url"] },
+        { properties: { asset_id: {} }, required: ["asset_id"] },
+      ],
       dependentRequired: {
         source_width: ["source_height"],
         source_height: ["source_width"],
@@ -481,10 +492,10 @@ const VISUAL_ELEMENT_SCHEMA = {
 
 export const VISUAL_COMPOSITION_MANIFEST: ComponentManifest = {
   id: "visual-composition",
-  version: "1.0.0",
+  version: "1.1.0",
   title: "Visual Composition",
   description:
-    "Builds a polished, presentation-ready visual surface rather than a stack of paragraphs. Match structure to the content's natural visual flow. Stack, row, and grid are equal options; use columns only for genuinely parallel items, direct comparisons, or coherent galleries—not as the default page pattern. Available elements include surfaced process stages, timelines, facts, charts for quantitative comparisons or trends, and cards for distinct entities. Charts use a vivid coral, sky, mint, amber, violet, and ivory palette. Image presentations include panoramic banners, split-layout features, repeated cards, and profile avatars. Use short text blocks, strong hierarchy, balanced composition, and meaningful available imagery with enough space to act as a visual anchor—not a tiny thumbnail beside oversized text. Use groups and element IDs instead of HTML or CSS.",
+    "Builds a polished, presentation-ready visual surface rather than a stack of paragraphs. Match structure to the content's natural visual flow. Stack, row, and grid are equal options; use columns only for genuinely parallel items, direct comparisons, or coherent galleries—not as the default page pattern. Available elements include surfaced process stages, timelines, facts, charts for quantitative comparisons or trends, and cards for distinct entities. Charts use a vivid coral, sky, mint, amber, violet, and ivory palette. Image presentations include panoramic banners, split-layout features, repeated cards, and profile avatars. Images may use either a verified HTTPS URL or a registered asset ID from the panel's course resource. Use short text blocks, strong hierarchy, balanced composition, and meaningful available imagery with enough space to act as a visual anchor—not a tiny thumbnail beside oversized text. Use groups and element IDs instead of HTML or CSS.",
   propsSchema: {
     type: "object",
     properties: {

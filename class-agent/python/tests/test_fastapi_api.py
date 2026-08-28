@@ -403,6 +403,34 @@ def test_authorized_resource_content_is_served_by_uri_without_exposing_paths() -
     )
 
 
+def test_registered_course_asset_is_served_by_resource_and_asset_id() -> None:
+    client, _, _ = _build_client()
+
+    response = client.get(
+        f"{API_PREFIX}/course/resources/asset",
+        params={
+            "uri": "course://instructors",
+            "asset_id": "pattie_maes_portrait",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("image/jpeg")
+    assert response.headers["x-class-agent-resource-uri"] == "course://instructors"
+    assert response.headers["x-class-agent-asset-id"] == "pattie_maes_portrait"
+    assert response.content.startswith(b"\xff\xd8\xff")
+    assert (
+        client.get(
+            f"{API_PREFIX}/course/resources/asset",
+            params={
+                "uri": "course://instructors",
+                "asset_id": "invented_portrait",
+            },
+        ).status_code
+        == 404
+    )
+
+
 def test_temporary_upload_route_stores_allowed_file_for_session(tmp_path: Path) -> None:
     client, _, _ = _build_client(FileTemporaryUploadStore(tmp_path / "uploads"))
 

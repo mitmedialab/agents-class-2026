@@ -5,6 +5,11 @@ const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL as string | undefine
 const API_BASE_URL = (configuredBaseUrl ?? "/api/v1").replace(/\/$/, "");
 const UPLOAD_TIMEOUT_MS = 60_000;
 
+export function courseResourceAssetUrl(resourceUri: string, assetId: string): string {
+  const query = new URLSearchParams({ uri: resourceUri, asset_id: assetId }).toString();
+  return `${API_BASE_URL}/course/resources/asset?${query}`;
+}
+
 export interface ConversationDetail {
   conversation: Conversation;
   events: Event[];

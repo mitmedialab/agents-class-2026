@@ -127,8 +127,8 @@ def build_runtime(
         PublicImageSearchTool(search_duckduckgo_images),
         PublicVisitWebpageTool(VisitWebpageTool(max_output_length=20_000).forward),
         WorkspaceListComponentsTool(component_registry),
-        WorkspaceOpenComponentTool(component_registry),
-        WorkspaceUpdateComponentTool(component_registry),
+        WorkspaceOpenComponentTool(component_registry, course_resources),
+        WorkspaceUpdateComponentTool(component_registry, course_resources),
         WorkspaceFocusComponentTool(component_registry),
         WorkspaceCloseComponentTool(component_registry),
     ]

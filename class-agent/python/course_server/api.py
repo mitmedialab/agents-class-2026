@@ -82,6 +82,10 @@ ANON_COOKIE = "class_agent_anon"
 API_PREFIX = "/api/v1"
 
 NonEmptyText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+CourseAssetId = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, pattern=r"^[a-z][a-z0-9_]*$", max_length=100),
+]
 
 
 class ApiModel(BaseModel):
@@ -805,6 +809,43 @@ def create_app(
             headers={
                 "Cache-Control": "private, max-age=60",
                 "X-Class-Agent-Resource-Uri": resource.uri,
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+
+    @router.get("/course/resources/asset", response_model=None)
+    async def read_course_resource_asset(
+        uri: NonEmptyText,
+        asset_id: CourseAssetId,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> Response:
+        state = _get_app_state(request)
+        assert state.services is not None
+        catalog = state.services.course_resources
+        if catalog is None:
+            catalog = FileResourceProvider.from_registry()
+        permitted = frozenset(
+            PublicCapabilityPolicy(resource.uri for resource in catalog.list_public())
+            .authorize(principal)
+            .resource_uris
+        )
+        if uri not in permitted:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+        try:
+            asset = await catalog.read_asset(uri, asset_id)
+        except ResourceNotFound as error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="not found",
+            ) from error
+        return Response(
+            content=asset.data,
+            media_type=asset.media_type,
+            headers={
+                "Cache-Control": "private, max-age=3600",
+                "X-Class-Agent-Resource-Uri": asset.uri,
+                "X-Class-Agent-Asset-Id": asset_id,
                 "X-Content-Type-Options": "nosniff",
             },
         )

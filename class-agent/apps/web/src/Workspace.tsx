@@ -21,6 +21,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   browserSnapshotUrl,
   browserPreviewSnapshotUrl,
+  courseResourceAssetUrl,
   getCourseResourceContent,
   type CourseResourceContent,
 } from "./api.js";
@@ -68,6 +69,29 @@ function stringProp(props: JsonObject, name: string): string | undefined {
 function numberProp(props: JsonObject, name: string): number | undefined {
   const value = props[name];
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+export function resolveVisualCourseAssets(
+  value: JsonValue | undefined,
+  resourceUri: string | undefined,
+): JsonValue | undefined {
+  if (!Array.isArray(value) || !resourceUri) return value;
+  return value.map((element) => {
+    if (
+      !element ||
+      typeof element !== "object" ||
+      Array.isArray(element) ||
+      element.type !== "image" ||
+      typeof element.asset_id !== "string"
+    ) {
+      return element;
+    }
+    const { asset_id: assetId, ...resolved } = element;
+    return {
+      ...resolved,
+      url: courseResourceAssetUrl(resourceUri, assetId),
+    };
+  });
 }
 
 function draftDocumentFields(value: JsonValue | undefined): DraftDocumentField[] | null {
@@ -300,8 +324,12 @@ function ResourcePanel({
   }
   if (panel.componentId === "visual-composition") {
     const rootId = stringProp(panel.props, "root_id");
+    const resolvedElements = resolveVisualCourseAssets(
+      panel.props.elements,
+      panel.resourceUri,
+    );
     const elements = rootId
-      ? normalizeVisualElements(panel.props.elements, rootId)
+      ? normalizeVisualElements(resolvedElements, rootId)
       : null;
     if (!rootId || !elements) {
       return <p className="workspace-panel-message">The visual composition is invalid.</p>;

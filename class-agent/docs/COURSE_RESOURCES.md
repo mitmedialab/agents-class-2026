@@ -22,6 +22,11 @@ it by hand.
 A sidecar may also declare an `assets` object that maps stable asset IDs to files
 relative to the sidecar. Asset paths are confined to `shared/`, validated as existing
 files, and copied into the generated registry alongside the primary resource path.
+Reading a resource returns its asset IDs and media types to the Course Agent without
+revealing repository paths. The browser resolves those IDs through the authorized
+`/api/v1/course/resources/asset` endpoint; model-controlled input never selects a file
+path. For example, the staff resource exposes its portraits as registered image assets,
+so a profile composition can use them directly instead of searching the public web.
 
 To add a resource, create its public content and a sibling `resource.json`. The
 manifest's `file` path is relative to its own directory. URI and resolved file paths

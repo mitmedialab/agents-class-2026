@@ -66,6 +66,14 @@ Calendar selection/view changes and document page/find actions emit validated
 `workspace.interaction` events, which are available to the next agent turn without
 storing DOM details.
 
+Visual Composition `1.1.0` adds a backward-compatible registered-image form. An image
+may still carry a verified HTTPS `url`, or it may carry an `asset_id` returned by the
+course resource named in the panel's `resource_uri`. The server verifies that the ID
+belongs to that resource, and the browser resolves it through the authenticated course
+asset endpoint. Existing `1.0.0` URL-based panel events remain valid, so this minor
+component version does not require a workspace schema version or persisted-data
+migration.
+
 ## Resource separation
 
 A panel stores a `resource_uri`; it does not permanently embed syllabus or schedule
@@ -74,6 +82,7 @@ content endpoint and supplies it to the trusted renderer:
 
 ```text
 course://schedule → Calendar
+course://instructors + registered portrait asset → VisualComposition
 specific paper or file → DocumentViewer
 knowledge from one or more sources → VisualComposition
 specific website → WebpageViewer or BrowserViewer

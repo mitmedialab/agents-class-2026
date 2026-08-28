@@ -56,6 +56,11 @@ context names an unregistered tool. Read and search tools independently constrai
 to authorized resource URIs during execution. Model-controlled input cannot select a
 filesystem path. The schedule tool identifies its source as provisional.
 
+Resource reads also return safe registered-asset IDs when a manifest declares them.
+The runtime tells the agent to prefer those official assets, attach them to a visual
+composition through the source resource URI and exact asset ID, and skip redundant web
+image search. Asset ownership is revalidated by the workspace tool and HTTP endpoint.
+
 `web.search` and `web.visit` wrap smolagents' toolkit implementations inside the same
 authorized platform boundary. `web.search_images` wraps DuckDuckGo-first DDGS image
 search, with another DDGS public-image backend as an availability fallback, and returns

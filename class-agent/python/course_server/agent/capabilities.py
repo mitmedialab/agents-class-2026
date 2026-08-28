@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import ipaddress
 import json
+import mimetypes
 import os
 import re
 import shutil
@@ -636,7 +637,7 @@ class CourseSearchResult(BaseModel):
 
 
 class ResourceContents(BaseModel):
-    """Text returned from one registered resource."""
+    """Text and safe asset metadata returned from one registered resource."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -644,6 +645,7 @@ class ResourceContents(BaseModel):
     title: str
     media_type: str
     text: str
+    assets: dict[str, str] = Field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -663,7 +665,11 @@ class ResourceProvider(Protocol):
 class CourseResourceCatalog(ResourceProvider, Protocol):
     def list_public(self) -> list[ResourceSummary]: ...
 
+    def asset_ids(self, uri: str) -> tuple[str, ...]: ...
+
     async def read_file(self, uri: str) -> ResourceFile: ...
+
+    async def read_asset(self, uri: str, asset_id: str) -> ResourceFile: ...
 
     async def search(
         self,
@@ -685,6 +691,7 @@ class FileResourceProvider:
 
     async def read(self, uri: str) -> ResourceContents:
         resource_file = await self.read_file(uri)
+        resource = self._resources[uri]
         try:
             text = resource_file.data.decode("utf-8")
         except UnicodeDecodeError as error:
@@ -694,6 +701,10 @@ class FileResourceProvider:
             title=resource_file.title,
             media_type=resource_file.media_type,
             text=text,
+            assets={
+                asset_id: _asset_media_type(path)
+                for asset_id, path in sorted(resource.assets.items())
+            },
         )
 
     async def read_file(self, uri: str) -> ResourceFile:
@@ -708,6 +719,30 @@ class FileResourceProvider:
             uri=resource.uri,
             title=resource.title,
             media_type=resource.media_type,
+            data=data,
+        )
+
+    def asset_ids(self, uri: str) -> tuple[str, ...]:
+        resource = self._resources.get(uri)
+        if resource is None:
+            raise ResourceNotFound(uri)
+        return tuple(sorted(resource.assets))
+
+    async def read_asset(self, uri: str, asset_id: str) -> ResourceFile:
+        resource = self._resources.get(uri)
+        if resource is None:
+            raise ResourceNotFound(uri)
+        asset_path = resource.assets.get(asset_id)
+        if asset_path is None:
+            raise ResourceNotFound(f"{uri} asset {asset_id}")
+        try:
+            data = await asyncio.to_thread(asset_path.read_bytes)
+        except OSError as error:
+            raise ResourceNotFound(f"{uri} asset {asset_id}") from error
+        return ResourceFile(
+            uri=resource.uri,
+            title=asset_id,
+            media_type=_asset_media_type(asset_path),
             data=data,
         )
 
@@ -830,6 +865,11 @@ def _search_terms(query: str) -> list[str]:
     return [match.group(0).casefold() for match in _SEARCH_WORD.finditer(query)]
 
 
+def _asset_media_type(path: Path) -> str:
+    media_type, _ = mimetypes.guess_type(path.name)
+    return media_type or "application/octet-stream"
+
+
 def _search_blocks(text: str) -> list[str]:
     blocks = [" ".join(block.split()) for block in re.split(r"\n\s*\n", text)]
     return [block for block in blocks if block]
@@ -931,8 +971,8 @@ class CourseReadPublicFileTool:
 
     id = READ_PUBLIC_FILE_TOOL_ID
     description = (
-        "Read a public course file by its course:// URI. Use course.show_public_files "
-        "first when the appropriate URI is unknown."
+        "Read a public course file and discover its registered assets by course:// URI. "
+        "Use course.show_public_files first when the appropriate URI is unknown."
     )
     input_schema: ClassVar[dict[str, JsonValue]] = {
         "type": "object",
@@ -959,8 +999,17 @@ class CourseReadPublicFileTool:
         if uri not in context.permitted_resource_uris:
             raise PermissionError(f"{uri} is not authorized for this run")
         resource = await self._resources.read(uri)
+        content: JsonValue = resource.text
+        if resource.assets:
+            registered_assets: dict[str, JsonValue] = {}
+            for asset_id, media_type in resource.assets.items():
+                registered_assets[asset_id] = media_type
+            content = {
+                "text": resource.text,
+                "registered_assets": registered_assets,
+            }
         return ToolExecutionResult(
-            content=resource.text,
+            content=content,
             summary=f"Read public course resource {resource.uri}.",
             storage_policy="server_full",
             resource_uris=[resource.uri],
@@ -1163,7 +1212,7 @@ class CourseSearchTool:
     id = SEARCH_COURSE_TOOL_ID
     description = (
         "Search the official syllabus, provisional schedule, repository overview, "
-        "public FAQ, and application guide."
+        "public FAQ, course staff profiles, and application guide."
     )
     input_schema: ClassVar[dict[str, JsonValue]] = {
         "type": "object",

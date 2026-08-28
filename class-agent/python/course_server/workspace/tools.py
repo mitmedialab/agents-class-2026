@@ -11,6 +11,8 @@ from pydantic import JsonValue, ValidationError
 
 from course_server.agent.capabilities import (
     COURSE_SCHEDULE_URI,
+    CourseResourceCatalog,
+    ResourceNotFound,
     ToolEmittedEvent,
     ToolExecutionContext,
     ToolExecutionResult,
@@ -143,9 +145,54 @@ def _visual_composition_has_image(panel: WorkspacePanel) -> bool:
     return isinstance(elements, list) and any(
         isinstance(element, dict)
         and element.get("type") == "image"
-        and isinstance(element.get("url"), str)
+        and (isinstance(element.get("url"), str) or isinstance(element.get("asset_id"), str))
         for element in elements
     )
+
+
+def _enforce_registered_course_assets(
+    *,
+    command: WorkspaceCommand,
+    state: WorkspaceState,
+    resources: CourseResourceCatalog | None,
+) -> None:
+    if isinstance(command, OpenWorkspaceCommand):
+        panel_id = command.panel.id
+    elif isinstance(command, UpdateWorkspaceCommand):
+        panel_id = command.panel_id
+    else:
+        return
+    panel = next((candidate for candidate in state.panels if candidate.id == panel_id), None)
+    if panel is None or panel.component_id != "visual-composition":
+        return
+    elements = panel.props.get("elements")
+    if not isinstance(elements, list):
+        return
+    asset_ids = [
+        str(element["asset_id"])
+        for element in elements
+        if isinstance(element, dict)
+        and element.get("type") == "image"
+        and isinstance(element.get("asset_id"), str)
+    ]
+    if not asset_ids:
+        return
+    if panel.resource_uri is None or not panel.resource_uri.startswith("course://"):
+        raise ToolValidationError(
+            "A registered image asset requires the visual-composition resource_uri for "
+            "the course resource that supplied it."
+        )
+    if resources is None:
+        raise ToolValidationError("Registered course assets are unavailable in this runtime.")
+    try:
+        available = frozenset(resources.asset_ids(panel.resource_uri))
+    except ResourceNotFound as error:
+        raise ToolValidationError("The registered course resource is unavailable.") from error
+    unknown = sorted(set(asset_ids) - available)
+    if unknown:
+        raise ToolValidationError(
+            "Unknown registered asset for this course resource: " + ", ".join(unknown)
+        )
 
 
 def _enforce_chart_data_contract(
@@ -349,12 +396,14 @@ def _apply_command(
     registry: ComponentRegistry,
     command: WorkspaceCommand,
     context: ToolExecutionContext,
+    resources: CourseResourceCatalog | None = None,
 ) -> WorkspaceState:
     try:
         state = registry.apply(_current_state(context), command)
     except WorkspaceValidationError as error:
         raise ToolValidationError(str(error)) from error
     _enforce_chart_data_contract(command=command, state=state)
+    _enforce_registered_course_assets(command=command, state=state, resources=resources)
     _enforce_visual_media(command=command, state=state, context=context)
     _enforce_image_layout_metadata(command=command, state=state, context=context)
     context.workspace_state.clear()
@@ -429,6 +478,7 @@ class WorkspaceOpenComponentTool:
         "for schedules and other structured resources; and use visual-composition for synthesized "
         "knowledge. Opening a component replaces the prior workspace surface when focus changes. "
         "A visual composition must be clear and presentation-ready on its first open. For a "
+        "registered course image, set the panel resource_uri and use the returned asset_id. For a "
         "concrete person, project, prototype, device, interface, or place, the platform requires "
         "an image search before the first open call and requires a suitable result when one is "
         "available. Very wide contained figures belong full-width in a stack, never in a split "
@@ -458,8 +508,13 @@ class WorkspaceOpenComponentTool:
         "additionalProperties": False,
     }
 
-    def __init__(self, registry: ComponentRegistry) -> None:
+    def __init__(
+        self,
+        registry: ComponentRegistry,
+        resources: CourseResourceCatalog | None = None,
+    ) -> None:
         self._registry = registry
+        self._resources = resources
 
     async def execute(
         self,
@@ -498,7 +553,12 @@ class WorkspaceOpenComponentTool:
             layout=layout,
         )
         command = OpenWorkspaceCommand(panel=panel)
-        _apply_command(registry=self._registry, command=command, context=context)
+        _apply_command(
+            registry=self._registry,
+            command=command,
+            context=context,
+            resources=self._resources,
+        )
         return _command_result(
             command=command,
             event_type="workspace.panel.opened",
@@ -537,8 +597,13 @@ class WorkspaceUpdateComponentTool:
         "additionalProperties": False,
     }
 
-    def __init__(self, registry: ComponentRegistry) -> None:
+    def __init__(
+        self,
+        registry: ComponentRegistry,
+        resources: CourseResourceCatalog | None = None,
+    ) -> None:
         self._registry = registry
+        self._resources = resources
 
     async def execute(
         self,
@@ -568,7 +633,12 @@ class WorkspaceUpdateComponentTool:
             command = UpdateWorkspaceCommand.model_validate(changes)
         except ValidationError as error:
             raise ToolValidationError("workspace update must contain a valid change") from error
-        _apply_command(registry=self._registry, command=command, context=context)
+        _apply_command(
+            registry=self._registry,
+            command=command,
+            context=context,
+            resources=self._resources,
+        )
         return _command_result(
             command=command,
             event_type="workspace.panel.updated",

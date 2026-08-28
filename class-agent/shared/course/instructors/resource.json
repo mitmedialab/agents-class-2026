@@ -3,7 +3,7 @@
   "resource": {
     "uri": "course://instructors",
     "title": "Course Staff",
-    "description": "Instructors, teaching assistants, affiliations, contact information, biographies, and application fields.",
+    "description": "Instructors, teaching assistants, official portrait assets, affiliations, contact information, and biographies.",
     "media_type": "text/markdown",
     "file": "instructors.md",
     "assets": {

@@ -291,6 +291,11 @@ function safeHttpsUrl(value: string): string | null {
   }
 }
 
+function safeImageUrl(value: string): string | null {
+  if (value.startsWith("/") && !value.startsWith("//")) return value;
+  return safeHttpsUrl(value);
+}
+
 function elementAttributes(element: VisualElement) {
   return {
     className: "ca-visual-element",
@@ -353,7 +358,7 @@ export function VisualComposition({
       );
     }
     if (element.type === "image") {
-      const url = safeHttpsUrl(element.url);
+      const url = safeImageUrl(element.url);
       const hasSourceDimensions =
         element.source_width !== undefined && element.source_height !== undefined;
       return (

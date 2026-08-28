@@ -234,6 +234,41 @@ describe("component registry", () => {
 
     expect(registry.apply(emptyWorkspaceState(), visual).panels).toHaveLength(1);
 
+    expect(
+      registry.apply(emptyWorkspaceState(), {
+        ...visual,
+        panel: {
+          ...visual.panel,
+          resource_uri: "course://instructors",
+          props: {
+            ...visual.panel.props,
+            elements: visual.panel.props.elements.map((element) => {
+              if (element.id !== "photo") return element;
+              const { url: _url, ...withoutUrl } = element;
+              return { ...withoutUrl, asset_id: "pattie_maes_portrait" };
+            }),
+          },
+        },
+      }).panels,
+    ).toHaveLength(1);
+
+    expect(() =>
+      registry.apply(emptyWorkspaceState(), {
+        ...visual,
+        panel: {
+          ...visual.panel,
+          props: {
+            ...visual.panel.props,
+            elements: visual.panel.props.elements.map((element) =>
+              element.id === "photo"
+                ? { ...element, asset_id: "pattie_maes_portrait" }
+                : element,
+            ),
+          },
+        },
+      }),
+    ).toThrow("invalid props");
+
     expect(() =>
       registry.apply(emptyWorkspaceState(), {
         ...visual,
