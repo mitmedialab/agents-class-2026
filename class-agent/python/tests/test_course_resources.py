@@ -8,6 +8,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from pydantic import ValidationError
 from pypdf import PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
@@ -18,6 +19,7 @@ from course_server.agent import (
     COURSE_INSTRUCTORS_URI,
     COURSE_SCHEDULE_URI,
     COURSE_SYLLABUS_URI,
+    CourseApplication,
     CourseGetApplicationTool,
     CourseReadPublicFileTool,
     CourseSearchFaqTool,
@@ -26,6 +28,7 @@ from course_server.agent import (
     CourseSubmitApplicationTool,
     FileApplicantStore,
     FileResourceProvider,
+    PublicImageInspectionTool,
     PublicImageSearchTool,
     PublicVisitWebpageTool,
     PublicWebSearchTool,
@@ -596,6 +599,60 @@ def test_public_image_search_normalizes_https_candidates_for_workspace_images() 
     asyncio.run(scenario())
 
 
+def test_page_images_can_be_inspected_together() -> None:
+    async def scenario() -> None:
+        context = execution_context()
+        page = await PublicVisitWebpageTool(
+            lambda url: {
+                "url": url,
+                "text": "# Project",
+                "images": [
+                    {"image_url": "https://images.example.org/one.jpg", "alt": "One"},
+                    {"image_url": "https://images.example.org/two.jpg", "alt": "Two"},
+                ],
+            }
+        ).execute({"url": "https://8.8.8.8/project"}, context)
+
+        assert isinstance(page.content, dict)
+        page_images = page.content["images"]
+        assert isinstance(page_images, list)
+        assert len(page_images) == 2
+        calls: list[tuple[list[str], str]] = []
+
+        def inspect(urls: list[str], prompt: str) -> str:
+            calls.append((urls, prompt))
+            return "Image one is a diagram; image two is a prototype photograph."
+
+        result = await PublicImageInspectionTool(inspect, lambda url: url).execute(
+            {
+                "urls": [
+                    "https://images.example.org/one.jpg",
+                    "https://images.example.org/two.jpg",
+                ],
+                "prompt": "Compare these as project visuals.",
+            },
+            context,
+        )
+
+        assert calls == [
+            (
+                [
+                    "https://images.example.org/one.jpg",
+                    "https://images.example.org/two.jpg",
+                ],
+                "Compare these as project visuals.",
+            )
+        ]
+        assert isinstance(result.content, dict)
+        assert "prototype photograph" in str(result.content["analysis"])
+        assert context.transient_state["image_search_candidates"] == [
+            "https://images.example.org/one.jpg",
+            "https://images.example.org/two.jpg",
+        ]
+
+    asyncio.run(scenario())
+
+
 def test_application_tool_stores_private_json_with_server_generated_name(
     tmp_path: Path,
 ) -> None:
@@ -620,6 +677,7 @@ def test_application_tool_stores_private_json_with_server_generated_name(
         application = {
             "name": "Ada Applicant",
             "email": "ada@example.edu",
+            "github_id": "ada-lovelace",
             "department_research_group_year_of_study_mit": (
                 "Media Lab, Fluid Interfaces, second year"
             ),
@@ -652,6 +710,7 @@ def test_application_tool_stores_private_json_with_server_generated_name(
         application_file = stored_directories[0] / "application.json"
         stored = json.loads(application_file.read_text(encoding="utf-8"))
         assert stored["application"]["name"] == "Ada Applicant"
+        assert stored["application"]["github_id"] == "ada-lovelace"
         assert stored["application"]["photo_upload_id"] == str(photo.id)
         assert stored["principal"]["anonymous_session_id"] is not None
         photo_file = stored_directories[0] / "photo.png"
@@ -677,6 +736,7 @@ def test_application_tool_reports_every_incomplete_field(tmp_path: Path) -> None
 
         message = str(raised.value)
         assert "email" in message
+        assert "github_id" in message
         assert "photo_upload_id" in message
         assert "registration_status" in message
         assert "questions_or_comments_for_instructors" in message
@@ -684,10 +744,36 @@ def test_application_tool_reports_every_incomplete_field(tmp_path: Path) -> None
     asyncio.run(scenario())
 
 
+@pytest.mark.parametrize(
+    "github_id",
+    ["@ada", "https://github.com/ada", "-ada", "ada-", "ada--dev", "a" * 40],
+)
+def test_application_rejects_malformed_github_id(github_id: str) -> None:
+    with pytest.raises(ValidationError):
+        CourseApplication.model_validate(
+            {
+                "name": "Ada Applicant",
+                "email": "ada@example.edu",
+                "github_id": github_id,
+                "department_research_group_year_of_study_mit": "MIT",
+                "personal_webpage": "None",
+                "interests": "Agents",
+                "why_take_this_class": "To learn",
+                "knowledgeable_about": "Python",
+                "skill_set": "Building software",
+                "registration_status": "MIT student for credit",
+                "listener_willing_to_do_weekly_builds": "Not applicable",
+                "questions_or_comments_for_instructors": "None",
+                "photo_upload_id": str(uuid4()),
+            }
+        )
+
+
 def test_application_tool_requires_supplied_form_categories_and_photo() -> None:
     assert CourseSubmitApplicationTool.input_schema["required"] == [
         "name",
         "email",
+        "github_id",
         "department_research_group_year_of_study_mit",
         "personal_webpage",
         "interests",
@@ -701,6 +787,11 @@ def test_application_tool_requires_supplied_form_categories_and_photo() -> None:
     ]
     properties = CourseSubmitApplicationTool.input_schema["properties"]
     assert isinstance(properties, dict)
+    github_id = properties["github_id"]
+    assert isinstance(github_id, dict)
+    assert github_id["pattern"] == (
+        "^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$"
+    )
     registration_status = properties["registration_status"]
     assert isinstance(registration_status, dict)
     assert registration_status["enum"] == [

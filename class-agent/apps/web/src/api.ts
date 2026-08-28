@@ -335,6 +335,7 @@ const TOOL_ACTIVITY_LABELS: Record<string, string> = {
   "course.submit_application": "Submitting application",
   "web.search": "Searching the public web",
   "web.search_images": "Searching public images",
+  "web.inspect_images": "Inspecting public images",
   "web.visit": "Reading a public webpage",
   "browser.open": "Opening remote browser",
   "browser.navigate": "Navigating remote browser",

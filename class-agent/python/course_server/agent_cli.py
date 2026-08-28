@@ -8,7 +8,7 @@ import re
 from collections.abc import Sequence
 
 from dotenv import load_dotenv
-from smolagents import DuckDuckGoSearchTool, VisitWebpageTool
+from smolagents import DuckDuckGoSearchTool
 
 from agent_core import AgentResult, AgentRuntime, Conversation
 from course_server.agent import (
@@ -26,6 +26,7 @@ from course_server.agent import (
     FileApplicantStore,
     FileResourceProvider,
     PublicCapabilityPolicy,
+    PublicImageInspectionTool,
     PublicImageSearchTool,
     PublicVisitWebpageTool,
     PublicWebSearchTool,
@@ -55,7 +56,12 @@ from course_server.uploads import (
     FileTemporaryUploadStore,
     TemporaryUploadStore,
 )
-from course_server.web_search import probe_public_image_url, search_duckduckgo_images
+from course_server.web_search import (
+    fetch_public_webpage,
+    inspect_images_with_openai,
+    probe_public_image_url,
+    search_duckduckgo_images,
+)
 from course_server.workspace import ComponentRegistry, load_component_registry
 from course_server.workspace.tools import (
     WorkspaceCloseComponentTool,
@@ -125,10 +131,27 @@ def build_runtime(
         CourseSubmitApplicationTool(applicant_store, upload_store),
         PublicWebSearchTool(DuckDuckGoSearchTool(max_results=5).forward),
         PublicImageSearchTool(search_duckduckgo_images, probe_public_image_url),
-        PublicVisitWebpageTool(VisitWebpageTool(max_output_length=20_000).forward),
+        PublicImageInspectionTool(
+            lambda urls, prompt: inspect_images_with_openai(
+                urls,
+                prompt,
+                model_id=settings.model_id,
+                api_key=settings.model_api_key.get_secret_value(),
+            ),
+            probe_public_image_url,
+        ),
+        PublicVisitWebpageTool(fetch_public_webpage),
         WorkspaceListComponentsTool(component_registry),
-        WorkspaceOpenComponentTool(component_registry, course_resources),
-        WorkspaceUpdateComponentTool(component_registry, course_resources),
+        WorkspaceOpenComponentTool(
+            component_registry,
+            course_resources,
+            strict_visual_policy=settings.workspace_strict_visual_policy,
+        ),
+        WorkspaceUpdateComponentTool(
+            component_registry,
+            course_resources,
+            strict_visual_policy=settings.workspace_strict_visual_policy,
+        ),
         WorkspaceFocusComponentTool(component_registry),
         WorkspaceCloseComponentTool(component_registry),
     ]

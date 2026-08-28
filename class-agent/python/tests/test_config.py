@@ -59,6 +59,18 @@ def test_settings_can_disable_and_bound_the_remote_browser() -> None:
     assert str(settings.browser_executable_path) == "/opt/chromium/chrome"
 
 
+def test_settings_can_disable_strict_workspace_visual_policy() -> None:
+    settings = AgentSettings.from_environment(
+        {
+            "DATABASE_URL": "postgresql://example",
+            "OPENAI_API_KEY": "test-secret-value",
+            "WORKSPACE_STRICT_VISUAL_POLICY": "false",
+        }
+    )
+
+    assert settings.workspace_strict_visual_policy is False
+
+
 def test_openai_provider_creates_transient_smolagents_model_without_network_call() -> None:
     provider = OpenAIModelProvider(
         model_id="test-model",

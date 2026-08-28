@@ -16,6 +16,7 @@ dependencies = [
   "fastapi>=0.115,<1",
   "httpx>=0.28,<1",
   "jsonschema>=4.23,<5",
+  "markdownify>=1.2,<2",
   "playwright>=1.55,<2",
   "pydantic>=2.10,<3",
   "pypdf>=6,<7",

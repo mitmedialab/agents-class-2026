@@ -377,6 +377,36 @@ def test_searched_image_dimensions_control_primary_visual_placement() -> None:
     asyncio.run(scenario())
 
 
+def test_relaxed_visual_policy_skips_image_requirement_and_layout_checks() -> None:
+    async def scenario() -> None:
+        registry = load_component_registry()
+        tool = WorkspaceOpenComponentTool(registry, strict_visual_policy=False)
+        context = execution_context()
+        context.transient_state["image_search_candidates"] = ["https://example.com/image.png"]
+
+        opened = await tool.execute(
+            {
+                "component_id": "visual-composition",
+                "props": {
+                    "root_id": "root",
+                    "elements": [
+                        {
+                            "id": "root",
+                            "type": "text",
+                            "text": "A physical prototype without a selected image.",
+                        }
+                    ],
+                },
+            },
+            context,
+        )
+
+        assert isinstance(opened.content, dict)
+        assert opened.content["status"] == "opened"
+
+    asyncio.run(scenario())
+
+
 def test_workspace_events_reconstruct_state_without_framework_objects() -> None:
     registry = load_component_registry()
     panel_id = uuid4()

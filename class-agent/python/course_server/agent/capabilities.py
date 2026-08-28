@@ -56,6 +56,7 @@ SUBMIT_APPLICATION_TOOL_ID = "course.submit_application"
 READ_UPLOAD_TOOL_ID = "upload.read"
 WEB_SEARCH_TOOL_ID = "web.search"
 WEB_IMAGE_SEARCH_TOOL_ID = "web.search_images"
+WEB_IMAGE_INSPECT_TOOL_ID = "web.inspect_images"
 VISIT_WEBPAGE_TOOL_ID = "web.visit"
 COURSE_SYLLABUS_URI = "course://syllabus"
 COURSE_SCHEDULE_URI = "course://schedule"
@@ -78,6 +79,7 @@ _IMAGE_SEARCH_OVERSAMPLE_FACTOR = 4
 _IMAGE_SEARCH_MIN_CANDIDATES = 12
 _IMAGE_SEARCH_MAX_CANDIDATES = 30
 _MAX_UPLOAD_TEXT_LENGTH = 50_000
+_GITHUB_ID = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}\Z")
 
 StoragePolicy = Literal["server_full", "server_summary", "local_only", "ephemeral"]
 ResourceVisibility = Literal["public"]
@@ -165,8 +167,10 @@ class ExecutableTool(Protocol):
 
 
 WebTextRunner = Callable[[str], str]
+WebVisitRunner = Callable[[str], str | Mapping[str, object]]
 ImageSearchRunner = Callable[[str, int], list[dict[str, object]]]
 ImageProbeRunner = Callable[[str], str | None]
+ImageInspectionRunner = Callable[[list[str], str], str]
 
 
 def _required_tool_string(
@@ -596,6 +600,99 @@ class PublicImageSearchTool:
         )
 
 
+class PublicImageInspectionTool:
+    """Visually inspect a bounded batch of previously discovered public images."""
+
+    id = WEB_IMAGE_INSPECT_TOOL_ID
+    description = (
+        "Inspect one to four images discovered by web.search_images or web.visit in one "
+        "multimodal call. Use this to compare actual visible content and suitability before "
+        "selecting images for a workspace composition. Image appearance alone does not verify "
+        "identity or factual claims."
+    )
+    input_schema: ClassVar[dict[str, JsonValue]] = {
+        "type": "object",
+        "properties": {
+            "urls": {
+                "type": "array",
+                "items": {"type": "string"},
+                "minItems": 1,
+                "maxItems": 4,
+                "description": "One to four image URLs returned by an earlier web tool call.",
+            },
+            "prompt": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1_000,
+                "description": "What to inspect or compare across the images.",
+            },
+        },
+        "required": ["urls", "prompt"],
+        "additionalProperties": False,
+    }
+
+    def __init__(self, inspect: ImageInspectionRunner, probe: ImageProbeRunner) -> None:
+        self._inspect = inspect
+        self._probe = probe
+
+    async def execute(
+        self,
+        arguments: Mapping[str, JsonValue],
+        context: ToolExecutionContext,
+    ) -> ToolExecutionResult:
+        _reject_unknown_arguments(arguments, frozenset({"urls", "prompt"}))
+        raw_urls = arguments.get("urls")
+        if (
+            not isinstance(raw_urls, list)
+            or not 1 <= len(raw_urls) <= 4
+            or any(not isinstance(value, str) for value in raw_urls)
+        ):
+            raise ToolValidationError("urls must contain one to four image URLs")
+        urls = list(dict.fromkeys(cast(list[str], raw_urls)))
+        prompt = _required_text_argument(arguments, "prompt", max_length=1_000)
+        known_values: list[JsonValue] = []
+        for key in ("image_search_candidates", "page_image_candidates"):
+            values = context.transient_state.get(key, [])
+            if isinstance(values, list):
+                known_values.extend(values)
+        known_urls = {value for value in known_values if isinstance(value, str)}
+        if any(url not in known_urls for url in urls):
+            raise ToolValidationError(
+                "Inspect only image URLs returned by web.search_images or web.visit in this run."
+            )
+        outcomes: list[str | Exception | None] = []
+        for url in urls:
+            try:
+                outcomes.append(self._probe(url))
+            except Exception as error:
+                outcomes.append(error)
+        verified = [
+            final_url
+            for final_url in outcomes
+            if isinstance(final_url, str) and _https_result_url(final_url) is not None
+        ]
+        if not verified:
+            raise ToolValidationError("None of the selected images remains safely accessible.")
+        try:
+            analysis = self._inspect(verified, prompt)
+        except Exception as error:
+            raise ToolValidationError("The selected images could not be inspected.") from error
+        if not analysis.strip():
+            raise ToolValidationError("Image inspection returned no visual analysis.")
+        existing = context.transient_state.get("image_search_candidates", [])
+        candidates = [value for value in existing if isinstance(value, str)] if isinstance(
+            existing, list
+        ) else []
+        context.transient_state["image_search_candidates"] = list(
+            dict.fromkeys([*candidates, *verified])
+        )
+        return ToolExecutionResult(
+            content={"images": verified, "analysis": analysis.strip()},
+            summary=f"Inspected {len(verified)} public images.",
+            storage_policy="server_summary",
+        )
+
+
 class PublicVisitWebpageTool:
     """Read a public webpage through an injected smolagents page-view implementation."""
 
@@ -618,7 +715,7 @@ class PublicVisitWebpageTool:
         "additionalProperties": False,
     }
 
-    def __init__(self, visit: WebTextRunner) -> None:
+    def __init__(self, visit: WebVisitRunner) -> None:
         self._visit = visit
 
     async def execute(
@@ -626,22 +723,53 @@ class PublicVisitWebpageTool:
         arguments: Mapping[str, JsonValue],
         context: ToolExecutionContext,
     ) -> ToolExecutionResult:
-        del context
         raw_url = _required_tool_string(
             arguments,
             "url",
             max_length=_MAX_WEB_URL_LENGTH,
         )
-        url = await asyncio.to_thread(_public_web_url, raw_url)
+        url = _public_web_url(raw_url)
         try:
-            result = await asyncio.to_thread(self._visit, url)
+            result = self._visit(url)
         except Exception as error:
             raise ToolValidationError("The public webpage could not be read.") from error
-        content = result.strip()
-        if not content:
+        if isinstance(result, str):
+            content: JsonValue = result.strip()
+            image_urls: list[str] = []
+        elif isinstance(result, Mapping):
+            text = result.get("text")
+            raw_images = result.get("images")
+            images = (
+                [dict(value) for value in raw_images if isinstance(value, Mapping)]
+                if isinstance(raw_images, list)
+                else []
+            )
+            image_urls = [
+                str(image["image_url"])
+                for image in images
+                if _https_result_url(image.get("image_url")) is not None
+            ]
+            content = {
+                "url": str(result.get("url", url)),
+                "text": text[:_MAX_WEB_RESULT_LENGTH] if isinstance(text, str) else "",
+                "images": cast(list[JsonValue], images),
+            }
+        else:
+            raise ToolValidationError("The public webpage returned an invalid result.")
+        if (isinstance(content, str) and not content) or (
+            isinstance(content, dict) and not content.get("text") and not content.get("images")
+        ):
             raise ToolValidationError("The public webpage returned no readable content.")
+        if image_urls:
+            existing = context.transient_state.get("page_image_candidates", [])
+            candidates = [value for value in existing if isinstance(value, str)] if isinstance(
+                existing, list
+            ) else []
+            context.transient_state["page_image_candidates"] = list(
+                dict.fromkeys([*candidates, *image_urls])
+            )
         return ToolExecutionResult(
-            content=content[:_MAX_WEB_RESULT_LENGTH],
+            content=content[:_MAX_WEB_RESULT_LENGTH] if isinstance(content, str) else content,
             summary="Read a public webpage.",
             storage_policy="server_summary",
         )
@@ -1383,6 +1511,7 @@ class CourseApplication(BaseModel):
 
     name: str = Field(min_length=2, max_length=200)
     email: EmailStr
+    github_id: str = Field(min_length=1, max_length=39)
     department_research_group_year_of_study_mit: str = Field(min_length=1, max_length=1_000)
     personal_webpage: str = Field(min_length=1, max_length=2_000)
     interests: str = Field(min_length=1, max_length=4_000)
@@ -1410,6 +1539,16 @@ class CourseApplication(BaseModel):
     def reject_placeholders(cls, value: str) -> str:
         if value.strip().casefold() in {"-", "tbd", "unknown"}:
             raise ValueError("placeholder answers are not accepted")
+        return value
+
+    @field_validator("github_id")
+    @classmethod
+    def validate_github_id(cls, value: str) -> str:
+        if not _GITHUB_ID.fullmatch(value):
+            raise ValueError(
+                "must be a GitHub username (1-39 letters, numbers, or single hyphens; "
+                "no leading or trailing hyphen)"
+            )
         return value
 
 
@@ -1507,6 +1646,16 @@ class CourseSubmitApplicationTool:
                 "type": "string",
                 "description": "Email field.",
             },
+            "github_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 39,
+                "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$",
+                "description": (
+                    "Required GitHub username only, without @ or a profile URL. It may contain "
+                    "letters, numbers, and single hyphens, and cannot begin or end with a hyphen."
+                ),
+            },
             "department_research_group_year_of_study_mit": {
                 "type": "string",
                 "description": "Department / Research Group / Year of Study MIT field.",
@@ -1563,6 +1712,7 @@ class CourseSubmitApplicationTool:
         "required": [
             "name",
             "email",
+            "github_id",
             "department_research_group_year_of_study_mit",
             "personal_webpage",
             "interests",
@@ -1703,6 +1853,7 @@ class PublicCapabilityPolicy:
                 SUBMIT_APPLICATION_TOOL_ID,
                 WEB_SEARCH_TOOL_ID,
                 WEB_IMAGE_SEARCH_TOOL_ID,
+                WEB_IMAGE_INSPECT_TOOL_ID,
                 VISIT_WEBPAGE_TOOL_ID,
                 *WORKSPACE_TOOL_IDS,
                 *(BROWSER_TOOL_IDS if self._browser_enabled else ()),

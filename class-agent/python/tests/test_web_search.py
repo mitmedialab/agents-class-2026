@@ -13,6 +13,14 @@ def _allow_public_test_hosts(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(web_search, "_is_public_https_url", validator)
 
 
+def _allow_public_web_test_hosts(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        web_search,
+        "_is_public_web_url",
+        lambda url: url.startswith("https://public.example.org/"),
+    )
+
+
 def test_image_probe_accepts_a_fetchable_image(monkeypatch: pytest.MonkeyPatch) -> None:
     _allow_public_test_hosts(monkeypatch)
     requests: list[httpx.Request] = []
@@ -90,3 +98,56 @@ def test_image_probe_rejects_non_images_and_private_redirects(
         is None
     )
     assert request_count == 1
+
+
+def test_webpage_fetch_revalidates_and_rejects_private_redirect(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _allow_public_web_test_hosts(monkeypatch)
+    requests: list[httpx.Request] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(302, headers={"Location": "http://127.0.0.1/private"})
+
+    with pytest.raises(ValueError, match="public internet"):
+        web_search.fetch_public_webpage(
+            "https://public.example.org/start",
+            transport=httpx.MockTransport(respond),
+        )
+    assert len(requests) == 1
+
+
+def test_webpage_fetch_follows_only_revalidated_public_redirects(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _allow_public_web_test_hosts(monkeypatch)
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/start":
+            return httpx.Response(302, headers={"Location": "/final"})
+        return httpx.Response(
+            200,
+            headers={"Content-Type": "text/html; charset=utf-8"},
+            content=(
+                b'<h1>Safe page</h1><img src="/hero.jpg" alt="Hero" width="1200" '
+                b'height="800"><img data-src="https://public.example.org/second.png">'
+            ),
+        )
+
+    result = web_search.fetch_public_webpage(
+        "https://public.example.org/start",
+        transport=httpx.MockTransport(respond),
+    )
+    assert isinstance(result, dict)
+    assert "Safe page" in str(result["text"])
+    assert result["url"] == "https://public.example.org/final"
+    assert result["images"] == [
+        {
+            "image_url": "https://public.example.org/hero.jpg",
+            "alt": "Hero",
+            "width": "1200",
+            "height": "800",
+        },
+        {"image_url": "https://public.example.org/second.png"},
+    ]

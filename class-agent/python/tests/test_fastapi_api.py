@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from agent_core import AgentContext, AgentInput, AgentResult, Event, PrincipalContext
 from course_server.agent import CourseAgentService, InMemoryConversationStore
+from course_server.anonymous_quotas import AnonymousQuotaPolicy
 from course_server.api import API_PREFIX, AppServices, create_app
 from course_server.auth import AuthenticationService, InMemoryAuthStore, UserAdminService
 from course_server.browser import (
@@ -274,6 +275,7 @@ class SnapshotBrowserService:
 def _build_client(
     upload_store: TemporaryUploadStore | None = None,
     browser: BrowserSessionService | None = None,
+    anonymous_quota_policy: AnonymousQuotaPolicy | None = None,
 ) -> tuple[TestClient, str, RecordingRuntime]:
     auth_store = InMemoryAuthStore()
     conversations = InMemoryConversationStore()
@@ -298,6 +300,7 @@ def _build_client(
         conversations=conversations,
         uploads=upload_store,
         browser=browser,
+        anonymous_quota_policy=anonymous_quota_policy or AnonymousQuotaPolicy(),
     )
     return (
         TestClient(create_app(services=services), base_url="https://testserver"),
@@ -342,6 +345,44 @@ def test_me_creates_isolated_anonymous_session_and_secure_cookie() -> None:
     assert "Secure" in set_cookie
     assert "SameSite=lax" in set_cookie
     assert first.get("/auth/me").json()["session_id"] == response.json()["session_id"]
+
+
+def test_anonymous_conversation_and_run_quotas_return_429() -> None:
+    client, _, runtime = _build_client(
+        anonymous_quota_policy=AnonymousQuotaPolicy(
+            max_conversations=1,
+            max_agent_runs=1,
+            max_uploads=1,
+            max_upload_bytes=100,
+        )
+    )
+    conversation_id = _create_conversation(client)
+
+    conversation_limit = client.post("/conversations", json={"title": "Second"})
+    assert conversation_limit.status_code == 429
+    assert conversation_limit.headers["retry-after"] == "604800"
+
+    first_run = client.post(
+        f"/conversations/{conversation_id}/run",
+        json={"text": "first"},
+    )
+    assert first_run.status_code == 200
+    second_run = client.post(
+        f"/conversations/{conversation_id}/run",
+        json={"text": "second"},
+    )
+    assert second_run.status_code == 429
+    assert len(runtime.contexts) == 1
+
+
+def test_authenticated_users_are_exempt_from_anonymous_quotas() -> None:
+    client, access_code, _ = _build_client(
+        anonymous_quota_policy=AnonymousQuotaPolicy(max_conversations=1)
+    )
+    _login(client, access_code)
+
+    assert client.post("/conversations", json={"title": "First"}).status_code == 200
+    assert client.post("/conversations", json={"title": "Second"}).status_code == 200
 
 
 def test_login_me_and_logout_flow() -> None:
@@ -627,10 +668,11 @@ def test_application_draft_opens_complete_and_persists_user_edits() -> None:
     assert panel["component_id"] == "draft-document"
     assert panel["resource_uri"] == "course://application"
     assert panel["state"]["document_kind"] == "course-application"
-    assert len(panel["props"]["fields"]) == 12
+    assert len(panel["props"]["fields"]) == 13
     assert [field["id"] for field in panel["props"]["fields"]] == [
         "name",
         "email",
+        "github_id",
         "department_research_group_year_of_study_mit",
         "personal_webpage",
         "interests",
@@ -643,6 +685,16 @@ def test_application_draft_opens_complete_and_persists_user_edits() -> None:
         "photo_upload_id",
     ]
     assert all(field["value"] == "" for field in panel["props"]["fields"])
+
+    malformed_github_id = client.post(
+        f"/conversations/{conversation_id}/workspace/interactions",
+        json={
+            "panel_id": panel["id"],
+            "action": "draft.change",
+            "value": {"field_id": "github_id", "value": "https://github.com/ada"},
+        },
+    )
+    assert malformed_github_id.status_code == 400
 
     changed = client.post(
         f"/conversations/{conversation_id}/workspace/interactions",
@@ -738,9 +790,9 @@ def test_application_draft_migrates_legacy_nine_field_panel() -> None:
     assert command["resource_uri"] == "course://application"
     assert command["state"] == {"document_kind": "course-application"}
     fields = command["props"]["fields"]
-    assert len(fields) == 12
+    assert len(fields) == 13
     assert fields[0]["value"] == "Ada Example"
-    assert fields[2] == {
+    assert fields[3] == {
         "id": "department_research_group_year_of_study_mit",
         "label": "Department / Research Group / Year of Study MIT",
         "value": "MIT Media Lab",

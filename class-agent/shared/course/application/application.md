@@ -16,16 +16,17 @@
 
 1. Name
 2. Email
-3. Department / Research Group / Year of Study MIT
-4. Personal Webpage
-5. Interests
-6. Why do you want to take this class?
-7. Knowledgeable about
-8. Skill-set (practical knowledge and builder experience)
-9. Registration Status (choose exactly one option below)
-10. (For listeners) I am willing to do the weekly builds
-11. Questions or comments for instructors
-12. Recent profile photo uploaded in chat (`JPEG`, `PNG`, or `WebP`)
+3. GitHub ID
+4. Department / Research Group / Year of Study MIT
+5. Personal Webpage
+6. Interests
+7. Why do you want to take this class?
+8. Knowledgeable about
+9. Skill-set (practical knowledge and builder experience)
+10. Registration Status (choose exactly one option below)
+11. (For listeners) I am willing to do the weekly builds
+12. Questions or comments for instructors
+13. Recent profile photo uploaded in chat (`JPEG`, `PNG`, or `WebP`)
 
 ## Submission constraints
 
@@ -35,6 +36,7 @@
 | Not applicable / none | State explicitly |
 | Missing, blank, placeholder, or malformed value | Rejected |
 | Expired or inaccessible photo upload | Rejected |
+| GitHub ID | Username only: 1-39 letters, numbers, or single hyphens; no `@`, URL, leading/trailing hyphen, or consecutive hyphens |
 
 ## Registration status options
 

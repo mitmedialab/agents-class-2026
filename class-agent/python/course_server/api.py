@@ -5,9 +5,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal, cast
 from uuid import UUID, uuid4
@@ -32,6 +34,15 @@ from course_server.agent import (
 )
 from course_server.agent.store import principal_owns_conversation
 from course_server.agent_cli import build_runtime
+from course_server.anonymous_quotas import (
+    AnonymousQuotaExceeded,
+    AnonymousQuotaPolicy,
+    AnonymousQuotaStore,
+    InMemoryAnonymousQuotaStore,
+    PostgresAnonymousQuotaStore,
+    QuotaCharge,
+    QuotaMetric,
+)
 from course_server.auth import (
     AuthenticationService,
     InvalidCredentials,
@@ -82,6 +93,10 @@ ANON_COOKIE = "class_agent_anon"
 API_PREFIX = "/api/v1"
 
 NonEmptyText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+PromptText = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=20_000),
+]
 CourseAssetId = Annotated[
     str,
     StringConstraints(strip_whitespace=True, pattern=r"^[a-z][a-z0-9_]*$", max_length=100),
@@ -102,7 +117,7 @@ class CreateConversationRequest(ApiModel):
 
 
 class RunRequest(ApiModel):
-    text: NonEmptyText
+    text: PromptText
 
 
 class AgentRunRequest(RunRequest):
@@ -187,6 +202,12 @@ class AppServices:
     uploads: TemporaryUploadStore | None = None
     workspace_registry: ComponentRegistry | None = None
     browser: BrowserSessionService | None = None
+    anonymous_quotas: AnonymousQuotaStore = dataclass_field(
+        default_factory=InMemoryAnonymousQuotaStore
+    )
+    anonymous_quota_policy: AnonymousQuotaPolicy = dataclass_field(
+        default_factory=AnonymousQuotaPolicy
+    )
 
 
 @dataclass
@@ -222,6 +243,58 @@ def _get_app_state(request: Request) -> AppState:
     if not isinstance(state, AppState) or state.services is None:
         raise RuntimeError("application state is not configured")
     return state
+
+
+async def _consume_anonymous_quota(
+    state: AppState,
+    principal: PrincipalContext,
+    metric: QuotaMetric,
+    amount: int,
+    limit: int,
+) -> None:
+    if principal.authenticated:
+        return
+    assert state.services is not None
+    try:
+        await state.services.anonymous_quotas.consume(
+            principal.session_id,
+            (QuotaCharge(metric=metric, amount=amount, limit=limit),),
+        )
+    except AnonymousQuotaExceeded as error:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"anonymous {error.metric.replace('_', ' ')} limit reached; sign in to continue",
+            headers={"Retry-After": "604800"},
+        ) from error
+
+
+async def _consume_anonymous_upload_quota(
+    state: AppState,
+    principal: PrincipalContext,
+    size: int,
+) -> None:
+    if principal.authenticated:
+        return
+    assert state.services is not None
+    policy = state.services.anonymous_quota_policy
+    try:
+        await state.services.anonymous_quotas.consume(
+            principal.session_id,
+            (
+                QuotaCharge(metric="uploads", amount=1, limit=policy.max_uploads),
+                QuotaCharge(
+                    metric="upload_bytes",
+                    amount=size,
+                    limit=policy.max_upload_bytes,
+                ),
+            ),
+        )
+    except AnonymousQuotaExceeded as error:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"anonymous {error.metric.replace('_', ' ')} limit reached; sign in to continue",
+            headers={"Retry-After": "604800"},
+        ) from error
 
 
 def _delete_cookie(response: Response, name: str) -> None:
@@ -381,6 +454,13 @@ def _valid_draft_change(props: dict[str, JsonValue], value: JsonValue) -> bool:
         isinstance(field_id, str)
         and isinstance(changed_value, str)
         and len(changed_value) <= 4_000
+        and (
+            field_id != "github_id"
+            or changed_value == ""
+            or bool(
+                re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}", changed_value)
+            )
+        )
         and fields is not None
         and any(field.get("id") == field_id for field in fields)
     )
@@ -389,6 +469,7 @@ def _valid_draft_change(props: dict[str, JsonValue], value: JsonValue) -> bool:
 APPLICATION_DRAFT_FIELDS: tuple[tuple[str, str], ...] = (
     ("name", "Name"),
     ("email", "Email"),
+    ("github_id", "GitHub ID (username only; no @ or URL)"),
     (
         "department_research_group_year_of_study_mit",
         "Department / Research Group / Year of Study MIT",
@@ -683,6 +764,13 @@ def create_app(
             uploads=upload_store,
             workspace_registry=component_registry,
             browser=browser_service,
+            anonymous_quotas=PostgresAnonymousQuotaStore(pool),
+            anonymous_quota_policy=AnonymousQuotaPolicy(
+                max_conversations=resolved_settings.anonymous_max_conversations,
+                max_agent_runs=resolved_settings.anonymous_max_agent_runs,
+                max_uploads=resolved_settings.anonymous_max_uploads,
+                max_upload_bytes=resolved_settings.anonymous_max_upload_bytes,
+            ),
         )
         try:
             yield
@@ -893,6 +981,8 @@ def create_app(
                     detail="uploaded file exceeds the 10 MB limit",
                 )
             chunks.append(chunk)
+        if size > 0:
+            await _consume_anonymous_upload_quota(state, principal, size)
         try:
             return await upload_store.store(
                 filename=filename,
@@ -960,6 +1050,13 @@ def create_app(
     ) -> Conversation:
         state = _get_app_state(request)
         assert state.services is not None
+        await _consume_anonymous_quota(
+            state,
+            principal,
+            "conversations",
+            1,
+            state.services.anonymous_quota_policy.max_conversations,
+        )
         return await state.services.agent.create_conversation(principal, title=payload.title)
 
     @router.get(
@@ -1619,6 +1716,14 @@ def create_app(
             principal=principal,
             conversation_id=conversation_id,
         )
+        assert state.services is not None
+        await _consume_anonymous_quota(
+            state,
+            principal,
+            "agent_runs",
+            1,
+            state.services.anonymous_quota_policy.max_agent_runs,
+        )
         result = await _run_agent(
             state=state,
             principal=principal,
@@ -1640,6 +1745,14 @@ def create_app(
             principal=principal,
             conversation_id=conversation_id,
         )
+        assert state.services is not None
+        await _consume_anonymous_quota(
+            state,
+            principal,
+            "agent_runs",
+            1,
+            state.services.anonymous_quota_policy.max_agent_runs,
+        )
         return _streaming_response(
             _stream_agent_run(
                 state=state,
@@ -1660,6 +1773,14 @@ def create_app(
             state=state,
             principal=principal,
             conversation_id=payload.conversation_id,
+        )
+        assert state.services is not None
+        await _consume_anonymous_quota(
+            state,
+            principal,
+            "agent_runs",
+            1,
+            state.services.anonymous_quota_policy.max_agent_runs,
         )
         if "text/event-stream" in request.headers.get("accept", ""):
             return _streaming_response(

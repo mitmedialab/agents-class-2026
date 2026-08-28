@@ -397,6 +397,7 @@ def _apply_command(
     command: WorkspaceCommand,
     context: ToolExecutionContext,
     resources: CourseResourceCatalog | None = None,
+    strict_visual_policy: bool = True,
 ) -> WorkspaceState:
     try:
         state = registry.apply(_current_state(context), command)
@@ -404,8 +405,9 @@ def _apply_command(
         raise ToolValidationError(str(error)) from error
     _enforce_chart_data_contract(command=command, state=state)
     _enforce_registered_course_assets(command=command, state=state, resources=resources)
-    _enforce_visual_media(command=command, state=state, context=context)
-    _enforce_image_layout_metadata(command=command, state=state, context=context)
+    if strict_visual_policy:
+        _enforce_visual_media(command=command, state=state, context=context)
+        _enforce_image_layout_metadata(command=command, state=state, context=context)
     context.workspace_state.clear()
     context.workspace_state.update(state.model_dump(mode="json", exclude_none=True))
     return state
@@ -512,9 +514,12 @@ class WorkspaceOpenComponentTool:
         self,
         registry: ComponentRegistry,
         resources: CourseResourceCatalog | None = None,
+        *,
+        strict_visual_policy: bool = True,
     ) -> None:
         self._registry = registry
         self._resources = resources
+        self._strict_visual_policy = strict_visual_policy
 
     async def execute(
         self,
@@ -558,6 +563,7 @@ class WorkspaceOpenComponentTool:
             command=command,
             context=context,
             resources=self._resources,
+            strict_visual_policy=self._strict_visual_policy,
         )
         return _command_result(
             command=command,
@@ -601,9 +607,12 @@ class WorkspaceUpdateComponentTool:
         self,
         registry: ComponentRegistry,
         resources: CourseResourceCatalog | None = None,
+        *,
+        strict_visual_policy: bool = True,
     ) -> None:
         self._registry = registry
         self._resources = resources
+        self._strict_visual_policy = strict_visual_policy
 
     async def execute(
         self,
@@ -638,6 +647,7 @@ class WorkspaceUpdateComponentTool:
             command=command,
             context=context,
             resources=self._resources,
+            strict_visual_policy=self._strict_visual_policy,
         )
         return _command_result(
             command=command,

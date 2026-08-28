@@ -34,6 +34,11 @@ class AgentSettings(BaseModel):
     browser_max_sessions_per_principal: int = Field(default=2, ge=1, le=10)
     browser_session_ttl_seconds: int = Field(default=900, ge=60, le=86_400)
     browser_executable_path: Path | None = None
+    anonymous_max_conversations: int = Field(default=3, ge=1, le=20)
+    anonymous_max_agent_runs: int = Field(default=10, ge=1, le=100)
+    anonymous_max_uploads: int = Field(default=5, ge=1, le=50)
+    anonymous_max_upload_bytes: int = Field(default=20 * 1024 * 1024, ge=1, le=100 * 1024 * 1024)
+    workspace_strict_visual_policy: bool = True
 
     @classmethod
     def from_environment(
@@ -92,6 +97,11 @@ class AgentSettings(BaseModel):
         browser_enabled = values.get("BROWSER_ENABLED", "true").strip().casefold()
         if browser_enabled not in {"true", "false", "1", "0", "yes", "no"}:
             raise ConfigurationError("BROWSER_ENABLED must be true or false")
+        strict_visual_policy = values.get(
+            "WORKSPACE_STRICT_VISUAL_POLICY", "true"
+        ).strip().casefold()
+        if strict_visual_policy not in {"true", "false", "1", "0", "yes", "no"}:
+            raise ConfigurationError("WORKSPACE_STRICT_VISUAL_POLICY must be true or false")
 
         return cls(
             model_provider="openai",
@@ -108,4 +118,11 @@ class AgentSettings(BaseModel):
             ),
             browser_session_ttl_seconds=int(values.get("BROWSER_SESSION_TTL_SECONDS", "900")),
             browser_executable_path=browser_executable_path,
+            anonymous_max_conversations=int(values.get("ANONYMOUS_MAX_CONVERSATIONS", "3")),
+            anonymous_max_agent_runs=int(values.get("ANONYMOUS_MAX_AGENT_RUNS", "10")),
+            anonymous_max_uploads=int(values.get("ANONYMOUS_MAX_UPLOADS", "5")),
+            anonymous_max_upload_bytes=int(
+                values.get("ANONYMOUS_MAX_UPLOAD_BYTES", str(20 * 1024 * 1024))
+            ),
+            workspace_strict_visual_policy=strict_visual_policy in {"true", "1", "yes"},
         )
