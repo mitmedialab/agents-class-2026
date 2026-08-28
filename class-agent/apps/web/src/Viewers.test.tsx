@@ -13,6 +13,8 @@ import {
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import publishedSchedule from "../../../shared/course/schedule/schedule.md?raw";
+
 describe("DocumentViewer", () => {
   it("resolves a semantic quote with surrounding text and highlights Markdown", () => {
     const content =
@@ -65,6 +67,32 @@ describe("DocumentViewer", () => {
 });
 
 describe("Calendar", () => {
+  it("parses every row in the published schedule source", () => {
+    const data = normalizeCalendarData(publishedSchedule);
+
+    expect(data.events).toHaveLength(14);
+    expect(data.events[0]).toMatchObject({
+      week: 1,
+      dateLabel: "9/15",
+      title: "Course introduction: What is an AI agent?",
+      speakers: ["Prof. Pattie Maes", "Valdemar Danry"],
+      tutorialSpeakers: ["Wazeer Zulfikar"],
+    });
+    expect(data.events[6]).toMatchObject({
+      week: 7,
+      tutorialSpeakers: ["Wazeer Zulfikar", "Yasith Samaradivakara"],
+    });
+    expect(data.events.at(-1)).toMatchObject({
+      week: 14,
+      dateLabel: "TBD",
+      title: "Final project presentations",
+    });
+    expect(data.notices).toContainEqual({
+      label: "Application deadline",
+      text: "September 4th, midnight",
+    });
+  });
+
   it("parses the editable Markdown schedule into complete calendar events", () => {
     const data = normalizeCalendarData(`# Schedule
 

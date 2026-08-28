@@ -231,8 +231,9 @@ Components receive resource URIs, not embedded course data. The authorized resou
 content endpoint resolves a registered URI to bytes without revealing its filesystem
 path. DocumentViewer is reserved for a concrete artifact the user wants to navigate,
 search, or discuss passage by passage. Knowledge summaries derived from documents are
-synthesized into registered visual elements instead. Calendar normalizes the published
-schedule for display but retains unknown dates as unknown instead of fabricating them.
+synthesized into registered visual elements instead. Calendar parses and normalizes the
+published Markdown schedule for display but retains unknown dates as unknown instead of
+fabricating them. The Markdown is the schedule's sole maintained content source.
 
 No database migration is required. Panel history uses the existing canonical event
 table. The new workspace schema is an independent additive v1 contract and does not

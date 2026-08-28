@@ -109,8 +109,9 @@ without a specialized view. The agent reads the source, selects the useful infor
 and builds the overview from registered semantic elements.
 
 `calendar` accepts `view` (`month` or `agenda`), `focus_date`, and
-`selected_event_id`. It consumes normalized event JSON. The Phase 6 weekly schedule is
-adapted for display; missing dates remain explicitly unconfirmed.
+`selected_event_id`. It consumes normalized event data. The Phase 6 weekly schedule is
+maintained as Markdown and parsed at the trusted renderer boundary; missing dates remain
+explicitly unconfirmed.
 
 `webpage-viewer` accepts a required HTTPS `url`, plus `mode` and optional readable
 `content`. Reader mode is the safe default: the agent first uses `web.visit`, then the

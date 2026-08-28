@@ -1,26 +1,22 @@
-# Provisional Course Schedule
+# Schedule
 
-| Field | Value |
-| --- | --- |
-| Status | Provisional |
-| Frequency | Weekly |
-| Modality | In person |
-| Start time | 11:00 AM |
-| End time | 1:00 PM |
-| Show and tell | 15 minutes |
+**Notes: Every lecture will begin with a 15 minute show and tell. Students will be randomly picked.**
+**Application deadline: September 4th, midnight**
+**Acceptance notification**
 
-| Week | Date | Lecture | Speaker(s) | Tutorial | Readings |
-| --- | --- | --- | --- | --- | --- |
-| 1 | 9/15 | Course introduction: agent history, cognitive augmentation, perception-action loops, tool use, autonomy | Pattie Maes | Build a minimal observe-decide-act loop; start documentation website | ReAct; LLM-agent surveys; software-agent background |
-| 2 | — | Tool use and agent interfaces: function calling, APIs, MCP, schemas, affordances, permissions, failures | Valdemar Danry | Build a typed tool-calling agent with five tools and validation | Toolformer; MCP specification; tool-use agent papers |
-| 3 | — | Human-agent interaction and cognitive augmentation: delegation, agency, overreliance, deskilling, representation, human outcomes | Pattie Maes | Explore hand-off, approval, and related interaction decisions | Guidelines for Human-AI Interaction; cognitive offloading; Socratic AI; human-AI teaming |
-| 4 | — | Agent environments and evaluation: tasks, state-based grading, metrics, failure taxonomies, cost, latency | Valdemar Danry | Build a 30-task benchmark with automatic grading | τ-bench; GAIA; AgentBench; benchmark-design papers |
-| 5 | — | Browser and computer-use agents: DOM, screenshots, accessibility trees, visual grounding, software control, coding, terminals, sandboxing | Yasith | Build a local-website browser agent or a repository-fixing coding/terminal agent | WebArena; VisualWebArena; Mind2Web; VideoWebArena; SWE-agent; SWE-bench; OSWorld |
-| 6 | — | Memory architectures, context, and personalization: short-term, episodic, semantic, long-term, writing, reading, forgetting | Wazeer | Compare no memory, naive memory, and selective memory in a multi-session agent | Agent-memory surveys; Generative Agents |
-| 7 | — | Final project proposal presentations | — | — | — |
-| 8 | — | Multimodal agents: vision, audio, video, interaction traces, gaze, screen state, sensors, grounding | Paul Liang | Build an agent using at least one non-text input | GPT-4V, Gemini, and LLaVA-style agent papers; VideoWebArena; OpenVLA |
-| 9 | — | Agentic reinforcement learning and self-improving agents: GRPO, PPO, DPO, trajectories, rewards, feedback, adaptation | Paul Liang | Fine-tune or adapt a small agent policy using trajectories, preferences, or rewards | DeepSeek-R1; DPO; agentic-RL surveys |
-| 10 | — | Multi-agent systems and simulated societies: roles, delegation, debate, user simulators, collaboration, coordination failures | Sung-Won Park; Bernstein | Compare a single-agent and multi-agent implementation | Generative Agents; multi-agent failure papers |
-| 11 | — | Wearables, BCIs, and physiology-aware agents: gaze, EEG, EDA, audio, context sensing, closed-loop systems | Chitra; Cathy; Dünya | Build a physiology- or context-aware prototype, or use a simulated sensor stream | Wearable AI; BCI; affective computing; gaze-aware assistants |
-| 12 | — | Safety, security, and agent behavior: prompt/tool injection, exfiltration, irreversible actions, sandboxing, audit logs, approvals | Manuel Cherep; Tobin South | Red-team another group's agent | MCP security; prompt-injection papers; agent-safety papers |
-| 13 | — | Final project presentations: live demo, paper-style presentation, failure analysis | — | Final demos | Final project reports |
+| Date / Week | Lecture Topics (45 min) | Hands-on tutorial (50 min) | Suggested Readings |
+| ----- | ----- | ----- | ----- |
+| Week 1 (9/15) | **Course introduction: What is an AI agent?**  The history and trajectory of AI agents. *Prof. Pattie Maes & Valdemar Danry* | Build a minimal agent loop from scratch, and make your course website. *Wazeer Zulfikar* | ReAct; surveys on LLM agents; Software agents background |
+| Week 2 (9/22) | **Tool use and agent interfaces.**  Function calling, APIs, MCP, tool schemas, tool affordances, permissions, tool failures.  *Valdemar Danry* | Build a typed tool-calling agent with 5 tools and tool-call validation. Write ideas for final projects. | Toolformer; MCP specification; recent tool-use agent papers. ([Model Context Protocol](https://modelcontextprotocol.io/specification/2025-06-18/server/tools?utm_source=chatgpt.com)) |
+| Week 3 (9/29)  | **Human-agent interaction and cognitive augmentation** Delegation, agency, overreliance, deskilling, memory-agents, tutoring, reasoning support, learning, representation. *Prof. Pattie Maes* | Explore agent interaction design decisions (hand-off, approval, human outcomes as environments etc.). *Rachel Poonsiriwong* | Guidelines for Human-AI Interaction; cognitive offloading; Socratic AI; human-AI teaming |
+| Week 4 (10/6) | **Agent environments and evaluation**  Tasks, environments, state-based grading, success metrics, failure taxonomies, cost and latency.  *Valdemar Danry* | Build an environment that the agent acts within and consider evaluations. | τ-bench; GAIA; AgentBench; benchmark design papers. We should also include other environments. |
+| Week 5 (10/13) | No class | No class | No class |
+| Week 6 (10/20) | **Browser and computer use agents**  DOM vs screenshots, accessibility trees, Playwright, web navigation, visual grounding, website state. Computer-use and software agents. OS agents, coding agents, terminal agents, file editing, test execution, sandboxing. *Yasith Samaradivakara* | Build a browser or computer use agent that completes tasks.  | WebArena; VisualWebArena; Mind2Web; VideoWebArena. SWE-agent; SWE-bench; OSWorld.  |
+| Week 7 (10/27) | **Memory architectures, context, and personalization** Short-term memory, episodic memory, semantic memory, long-term user modeling, memory writing/reading policies, forgetting. *Wazeer Zulfikar* | Build an agent that requires long term memory and ablate no memory vs naive memory vs selective memory *Wazeer Zulfikar* & *Yasith Samaradivakara* | Recent agent memory surveys. |
+| Week 8 (11/3) | **Proposed Final Project Presentation** | N/A | N/A |
+| Week 9 (11/10) | **Multimodal agents** Vision, audio, video, interaction traces, gaze, screen state, sensor data, multimodal grounding. | Build an agent that uses at least one non-text input. *Dr. Chitralekha Gupta* & *Yasith Samaradivakara* | GPT-4V/Gemini/LLaVA-style agent papers; VideoWebArena; OpenVLA |
+| Week 10 (11/17) | **Agentic RL and self-improving agents** GRPO/PPO/DPO for agents, trajectory data, rewards, sparse feedback, online vs offline improvement. *TBD* | Fine-tune or adapt a small agent policy using trajectories, preferences, or reward signals *Valdemar Danry* & *Wazeer Zulfikar* | DeepSeek-R1; DPO; agentic RL surveys. Recent work frames agentic RL as multi-turn, partially observable interaction rather than one-step response optimization. ([arXiv](https://arxiv.org/abs/2509.02547?utm_source=chatgpt.com)) |
+| Week 11 (11/24) | **Multi-agent systems and simulated societies.** Role decomposition, delegation, debate, user simulators, collaboration, coordination failures. *TBD* | Build a single-agent vs multi-agent comparison Rachel Poonsiriwong | Generative Agents; multi-agent failure papers. Recent work on multi-agent failures introduces datasets of annotated execution traces and shows systematic coordination issues. ([OpenReview](https://openreview.net/forum?id=fAjbYBmonr&utm_source=chatgpt.com)) |
+| Week 12 (12/1) | **Wearables, BCIs, and physiology-aware agents** Gaze, EEG, EDA, XR, audio, context sensing, real-time interventions, closed-loop systems. *Dr. Chitralekha Gupta* | Build a simple physiology- or context-aware agent prototype using hardware | Wearable AI, BCI, affective computing, gaze-aware assistants |
+| Week 13 (12/7) | **Safety, security, and agent behaviors.** Prompt injection, tool injection, data exfiltration, irreversible actions, sandboxing, audit logs, approval layers. *TBD* | Measuring safety and read-teaming own and other’s models | MCP security discussions; prompt injection papers; agent safety papers. Recent MCP ecosystem discussions emphasize both interoperability and security risks around tools, permissions, and external servers. |
+| Week 14 TBD | **Final project presentations** Live demo \+ paper-style presentation \+ failure analysis | Final demos | Final project reports |

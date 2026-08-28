@@ -5,7 +5,8 @@ The indexer generates `shared/registry/resources.json` from those manifests. Pha
 includes:
 
 - the official Markdown syllabus;
-- Markdown and JSON schedules explicitly marked provisional;
+- a canonical Markdown schedule, parsed into calendar data at render time and explicitly
+  marked provisional in its resource manifest;
 - Markdown and JSON repository overviews;
 - Markdown and JSON FAQ documents;
 - instructor and teaching-assistant profiles;

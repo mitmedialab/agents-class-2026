@@ -43,6 +43,11 @@ uv run python -m course_server.index_resources
 ```
 
 The schedule remains `provisional` until dates and details are confirmed.
+`shared/course/schedule/schedule.md` is its only content source. The Calendar's trusted
+Markdown parser derives normalized events when the resource is opened, so schedule edits
+do not require maintaining or regenerating a second schedule JSON file. The Course Agent
+and lexical search read that same Markdown through the authorized `course://schedule`
+resource.
 
 ## Search refresh
 

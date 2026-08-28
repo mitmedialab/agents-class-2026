@@ -4,8 +4,8 @@
     "uri": "course://schedule",
     "title": "Provisional Course Schedule",
     "description": "Provisional weekly topics, tutorials, speakers, and readings.",
-    "media_type": "application/json",
-    "file": "schedule.json",
+    "media_type": "text/markdown",
+    "file": "schedule.md",
     "visibility": "public",
     "status": "provisional",
     "order": 20

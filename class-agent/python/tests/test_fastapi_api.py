@@ -431,9 +431,10 @@ def test_authorized_resource_content_is_served_by_uri_without_exposing_paths() -
     )
 
     assert response.status_code == 200
-    assert response.headers["content-type"].startswith("application/json")
+    assert response.headers["content-type"].startswith("text/markdown")
     assert response.headers["x-class-agent-resource-uri"] == "course://schedule"
-    assert response.json()["status"] == "provisional"
+    assert "| Week 1 (9/15) |" in response.text
+    assert "| Week 14 TBD |" in response.text
     assert "shared/course" not in response.text
     assert (
         client.get(

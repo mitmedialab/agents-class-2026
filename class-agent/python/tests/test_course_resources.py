@@ -157,10 +157,16 @@ def test_public_resource_registry_includes_provisional_schedule() -> None:
     assert schedule.description == "Provisional weekly topics, tutorials, speakers, and readings."
 
     schedule_contents = asyncio.run(resources.read(COURSE_SCHEDULE_URI))
-    schedule_data = json.loads(schedule_contents.text)
-    assert schedule_contents.media_type == "application/json"
-    assert schedule_data["status"] == "provisional"
-    assert len(schedule_data["weeks"]) == 13
+    assert schedule_contents.media_type == "text/markdown"
+    assert "| Week 1 (9/15) |" in schedule_contents.text
+    assert "| Week 14 TBD |" in schedule_contents.text
+    assert "Browser and computer use agents" in schedule_contents.text
+
+    schedule_definition = next(
+        resource for resource in load_resource_definitions() if resource.uri == COURSE_SCHEDULE_URI
+    )
+    assert schedule_definition.path.name == "schedule.md"
+    assert not schedule_definition.path.with_name("schedule.json").exists()
 
     instructor_contents = asyncio.run(resources.read(COURSE_INSTRUCTORS_URI))
     assert "Pattie Maes" in instructor_contents.text
