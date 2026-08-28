@@ -44,6 +44,12 @@ OPENAI_API_KEY=your-key-here
 MODEL_ID=gpt-5.6-terra
 ```
 
+Anonymous visitors are limited for the lifetime of their seven-day session. The production
+defaults are three conversations, ten agent runs, five uploads, and 20 MiB of uploads. Tune
+`ANONYMOUS_MAX_CONVERSATIONS`, `ANONYMOUS_MAX_AGENT_RUNS`, `ANONYMOUS_MAX_UPLOADS`, and
+`ANONYMOUS_MAX_UPLOAD_BYTES` in `.env`; authenticated users are exempt. Production should also
+enforce the per-IP limits in `deploy/cognitive-agents.nginx` because browser cookies can be reset.
+
 The CLI intentionally does not override variables already exported in the shell. If you previously exported an old key, run `unset OPENAI_API_KEY MODEL_API_KEY` so `.env` is used. Then run one CLI turn:
 
 ```bash
@@ -124,3 +130,10 @@ docs/                    architecture and versioning decisions
 ```
 
 See [docs/API.md](docs/API.md), [docs/WORKSPACE.md](docs/WORKSPACE.md), [docs/RUNTIME.md](docs/RUNTIME.md), [docs/AUTH.md](docs/AUTH.md), and [docs/STORAGE.md](docs/STORAGE.md) for behavior and operational guidance. The default tests use a scripted model and do not spend OpenAI credits.
+
+## Production hardening
+
+The reference deployment files under `deploy/` provide TLS termination, security headers,
+per-IP API/model rate and connection limits, a sandboxed systemd API service, and a conservative
+SSH baseline. Follow `deploy/HARDENING.md` for firewall and SSH installation. Do not disable SSH
+password authentication until a public key has been installed and verified in a separate session.

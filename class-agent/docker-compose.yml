@@ -3,6 +3,7 @@ name: class-agent
 services:
   postgres:
     image: postgres:17-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: class_agent
       POSTGRES_USER: class_agent

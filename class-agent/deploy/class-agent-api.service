@@ -1,0 +1,42 @@
+[Unit]
+Description=MIT Cognitive Agents API
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=wazeer
+Group=wazeer
+WorkingDirectory=/home/wazeer/agents-class-2026/class-agent
+EnvironmentFile=/home/wazeer/agents-class-2026/class-agent/.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/home/wazeer/agents-class-2026/class-agent/.venv/bin/python -m course_server.api
+Restart=on-failure
+RestartSec=5
+UMask=0077
+
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHome=read-only
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+ReadWritePaths=/home/wazeer/agents-class-2026/class-agent/var/applicants
+ReadWritePaths=/home/wazeer/agents-class-2026/class-agent/var/uploads
+CapabilityBoundingSet=
+LockPersonality=true
+# Chromium's JIT requires executable memory mappings.
+MemoryDenyWriteExecute=false
+RemoveIPC=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictRealtime=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target
