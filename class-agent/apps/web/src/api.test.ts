@@ -146,6 +146,34 @@ describe("temporary uploads", () => {
     vi.unstubAllGlobals();
   });
 
+  it("aborts an upload that does not complete within one minute", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = vi.fn().mockImplementation(
+        (_url: string, init: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init.signal?.addEventListener("abort", () =>
+              reject(new DOMException("The operation was aborted", "AbortError")),
+            );
+          }),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+      const file = new File(["contents"], "notes.txt", { type: "text/plain" });
+      const assertion = expect(uploadFile(file)).rejects.toMatchObject({
+        message: "Upload timed out. Please try again.",
+        status: 408,
+      });
+
+      await vi.advanceTimersByTimeAsync(60_000);
+      await assertion;
+      expect(fetchMock.mock.calls[0]?.[1]?.signal).toHaveProperty("aborted", true);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
   it("reads an upload resource from its principal-scoped content route", async () => {
     const bytes = new Uint8Array([37, 80, 68, 70]);
     const fetchMock = vi.fn().mockResolvedValue({

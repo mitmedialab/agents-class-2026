@@ -3,6 +3,7 @@ import type { JsonValue } from "@class-agent/workspace";
 
 const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL as string | undefined;
 const API_BASE_URL = (configuredBaseUrl ?? "/api/v1").replace(/\/$/, "");
+const UPLOAD_TIMEOUT_MS = 60_000;
 
 export interface ConversationDetail {
   conversation: Conversation;
@@ -270,16 +271,28 @@ function uploadMediaType(file: File): string {
 
 export async function uploadFile(file: File): Promise<TemporaryUpload> {
   const query = new URLSearchParams({ filename: file.name });
-  const response = await fetch(`${API_BASE_URL}/uploads?${query.toString()}`, {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": uploadMediaType(file) },
-    body: file,
-  });
-  if (!response.ok) {
-    throw new ApiError(await errorMessage(response), response.status);
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${API_BASE_URL}/uploads?${query.toString()}`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": uploadMediaType(file) },
+      body: file,
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new ApiError(await errorMessage(response), response.status);
+    }
+    return (await response.json()) as TemporaryUpload;
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new ApiError("Upload timed out. Please try again.", 408);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
   }
-  return (await response.json()) as TemporaryUpload;
 }
 
 function jsonDetail(value: unknown): string | undefined {

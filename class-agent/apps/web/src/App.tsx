@@ -32,6 +32,7 @@ import { AgentResponse } from "./AgentResponse.js";
 import { SyllabusPage } from "./SyllabusPage.js";
 import { Workspace } from "./Workspace.js";
 import {
+  type DragEvent,
   type FormEvent,
   type KeyboardEvent,
   useEffect,
@@ -42,6 +43,30 @@ import {
 const CONNECTION_ERROR = "I couldn’t reach the Course Agent. Please try again.";
 const WELCOME_MESSAGE =
   "Welcome. I’m the Course Agent. This agent is the class website—ask me for class information, or talk with me if you’d like to apply.";
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const SUPPORTED_UPLOAD_EXTENSIONS = new Set([
+  "csv",
+  "gif",
+  "jpeg",
+  "jpg",
+  "json",
+  "md",
+  "pdf",
+  "png",
+  "txt",
+  "webp",
+]);
+const SUPPORTED_UPLOAD_MEDIA_TYPES = new Set([
+  "application/json",
+  "application/pdf",
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "text/csv",
+  "text/markdown",
+  "text/plain",
+]);
 const HEADER_PROMPTS = [
   { label: "Apply", message: "I'd like to apply for the course." },
   { label: "Schedule", message: "Show me the course schedule." },
@@ -94,6 +119,23 @@ function messageWithUploads(message: string, uploads: TemporaryUpload[]): string
   return `${message || "I attached file(s) for this conversation."}\n\n${uploadContext}`;
 }
 
+function uploadValidationError(files: File[]): string | null {
+  const oversized = files.find((file) => file.size > MAX_UPLOAD_BYTES);
+  if (oversized) return `“${oversized.name}” exceeds the 10 MB upload limit.`;
+
+  const unsupported = files.find((file) => {
+    const extension = file.name.split(".").at(-1)?.toLowerCase() ?? "";
+    const mediaType = file.type.toLowerCase();
+    return (
+      !SUPPORTED_UPLOAD_EXTENSIONS.has(extension) &&
+      !SUPPORTED_UPLOAD_MEDIA_TYPES.has(mediaType)
+    );
+  });
+  return unsupported
+    ? `“${unsupported.name}” isn’t supported. Upload an image, PDF, text, CSV, JSON, or Markdown file.`
+    : null;
+}
+
 function formatConversationDate(value: string): string {
   return new Intl.DateTimeFormat(undefined, {
     month: "short",
@@ -125,6 +167,8 @@ export default function App() {
   const [isStreamingText, setIsStreamingText] = useState(false);
   const [uploads, setUploads] = useState<TemporaryUpload[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isFileDragActive, setIsFileDragActive] = useState(false);
+  const [pendingUploadCount, setPendingUploadCount] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -445,7 +489,15 @@ export default function App() {
   async function handleFileSelection(fileList: FileList | null): Promise<void> {
     const files = Array.from(fileList ?? []);
     if (files.length === 0) return;
+    const validationError = uploadValidationError(files);
+    if (validationError) {
+      setUploadError(validationError);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      requestAnimationFrame(() => composerRef.current?.focus());
+      return;
+    }
     setIsUploading(true);
+    setPendingUploadCount(files.length);
     setUploadError(null);
     try {
       const stored = await Promise.all(files.map((file) => uploadFile(file)));
@@ -455,8 +507,49 @@ export default function App() {
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = "";
       setIsUploading(false);
+      setPendingUploadCount(0);
       requestAnimationFrame(() => composerRef.current?.focus());
     }
+  }
+
+  const canDropFiles =
+    !aboutOpen &&
+    !historyOpen &&
+    !isInitializing &&
+    !isRunning &&
+    !isUploading;
+
+  function dragContainsFiles(event: DragEvent<HTMLDivElement>): boolean {
+    return Array.from(event.dataTransfer.types).includes("Files");
+  }
+
+  function handleFileDragEnter(event: DragEvent<HTMLDivElement>): void {
+    if (!dragContainsFiles(event)) return;
+    event.preventDefault();
+    if (canDropFiles) setIsFileDragActive(true);
+  }
+
+  function handleFileDragOver(event: DragEvent<HTMLDivElement>): void {
+    if (!dragContainsFiles(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = canDropFiles ? "copy" : "none";
+  }
+
+  function handleFileDragLeave(event: DragEvent<HTMLDivElement>): void {
+    if (
+      event.relatedTarget instanceof Node &&
+      event.currentTarget.contains(event.relatedTarget)
+    ) {
+      return;
+    }
+    setIsFileDragActive(false);
+  }
+
+  function handleFileDrop(event: DragEvent<HTMLDivElement>): void {
+    if (!dragContainsFiles(event)) return;
+    event.preventDefault();
+    setIsFileDragActive(false);
+    if (canDropFiles) void handleFileSelection(event.dataTransfer.files);
   }
 
   function startNewConversation() {
@@ -720,7 +813,12 @@ export default function App() {
     <div
       className="course-agent"
       data-about-open={aboutOpen}
+      data-file-drag-active={isFileDragActive}
       data-workspace-open={!aboutOpen && workspaceState.panels.length > 0}
+      onDragEnter={handleFileDragEnter}
+      onDragLeave={handleFileDragLeave}
+      onDragOver={handleFileDragOver}
+      onDrop={handleFileDrop}
     >
       <header className="agent-header">
         <div className="header-left">
@@ -825,7 +923,41 @@ export default function App() {
             onChange={(event) => void handleFileSelection(event.target.files)}
             type="file"
           />
-          <div className="composer-entry">
+          <div
+            aria-busy={isUploading}
+            className="composer-entry"
+            data-drop-active={isFileDragActive}
+            data-uploading={isUploading}
+          >
+            {isFileDragActive || isUploading ? (
+              <div className="composer-drop-state" role="status">
+                <span aria-hidden="true" className="composer-drop-icon">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M12 15V4m0 0L8 8m4-4 4 4" />
+                    <path d="M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" />
+                  </svg>
+                </span>
+                <span className="composer-drop-copy">
+                  <strong>
+                    {isUploading
+                      ? `Uploading ${pendingUploadCount} ${
+                          pendingUploadCount === 1 ? "file" : "files"
+                        }`
+                      : "Drop files to attach"}
+                  </strong>
+                  <span>
+                    {isUploading
+                      ? "Preparing your attachment"
+                      : "Images, PDF, text, CSV, JSON, or Markdown"}
+                  </span>
+                </span>
+                {isUploading ? (
+                  <span aria-hidden="true" className="upload-progress-track">
+                    <span />
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
             {uploads.length > 0 ? (
               <ul aria-label="Temporary uploads" className="upload-list">
                 {uploads.map((upload) => (

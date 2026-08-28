@@ -550,6 +550,73 @@ describe("Course Agent interface", () => {
     );
   });
 
+  it("accepts dropped files and shows hover and upload states", async () => {
+    let finishUpload!: (value: Awaited<ReturnType<typeof api.uploadFile>>) => void;
+    vi.mocked(api.uploadFile).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishUpload = resolve;
+        }),
+    );
+    render(<App />);
+    await screen.findByText("The earlier response.");
+    const app = document.querySelector<HTMLElement>(".course-agent");
+    expect(app).not.toBeNull();
+    const photo = new File([new Uint8Array([137, 80, 78, 71])], "dropped.png", {
+      type: "image/png",
+    });
+    const dataTransfer = {
+      dropEffect: "none",
+      files: [photo],
+      types: ["Files"],
+    };
+
+    fireEvent.dragEnter(app!, { dataTransfer });
+    expect(screen.getByText("Drop files to attach")).toBeInTheDocument();
+    expect(app).toHaveAttribute("data-file-drag-active", "true");
+
+    fireEvent.drop(app!, { dataTransfer });
+    expect(screen.getByText("Uploading 1 file")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Message" })).toBeDisabled();
+    expect(api.uploadFile).toHaveBeenCalledWith(photo);
+
+    finishUpload({
+      id: "40000000-0000-4000-8000-000000000002",
+      filename: "dropped.png",
+      media_type: "image/png",
+      size_bytes: 4,
+      created_at: "2026-08-23T10:00:00Z",
+      expires_at: "2026-08-24T10:00:00Z",
+    });
+
+    expect(await screen.findByText("dropped.png")).toBeInTheDocument();
+    expect(screen.queryByText("Uploading 1 file")).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Message" })).not.toBeDisabled();
+  });
+
+  it("rejects an unsupported dropped archive without starting an upload", async () => {
+    render(<App />);
+    await screen.findByText("The earlier response.");
+    const app = document.querySelector<HTMLElement>(".course-agent");
+    const archive = new File(["archive"], "materials.zip", {
+      type: "application/zip",
+    });
+
+    fireEvent.drop(app!, {
+      dataTransfer: {
+        dropEffect: "none",
+        files: [archive],
+        types: ["Files"],
+      },
+    });
+
+    expect(
+      await screen.findByText(/“materials\.zip” isn’t supported/),
+    ).toBeInTheDocument();
+    expect(api.uploadFile).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Uploading/)).not.toBeInTheDocument();
+  });
+
   it("welcomes first-time visitors and explains that the agent is the website", async () => {
     vi.mocked(api.listConversations).mockResolvedValue([]);
     render(<App />);

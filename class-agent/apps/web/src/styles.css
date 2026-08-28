@@ -820,10 +820,103 @@ textarea {
 .composer-entry {
   display: grid;
   gap: 0;
+  isolation: isolate;
   justify-self: center;
   max-width: 46rem;
   min-width: 0;
+  position: relative;
   width: 100%;
+}
+
+.composer-drop-state {
+  align-items: center;
+  animation: composer-drop-in 180ms ease-out;
+  backdrop-filter: blur(10px);
+  background: color-mix(in srgb, var(--color-surface-raised) 94%, transparent);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 0.75rem 2.5rem rgb(0 0 0 / 42%);
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  inset: -0.65rem -0.8rem;
+  min-height: 4.75rem;
+  overflow: hidden;
+  padding: 0.8rem 1rem;
+  pointer-events: none;
+  position: absolute;
+  z-index: 3;
+}
+
+.composer-entry[data-drop-active="true"] .composer-drop-state {
+  animation:
+    composer-drop-in 180ms ease-out,
+    composer-drop-hover 1.4s ease-in-out 180ms infinite alternate;
+  border-color: color-mix(in srgb, var(--color-text) 48%, var(--color-border));
+}
+
+.composer-drop-icon {
+  align-items: center;
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: flex;
+  height: 2.25rem;
+  justify-content: center;
+  width: 2.25rem;
+}
+
+.composer-entry[data-drop-active="true"] .composer-drop-icon {
+  animation: composer-drop-icon 720ms ease-in-out infinite alternate;
+}
+
+.composer-drop-icon svg {
+  fill: none;
+  height: 1.05rem;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+  width: 1.05rem;
+}
+
+.composer-drop-copy {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.composer-drop-copy strong {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.composer-drop-copy > span {
+  color: var(--color-text-muted);
+  font-size: 0.625rem;
+}
+
+.upload-progress-track {
+  background: color-mix(in srgb, var(--color-border) 72%, transparent);
+  border-radius: 999px;
+  bottom: 0.45rem;
+  height: 2px;
+  left: 1rem;
+  overflow: hidden;
+  position: absolute;
+  right: 1rem;
+}
+
+.upload-progress-track span {
+  animation: upload-progress 1.1s ease-in-out infinite;
+  background: var(--color-text);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  transform: translateX(-100%);
+  width: 45%;
 }
 
 .composer-actions {
@@ -889,12 +982,14 @@ textarea {
 
 .upload-list li {
   align-items: center;
+  background: var(--color-surface-raised);
   border: 1px solid var(--color-border);
+  border-radius: 999px;
   display: flex;
   font-size: 0.75rem;
   gap: 0.65rem;
   max-width: 100%;
-  padding: 0.25rem 0.5rem;
+  padding: 0.3rem 0.65rem;
 }
 
 .upload-list span {
@@ -1130,6 +1225,48 @@ textarea {
   }
 }
 
+@keyframes composer-drop-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.4rem) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes composer-drop-hover {
+  from {
+    box-shadow:
+      0 0 0 0 rgb(255 255 255 / 0%),
+      0 0.75rem 2.5rem rgb(0 0 0 / 42%);
+  }
+  to {
+    box-shadow:
+      0 0 0 0.18rem rgb(255 255 255 / 5%),
+      0 0.75rem 2.5rem rgb(0 0 0 / 42%);
+  }
+}
+
+@keyframes composer-drop-icon {
+  from {
+    transform: translateY(0.1rem);
+  }
+  to {
+    transform: translateY(-0.12rem);
+  }
+}
+
+@keyframes upload-progress {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(245%);
+  }
+}
+
 @media (max-width: 900px) {
   .course-agent[data-workspace-open="true"] .agent-header {
     right: 0;
@@ -1301,7 +1438,11 @@ textarea {
   .response-agent-line,
   .response-stage,
   .response-character,
+  .composer-drop-state,
+  .composer-drop-icon,
+  .upload-progress-track span,
   .latest-response[data-streaming="true"] > :last-child::after {
     animation: none;
+    transition: none;
   }
 }
