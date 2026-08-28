@@ -13,6 +13,44 @@ describe("AgentResponse", () => {
     expect(container.firstChild).toHaveTextContent("A concise answer.");
   });
 
+  it("can stagger the standard character animation", () => {
+    const { container } = render(
+      <AgentResponse
+        initialCharacterDelayMs={3000}
+        staggerCharacters
+        streaming
+        text="Agent"
+      />,
+    );
+    const characters = container.querySelectorAll<HTMLElement>(
+      ".response-character",
+    );
+
+    expect(container.firstChild).toHaveAttribute("data-character-delay", "3000");
+    expect(container.firstChild).toHaveAttribute("data-staggered", "true");
+    expect(characters[0]).toHaveStyle({ animationDelay: "3000ms" });
+    expect(characters[1]).toHaveStyle({ animationDelay: "3014ms" });
+    expect(characters[4]).toHaveStyle({ animationDelay: "3056ms" });
+  });
+
+  it("keeps the animated word and character layout after the reveal finishes", () => {
+    const { container, rerender } = render(
+      <AgentResponse staggerCharacters streaming text="Course Agent" />,
+    );
+    const firstCharacter = container.querySelectorAll(".response-character")[0];
+
+    expect(container.querySelectorAll(".response-word")).toHaveLength(2);
+    expect(container.querySelectorAll(".response-character")).toHaveLength(12);
+
+    rerender(<AgentResponse staggerCharacters text="Course Agent" />);
+
+    expect(container.querySelectorAll(".response-word")).toHaveLength(2);
+    expect(container.querySelectorAll(".response-character")).toHaveLength(12);
+    expect(container.querySelectorAll(".response-character")[0]).toBe(
+      firstCharacter,
+    );
+  });
+
   it("scales continuously from large responses to the bounded reading size", () => {
     const mediumAnswer = "Course information and application details. ".repeat(6);
     const substantialAnswer = "Course information and application details. ".repeat(14);

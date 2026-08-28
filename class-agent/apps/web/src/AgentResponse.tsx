@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from "react";
 
 const MIN_CONTENT_LOAD = 40;
 const MAX_CONTENT_LOAD = 900;
+export const RESPONSE_CHARACTER_STAGGER_MS = 14;
 
 export function responseScale(text: string): number {
   const visibleLines = text.split("\n").filter((line) => line.trim()).length;
@@ -35,29 +36,94 @@ function responseStyle(text: string): CSSProperties {
   } as CSSProperties;
 }
 
-function characterNodes(text: string, keyPrefix: string, streaming: boolean): ReactNode {
-  if (!streaming) return text;
-  return Array.from(text).map((character, index) => (
-    <span className="response-character" key={`${keyPrefix}-character-${index}`}>
-      {character}
-    </span>
-  ));
+function characterNodes(
+  text: string,
+  keyPrefix: string,
+  streaming: boolean,
+  staggerCharacters: boolean,
+  initialCharacterDelayMs: number,
+): ReactNode {
+  if (!streaming && !staggerCharacters) return text;
+  const characterCount = Array.from(text).length;
+  let characterIndex = 0;
+
+  return text
+    .split(/(\s+)/g)
+    .filter(Boolean)
+    .map((token, tokenIndex) => {
+      const tokenCharacters = Array.from(token).map((character) => {
+        const index = characterIndex;
+        characterIndex += 1;
+        const delay = initialCharacterDelayMs + index * RESPONSE_CHARACTER_STAGGER_MS;
+        const className =
+          index === characterCount - 1
+            ? "response-character response-character-last"
+            : "response-character";
+        return (
+          <span
+            className={className}
+            key={`${keyPrefix}-character-${index}`}
+            style={
+              staggerCharacters
+                ? ({
+                    "--response-character-delay": `${delay}ms`,
+                    animationDelay: `${delay}ms`,
+                  } as CSSProperties)
+                : undefined
+            }
+          >
+            {character}
+          </span>
+        );
+      });
+
+      return /^\s+$/.test(token) ? (
+        tokenCharacters
+      ) : (
+        <span className="response-word" key={`${keyPrefix}-word-${tokenIndex}`}>
+          {tokenCharacters}
+        </span>
+      );
+    });
 }
 
-function inlineMarkup(text: string, keyPrefix: string, streaming: boolean): ReactNode[] {
+function inlineMarkup(
+  text: string,
+  keyPrefix: string,
+  streaming: boolean,
+  staggerCharacters: boolean,
+  initialCharacterDelayMs: number,
+): ReactNode[] {
   return text.split(/(\*\*[^*\n]+\*\*)/g).map((part, index) => {
     if (part.startsWith("**") && part.endsWith("**")) {
       return (
         <strong key={`${keyPrefix}-strong-${index}`}>
-          {characterNodes(part.slice(2, -2), `${keyPrefix}-strong-${index}`, streaming)}
+          {characterNodes(
+            part.slice(2, -2),
+            `${keyPrefix}-strong-${index}`,
+            streaming,
+            staggerCharacters,
+            initialCharacterDelayMs,
+          )}
         </strong>
       );
     }
-    return characterNodes(part, `${keyPrefix}-plain-${index}`, streaming);
+    return characterNodes(
+      part,
+      `${keyPrefix}-plain-${index}`,
+      streaming,
+      staggerCharacters,
+      initialCharacterDelayMs,
+    );
   });
 }
 
-function responseBlocks(text: string, streaming: boolean): ReactNode[] {
+function responseBlocks(
+  text: string,
+  streaming: boolean,
+  staggerCharacters: boolean,
+  initialCharacterDelayMs: number,
+): ReactNode[] {
   const lines = text.trim().split("\n");
   const blocks: ReactNode[] = [];
   let index = 0;
@@ -73,7 +139,13 @@ function responseBlocks(text: string, streaming: boolean): ReactNode[] {
     if (heading?.[2]) {
       blocks.push(
         <h2 key={`heading-${index}`}>
-          {inlineMarkup(heading[2], `h-${index}`, streaming)}
+          {inlineMarkup(
+            heading[2],
+            `h-${index}`,
+            streaming,
+            staggerCharacters,
+            initialCharacterDelayMs,
+          )}
         </h2>,
       );
       index += 1;
@@ -87,7 +159,13 @@ function responseBlocks(text: string, streaming: boolean): ReactNode[] {
         if (!item?.[1]) break;
         items.push(
           <li key={`bullet-${index}`}>
-            {inlineMarkup(item[1], `b-${index}`, streaming)}
+            {inlineMarkup(
+              item[1],
+              `b-${index}`,
+              streaming,
+              staggerCharacters,
+              initialCharacterDelayMs,
+            )}
           </li>,
         );
         index += 1;
@@ -103,7 +181,13 @@ function responseBlocks(text: string, streaming: boolean): ReactNode[] {
         if (!item?.[1]) break;
         items.push(
           <li key={`number-${index}`}>
-            {inlineMarkup(item[1], `n-${index}`, streaming)}
+            {inlineMarkup(
+              item[1],
+              `n-${index}`,
+              streaming,
+              staggerCharacters,
+              initialCharacterDelayMs,
+            )}
           </li>,
         );
         index += 1;
@@ -129,7 +213,13 @@ function responseBlocks(text: string, streaming: boolean): ReactNode[] {
     const paragraphText = paragraph.join(" ");
     blocks.push(
       <p key={`paragraph-${index}`}>
-        {inlineMarkup(paragraphText, `p-${index}`, streaming)}
+        {inlineMarkup(
+          paragraphText,
+          `p-${index}`,
+          streaming,
+          staggerCharacters,
+          initialCharacterDelayMs,
+        )}
       </p>,
     );
   }
@@ -138,20 +228,34 @@ function responseBlocks(text: string, streaming: boolean): ReactNode[] {
 }
 
 export interface AgentResponseProps {
+  initialCharacterDelayMs?: number;
+  staggerCharacters?: boolean;
   streaming?: boolean;
   text: string;
 }
 
-export function AgentResponse({ streaming = false, text }: AgentResponseProps) {
+export function AgentResponse({
+  initialCharacterDelayMs = 0,
+  staggerCharacters = false,
+  streaming = false,
+  text,
+}: AgentResponseProps) {
   const scale = responseScale(text);
   return (
     <div
       className="latest-response"
+      data-character-delay={initialCharacterDelayMs}
       data-response-scale={scale.toFixed(3)}
+      data-staggered={staggerCharacters}
       data-streaming={streaming}
       style={responseStyle(text)}
     >
-      {responseBlocks(text, streaming)}
+      {responseBlocks(
+        text,
+        streaming,
+        staggerCharacters,
+        initialCharacterDelayMs,
+      )}
     </div>
   );
 }

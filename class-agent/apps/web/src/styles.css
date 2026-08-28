@@ -268,6 +268,8 @@ textarea {
 }
 
 .course-agent[data-workspace-open="true"] .response-stage {
+  --response-stage-offset: 0rem;
+
   box-sizing: border-box;
   height: 100dvh;
   justify-self: stretch;
@@ -502,19 +504,85 @@ textarea {
 }
 
 .response-stage {
+  --response-stage-offset: clamp(-10rem, -13dvh, -5rem);
+
   align-items: center;
   display: flex;
   flex-direction: column;
+  isolation: isolate;
   justify-content: center;
   max-width: 68rem;
   min-height: 14rem;
+  position: relative;
   text-align: center;
+  transform: translateY(var(--response-stage-offset));
   transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
   width: 100%;
 }
 
+.morphing-line-figure {
+  aspect-ratio: 1;
+  flex: none;
+  margin: 0 0 clamp(3rem, 7dvh, 5rem);
+  opacity: 0.48;
+  pointer-events: none;
+  position: relative;
+  transition: opacity 420ms ease;
+  width: clamp(9rem, 12vw, 12rem);
+  z-index: 1;
+}
+
+.morphing-line-figure[data-active="true"] {
+  opacity: 0.82;
+}
+
+.morphing-line-figure svg {
+  animation: morphing-line-idle 13s ease-in-out infinite alternate;
+  display: block;
+  height: 100%;
+  overflow: visible;
+  width: 100%;
+}
+
+.morphing-line-figure[data-active="true"] svg {
+  animation: morphing-line-drift 7s ease-in-out infinite alternate;
+}
+
+.morphing-line-contour {
+  fill: none;
+  opacity: 0.42;
+  stroke: var(--color-text);
+  stroke-linecap: square;
+  stroke-linejoin: bevel;
+  vector-effect: non-scaling-stroke;
+}
+
+.morphing-line-contour:nth-child(3n + 1) {
+  opacity: 0.22;
+}
+
+.morphing-line-contour:nth-child(4n + 2) {
+  opacity: 0.58;
+}
+
+.course-agent[data-workspace-open="true"] .morphing-line-figure {
+  margin-bottom: 2rem;
+  opacity: 0.42;
+  width: clamp(5.5rem, 8vw, 7.5rem);
+}
+
+.course-agent[data-workspace-open="true"] .morphing-line-figure[data-active="true"] {
+  opacity: 0.72;
+}
+
+.response-agent-line,
+.latest-response {
+  position: relative;
+  z-index: 1;
+}
+
 .response-stage:has(.activity-trace[open]) {
-  transform: translateY(-2.5rem);
+  transform: translateY(calc(var(--response-stage-offset) - 2.5rem));
 }
 
 .response-agent-line {
@@ -591,6 +659,41 @@ textarea {
 
 .latest-response[data-streaming="true"] .response-character {
   animation: response-character-in 180ms ease-out both;
+}
+
+.latest-response[data-staggered="true"] > :last-child::after {
+  display: none;
+}
+
+.response-word {
+  white-space: nowrap;
+}
+
+.latest-response[data-streaming="true"][data-staggered="true"]
+  .response-character {
+  position: relative;
+}
+
+.latest-response[data-streaming="true"][data-staggered="true"]
+  .response-character::after {
+  animation: response-cursor-follow 14ms linear;
+  animation-delay: var(--response-character-delay);
+  background: currentColor;
+  bottom: 0.08em;
+  content: "";
+  height: 0.72em;
+  left: 100%;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  width: 0.32em;
+  z-index: 2;
+}
+
+.latest-response[data-streaming="true"][data-staggered="true"]
+  .response-character-last::after {
+  animation: response-cursor 750ms steps(2, end) infinite;
+  animation-delay: var(--response-character-delay);
 }
 
 .latest-response p,
@@ -1211,8 +1314,19 @@ textarea {
 }
 
 @keyframes response-cursor {
+  0%,
+  100% {
+    opacity: 1;
+  }
   50% {
     opacity: 0.15;
+  }
+}
+
+@keyframes response-cursor-follow {
+  from,
+  to {
+    opacity: 1;
   }
 }
 
@@ -1222,6 +1336,24 @@ textarea {
   }
   to {
     opacity: 1;
+  }
+}
+
+@keyframes morphing-line-drift {
+  from {
+    transform: rotate(-1.5deg) scale(0.99);
+  }
+  to {
+    transform: rotate(1.5deg) scale(1.01);
+  }
+}
+
+@keyframes morphing-line-idle {
+  from {
+    transform: rotate(-0.35deg) scale(0.997);
+  }
+  to {
+    transform: rotate(0.35deg) scale(1.003);
   }
 }
 
@@ -1377,6 +1509,10 @@ textarea {
     padding: 5.5rem 1.5rem 8rem;
   }
 
+  .response-stage {
+    --response-stage-offset: -2rem;
+  }
+
   .institutional-marks {
     gap: 0.75rem;
   }
@@ -1415,6 +1551,11 @@ textarea {
     padding-inline: min(var(--response-padding-inline), 0.75rem);
   }
 
+  .morphing-line-figure {
+    margin-bottom: 2rem;
+    width: 7.5rem;
+  }
+
   .composer {
     bottom: clamp(5rem, 12dvh, 7rem);
     padding: 0 1.5rem;
@@ -1438,6 +1579,10 @@ textarea {
   .response-agent-line,
   .response-stage,
   .response-character,
+  .response-character::after,
+  .morphing-line-figure,
+  .morphing-line-figure svg,
+  .morphing-line-contour,
   .composer-drop-state,
   .composer-drop-icon,
   .upload-progress-track span,

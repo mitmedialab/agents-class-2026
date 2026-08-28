@@ -28,13 +28,18 @@ import {
   type TemporaryUpload,
 } from "./api.js";
 import { ActivityTrace } from "./ActivityTrace.js";
-import { AgentResponse } from "./AgentResponse.js";
+import {
+  AgentResponse,
+  RESPONSE_CHARACTER_STAGGER_MS,
+} from "./AgentResponse.js";
+import { MorphingLineFigure } from "./MorphingLineFigure.js";
 import { SyllabusPage } from "./SyllabusPage.js";
 import { Workspace } from "./Workspace.js";
 import {
   type DragEvent,
   type FormEvent,
   type KeyboardEvent,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -43,6 +48,12 @@ import {
 const CONNECTION_ERROR = "I couldn’t reach the Course Agent. Please try again.";
 const WELCOME_MESSAGE =
   "Welcome. I’m the Course Agent. This agent is the class website—ask me for class information, or talk with me if you’d like to apply.";
+const WELCOME_MORPH_DELAY_MS = 3_000;
+const WELCOME_PRESENTATION_MS =
+  WELCOME_MORPH_DELAY_MS +
+  (WELCOME_MESSAGE.length - 1) * RESPONSE_CHARACTER_STAGGER_MS +
+  180;
+const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const SUPPORTED_UPLOAD_EXTENSIONS = new Set([
   "csv",
@@ -165,6 +176,8 @@ export default function App() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
   const [isStreamingText, setIsStreamingText] = useState(false);
+  const [isPresentingWelcome, setIsPresentingWelcome] = useState(true);
+  const [welcomePresentationId, setWelcomePresentationId] = useState(0);
   const [uploads, setUploads] = useState<TemporaryUpload[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isFileDragActive, setIsFileDragActive] = useState(false);
@@ -186,12 +199,40 @@ export default function App() {
   const operationInFlight = useRef(false);
   const applicationReturnResponse = useRef<string | null>(null);
 
+  const showWelcomeMessage = useCallback(() => {
+    setLatestResponse(WELCOME_MESSAGE);
+    setIsPresentingWelcome(true);
+    setWelcomePresentationId((current) => current + 1);
+  }, []);
+
+  const startNewConversation = useCallback(() => {
+    activeRun.current?.abort();
+    activeRun.current = null;
+    operationInFlight.current = false;
+    applicationReturnResponse.current = null;
+    setSelectedConversationId(null);
+    showWelcomeMessage();
+    setActivities([]);
+    setWorkspaceState(emptyWorkspaceState());
+    setCurrentAction(null);
+    setMessage("");
+    setUploads([]);
+    setUploadError(null);
+    setIsRunning(false);
+    setIsStreamingText(false);
+    setHistoryOpen(false);
+    setAboutOpen(false);
+    requestAnimationFrame(() => composerRef.current?.focus());
+  }, [showWelcomeMessage]);
+
   async function showConversation(conversation: Conversation): Promise<void> {
     setCurrentAction("Loading conversation");
     try {
       const detail = await getConversation(conversation.id);
       setSelectedConversationId(conversation.id);
-      setLatestResponse(latestAgentResponse(detail.events) || WELCOME_MESSAGE);
+      const response = latestAgentResponse(detail.events);
+      if (response) setLatestResponse(response);
+      else showWelcomeMessage();
       setWorkspaceState(workspaceFromEvents(detail.events));
       setActivities([]);
       setHistoryOpen(false);
@@ -226,7 +267,9 @@ export default function App() {
           const detail = await getConversation(newest.id);
           if (disposed) return;
           setSelectedConversationId(newest.id);
-          setLatestResponse(latestAgentResponse(detail.events) || WELCOME_MESSAGE);
+          const response = latestAgentResponse(detail.events);
+          if (response) setLatestResponse(response);
+          else showWelcomeMessage();
           setWorkspaceState(workspaceFromEvents(detail.events));
         }
       } catch {
@@ -244,7 +287,44 @@ export default function App() {
       disposed = true;
       activeRun.current?.abort();
     };
-  }, []);
+  }, [showWelcomeMessage]);
+
+  useEffect(() => {
+    if (latestResponse !== WELCOME_MESSAGE) return;
+    setIsPresentingWelcome(true);
+    const timeout = window.setTimeout(
+      () => setIsPresentingWelcome(false),
+      WELCOME_PRESENTATION_MS,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [latestResponse, welcomePresentationId]);
+
+  useEffect(() => {
+    let inactivityTimer = window.setTimeout(startNewConversation, INACTIVITY_TIMEOUT_MS);
+
+    function resetInactivityTimer() {
+      window.clearTimeout(inactivityTimer);
+      inactivityTimer = window.setTimeout(startNewConversation, INACTIVITY_TIMEOUT_MS);
+    }
+
+    const activityEvents = [
+      "keydown",
+      "pointerdown",
+      "pointermove",
+      "scroll",
+      "touchstart",
+    ] as const;
+    activityEvents.forEach((eventName) =>
+      window.addEventListener(eventName, resetInactivityTimer, { passive: true }),
+    );
+
+    return () => {
+      window.clearTimeout(inactivityTimer);
+      activityEvents.forEach((eventName) =>
+        window.removeEventListener(eventName, resetInactivityTimer),
+      );
+    };
+  }, [startNewConversation]);
 
   useEffect(() => {
     const composer = composerRef.current;
@@ -552,26 +632,6 @@ export default function App() {
     if (canDropFiles) void handleFileSelection(event.dataTransfer.files);
   }
 
-  function startNewConversation() {
-    activeRun.current?.abort();
-    activeRun.current = null;
-    operationInFlight.current = false;
-    applicationReturnResponse.current = null;
-    setSelectedConversationId(null);
-    setLatestResponse(WELCOME_MESSAGE);
-    setActivities([]);
-    setWorkspaceState(emptyWorkspaceState());
-    setCurrentAction(null);
-    setMessage("");
-    setUploads([]);
-    setUploadError(null);
-    setIsRunning(false);
-    setIsStreamingText(false);
-    setHistoryOpen(false);
-    setAboutOpen(false);
-    requestAnimationFrame(() => composerRef.current?.focus());
-  }
-
   async function toggleAbout(): Promise<void> {
     if (aboutOpen) {
       setAboutOpen(false);
@@ -674,11 +734,13 @@ export default function App() {
       setCurrentAction(null);
       setIsStreamingText(false);
       const previousResponse = applicationReturnResponse.current;
-      setLatestResponse(
-        previousResponse && previousResponse !== WELCOME_MESSAGE
-          ? `${previousResponse}\n\nTo continue, send a message to the Course Agent.`
-          : WELCOME_MESSAGE,
-      );
+      if (previousResponse && previousResponse !== WELCOME_MESSAGE) {
+        setLatestResponse(
+          `${previousResponse}\n\nTo continue, send a message to the Course Agent.`,
+        );
+      } else {
+        showWelcomeMessage();
+      }
       applicationReturnResponse.current = null;
     }
     if (!selectedConversationId) return;
@@ -809,6 +871,9 @@ export default function App() {
     }
   }
 
+  const isWelcomePresentationActive =
+    latestResponse === WELCOME_MESSAGE && isPresentingWelcome;
+
   return (
     <div
       className="course-agent"
@@ -883,12 +948,33 @@ export default function App() {
         <>
       <main className="workspace-shell" data-testid="workspace-shell">
         <section aria-atomic="false" aria-live="polite" className="response-stage">
+          <MorphingLineFigure
+            active={
+              isInitializing ||
+              isRunning ||
+              isStreamingText ||
+              isWelcomePresentationActive ||
+              currentAction !== null
+            }
+          />
           <div className="response-agent-line" data-testid="response-agent-line">
             <span className="response-agent-name">Course Agent</span>
             <ActivityTrace activities={activities} currentLabel={currentAction} />
           </div>
           {latestResponse ? (
-            <AgentResponse streaming={isStreamingText} text={latestResponse} />
+            <AgentResponse
+              initialCharacterDelayMs={
+                isWelcomePresentationActive ? WELCOME_MORPH_DELAY_MS : 0
+              }
+              key={
+                latestResponse === WELCOME_MESSAGE
+                  ? `welcome-${welcomePresentationId}`
+                  : "agent-response"
+              }
+              staggerCharacters={latestResponse === WELCOME_MESSAGE}
+              streaming={isStreamingText || isWelcomePresentationActive}
+              text={latestResponse}
+            />
           ) : null}
         </section>
         {workspaceState.panels.length > 0 ? (

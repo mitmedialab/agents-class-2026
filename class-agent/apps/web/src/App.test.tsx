@@ -1,5 +1,5 @@
 import type { Conversation, PrincipalContext } from "@class-agent/protocol";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App.js";
 import * as api from "./api.js";
@@ -184,7 +184,17 @@ describe("Course Agent interface", () => {
       fireEvent.change(composer, { target: { value: "Unsent draft" } });
       fireEvent.click(screen.getByRole("button", { name: logoName }));
 
-      expect(screen.getByText(/Welcome\. I’m the Course Agent/)).toBeInTheDocument();
+      expect(document.querySelector(".latest-response")).toHaveTextContent(
+        /Welcome\. I’m the Course Agent/,
+      );
+      expect(document.querySelector(".latest-response")).toHaveAttribute(
+        "data-staggered",
+        "true",
+      );
+      expect(document.querySelector(".latest-response")).toHaveAttribute(
+        "data-character-delay",
+        "3000",
+      );
       expect(composer).toHaveValue("");
 
       fireEvent.change(composer, { target: { value: "A fresh question" } });
@@ -411,11 +421,19 @@ describe("Course Agent interface", () => {
       expect(document.querySelector(".latest-response")).toHaveTextContent("Now."),
     );
     expect(document.querySelectorAll(".response-character")).toHaveLength(4);
+    expect(screen.getByTestId("morphing-line-figure")).toHaveAttribute(
+      "data-active",
+      "true",
+    );
     expect(composer).toBeDisabled();
 
     releaseStream();
     expect(await screen.findByText("Now done.")).toBeInTheDocument();
     await waitFor(() => expect(composer).not.toBeDisabled());
+    expect(screen.getByTestId("morphing-line-figure")).toHaveAttribute(
+      "data-active",
+      "false",
+    );
   });
 
   it("replaces an earlier progress message while appending chunks within each message", async () => {
@@ -621,10 +639,56 @@ describe("Course Agent interface", () => {
     vi.mocked(api.listConversations).mockResolvedValue([]);
     render(<App />);
 
-    expect(
-      await screen.findByText(/This agent is the class website/),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/like to apply/)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(document.querySelector(".latest-response")).toHaveTextContent(
+        /This agent is the class website/,
+      ),
+    );
+    expect(document.querySelector(".latest-response")).toHaveTextContent(
+      /like to apply/,
+    );
+    expect(document.querySelector(".latest-response")).toHaveAttribute(
+      "data-staggered",
+      "true",
+    );
+  });
+
+  it("returns to a newly animated welcome after five minutes without activity", async () => {
+    vi.useFakeTimers();
+    try {
+      render(<App />);
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(document.querySelector(".latest-response")).toHaveTextContent(
+        "The earlier response.",
+      );
+      const composer = screen.getByRole("textbox", { name: "Message" });
+      fireEvent.change(composer, { target: { value: "An unfinished thought" } });
+
+      act(() => vi.advanceTimersByTime(4 * 60 * 1000));
+      fireEvent.pointerMove(window);
+      act(() => vi.advanceTimersByTime(5 * 60 * 1000 - 1));
+      expect(document.querySelector(".latest-response")).toHaveTextContent(
+        "The earlier response.",
+      );
+
+      act(() => vi.advanceTimersByTime(1));
+      expect(document.querySelector(".latest-response")).toHaveTextContent(
+        /Welcome\. I’m the Course Agent/,
+      );
+      expect(document.querySelector(".latest-response")).toHaveAttribute(
+        "data-staggered",
+        "true",
+      );
+      expect(composer).toHaveValue("");
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
   });
 
   it("keeps inspectable agent activity visually separate and expandable", async () => {
