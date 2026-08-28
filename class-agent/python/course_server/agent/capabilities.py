@@ -680,9 +680,11 @@ class PublicImageInspectionTool:
         if not analysis.strip():
             raise ToolValidationError("Image inspection returned no visual analysis.")
         existing = context.transient_state.get("image_search_candidates", [])
-        candidates = [value for value in existing if isinstance(value, str)] if isinstance(
-            existing, list
-        ) else []
+        candidates = (
+            [value for value in existing if isinstance(value, str)]
+            if isinstance(existing, list)
+            else []
+        )
         context.transient_state["image_search_candidates"] = list(
             dict.fromkeys([*candidates, *verified])
         )
@@ -762,9 +764,11 @@ class PublicVisitWebpageTool:
             raise ToolValidationError("The public webpage returned no readable content.")
         if image_urls:
             existing = context.transient_state.get("page_image_candidates", [])
-            candidates = [value for value in existing if isinstance(value, str)] if isinstance(
-                existing, list
-            ) else []
+            candidates = (
+                [value for value in existing if isinstance(value, str)]
+                if isinstance(existing, list)
+                else []
+            )
             context.transient_state["page_image_candidates"] = list(
                 dict.fromkeys([*candidates, *image_urls])
             )

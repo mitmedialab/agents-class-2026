@@ -97,9 +97,9 @@ class AgentSettings(BaseModel):
         browser_enabled = values.get("BROWSER_ENABLED", "true").strip().casefold()
         if browser_enabled not in {"true", "false", "1", "0", "yes", "no"}:
             raise ConfigurationError("BROWSER_ENABLED must be true or false")
-        strict_visual_policy = values.get(
-            "WORKSPACE_STRICT_VISUAL_POLICY", "true"
-        ).strip().casefold()
+        strict_visual_policy = (
+            values.get("WORKSPACE_STRICT_VISUAL_POLICY", "true").strip().casefold()
+        )
         if strict_visual_policy not in {"true", "false", "1", "0", "yes", "no"}:
             raise ConfigurationError("WORKSPACE_STRICT_VISUAL_POLICY must be true or false")
 

@@ -133,9 +133,12 @@ def fetch_public_webpage(
                         "img[src], img[data-src], img[data-lazy-src], source[srcset], "
                         "meta[property='og:image'][content], meta[name='twitter:image'][content]"
                     ):
-                        raw_url = element.get("content") or element.get("data-src") or element.get(
-                            "data-lazy-src"
-                        ) or element.get("src")
+                        raw_url = (
+                            element.get("content")
+                            or element.get("data-src")
+                            or element.get("data-lazy-src")
+                            or element.get("src")
+                        )
                         srcset = element.get("srcset")
                         if not raw_url and isinstance(srcset, str):
                             entries = [item.strip().split()[0] for item in srcset.split(",")]

@@ -795,9 +795,7 @@ def test_application_tool_requires_supplied_form_categories_and_photo() -> None:
     assert isinstance(properties, dict)
     github_id = properties["github_id"]
     assert isinstance(github_id, dict)
-    assert github_id["pattern"] == (
-        "^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$"
-    )
+    assert github_id["pattern"] == ("^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$")
     registration_status = properties["registration_status"]
     assert isinstance(registration_status, dict)
     assert registration_status["enum"] == [
