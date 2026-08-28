@@ -48,6 +48,8 @@ import {
 const CONNECTION_ERROR = "I couldn’t reach the Course Agent. Please try again.";
 const WELCOME_MESSAGE =
   "Welcome. I’m the Course Agent. This agent is the class website—ask me for class information, or talk with me if you’d like to apply.";
+const COURSE_TITLE = "AI Agents for Cognitive Augmentation";
+const OPENING_SPLASH_DURATION_MS = 3_600;
 const WELCOME_MORPH_DELAY_MS = 3_000;
 const WELCOME_PRESENTATION_MS =
   WELCOME_MORPH_DELAY_MS +
@@ -176,6 +178,11 @@ export default function App() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
   const [isStreamingText, setIsStreamingText] = useState(false);
+  const [isOpening, setIsOpening] = useState(() =>
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? !window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      : true,
+  );
   const [isPresentingWelcome, setIsPresentingWelcome] = useState(true);
   const [welcomePresentationId, setWelcomePresentationId] = useState(0);
   const [uploads, setUploads] = useState<TemporaryUpload[]>([]);
@@ -290,6 +297,22 @@ export default function App() {
   }, [showWelcomeMessage]);
 
   useEffect(() => {
+    if (!isOpening) return;
+    const timeout = window.setTimeout(
+      () => setIsOpening(false),
+      OPENING_SPLASH_DURATION_MS,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [isOpening]);
+
+  useEffect(() => {
+    if (isOpening) return;
+    const frame = requestAnimationFrame(() => composerRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [isOpening]);
+
+  useEffect(() => {
+    if (isOpening) return;
     if (latestResponse !== WELCOME_MESSAGE) return;
     setIsPresentingWelcome(true);
     const timeout = window.setTimeout(
@@ -297,7 +320,7 @@ export default function App() {
       WELCOME_PRESENTATION_MS,
     );
     return () => window.clearTimeout(timeout);
-  }, [latestResponse, welcomePresentationId]);
+  }, [isOpening, latestResponse, welcomePresentationId]);
 
   useEffect(() => {
     let inactivityTimer = window.setTimeout(startNewConversation, INACTIVITY_TIMEOUT_MS);
@@ -337,6 +360,7 @@ export default function App() {
     function focusComposer(event: globalThis.KeyboardEvent) {
       const target = event.target;
       if (
+        isOpening ||
         historyOpen ||
         aboutOpen ||
         event.metaKey ||
@@ -354,7 +378,7 @@ export default function App() {
 
     window.addEventListener("keydown", focusComposer);
     return () => window.removeEventListener("keydown", focusComposer);
-  }, [aboutOpen, historyOpen]);
+  }, [aboutOpen, historyOpen, isOpening]);
 
   useEffect(() => {
     if (!historyOpen) return;
@@ -872,19 +896,34 @@ export default function App() {
   }
 
   const isWelcomePresentationActive =
-    latestResponse === WELCOME_MESSAGE && isPresentingWelcome;
+    !isOpening && latestResponse === WELCOME_MESSAGE && isPresentingWelcome;
 
   return (
     <div
       className="course-agent"
       data-about-open={aboutOpen}
       data-file-drag-active={isFileDragActive}
+      data-opening={isOpening}
       data-workspace-open={!aboutOpen && workspaceState.panels.length > 0}
       onDragEnter={handleFileDragEnter}
       onDragLeave={handleFileDragLeave}
       onDragOver={handleFileDragOver}
       onDrop={handleFileDrop}
     >
+      {isOpening ? (
+        <section
+          aria-label="Course introduction"
+          className="opening-splash"
+          data-testid="opening-splash"
+        >
+          <h1 className="opening-splash-title">{COURSE_TITLE}</h1>
+        </section>
+      ) : null}
+      <div
+        className="course-agent-interface"
+        data-testid="course-agent-interface"
+        inert={isOpening ? true : undefined}
+      >
       <header className="agent-header">
         <div className="header-left">
           <div aria-label="MIT and MIT Media Lab" className="institutional-marks">
@@ -1068,7 +1107,7 @@ export default function App() {
               ref={composerRef}
               aria-label="Message"
               autoComplete="off"
-              autoFocus
+              autoFocus={!isOpening}
               className="composer-text"
               disabled={isInitializing || isRunning || isUploading}
               enterKeyHint="send"
@@ -1204,6 +1243,7 @@ export default function App() {
           </aside>
         </div>
       ) : null}
+      </div>
     </div>
   );
 }

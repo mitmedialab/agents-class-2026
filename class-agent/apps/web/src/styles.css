@@ -29,6 +29,41 @@ textarea {
   position: relative;
 }
 
+.course-agent-interface {
+  background: var(--color-background);
+  min-height: 100dvh;
+  opacity: 1;
+  transition: opacity 900ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.course-agent[data-opening="true"] .course-agent-interface {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.opening-splash {
+  align-items: center;
+  background: #000;
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  overflow: hidden;
+  padding: clamp(2rem, 6vw, 7rem);
+  position: fixed;
+  z-index: 100;
+}
+
+.opening-splash-title {
+  animation: opening-course-title 3.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  font-size: clamp(3.5rem, 8.5vw, 8.75rem);
+  font-weight: 400;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  margin: 0;
+  max-width: 18ch;
+  will-change: filter, opacity, transform;
+}
+
 .course-agent[data-about-open="true"] {
   overflow: visible;
 }
@@ -1313,6 +1348,25 @@ textarea {
   }
 }
 
+@keyframes opening-course-title {
+  0% {
+    filter: blur(0.6rem);
+    opacity: 0;
+    transform: translateY(1.1rem) scale(0.99);
+  }
+  24%,
+  64% {
+    filter: blur(0);
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    filter: blur(0.35rem);
+    opacity: 0;
+    transform: translateY(-0.75rem) scale(1.005);
+  }
+}
+
 @keyframes response-cursor {
   0%,
   100% {
@@ -1573,6 +1627,8 @@ textarea {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .course-agent-interface,
+  .opening-splash-title,
   .agent-drawer,
   .ca-spinner,
   .activity-list,

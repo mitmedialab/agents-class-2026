@@ -154,6 +154,38 @@ beforeEach(() => {
 });
 
 describe("Course Agent interface", () => {
+  it("introduces the course before revealing the interface", async () => {
+    vi.useFakeTimers();
+    try {
+      render(<App />);
+
+      expect(screen.getByTestId("opening-splash")).toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", {
+          name: "AI Agents for Cognitive Augmentation",
+        }),
+      ).toBeInTheDocument();
+      expect(screen.getByTestId("course-agent-interface")).toHaveAttribute(
+        "inert",
+      );
+
+      act(() => vi.advanceTimersByTime(3_599));
+      expect(screen.getByTestId("opening-splash")).toBeInTheDocument();
+
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+        await Promise.resolve();
+      });
+      expect(screen.queryByTestId("opening-splash")).not.toBeInTheDocument();
+      expect(screen.getByTestId("course-agent-interface")).not.toHaveAttribute(
+        "inert",
+      );
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
   it("shows only the latest agent response in the main workspace", async () => {
     render(<App />);
 
@@ -177,31 +209,41 @@ describe("Course Agent interface", () => {
   it.each(["MIT", "MIT Media Lab"])(
     "starts a fresh chat from the %s logo",
     async (logoName) => {
-      render(<App />);
-      await screen.findByText("The earlier response.");
+      vi.useFakeTimers();
+      try {
+        render(<App />);
+        await act(async () => {
+          vi.advanceTimersByTime(3_600);
+          await Promise.resolve();
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+        expect(screen.getByText("The earlier response.")).toBeInTheDocument();
 
-      const composer = screen.getByRole("textbox", { name: "Message" });
-      fireEvent.change(composer, { target: { value: "Unsent draft" } });
-      fireEvent.click(screen.getByRole("button", { name: logoName }));
+        const composer = screen.getByRole("textbox", { name: "Message" });
+        fireEvent.change(composer, { target: { value: "Unsent draft" } });
+        fireEvent.click(screen.getByRole("button", { name: logoName }));
 
-      expect(document.querySelector(".latest-response")).toHaveTextContent(
-        /Welcome\. I’m the Course Agent/,
-      );
-      expect(document.querySelector(".latest-response")).toHaveAttribute(
-        "data-staggered",
-        "true",
-      );
-      expect(document.querySelector(".latest-response")).toHaveAttribute(
-        "data-character-delay",
-        "3000",
-      );
-      expect(composer).toHaveValue("");
+        expect(document.querySelector(".latest-response")).toHaveTextContent(
+          /Welcome\. I’m the Course Agent/,
+        );
+        expect(document.querySelector(".latest-response")).toHaveAttribute(
+          "data-staggered",
+          "true",
+        );
+        expect(document.querySelector(".latest-response")).toHaveAttribute(
+          "data-character-delay",
+          "3000",
+        );
+        expect(composer).toHaveValue("");
 
-      fireEvent.change(composer, { target: { value: "A fresh question" } });
-      fireEvent.keyDown(composer, { key: "Enter" });
-      await waitFor(() =>
-        expect(api.createConversation).toHaveBeenCalledWith("A fresh question"),
-      );
+        fireEvent.change(composer, { target: { value: "A fresh question" } });
+        fireEvent.keyDown(composer, { key: "Enter" });
+        expect(api.createConversation).toHaveBeenCalledWith("A fresh question");
+      } finally {
+        vi.clearAllTimers();
+        vi.useRealTimers();
+      }
     },
   );
 
