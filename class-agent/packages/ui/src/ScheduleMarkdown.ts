@@ -217,12 +217,22 @@ function parseNotices(lines: string[]): CalendarNotice[] {
   return notices;
 }
 
+function parseScheduleYear(lines: string[]): number | undefined {
+  for (const line of lines) {
+    const match = /\b(20\d{2})\b/.exec(cleanInlineMarkdown(line));
+    if (match?.[1]) return Number(match[1]);
+  }
+  return undefined;
+}
+
 /** Parse the editable course Markdown into the trusted Calendar's normalized data. */
 export function parseScheduleMarkdown(markdown: string): CalendarData {
   const lines = markdown.split(/\r?\n/);
   const table = findScheduleTable(lines);
   if (!table) return { events: [] };
-  const notices = parseNotices(lines.slice(0, table.startLine));
+  const scheduleHeader = lines.slice(0, table.startLine);
+  const notices = parseNotices(scheduleHeader);
+  const year = parseScheduleYear(scheduleHeader);
   const events: CalendarEvent[] = [];
 
   for (const row of table.rows) {
@@ -265,5 +275,6 @@ export function parseScheduleMarkdown(markdown: string): CalendarData {
   return {
     events,
     ...(notices.length ? { notices } : {}),
+    ...(year ? { year } : {}),
   };
 }

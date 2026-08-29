@@ -327,8 +327,7 @@ def test_application_information_tool_reads_official_guide_directly() -> None:
         assert "Capacity | 25 in-person students" in result.content
         assert "Email" in result.content
         assert "Recent profile photo" in result.content
-        assert "Acceptance notification | To be announced" in result.content
-        assert "September 9" not in result.content
+        assert "Acceptance notification | September 9" in result.content
         assert "ask only for the applicant's full name" in result.content
         assert "every required field has a supported candidate value" in result.content
         assert "later field-by-field interview" in result.content

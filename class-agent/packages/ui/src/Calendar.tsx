@@ -26,6 +26,7 @@ export interface CalendarData {
   events: CalendarEvent[];
   status?: string;
   notices?: CalendarNotice[];
+  year?: number;
 }
 
 export interface CalendarProps {
@@ -36,7 +37,7 @@ export interface CalendarProps {
   onInteraction?: ((action: string, value: string) => void) | undefined;
 }
 
-type CalendarView = "month" | "agenda" | "readings";
+type CalendarView = "month" | "agenda";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -57,6 +58,15 @@ function textList(value: unknown): string[] | undefined {
 
 function weekNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isInteger(value) && value > 0
+    ? value
+    : undefined;
+}
+
+function calendarYear(value: unknown): number | undefined {
+  return typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 2000 &&
+    value <= 2100
     ? value
     : undefined;
 }
@@ -95,11 +105,12 @@ export function normalizeCalendarData(value: unknown): CalendarData {
   if (typeof value === "string") return parseScheduleMarkdown(value);
   if (!isRecord(value)) return { events: [] };
   const status = text(value.status);
+  const year = calendarYear(value.year);
   if (Array.isArray(value.events)) {
     const events = value.events
       .map((event, index) => normalizedEvent(event, index))
       .filter((event): event is CalendarEvent => event !== null);
-    return status ? { events, status } : { events };
+    return { events, ...(status ? { status } : {}), ...(year ? { year } : {}) };
   }
   if (Array.isArray(value.weeks)) {
     const events = value.weeks.flatMap((week, index) => {
@@ -125,9 +136,9 @@ export function normalizeCalendarData(value: unknown): CalendarData {
       if (readings) event.readings = readings;
       return [event];
     });
-    return status ? { events, status } : { events };
+    return { events, ...(status ? { status } : {}), ...(year ? { year } : {}) };
   }
-  return status ? { events: [], status } : { events: [] };
+  return { events: [], ...(status ? { status } : {}), ...(year ? { year } : {}) };
 }
 
 function localDate(value: string): Date | null {
@@ -204,12 +215,21 @@ export function Calendar({
 }: CalendarProps) {
   const [activeView, setActiveView] = useState<CalendarView>(view);
   const firstDatedEvent = data.events.find((event) => event.start)?.start;
-  const requestedFocus = focusDate ? localDate(focusDate) : null;
+  const rawRequestedFocus = focusDate ? localDate(focusDate) : null;
   const firstEventDate = firstDatedEvent ? localDate(firstDatedEvent) : null;
   const scheduleYear =
-    requestedFocus?.getFullYear() ??
+    data.year ??
+    rawRequestedFocus?.getFullYear() ??
     firstEventDate?.getFullYear() ??
     new Date().getFullYear();
+  const requestedFocus = rawRequestedFocus
+    ? new Date(
+        scheduleYear,
+        rawRequestedFocus.getMonth(),
+        rawRequestedFocus.getDate(),
+        12,
+      )
+    : null;
   const firstLabeledEvent = data.events.find(
     (event) => event.dateLabel && dateLabelKey(event.dateLabel, scheduleYear),
   );
@@ -220,7 +240,6 @@ export function Calendar({
   const [focus, setFocus] = useState(initialFocus);
   const [selectedId, setSelectedId] = useState(selectedEventId);
   const cells = useMemo(() => monthCells(focus), [focus]);
-  const readingEvents = data.events.filter((event) => event.readings);
 
   function chooseEvent(event: CalendarEvent) {
     setSelectedId(event.id);
@@ -252,13 +271,6 @@ export function Calendar({
             type="button"
           >
             Agenda
-          </button>
-          <button
-            aria-pressed={activeView === "readings"}
-            onClick={() => changeView("readings")}
-            type="button"
-          >
-            Suggested readings
           </button>
         </div>
       </header>
@@ -313,6 +325,7 @@ export function Calendar({
               return (
                 <div
                   aria-label={new Intl.DateTimeFormat(undefined, {
+                    weekday: "long",
                     month: "long",
                     day: "numeric",
                   }).format(date)}
@@ -331,47 +344,21 @@ export function Calendar({
               );
             })}
           </div>
-          {data.events.some((event) => !event.start) ? (
+          {data.events.some(
+            (event) =>
+              !event.start &&
+              (!event.dateLabel || !dateLabelKey(event.dateLabel, scheduleYear)),
+          ) ? (
             <p className="ca-calendar-undated-note">
               Events without confirmed dates are listed in Agenda view.
             </p>
           ) : null}
         </div>
-      ) : activeView === "readings" ? (
-        <section aria-label="Suggested readings" className="ca-calendar-readings">
-          <header>
-            <span>Course bibliography</span>
-            <h2>Suggested readings</h2>
-            <p>Week-by-week references from the current course schedule.</p>
-          </header>
-          {readingEvents.length ? (
-            <ol>
-              {readingEvents.map((event) => (
-                <li key={event.id}>
-                  <span className="ca-calendar-reading-meta">
-                    {event.week ? <b>Week {event.week}</b> : null}
-                    <time dateTime={event.start}>{formatEventDate(event)}</time>
-                  </span>
-                  <span className="ca-calendar-reading-content">
-                    <strong>{event.title}</strong>
-                    <span>{event.readings}</span>
-                  </span>
-                </li>
-              ))}
-            </ol>
-          ) : (
-            <p className="ca-calendar-readings-empty">No suggested readings yet.</p>
-          )}
-        </section>
       ) : (
         <ol className="ca-calendar-agenda">
           {data.events.map((event) => (
             <li data-selected={event.id === selectedId} key={event.id}>
-              <button
-                aria-expanded={event.readings ? event.id === selectedId : undefined}
-                onClick={() => chooseEvent(event)}
-                type="button"
-              >
+              <button onClick={() => chooseEvent(event)} type="button">
                 <span className="ca-calendar-agenda-meta">
                   {event.week ? <b>Week {event.week}</b> : null}
                   <time dateTime={event.start}>{formatEventDate(event)}</time>
@@ -402,18 +389,14 @@ export function Calendar({
                       ) : null}
                     </span>
                   ) : null}
+                  {event.readings ? (
+                    <span className="ca-calendar-agenda-readings">
+                      <b>Suggested readings</b>
+                      <span>{event.readings}</span>
+                    </span>
+                  ) : null}
                 </span>
               </button>
-              {event.id === selectedId && event.readings ? (
-                <div
-                  aria-label={`Readings for ${event.title}`}
-                  className="ca-calendar-agenda-readings"
-                  role="region"
-                >
-                  <b>Readings</b>
-                  <span>{event.readings}</span>
-                </div>
-              ) : null}
             </li>
           ))}
         </ol>

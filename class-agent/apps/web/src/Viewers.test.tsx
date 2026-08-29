@@ -70,6 +70,7 @@ describe("Calendar", () => {
   it("parses every row in the published schedule source", () => {
     const data = normalizeCalendarData(publishedSchedule);
 
+    expect(data.year).toBe(2026);
     expect(data.events).toHaveLength(14);
     expect(data.events[0]).toMatchObject({
       week: 1,
@@ -91,14 +92,27 @@ describe("Calendar", () => {
       label: "Application deadline",
       text: "September 4th, midnight",
     });
+    expect(data.notices).toContainEqual({
+      label: "Acceptance notification",
+      text: "September 9",
+    });
+
+    render(<Calendar data={data} focusDate="2025-09-15" view="month" />);
+    expect(screen.getByRole("heading", { name: "September 2026" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("gridcell", { name: "Tuesday, September 1" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Course introduction: What is an AI agent?" }),
+    ).toBeInTheDocument();
   });
 
   it("parses the editable Markdown schedule into complete calendar events", () => {
-    const data = normalizeCalendarData(`# Schedule
+    const data = normalizeCalendarData(`# Fall 2026 Schedule
 
 **Notes: Every lecture begins with a 15 minute show and tell.**
 **Application deadline: September 4th, midnight**
-**Acceptance notification**
+**Acceptance notification: September 9**
 
 | Date / Week | Lecture Topics (45 min) | Hands-on tutorial (50 min) | Suggested Readings |
 | --- | --- | --- | --- |
@@ -110,8 +124,9 @@ describe("Calendar", () => {
     expect(data.notices).toEqual([
       { label: "Notes", text: "Every lecture begins with a 15 minute show and tell." },
       { label: "Application deadline", text: "September 4th, midnight" },
-      { label: "Acceptance notification" },
+      { label: "Acceptance notification", text: "September 9" },
     ]);
+    expect(data.year).toBe(2026);
     expect(data.events).toEqual([
       {
         id: "week-1",
@@ -155,6 +170,7 @@ describe("Calendar", () => {
   it("normalizes the course schedule without inventing missing dates", () => {
     const data = normalizeCalendarData({
       status: "provisional",
+      year: 2026,
       weeks: [
         {
           week: 1,
@@ -187,17 +203,9 @@ describe("Calendar", () => {
     expect(screen.getByText("Week 1")).toBeInTheDocument();
     expect(screen.getByText("Speaker: Pattie Maes")).toBeInTheDocument();
     expect(screen.getByText("Build a minimal agent.")).toBeInTheDocument();
-    expect(screen.queryByText("ReAct")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Suggested readings" }));
-    const readings = screen.getByRole("region", { name: "Suggested readings" });
-    expect(readings).toHaveTextContent("Week 1");
-    expect(readings).toHaveTextContent("Introduction");
-    expect(readings).toHaveTextContent("ReAct");
-    fireEvent.click(screen.getByRole("button", { name: "Agenda" }));
-    fireEvent.click(screen.getByRole("button", { name: /Introduction/ }));
-    expect(screen.getByRole("region", { name: "Readings for Introduction" })).toHaveTextContent(
-      "ReAct",
-    );
+    expect(screen.getByText("ReAct")).toBeInTheDocument();
+    expect(screen.getByText("Suggested readings")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Suggested readings" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Month" }));
     expect(screen.getByRole("grid", { name: "Month" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Introduction" })).toBeInTheDocument();

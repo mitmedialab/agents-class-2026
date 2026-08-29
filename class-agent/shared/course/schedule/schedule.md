@@ -1,8 +1,8 @@
-# Schedule
+# Fall 2026 Schedule
 
 **Notes: Every lecture will begin with a 15 minute show and tell. Students will be randomly picked.**
 **Application deadline: September 4th, midnight**
-**Acceptance notification**
+**Acceptance notification: September 9**
 
 | Date / Week | Lecture Topics (45 min) | Hands-on tutorial (50 min) | Suggested Readings |
 | ----- | ----- | ----- | ----- |
