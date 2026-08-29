@@ -161,6 +161,69 @@ def test_course_agent_persists_portable_history_and_isolates_anonymous_users() -
     asyncio.run(scenario())
 
 
+def test_course_agent_context_prioritizes_dialogue_over_run_bookkeeping() -> None:
+    async def scenario() -> None:
+        runtime = RecordingRuntime()
+        store = InMemoryConversationStore()
+        principal = public_principal()
+        service = CourseAgentService(runtime=runtime, conversations=store)
+        conversation = await service.create_conversation(principal)
+        events: list[Event] = []
+        for index in range(30):
+            common = {
+                "actor": "course-agent",
+                "anonymous_session_id": principal.anonymous_session_id,
+                "conversation_id": conversation.id,
+            }
+            events.extend(
+                [
+                    Event(
+                        type="user.message",
+                        payload={"text": f"User turn {index}"},
+                        **common,
+                    ),
+                    Event(type="agent.run.started", payload={"turn": index}, **common),
+                    Event(
+                        type="agent.tool.requested",
+                        payload={"tool_id": "test.tool"},
+                        **common,
+                    ),
+                    Event(
+                        type="agent.tool.completed",
+                        payload={"tool_id": "test.tool"},
+                        **common,
+                    ),
+                    Event(
+                        type="agent.message",
+                        payload={"text": f"Agent turn {index}"},
+                        **common,
+                    ),
+                    Event(type="agent.run.completed", payload={"turn": index}, **common),
+                ]
+            )
+        await store.append_events(conversation.id, events)
+
+        await service.run(
+            principal=principal,
+            conversation_id=conversation.id,
+            text="Continue",
+        )
+
+        recent = runtime.contexts[0].recent_events
+        dialogue = [event for event in recent if event.type in {"user.message", "agent.message"}]
+        supporting = [event for event in recent if event.type == "agent.tool.completed"]
+        assert len(dialogue) == 24
+        assert dialogue[0].payload["text"] == "User turn 18"
+        assert dialogue[-1].payload["text"] == "Agent turn 29"
+        assert len(supporting) == 16
+        assert all(
+            event.type in {"user.message", "agent.message", "agent.tool.completed"}
+            for event in recent
+        )
+
+    asyncio.run(scenario())
+
+
 def test_course_agent_reports_result_events_for_unobserved_runtime_adapters() -> None:
     async def scenario() -> None:
         runtime = RecordingRuntime()

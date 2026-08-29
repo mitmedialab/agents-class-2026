@@ -88,7 +88,7 @@ Optional credential email delivery is deferred to the `MailAdapter` phase. The P
 
 `Conversation` is now a portable core contract with exactly one authenticated-user or anonymous-session owner. PostgreSQL persists conversations and canonical `Event` envelopes through an application-owned `ConversationStore`; raw framework memory is never stored.
 
-`runtime_smolagents` implements `AgentRuntime` with `ToolCallingAgent`, not `CodeAgent`. It reconstructs prior user/agent text from events, receives only pre-authorized tools, emits portable run/tool/resource/message events, and discards all smolagents objects after the run. `OpenAIModelProvider` is the first `ModelProvider` adapter and obtains its key from server-side configuration.
+`runtime_smolagents` implements `AgentRuntime` with `ToolCallingAgent`, not `CodeAgent`. It reconstructs selected prior user/agent events as transient messages with their original roles, receives only pre-authorized tools, emits portable run/tool/resource/message events, and discards all smolagents objects after the run. Tool bookkeeping is excluded from the dialogue budget so tool-heavy turns cannot crowd out recent conversational context. `OpenAIModelProvider` is the first `ModelProvider` adapter and obtains its key from server-side configuration.
 
 The initial internal tool and resource conveniences use canonical dotted tool IDs, resource URIs, and JSON input schemas so they translate directly to MCP. No MCP server or proprietary external tool protocol is introduced in Phase 3. The only initial capability is public `course.read_syllabus` over `course://syllabus`.
 

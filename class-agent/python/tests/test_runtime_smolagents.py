@@ -42,6 +42,7 @@ class ScriptedToolCallingModel(Model):  # type: ignore[misc]
         self.calls = 0
         self.available_tool_names: list[str] = []
         self.message_text = ""
+        self.message_snapshots: list[list[ChatMessage]] = []
 
     def generate(
         self,
@@ -52,6 +53,7 @@ class ScriptedToolCallingModel(Model):  # type: ignore[misc]
         **kwargs: Any,
     ) -> ChatMessage:
         self.message_text = "\n".join(str(message.content or "") for message in messages)
+        self.message_snapshots.append(list(messages))
         del stop_sequences, response_format, kwargs
         self.available_tool_names = [tool.name for tool in tools_to_call_from or []]
         self.calls += 1
@@ -354,6 +356,65 @@ def test_application_guide_and_web_action_are_retained_as_natural_history() -> N
         assert "week-3" in model.message_text
         assert GET_APPLICATION_TOOL_ID not in model.message_text
         assert WEB_SEARCH_TOOL_ID not in model.message_text
+
+    asyncio.run(scenario())
+
+
+def test_dialogue_history_is_replayed_with_roles_and_continuity_guidance() -> None:
+    async def scenario() -> None:
+        model = ScriptedToolCallingModel()
+        resources = FileResourceProvider.with_sample_syllabus()
+        runtime = SmolagentsRuntime(
+            model_provider=ScriptedProvider(model),
+            tools=ToolCatalog([CourseReadSyllabusTool(resources)]),
+        )
+        conversation_id = uuid4()
+        principal = public_principal()
+        context = AgentContext(
+            principal=principal,
+            conversation_id=conversation_id,
+            recent_events=[
+                Event(
+                    type="user.message",
+                    actor="user",
+                    anonymous_session_id=principal.anonymous_session_id,
+                    conversation_id=conversation_id,
+                    payload={"text": "I am applying to the course."},
+                ),
+                Event(
+                    type="agent.message",
+                    actor="course-agent",
+                    anonymous_session_id=principal.anonymous_session_id,
+                    conversation_id=conversation_id,
+                    payload={"text": "Please upload a recent face photo."},
+                ),
+            ],
+            permitted_tool_ids=[READ_SYLLABUS_TOOL_ID],
+            permitted_resource_uris=[COURSE_SYLLABUS_URI],
+        )
+
+        await runtime.run(
+            context=context,
+            input=AgentInput(
+                conversation_id=conversation_id,
+                text="[Temporary upload: face.png]",
+            ),
+        )
+
+        first_messages = model.message_snapshots[0]
+        assert [message.role for message in first_messages] == [
+            MessageRole.SYSTEM,
+            MessageRole.USER,
+            MessageRole.ASSISTANT,
+            MessageRole.USER,
+        ]
+        system_text = str(first_messages[0].content)
+        assert "Continue the conversation coherently" in system_text
+        assert "I am applying to the course." not in system_text
+        assert "Please upload a recent face photo." not in system_text
+        assert "I am applying to the course." in str(first_messages[1].content)
+        assert "Please upload a recent face photo." in str(first_messages[2].content)
+        assert "[Temporary upload: face.png]" in str(first_messages[3].content)
 
     asyncio.run(scenario())
 

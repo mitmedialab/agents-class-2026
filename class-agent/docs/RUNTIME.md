@@ -4,7 +4,9 @@ There is one logical agent definition: `course-agent`. Each run combines that de
 
 ## Runtime boundary
 
-`agent_core.AgentRuntime` remains the platform boundary. `runtime_smolagents.SmolagentsRuntime` is one adapter and is the only production package that constructs `smolagents.ToolCallingAgent`. It creates a fresh transient framework agent for a run, reconstructs recent conversation context from canonical events, and returns only `AgentResult` and `Event` contracts. Phase 3 passes at most the 50 most recent events into a run.
+`agent_core.AgentRuntime` remains the platform boundary. `runtime_smolagents.SmolagentsRuntime` is one adapter and is the only production package that constructs `smolagents.ToolCallingAgent`. It creates a fresh transient framework agent for a run, reconstructs recent conversation context from canonical events, and returns only `AgentResult` and `Event` contracts. Context selection keeps the 24 most recent user/agent messages and 16 useful tool-completion or workspace-interaction events. Run lifecycle and tool-request bookkeeping do not consume that budget.
+
+The adapter reconstructs those portable user and assistant events as correctly role-scoped, ephemeral smolagents memory before each run. Dialogue is never flattened into the system instructions, and the transient memory is discarded afterward. This preserves conversational follow-ups—especially confirmations, corrections, requests to continue, and attachments—without making framework state canonical.
 
 No smolagents agent, memory, model, `RunResult`, or pickle is canonical persistent state. `CodeAgent` is not used.
 

@@ -11,7 +11,8 @@ from typing import Any, cast
 
 from pydantic import JsonValue, TypeAdapter
 from smolagents import ChatMessageStreamDelta, FinalAnswerStep, Model, Tool, ToolCallingAgent
-from smolagents.monitoring import LogLevel
+from smolagents.memory import ActionStep, TaskStep
+from smolagents.monitoring import LogLevel, Timing
 
 from agent_core import AgentContext, AgentInput, AgentResult, Event, ModelProvider
 from course_server.agent.capabilities import (
@@ -39,7 +40,7 @@ _FINAL_ANSWER_START = re.compile(r'"answer"\s*:\s*"')
 def _agent_instructions(
     context: AgentContext,
     public_resource_index: tuple[str, ...],
-    history: str,
+    supporting_history: str,
 ) -> str:
     sections = [
         (
@@ -54,6 +55,14 @@ def _agent_instructions(
             "user-facing progress or answers unless the user explicitly asks how the "
             "system is implemented. Never present an internal resource pointer as the "
             "answer; follow it with the appropriate read tool."
+        ),
+        (
+            "Continue the conversation coherently. Treat a short reply, correction, "
+            "confirmation, request to continue, or attachment as a response to your most "
+            "recent question or request unless the user clearly changes topic. Before asking "
+            "what the user wants, check whether the current input fulfills your pending "
+            "request. Do not make the user repeat context already present in the dialogue or "
+            "trusted workspace."
         ),
     ]
     sections.extend(
@@ -317,8 +326,8 @@ def _agent_instructions(
     if public_resource_index:
         entries = "\n".join(f"- {entry}" for entry in public_resource_index)
         sections.append(f"Official information available through tools:\n{entries}")
-    if history:
-        sections.append(f"Prior conversation:\n{history}")
+    if supporting_history:
+        sections.append(f"Relevant prior actions:\n{supporting_history}")
     return "\n\n".join(sections)
 
 
@@ -487,7 +496,7 @@ def _run_streaming_agent(
     extractor = _FinalAnswerDeltaExtractor(text_delta_observer)
     output: object | None = None
     progress_message_active = False
-    stream = cast(Iterable[object], agent.run(text, stream=True, reset=True))
+    stream = cast(Iterable[object], agent.run(text, stream=True, reset=False))
     for item in stream:
         if isinstance(item, ChatMessageStreamDelta):
             if item.content and progress_delta_observer is not None:
@@ -645,12 +654,6 @@ class _SmolagentsToolAdapter(Tool):  # type: ignore[misc]
 def _conversation_history(context: AgentContext) -> str:
     lines: list[str] = []
     for event in context.recent_events:
-        if event.type in {"user.message", "agent.message"}:
-            text = event.payload.get("text")
-            if isinstance(text, str):
-                speaker = "User" if event.type == "user.message" else "Class Agent"
-                lines.append(f"{speaker}: {text}")
-            continue
         if event.type == "workspace.interaction":
             action = event.payload.get("action")
             value = event.payload.get("value")
@@ -672,6 +675,30 @@ def _conversation_history(context: AgentContext) -> str:
         elif tool_id == VISIT_WEBPAGE_TOOL_ID:
             lines.append("Class Agent action: Public webpage read.")
     return "\n".join(lines)
+
+
+def _seed_dialogue_memory(agent: ToolCallingAgent, context: AgentContext) -> None:
+    """Reconstruct portable dialogue as ephemeral, correctly role-scoped model memory."""
+    assistant_step = 0
+    for event in context.recent_events:
+        if event.type not in {"user.message", "agent.message"}:
+            continue
+        text = event.payload.get("text")
+        if not isinstance(text, str) or not text.strip():
+            continue
+        if event.type == "user.message":
+            agent.memory.steps.append(TaskStep(task=text))
+            continue
+        assistant_step += 1
+        timestamp = event.timestamp.timestamp()
+        agent.memory.steps.append(
+            ActionStep(
+                step_number=assistant_step,
+                timing=Timing(start_time=timestamp, end_time=timestamp),
+                model_output=text,
+                is_final_answer=True,
+            )
+        )
 
 
 class SmolagentsRuntime:
@@ -755,11 +782,11 @@ class SmolagentsRuntime:
             )
             for tool in authorized_tools
         ]
-        history = _conversation_history(context)
+        supporting_history = _conversation_history(context)
         instructions = _agent_instructions(
             context,
             self._public_resource_index,
-            history,
+            supporting_history,
         )
 
         model = self._model_provider.create_model()
@@ -773,6 +800,7 @@ class SmolagentsRuntime:
             stream_outputs=(text_delta_observer is not None or progress_delta_observer is not None),
             verbosity_level=LogLevel.OFF,
         )
+        _seed_dialogue_memory(agent, context)
         event_fields = {
             "actor": self._agent_id,
             "conversation_id": context.conversation_id,
@@ -792,7 +820,7 @@ class SmolagentsRuntime:
             event_observer(started)
 
         if text_delta_observer is None and progress_delta_observer is None:
-            output = await asyncio.to_thread(agent.run, input.text, reset=True)
+            output = await asyncio.to_thread(agent.run, input.text, reset=False)
         else:
 
             def observe_final_text(text_delta: str) -> None:

@@ -28,7 +28,10 @@ from course_server.workspace import (
 from .capabilities import PublicCapabilityPolicy
 from .store import ConversationAccessDenied, ConversationStore, principal_owns_conversation
 
-RECENT_EVENT_LIMIT = 50
+RECENT_DIALOGUE_EVENT_LIMIT = 24
+RECENT_SUPPORTING_EVENT_LIMIT = 16
+_DIALOGUE_EVENT_TYPES = frozenset({"user.message", "agent.message"})
+_SUPPORTING_EVENT_TYPES = frozenset({"agent.tool.completed", "workspace.interaction"})
 EventObserver = Callable[[Event], None]
 TextDeltaObserver = Callable[[str], None]
 ProgressDeltaObserver = Callable[[str, bool], None]
@@ -58,6 +61,20 @@ def _principal_references(principal: PrincipalContext) -> dict[str, UUID | None]
         "principal_user_id": principal.user_id,
         "anonymous_session_id": principal.anonymous_session_id,
     }
+
+
+def _recent_context_events(events: list[Event]) -> list[Event]:
+    """Keep dialogue and useful actions without spending context on run bookkeeping."""
+    dialogue = [event for event in events if event.type in _DIALOGUE_EVENT_TYPES]
+    supporting = [event for event in events if event.type in _SUPPORTING_EVENT_TYPES]
+    retained_ids = {
+        event.id
+        for event in [
+            *dialogue[-RECENT_DIALOGUE_EVENT_LIMIT:],
+            *supporting[-RECENT_SUPPORTING_EVENT_LIMIT:],
+        ]
+    }
+    return [event for event in events if event.id in retained_ids]
 
 
 class CourseAgentService:
@@ -164,7 +181,7 @@ class CourseAgentService:
         context = AgentContext(
             principal=principal,
             conversation_id=conversation_id,
-            recent_events=previous_events[-RECENT_EVENT_LIMIT:],
+            recent_events=_recent_context_events(previous_events),
             capabilities=[
                 Capability(id=tool_id, status="available") for tool_id in authorized.tool_ids
             ],
