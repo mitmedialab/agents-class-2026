@@ -1360,7 +1360,8 @@
   white-space: pre-wrap;
 }
 
-.ca-draft-fields textarea {
+.ca-draft-fields textarea,
+.ca-draft-fields select {
   background: transparent;
   border: 0;
   border-radius: 0;
@@ -1375,8 +1376,17 @@
   width: 100%;
 }
 
+.ca-draft-fields select {
+  cursor: pointer;
+}
+
 .ca-draft-fields textarea:focus-visible {
   outline: 0;
+}
+
+.ca-draft-fields select:focus-visible {
+  outline: 1px solid var(--color-text);
+  outline-offset: 2px;
 }
 
 .ca-draft-fields textarea::placeholder {

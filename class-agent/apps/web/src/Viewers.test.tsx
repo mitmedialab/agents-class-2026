@@ -695,6 +695,30 @@ describe("DraftDocument", () => {
     expect(onChange).toHaveBeenCalledWith("name", "Grace Hopper");
   });
 
+  it("renders bounded draft options as a native select and saves immediately", () => {
+    const onChange = vi.fn();
+    render(
+      <DraftDocument
+        fields={[
+          {
+            id: "school",
+            label: "School",
+            options: ["MIT Media Lab", "MIT", "Harvard", "Wellesley", "Other"],
+            status: "missing",
+          },
+        ]}
+        onChange={onChange}
+        title="Course application"
+      />,
+    );
+
+    const field = screen.getByRole("combobox", { name: "School" });
+    fireEvent.change(field, { target: { value: "Harvard" } });
+
+    expect(field).toHaveValue("Harvard");
+    expect(onChange).toHaveBeenCalledWith("school", "Harvard");
+  });
+
   it("renders a general prose draft without requiring form fields", () => {
     render(
       <DraftDocument

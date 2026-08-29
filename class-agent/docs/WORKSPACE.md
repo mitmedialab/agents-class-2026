@@ -144,6 +144,9 @@ controls, and the resulting URL and title become current workspace state. See
 form. It renders safe Markdown prose, up to 50 structured fields, or both, without HTML
 injection. It can hold proposals, reports, notes, letters, outlines, plans, forms, and
 applications. Fields may be marked `missing`, `candidate`, `inferred`, or `confirmed`.
+Fields may also declare a bounded list of options; `draft-document` version 1.1.0 renders
+those fields as native selects while retaining textareas for open responses. This is an
+additive component-props change; version 1.0.0 drafts remain valid.
 The runtime receives current trusted workspace state and instructs the agent to update
 the existing panel rather than open duplicates. Updates are canonical workspace events
 and survive conversation reloads. A rendered draft never counts as submission,

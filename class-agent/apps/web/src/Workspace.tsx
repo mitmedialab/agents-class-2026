@@ -120,6 +120,16 @@ function draftDocumentFields(value: JsonValue | undefined): DraftDocumentField[]
     };
     if (typeof item.value === "string") field.value = item.value;
     if (typeof item.source === "string") field.source = item.source;
+    if (item.options !== undefined) {
+      if (
+        !Array.isArray(item.options) ||
+        item.options.length === 0 ||
+        !item.options.every((option) => typeof option === "string")
+      ) {
+        return null;
+      }
+      field.options = item.options;
+    }
     fields.push(field);
   }
   return fields;

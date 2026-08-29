@@ -100,6 +100,8 @@ the application layout remains in `apps/web/src/styles.css`.
 Phase 7 fills the workspace shell with registered native components. A validated
 workspace event changes the desktop layout to conversation plus workspace; smaller
 screens stack the active workspace below the current response. MCP Apps remain Phase 8.
+Closed draft fields render as native selects using options supplied by validated
+component props; open-response fields remain textareas.
 The desktop workspace is a full-height right-side canvas without an enclosing card.
 It has one current surface. Opening or focusing a different subject, artifact, or view
 replaces the prior panel immediately, so stale workspaces never compete for attention.

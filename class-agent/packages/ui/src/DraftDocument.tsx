@@ -11,6 +11,7 @@ export interface DraftDocumentField {
   value?: string | undefined;
   status: DraftFieldStatus;
   source?: string | undefined;
+  options?: readonly string[] | undefined;
 }
 
 export interface DraftDocumentProps {
@@ -48,10 +49,40 @@ function DraftFieldEditor({
   onCommit,
 }: DraftFieldEditorProps) {
   const editorRef = useRef<HTMLTextAreaElement>(null);
+  const options = field.options ?? [];
 
   useLayoutEffect(() => {
     if (editorRef.current) resizeToContent(editorRef.current);
   }, [value]);
+
+  if (options.length > 0) {
+    const hasLegacyValue = Boolean(value) && !options.includes(value);
+    return (
+      <select
+        aria-label={field.label}
+        onChange={(event) => {
+          const nextValue = event.currentTarget.value;
+          onChange(nextValue);
+          onCommit(nextValue);
+        }}
+        value={value}
+      >
+        <option disabled value="">
+          Choose an option
+        </option>
+        {hasLegacyValue ? (
+          <option disabled value={value}>
+            {value} — choose a current option
+          </option>
+        ) : null}
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    );
+  }
 
   return (
     <textarea
