@@ -49,6 +49,7 @@ def test_postgres_auth_store_roundtrip() -> None:
             "0001_authentication",
             "0002_conversations_events",
             "0003_course_resources",
+            "0004_anonymous_quotas",
         ]
         assert apply_migrations(scoped_url) == []
         assert index_resources(scoped_url) == [

@@ -14,6 +14,7 @@ QuotaMetric = Literal["conversations", "agent_runs", "uploads", "upload_bytes"]
 
 @dataclass(frozen=True)
 class AnonymousQuotaPolicy:
+    enabled: bool = True
     max_conversations: int = 3
     max_agent_runs: int = 10
     max_uploads: int = 5

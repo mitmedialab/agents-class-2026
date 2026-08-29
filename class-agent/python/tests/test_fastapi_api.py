@@ -385,6 +385,34 @@ def test_authenticated_users_are_exempt_from_anonymous_quotas() -> None:
     assert client.post("/conversations", json={"title": "Second"}).status_code == 200
 
 
+def test_disabled_anonymous_quotas_allow_local_development_usage() -> None:
+    client, _, runtime = _build_client(
+        anonymous_quota_policy=AnonymousQuotaPolicy(
+            enabled=False,
+            max_conversations=1,
+            max_agent_runs=1,
+        )
+    )
+    first_conversation_id = _create_conversation(client, title="First")
+
+    assert client.post("/conversations", json={"title": "Second"}).status_code == 200
+    assert (
+        client.post(
+            f"/conversations/{first_conversation_id}/run",
+            json={"text": "first"},
+        ).status_code
+        == 200
+    )
+    assert (
+        client.post(
+            f"/conversations/{first_conversation_id}/run",
+            json={"text": "second"},
+        ).status_code
+        == 200
+    )
+    assert len(runtime.contexts) == 2
+
+
 def test_login_me_and_logout_flow() -> None:
     client, access_code, _ = _build_client()
 

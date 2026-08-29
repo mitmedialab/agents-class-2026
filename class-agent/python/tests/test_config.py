@@ -22,6 +22,7 @@ def test_settings_accept_standard_openai_environment_without_exposing_secret() -
     assert settings.browser_enabled is True
     assert settings.browser_max_sessions == 20
     assert settings.browser_max_sessions_per_principal == 2
+    assert settings.anonymous_quotas_enabled is True
     assert "test-secret-value" not in repr(settings)
 
 
@@ -69,6 +70,19 @@ def test_settings_can_disable_strict_workspace_visual_policy() -> None:
     )
 
     assert settings.workspace_strict_visual_policy is False
+
+
+def test_settings_can_disable_anonymous_quotas_for_local_development() -> None:
+    settings = AgentSettings.from_environment(
+        {
+            "DATABASE_URL": "postgresql://example",
+            "OPENAI_API_KEY": "test-secret-value",
+            "BRAVE_API_KEY": "test-brave-value",
+            "ANONYMOUS_QUOTAS_ENABLED": "false",
+        }
+    )
+
+    assert settings.anonymous_quotas_enabled is False
 
 
 def test_openai_provider_creates_transient_smolagents_model_without_network_call() -> None:

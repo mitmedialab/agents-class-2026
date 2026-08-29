@@ -34,6 +34,7 @@ class AgentSettings(BaseModel):
     browser_max_sessions_per_principal: int = Field(default=2, ge=1, le=10)
     browser_session_ttl_seconds: int = Field(default=900, ge=60, le=86_400)
     browser_executable_path: Path | None = None
+    anonymous_quotas_enabled: bool = True
     anonymous_max_conversations: int = Field(default=3, ge=1, le=20)
     anonymous_max_agent_runs: int = Field(default=10, ge=1, le=100)
     anonymous_max_uploads: int = Field(default=5, ge=1, le=50)
@@ -97,6 +98,9 @@ class AgentSettings(BaseModel):
         browser_enabled = values.get("BROWSER_ENABLED", "true").strip().casefold()
         if browser_enabled not in {"true", "false", "1", "0", "yes", "no"}:
             raise ConfigurationError("BROWSER_ENABLED must be true or false")
+        anonymous_quotas_enabled = values.get("ANONYMOUS_QUOTAS_ENABLED", "true").strip().casefold()
+        if anonymous_quotas_enabled not in {"true", "false", "1", "0", "yes", "no"}:
+            raise ConfigurationError("ANONYMOUS_QUOTAS_ENABLED must be true or false")
         strict_visual_policy = (
             values.get("WORKSPACE_STRICT_VISUAL_POLICY", "true").strip().casefold()
         )
@@ -118,6 +122,7 @@ class AgentSettings(BaseModel):
             ),
             browser_session_ttl_seconds=int(values.get("BROWSER_SESSION_TTL_SECONDS", "900")),
             browser_executable_path=browser_executable_path,
+            anonymous_quotas_enabled=anonymous_quotas_enabled in {"true", "1", "yes"},
             anonymous_max_conversations=int(values.get("ANONYMOUS_MAX_CONVERSATIONS", "3")),
             anonymous_max_agent_runs=int(values.get("ANONYMOUS_MAX_AGENT_RUNS", "10")),
             anonymous_max_uploads=int(values.get("ANONYMOUS_MAX_UPLOADS", "5")),

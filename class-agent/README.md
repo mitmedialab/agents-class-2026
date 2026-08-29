@@ -47,7 +47,9 @@ MODEL_ID=gpt-5.6-terra
 Anonymous visitors are limited for the lifetime of their seven-day session. The production
 defaults are three conversations, ten agent runs, five uploads, and 20 MiB of uploads. Tune
 `ANONYMOUS_MAX_CONVERSATIONS`, `ANONYMOUS_MAX_AGENT_RUNS`, `ANONYMOUS_MAX_UPLOADS`, and
-`ANONYMOUS_MAX_UPLOAD_BYTES` in `.env`; authenticated users are exempt. Production should also
+`ANONYMOUS_MAX_UPLOAD_BYTES` in `.env`; authenticated users are exempt. Local development can
+set `ANONYMOUS_QUOTAS_ENABLED=false`, but deployed environments should keep it enabled.
+Production should also
 enforce the per-IP limits in `deploy/cognitive-agents.nginx` because browser cookies can be reset.
 
 The CLI intentionally does not override variables already exported in the shell. If you previously exported an old key, run `unset OPENAI_API_KEY MODEL_API_KEY` so `.env` is used. Then run one CLI turn:

@@ -253,9 +253,9 @@ async def _consume_anonymous_quota(
     amount: int,
     limit: int,
 ) -> None:
-    if principal.authenticated:
-        return
     assert state.services is not None
+    if principal.authenticated or not state.services.anonymous_quota_policy.enabled:
+        return
     try:
         await state.services.anonymous_quotas.consume(
             principal.session_id,
@@ -274,10 +274,10 @@ async def _consume_anonymous_upload_quota(
     principal: PrincipalContext,
     size: int,
 ) -> None:
-    if principal.authenticated:
-        return
     assert state.services is not None
     policy = state.services.anonymous_quota_policy
+    if principal.authenticated or not policy.enabled:
+        return
     try:
         await state.services.anonymous_quotas.consume(
             principal.session_id,
@@ -890,6 +890,7 @@ def create_app(
             browser=browser_service,
             anonymous_quotas=PostgresAnonymousQuotaStore(pool),
             anonymous_quota_policy=AnonymousQuotaPolicy(
+                enabled=resolved_settings.anonymous_quotas_enabled,
                 max_conversations=resolved_settings.anonymous_max_conversations,
                 max_agent_runs=resolved_settings.anonymous_max_agent_runs,
                 max_uploads=resolved_settings.anonymous_max_uploads,
