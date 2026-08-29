@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 from pydantic import JsonValue, ValidationError
 
 from course_server.agent.capabilities import (
+    COURSE_APPLICATION_URI,
     COURSE_SCHEDULE_URI,
     CourseResourceCatalog,
     ResourceNotFound,
@@ -17,6 +18,10 @@ from course_server.agent.capabilities import (
     ToolExecutionContext,
     ToolExecutionResult,
     ToolValidationError,
+)
+from course_server.application_draft import (
+    merged_application_draft_props,
+    normalized_application_draft_props,
 )
 
 from .constants import (
@@ -61,6 +66,7 @@ _NONCOMPARABLE_CHART = re.compile(
     re.IGNORECASE,
 )
 _CHART_PROVENANCE_FIELDS = ("data_kind", "data_source", "comparison_basis", "unit")
+_APPLICATION_UPDATED_THIS_TURN = "application_draft_updated_this_turn"
 
 
 def _reject_unknown(
@@ -105,6 +111,46 @@ def _current_state(context: ToolExecutionContext) -> WorkspaceState:
         return WorkspaceState.model_validate(context.workspace_state)
     except ValidationError as error:
         raise ToolValidationError("workspace state is unavailable") from error
+
+
+def _is_course_application_panel(panel: WorkspacePanel) -> bool:
+    return panel.component_id == "draft-document" and (
+        panel.resource_uri == COURSE_APPLICATION_URI
+        or panel.state.get("document_kind") == "course-application"
+    )
+
+
+def _confirms_initial_application_name(
+    panel: WorkspacePanel,
+    changed_props: dict[str, JsonValue],
+) -> bool:
+    existing_fields = panel.props.get("fields")
+    changed_fields = changed_props.get("fields")
+    if not isinstance(existing_fields, list) or not isinstance(changed_fields, list):
+        return False
+    existing_name = next(
+        (
+            field
+            for field in existing_fields
+            if isinstance(field, dict) and field.get("id") == "name"
+        ),
+        None,
+    )
+    changed_name = next(
+        (
+            field
+            for field in changed_fields
+            if isinstance(field, dict) and field.get("id") == "name"
+        ),
+        None,
+    )
+    return (
+        isinstance(existing_name, dict)
+        and not str(existing_name.get("value", "")).strip()
+        and isinstance(changed_name, dict)
+        and changed_name.get("status") == "confirmed"
+        and bool(str(changed_name.get("value", "")).strip())
+    )
 
 
 def _authorize_resource(resource_uri: str | None, context: ToolExecutionContext) -> None:
@@ -484,7 +530,9 @@ class WorkspaceOpenComponentTool:
         "concrete person, project, prototype, device, interface, or place, the platform requires "
         "an image search before the first open call and requires a suitable result when one is "
         "available. Very wide contained figures belong full-width in a stack, never in a split "
-        "feature beside taller content."
+        "feature beside taller content. To start a course application after reading the official "
+        "application guide, open draft-document with resource_uri course://application. The "
+        "platform supplies the canonical form; do not invent or omit its fields."
     )
     input_schema: ClassVar[dict[str, JsonValue]] = {
         "type": "object",
@@ -542,6 +590,14 @@ class WorkspaceOpenComponentTool:
         manifest = self._registry.get(component_id)
         if manifest is None:
             raise ToolValidationError(f"unknown component: {component_id}")
+        application_open = (
+            component_id == "draft-document" and resource_uri == COURSE_APPLICATION_URI
+        )
+        panel_state: dict[str, JsonValue] = {}
+        if application_open:
+            title = "Course Application Draft"
+            props = normalized_application_draft_props(props)
+            panel_state = {"document_kind": "course-application"}
         layout = None
         if manifest.default_size is not None:
             layout = WorkspaceLayout(
@@ -554,7 +610,7 @@ class WorkspaceOpenComponentTool:
             title=title or manifest.title,
             resource_uri=resource_uri,
             props=props,
-            state={},
+            state=panel_state,
             layout=layout,
         )
         command = OpenWorkspaceCommand(panel=panel)
@@ -565,15 +621,21 @@ class WorkspaceOpenComponentTool:
             resources=self._resources,
             strict_visual_policy=self._strict_visual_policy,
         )
+        content: dict[str, JsonValue] = {
+            "status": "opened",
+            "panel_id": str(panel.id),
+            "component_id": panel.component_id,
+            **({"resource_uri": resource_uri} if resource_uri is not None else {}),
+        }
+        if application_open:
+            content["next_action"] = (
+                "The canonical application draft is open. Use final_answer to state the "
+                "requirements and ask only for the applicant's full name, then wait."
+            )
         return _command_result(
             command=command,
             event_type="workspace.panel.opened",
-            content={
-                "status": "opened",
-                "panel_id": str(panel.id),
-                "component_id": panel.component_id,
-                **({"resource_uri": resource_uri} if resource_uri is not None else {}),
-            },
+            content=content,
             summary=f"Opened {panel.component_id} in the workspace.",
         )
 
@@ -625,13 +687,36 @@ class WorkspaceUpdateComponentTool:
         )
         resource_uri = _optional_string(arguments, "resource_uri")
         _authorize_resource(resource_uri, context)
+        panel_id = _required_string(arguments, "panel_id")
+        current_state = _current_state(context)
+        target_panel = next(
+            (panel for panel in current_state.panels if str(panel.id) == panel_id),
+            None,
+        )
+        application_update = target_panel is not None and _is_course_application_panel(target_panel)
+        if application_update and context.transient_state.get(_APPLICATION_UPDATED_THIS_TURN):
+            raise ToolValidationError(
+                "the application draft was already updated for this user turn; "
+                "use final_answer to ask exactly one question, then wait for the applicant"
+            )
         changes: dict[str, object] = {
             "type": "update",
-            "panel_id": _required_string(arguments, "panel_id"),
+            "panel_id": panel_id,
         }
         for name in ("props", "state"):
             value = _optional_object(arguments, name)
             if value is not None:
+                if name == "props" and application_update and target_panel is not None:
+                    if (
+                        _confirms_initial_application_name(target_panel, value)
+                        and context.transient_state.get("web_search_attempted") is not True
+                    ):
+                        raise ToolValidationError(
+                            "complete the initial public-web research before confirming the "
+                            "applicant's name; then combine the confirmed name and every supported "
+                            "research result in one application draft update"
+                        )
+                    value = merged_application_draft_props(target_panel.props, value)
                 changes[name] = value
         title = _optional_string(arguments, "title")
         if title is not None:
@@ -649,10 +734,21 @@ class WorkspaceUpdateComponentTool:
             resources=self._resources,
             strict_visual_policy=self._strict_visual_policy,
         )
+        if application_update:
+            context.transient_state[_APPLICATION_UPDATED_THIS_TURN] = True
+        content: dict[str, JsonValue] = {
+            "status": "updated",
+            "panel_id": str(command.panel_id),
+        }
+        if application_update:
+            content["next_action"] = (
+                "End this turn with final_answer containing exactly one question, "
+                "then wait for the applicant."
+            )
         return _command_result(
             command=command,
             event_type="workspace.panel.updated",
-            content={"status": "updated", "panel_id": str(command.panel_id)},
+            content=content,
             summary=f"Updated workspace panel {command.panel_id}.",
         )
 

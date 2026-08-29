@@ -587,43 +587,23 @@ def test_conversation_routes_persist_events_and_enforce_ownership() -> None:
     )
 
 
-def test_free_text_application_intent_bootstraps_canonical_draft_before_runtime() -> None:
+def test_free_text_application_intent_is_left_to_the_agent() -> None:
     client, _, runtime = _build_client()
     conversation_id = _create_conversation(client, title="Apply")
 
     with client.stream(
         "POST",
         f"/conversations/{conversation_id}/run/stream",
-        json={"text": "i want to apply"},
+        json={"text": "i want apply"},
     ) as response:
         assert response.status_code == 200
         body = "".join(response.iter_text())
 
-    assert '"type":"workspace.panel.opened"' in body
+    assert '"type":"workspace.panel.opened"' not in body
     workspace = cast(dict[str, Any], runtime.contexts[-1].metadata["workspace_state"])
-    panels = cast(list[dict[str, Any]], workspace["panels"])
-    assert len(panels) == 1
-    panel = panels[0]
-    assert panel["resource_uri"] == "course://application"
-    assert panel["state"] == {"document_kind": "course-application"}
-    assert [field["id"] for field in panel["props"]["fields"]] == [
-        "name",
-        "email",
-        "github_id",
-        "department_research_group_year_of_study_mit",
-        "personal_webpage",
-        "interests",
-        "why_take_this_class",
-        "knowledgeable_about",
-        "skill_set",
-        "registration_status",
-        "listener_willing_to_do_weekly_builds",
-        "questions_or_comments_for_instructors",
-        "photo_upload_id",
-    ]
+    assert workspace["panels"] == []
     detail = client.get(f"/conversations/{conversation_id}").json()
     assert [event["type"] for event in detail["events"]] == [
-        "workspace.panel.opened",
         "user.message",
         "agent.message",
     ]
@@ -748,7 +728,7 @@ def test_application_draft_opens_complete_and_persists_user_edits() -> None:
     assert panel["state"]["document_kind"] == "course-application"
     assert len(panel["props"]["fields"]) == 13
     assert "limited to 20 students" in panel["props"]["description"]
-    assert "Apply by September 5 at midnight" in panel["props"]["description"]
+    assert "Apply by September 4 at midnight" in panel["props"]["description"]
     assert "notifications are sent September 9 at midnight" in panel["props"]["description"]
     assert "document each build in a GitHub repository" in panel["props"]["description"]
     assert [field["id"] for field in panel["props"]["fields"]] == [

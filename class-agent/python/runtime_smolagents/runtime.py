@@ -16,6 +16,7 @@ from smolagents.monitoring import LogLevel, Timing
 
 from agent_core import AgentContext, AgentInput, AgentResult, Event, ModelProvider
 from course_server.agent.capabilities import (
+    COURSE_APPLICATION_URI,
     GET_APPLICATION_TOOL_ID,
     READ_UPLOAD_TOOL_ID,
     VISIT_WEBPAGE_TOOL_ID,
@@ -27,6 +28,7 @@ from course_server.agent.capabilities import (
     ToolCatalog,
     ToolExecutionContext,
     ToolExecutionResult,
+    ToolProviderError,
     ToolValidationError,
 )
 from course_server.browser.constants import BROWSER_OPEN_TOOL_ID
@@ -35,6 +37,25 @@ from course_server.workspace.constants import OPEN_COMPONENT_TOOL_ID
 _JSON_OBJECT = TypeAdapter(dict[str, JsonValue])
 _TOOL_NAME_CHARACTER = re.compile(r"[^A-Za-z0-9_]")
 _FINAL_ANSWER_START = re.compile(r'"answer"\s*:\s*"')
+
+
+def _has_active_application_draft(workspace_state: Mapping[str, JsonValue]) -> bool:
+    panels = workspace_state.get("panels")
+    if not isinstance(panels, list):
+        return False
+    return any(
+        isinstance(panel, dict)
+        and panel.get("component_id") == "draft-document"
+        and (
+            panel.get("resource_uri") == COURSE_APPLICATION_URI
+            or (
+                isinstance(panel.get("state"), dict)
+                and cast(dict[str, JsonValue], panel["state"]).get("document_kind")
+                == "course-application"
+            )
+        )
+        for panel in panels
+    )
 
 
 def _agent_instructions(
@@ -75,6 +96,21 @@ def _agent_instructions(
             f"Trusted principal roles: {', '.join(context.principal.roles)}.",
         ]
     )
+    if (
+        GET_APPLICATION_TOOL_ID in context.permitted_tool_ids
+        and OPEN_COMPONENT_TOOL_ID in context.permitted_tool_ids
+    ):
+        sections.append(
+            "Recognize course-application intent semantically from the conversation, not from a "
+            "fixed phrase. When the user wants to begin or complete an application and no "
+            "application draft is open, you own the startup flow: call course.get_application "
+            "exactly once, then make workspace.open_component your next tool call with "
+            "component_id draft-document and resource_uri course://application. Open the form "
+            "during that first turn, before asking the applicant for any field. Do not call "
+            "course.get_application again in that run and do not wait for the user to request "
+            "the UI separately. A factual question about deadlines or requirements is not, by "
+            "itself, a request to start an application."
+        )
     if OPEN_COMPONENT_TOOL_ID in context.permitted_tool_ids:
         sections.append(
             "Treat the trusted conversation workspace as the preferred presentation "
@@ -288,20 +324,7 @@ def _agent_instructions(
                 "Current trusted workspace state for follow-up tool arguments only:\n"
                 + json.dumps(workspace_state, ensure_ascii=False, sort_keys=True)
             )
-            panels = workspace_state.get("panels")
-            if isinstance(panels, list) and any(
-                isinstance(panel, dict)
-                and panel.get("component_id") == "draft-document"
-                and (
-                    panel.get("resource_uri") == "course://application"
-                    or (
-                        isinstance(panel.get("state"), dict)
-                        and cast(dict[str, JsonValue], panel["state"]).get("document_kind")
-                        == "course-application"
-                    )
-                )
-                for panel in panels
-            ):
+            if _has_active_application_draft(workspace_state):
                 sections.append(
                     "The trusted workspace contains the active course application draft. "
                     "This is a strict turn-by-turn interview, not a checklist to ask in one "
@@ -311,10 +334,22 @@ def _agent_instructions(
                     "one field and contain exactly one focused request or question. Never list, "
                     "preview, or ask about later missing fields. A reply may answer multiple "
                     "fields; save all supplied values, but still ask about only the next one. "
+                    "When the current reply supplies the applicant's full name and the initial "
+                    "research pass has not happened, do not update the draft first. Search and "
+                    "open plausible pages, then combine the confirmed name and all supported "
+                    "research findings in the single draft update for that turn. "
+                    "Apply every change from the current reply in one atomic draft update. After "
+                    "that update succeeds, immediately use final_answer and wait for the user; "
+                    "never update the application draft twice in one turn. Questions and "
+                    "confirmation requests belong only in final_answer. "
                     "When the applicant has provided enough identifying information, make one "
                     "bounded public-web research pass for relevant professional or academic "
-                    "material. Do not repeat a search or revisit the same page. Add useful public "
-                    "findings as sourced candidate or inferred values; never infer private contact "
+                    "material. Do not repeat a search or revisit the same page. In the one draft "
+                    "update after research, preserve every clearly supported result: explicit "
+                    "public email, affiliation, and personal webpage as sourced candidate values, "
+                    "and supported interests, knowledgeable-about topics, and practical skills "
+                    "as sourced inferred values. Do not leave supported later fields empty. Never "
+                    "infer private contact "
                     "information, registration choice, weekly-build commitment, instructor "
                     "questions, or a picture upload. Mark a field confirmed only when the "
                     "applicant supplies, edits, or explicitly confirms it. If the current field "
@@ -373,6 +408,8 @@ def _smolagents_inputs(schema: Mapping[str, JsonValue]) -> dict[str, dict[str, A
 
 
 def _tool_error_category(error: Exception) -> str:
+    if isinstance(error, ToolProviderError):
+        return error.category
     if isinstance(error, PermissionError):
         return "permission_denied"
     if isinstance(error, ResourceNotFound):
@@ -613,7 +650,9 @@ class _SmolagentsToolAdapter(Tool):  # type: ignore[misc]
                 )
             )
             message = (
-                str(error) if isinstance(error, ToolValidationError) else "tool execution failed"
+                str(error)
+                if isinstance(error, (ToolProviderError, ToolValidationError))
+                else "tool execution failed"
             )
             raise RuntimeError(f"{category}: {message}") from error
 

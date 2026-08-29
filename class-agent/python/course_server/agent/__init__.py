@@ -49,6 +49,7 @@ from .capabilities import (
     ToolCatalog,
     ToolExecutionContext,
     ToolExecutionResult,
+    ToolProviderError,
     ToolValidationError,
     load_resource_definitions,
 )
@@ -108,6 +109,7 @@ __all__ = [
     "ToolCatalog",
     "ToolExecutionContext",
     "ToolExecutionResult",
+    "ToolProviderError",
     "ToolValidationError",
     "load_resource_definitions",
 ]

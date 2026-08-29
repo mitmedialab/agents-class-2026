@@ -2,7 +2,7 @@
 
 ## Before you apply
 
-Enrollment is limited to 20 students. Applications are due September 5 at midnight,
+Enrollment is limited to 20 students. Applications are due September 4 at midnight,
 and acceptance notifications will be sent September 9 at midnight.
 
 This is a build-intensive course. Every student is expected to:
@@ -20,7 +20,7 @@ This is a build-intensive course. Every student is expected to:
 | Priority 1 | MIT Media Lab students |
 | Priority 2 | Other MIT students |
 | Priority 3 | Students taking the class for credit |
-| Application deadline | September 5, midnight |
+| Application deadline | September 4, midnight |
 | Acceptance notification | September 9, midnight |
 | Meeting schedule | Course schedule |
 
@@ -69,11 +69,16 @@ Affiliation does not determine whether someone is applying for credit or as a li
 
 ## Agent interaction
 
-1. First message: briefly state the 20-student capacity, both deadlines, and the weekly
-   build, GitHub documentation, in-class show-and-tell, and technical presentation
-   expectations. Then ask only for the applicant's full name.
-2. After receiving the full name, save it as confirmed. Do not ask another application
-   question until the initial research pass is complete.
+1. When the user intends to apply, read this guide exactly once and immediately open the
+   canonical course-application draft in the workspace during the same turn. Do not call this
+   guide repeatedly, and do not wait for a separate request to show the form. Then briefly state
+   the 20-student capacity, both deadlines, and the weekly build, GitHub documentation,
+   in-class show-and-tell, and technical presentation expectations. Then ask only for the
+   applicant's full name.
+2. After receiving the full name, do not update the draft yet. Complete the initial research
+   pass first, then make one combined draft update that confirms the supplied name and preserves
+   every supported research result. Do not ask another application question before that combined
+   update is complete.
 3. Make one bounded research pass using the exact name. Open plausible personal,
    institutional, research, portfolio, publication, and professional pages, but do not
    repeat a search or revisit the same page.
@@ -81,7 +86,12 @@ Affiliation does not determine whether someone is applying for credit or as a li
    affiliation or personal webpage the single current question.
 5. Public facts may become sourced `candidate` values only. Interests, knowledge, or
    skills derived from public work must be labeled `inferred`. Do not invent subjective
-   answers or infer private contact information.
+   answers or infer private contact information. In the single draft update after research,
+   preserve every clearly supported result: explicit public email, affiliation, and personal
+   webpage as sourced `candidate` values; interests, knowledgeable-about topics, and practical
+   skills supported by public work as sourced `inferred` values. Do not leave a supported field
+   empty merely because it appears later in the form, and do not discard an existing candidate
+   or inferred value.
 6. After research, work through the required fields in their displayed order. On every
    turn, discuss only the earliest field that is not confirmed and end with exactly one
    focused request or question. Never list, preview, or ask about later missing fields.
@@ -89,7 +99,9 @@ Affiliation does not determine whether someone is applying for credit or as a li
    value and its source and ask the applicant to confirm or correct it. Never ask for a
    value from scratch when the draft already contains one.
 8. If the applicant answers multiple fields in one reply, save every supplied value,
-   then continue by asking about only the next unconfirmed field.
+   using one atomic draft update. After that update, end the turn by asking about only
+   the next unconfirmed field and wait for the applicant. Never update the application
+   draft more than once in a user turn.
 9. Motivation, `Registration Status`, listener willingness, instructor questions, and
    the chat-uploaded picture are `missing` unless explicitly supplied by the applicant.
    Never infer motivation from public sources.
@@ -104,7 +116,8 @@ Affiliation does not determine whether someone is applying for credit or as a li
     make the upload the single current request and accept `JPEG`, `PNG`, or `WebP`.
 13. Mark a field `confirmed` only when the applicant supplies, edits, or explicitly
     confirms its value. Never turn a group of candidate or inferred fields into one
-    blanket confirmation request.
+    blanket confirmation request. Put questions and confirmation requests only in the
+    final response for the turn, never in progress text before a tool call.
 14. Once every field is individually confirmed, present the complete application and
     ask one final question: whether the applicant approves submission.
 15. Submit only after explicit approval. After submission, remind the applicant that

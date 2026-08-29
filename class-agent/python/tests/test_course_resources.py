@@ -7,6 +7,7 @@ from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
 
+import httpx
 import pytest
 from pydantic import ValidationError
 from pypdf import PdfWriter
@@ -34,6 +35,7 @@ from course_server.agent import (
     PublicWebSearchTool,
     ReadTemporaryUploadTool,
     ToolExecutionContext,
+    ToolProviderError,
     ToolValidationError,
     load_resource_definitions,
 )
@@ -328,16 +330,18 @@ def test_application_information_tool_reads_official_guide_directly() -> None:
         assert "Capacity | 20 students" in result.content
         assert "Email" in result.content
         assert "A class-only picture" in result.content
-        assert "Application deadline | September 5, midnight" in result.content
+        assert "Application deadline | September 4, midnight" in result.content
         assert "Acceptance notification | September 9, midnight" in result.content
         assert "document each weekly build in a GitHub repository" in result.content
         assert "present the technical details of the implementation in class" in result.content
-        assert "Then ask only for the applicant's full name" in result.content
+        assert "Then ask only for the applicant's full name" in normalized_content
         assert "what they have built, what they want to build and why" in normalized_content
         assert "their roles in past projects" in normalized_content
         assert "Make one bounded research pass" in normalized_content
         assert "Never list, preview, or ask about later missing fields" in normalized_content
         assert "Never ask for a value from scratch" in normalized_content
+        assert "one atomic draft update" in normalized_content
+        assert "final response for the turn" in normalized_content
         assert "for class use only" in result.content
         assert "does not need to be a formal headshot" in result.content
         assert result.resource_uris == [COURSE_APPLICATION_URI]
@@ -377,6 +381,29 @@ def test_public_web_tools_wrap_search_and_page_reading_without_persisting_result
                 {"url": "http://127.0.0.1/private"},
                 execution_context(),
             )
+
+    asyncio.run(scenario())
+
+
+def test_public_web_search_reports_provider_status_without_encouraging_retries() -> None:
+    async def scenario() -> None:
+        def rejected_search(_query: str) -> str:
+            request = httpx.Request("GET", "https://api.search.brave.com/search")
+            response = httpx.Response(429, request=request)
+            raise httpx.HTTPStatusError(
+                "rate limited",
+                request=request,
+                response=response,
+            )
+
+        with pytest.raises(ToolProviderError) as raised:
+            await PublicWebSearchTool(rejected_search).execute(
+                {"query": "Ada Lovelace"},
+                execution_context(),
+            )
+
+        assert raised.value.category == "temporary_failure"
+        assert str(raised.value) == ("Public web search is rate limited. Do not retry this turn.")
 
     asyncio.run(scenario())
 

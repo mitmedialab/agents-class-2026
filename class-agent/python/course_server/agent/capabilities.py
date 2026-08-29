@@ -114,6 +114,19 @@ class ToolValidationError(ValueError):
     """A tool request failed with a safe, model-actionable validation message."""
 
 
+class ToolProviderError(RuntimeError):
+    """An external provider failed with a safe category and model-actionable message."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        category: Literal["invalid_request", "permission_denied", "temporary_failure"],
+    ) -> None:
+        super().__init__(message)
+        self.category = category
+
+
 class ToolEmittedEvent(BaseModel):
     """Trusted event draft emitted as a consequence of successful tool execution."""
 
@@ -246,17 +259,34 @@ class PublicWebSearchTool:
         arguments: Mapping[str, JsonValue],
         context: ToolExecutionContext,
     ) -> ToolExecutionResult:
-        del context
         query = _required_tool_string(
             arguments,
             "query",
             max_length=_MAX_WEB_QUERY_LENGTH,
         )
+        context.transient_state["web_search_attempted"] = True
         try:
             result = await asyncio.to_thread(self._search, query)
         except Exception as error:
-            raise ToolValidationError(
-                "Public web search failed. Try a shorter or more specific query."
+            status_code = _provider_http_status_code(error)
+            if status_code in {401, 403}:
+                raise ToolProviderError(
+                    "Public web search credentials were rejected. Do not retry this turn.",
+                    category="permission_denied",
+                ) from error
+            if status_code == 429:
+                raise ToolProviderError(
+                    "Public web search is rate limited. Do not retry this turn.",
+                    category="temporary_failure",
+                ) from error
+            if status_code is not None and 400 <= status_code < 500:
+                raise ToolProviderError(
+                    "Public web search rejected the query.",
+                    category="invalid_request",
+                ) from error
+            raise ToolProviderError(
+                "Public web search is temporarily unavailable. Do not retry this turn.",
+                category="temporary_failure",
             ) from error
         content = result.strip()
         if not content:
@@ -266,6 +296,22 @@ class PublicWebSearchTool:
             summary="Searched the public web.",
             storage_policy="server_summary",
         )
+
+
+def _provider_http_status_code(error: BaseException) -> int | None:
+    current: BaseException | None = error
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        response = getattr(current, "response", None)
+        status_code = getattr(response, "status_code", None)
+        if isinstance(status_code, int):
+            return status_code
+        direct_status_code = getattr(current, "status_code", None)
+        if isinstance(direct_status_code, int):
+            return direct_status_code
+        current = current.__cause__ or current.__context__
+    return None
 
 
 def _https_result_url(value: object) -> str | None:
@@ -1343,9 +1389,11 @@ class CourseGetApplicationTool:
     id = GET_APPLICATION_TOOL_ID
     description = (
         "Read the official application capacity, priority order, deadlines, required "
-        "fields, photo requirement, and interaction instructions. Call this first when a "
-        "user wants to apply or asks about applying; do not substitute general application "
-        "advice."
+        "fields, photo requirement, and interaction instructions. When the user asks a factual "
+        "application question, read this without opening a form. When the user intends to "
+        "apply, call this exactly once, then immediately open draft-document with "
+        "resource_uri course://application. Never call this tool repeatedly in one run; its "
+        "returned guide remains available to you."
     )
     input_schema: ClassVar[dict[str, JsonValue]] = {
         "type": "object",

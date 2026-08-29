@@ -45,7 +45,9 @@ def execution_context() -> ToolExecutionContext:
     return ToolExecutionContext(
         principal=public_principal(),
         conversation_id=uuid4(),
-        permitted_resource_uris=frozenset({"course://syllabus", "course://schedule"}),
+        permitted_resource_uris=frozenset(
+            {"course://syllabus", "course://schedule", "course://application"}
+        ),
     )
 
 
@@ -117,6 +119,115 @@ def test_workspace_tools_validate_and_apply_complete_panel_lifecycle() -> None:
         )
         assert closed.emitted_events[0].type == "workspace.panel.closed"
         assert WorkspaceState.model_validate(context.workspace_state).panels == []
+
+    asyncio.run(scenario())
+
+
+def test_application_draft_allows_one_atomic_update_per_user_turn() -> None:
+    async def scenario() -> None:
+        registry = load_component_registry()
+        context = execution_context()
+        opened = await WorkspaceOpenComponentTool(registry).execute(
+            {
+                "component_id": "draft-document",
+                "title": "Course Application Draft",
+                "resource_uri": "course://application",
+                "props": {
+                    "title": "Course Application Draft",
+                    "fields": [
+                        {
+                            "id": "name",
+                            "label": "Name",
+                            "value": "",
+                            "status": "missing",
+                        },
+                        {
+                            "id": "email",
+                            "label": "Email",
+                            "value": "ada@example.edu",
+                            "status": "candidate",
+                            "source": "Public profile",
+                        },
+                    ],
+                },
+            },
+            context,
+        )
+        assert isinstance(opened.content, dict)
+        assert opened.content["next_action"] == (
+            "The canonical application draft is open. Use final_answer to state the "
+            "requirements and ask only for the applicant's full name, then wait."
+        )
+        panel_id = str(opened.content["panel_id"])
+        opened_state = WorkspaceState.model_validate(context.workspace_state)
+        panel = opened_state.panels[0]
+        assert panel.title == "Course Application Draft"
+        assert panel.state == {"document_kind": "course-application"}
+        opened_fields = panel.props["fields"]
+        assert isinstance(opened_fields, list)
+        assert len(opened_fields) == 13
+        tool = WorkspaceUpdateComponentTool(registry)
+
+        with pytest.raises(ToolValidationError, match="initial public-web research"):
+            await tool.execute(
+                {
+                    "panel_id": panel_id,
+                    "props": {
+                        "fields": [
+                            {
+                                "id": "name",
+                                "label": "Name",
+                                "value": "Ada Example",
+                                "status": "confirmed",
+                            }
+                        ]
+                    },
+                },
+                context,
+            )
+        context.transient_state["web_search_attempted"] = True
+
+        updated = await tool.execute(
+            {
+                "panel_id": panel_id,
+                "props": {
+                    "fields": [
+                        {
+                            "id": "name",
+                            "label": "Name",
+                            "value": "Ada Example",
+                            "status": "confirmed",
+                        }
+                    ]
+                },
+            },
+            context,
+        )
+
+        assert isinstance(updated.content, dict)
+        assert updated.content["next_action"] == (
+            "End this turn with final_answer containing exactly one question, "
+            "then wait for the applicant."
+        )
+        updated_state = WorkspaceState.model_validate(context.workspace_state)
+        updated_fields = updated_state.panels[0].props["fields"]
+        assert isinstance(updated_fields, list)
+        assert len(updated_fields) == 13
+        updated_name = updated_fields[0]
+        assert isinstance(updated_name, dict)
+        assert updated_name["value"] == "Ada Example"
+        assert updated_fields[1] == {
+            "id": "email",
+            "label": "Email",
+            "value": "ada@example.edu",
+            "status": "candidate",
+            "source": "Public profile",
+        }
+        with pytest.raises(ToolValidationError, match="already updated for this user turn"):
+            await tool.execute(
+                {"panel_id": panel_id, "props": {"description": "A redundant update"}},
+                context,
+            )
 
     asyncio.run(scenario())
 

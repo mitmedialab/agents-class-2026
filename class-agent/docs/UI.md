@@ -10,6 +10,10 @@ screen is intentionally sparse:
 
 An empty or new conversation explains that the Course Agent is itself the class
 website and invites visitors to ask for course information or discuss applying.
+The header's Apply shortcut opens the canonical application workspace directly before
+sending its prompt. Application requests typed in chat are not matched against browser or
+API keywords; the agent recognizes the intent and opens the same canonical workspace with
+its registered tool during the first response.
 
 Submitting a new prompt immediately removes the prior answer and resets the
 activity trace, so only the new run's process is visible until its answer begins.

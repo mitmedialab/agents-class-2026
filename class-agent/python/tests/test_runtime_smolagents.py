@@ -14,12 +14,14 @@ from smolagents.models import (
 
 from agent_core import AgentContext, AgentInput, AgentResult, Event, ModelProvider, PrincipalContext
 from course_server.agent import (
+    COURSE_APPLICATION_URI,
     COURSE_SYLLABUS_URI,
     GET_APPLICATION_TOOL_ID,
     READ_SYLLABUS_TOOL_ID,
     VISIT_WEBPAGE_TOOL_ID,
     WEB_IMAGE_SEARCH_TOOL_ID,
     WEB_SEARCH_TOOL_ID,
+    CourseGetApplicationTool,
     CourseReadSyllabusTool,
     FileResourceProvider,
     PublicImageSearchTool,
@@ -170,6 +172,47 @@ class ScriptedWorkspaceModel(ScriptedToolCallingModel):
             function = ChatMessageToolCallFunction(
                 name="final_answer",
                 arguments={"answer": "I opened the schedule."},
+            )
+            call_id = "final-answer"
+        return ChatMessage(
+            role=MessageRole.ASSISTANT,
+            content="",
+            tool_calls=[ChatMessageToolCall(function=function, id=call_id, type="function")],
+        )
+
+
+class ScriptedApplicationStartModel(ScriptedToolCallingModel):
+    def generate(
+        self,
+        messages: list[ChatMessage],
+        stop_sequences: list[str] | None = None,
+        response_format: dict[str, str] | None = None,
+        tools_to_call_from: list[Any] | None = None,
+        **kwargs: Any,
+    ) -> ChatMessage:
+        self.message_text = "\n".join(str(message.content or "") for message in messages)
+        del stop_sequences, response_format, kwargs
+        self.available_tool_names = [tool.name for tool in tools_to_call_from or []]
+        self.calls += 1
+        if self.calls == 1:
+            function = ChatMessageToolCallFunction(
+                name="course_get_application",
+                arguments={},
+            )
+            call_id = "read-application"
+        elif self.calls == 2:
+            function = ChatMessageToolCallFunction(
+                name="workspace_open_component",
+                arguments={
+                    "component_id": "draft-document",
+                    "resource_uri": COURSE_APPLICATION_URI,
+                },
+            )
+            call_id = "open-application"
+        else:
+            function = ChatMessageToolCallFunction(
+                name="final_answer",
+                arguments={"answer": "The application is open. What is your full name?"},
             )
             call_id = "final-answer"
         return ChatMessage(
@@ -562,13 +605,18 @@ def test_workspace_tool_emits_validated_portable_panel_event() -> None:
         assert "proposals, reports" in model.message_text
         assert "Workspace focus is silent UI housekeeping" in model.message_text
         assert "Do not call workspace.focus_component when" in model.message_text
-        assert "call it without a preceding progress message" in model.message_text
+        assert "call it directly" in model.message_text
+        assert "Use non-final tools directly" in model.message_text
         assert "make one bounded public-web research pass" in model.message_text
-        assert "sourced candidate or inferred values" in model.message_text
+        assert "preserve every clearly supported result" in model.message_text
+        assert "Do not leave supported later fields empty" in model.message_text
         assert "too shallow" in model.message_text
         assert "strict turn-by-turn interview" in model.message_text
         assert "contain exactly one focused request or question" in model.message_text
         assert "Never list, preview, or ask about later missing fields" in model.message_text
+        assert "one atomic draft update" in model.message_text
+        assert "immediately use final_answer and wait for the user" in model.message_text
+        assert "confirmation requests belong only in final_answer" in model.message_text
         assert "never ask an open-ended question for a value already present" in model.message_text
         assert "for class use only" in model.message_text
         assert "need not be a formal headshot" in model.message_text
@@ -578,6 +626,64 @@ def test_workspace_tool_emits_validated_portable_panel_event() -> None:
         assert "Ada Applicant" in model.message_text
         assert "Reader mode is the default" in model.message_text
         assert "untrusted data" in model.message_text
+
+    asyncio.run(scenario())
+
+
+def test_agent_owned_application_start_opens_canonical_draft_once() -> None:
+    async def scenario() -> None:
+        model = ScriptedApplicationStartModel()
+        resources = FileResourceProvider.from_registry()
+        registry = load_component_registry()
+        runtime = SmolagentsRuntime(
+            model_provider=ScriptedProvider(model),
+            tools=ToolCatalog(
+                [
+                    CourseGetApplicationTool(resources),
+                    WorkspaceOpenComponentTool(registry),
+                ]
+            ),
+        )
+        conversation_id = uuid4()
+
+        result = await runtime.run(
+            context=AgentContext(
+                principal=public_principal(),
+                conversation_id=conversation_id,
+                permitted_tool_ids=[GET_APPLICATION_TOOL_ID, OPEN_COMPONENT_TOOL_ID],
+                permitted_resource_uris=[COURSE_APPLICATION_URI],
+                metadata={"workspace_state": {"panels": []}},
+            ),
+            input=AgentInput(
+                conversation_id=conversation_id,
+                text="Can you help me put my name in for the class?",
+            ),
+        )
+
+        requested_tools = [
+            event.payload["tool_id"]
+            for event in result.events
+            if event.type == "agent.tool.requested"
+        ]
+        assert requested_tools == [GET_APPLICATION_TOOL_ID, OPEN_COMPONENT_TOOL_ID]
+        opened_event = next(
+            event for event in result.events if event.type == "workspace.panel.opened"
+        )
+        command = opened_event.payload["command"]
+        assert isinstance(command, dict)
+        panel = command["panel"]
+        assert isinstance(panel, dict)
+        assert panel["resource_uri"] == COURSE_APPLICATION_URI
+        assert panel["state"] == {"document_kind": "course-application"}
+        props = panel["props"]
+        assert isinstance(props, dict)
+        fields = props["fields"]
+        assert isinstance(fields, list)
+        assert len(fields) == 13
+        assert result.output_text == "The application is open. What is your full name?"
+        assert "Recognize course-application intent semantically" in model.message_text
+        assert "call course.get_application exactly once" in model.message_text
+        assert "Open the form during that first turn" in model.message_text
 
     asyncio.run(scenario())
 
