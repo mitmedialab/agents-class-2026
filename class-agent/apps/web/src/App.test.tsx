@@ -325,6 +325,42 @@ describe("Course Agent interface", () => {
     );
   });
 
+  it("mirrors an application name into the draft while the agent is running", async () => {
+    const finishRuns: Array<() => void> = [];
+    vi.mocked(api.streamAgentRun).mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finishRuns.push(resolve);
+        }),
+    );
+    vi.mocked(api.recordWorkspaceInteraction).mockImplementation(
+      () => new Promise(() => undefined),
+    );
+    render(<App />);
+    await openExistingConversation();
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    await screen.findByRole("textbox", { name: "Name" });
+    finishRuns.shift()?.();
+
+    const composer = screen.getByRole("textbox", { name: "Message" });
+    await waitFor(() => expect(composer).not.toBeDisabled());
+    fireEvent.change(composer, { target: { value: "Ada Lovelace" } });
+    fireEvent.keyDown(composer, { key: "Enter" });
+
+    await waitFor(() =>
+      expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("Ada Lovelace"),
+    );
+    expect(api.recordWorkspaceInteraction).toHaveBeenCalledWith(
+      conversation.id,
+      "40000000-0000-4000-8000-000000000009",
+      "draft.change",
+      { field_id: "name", value: "Ada Lovelace" },
+    );
+    finishRuns.shift()?.();
+    await waitFor(() => expect(composer).not.toBeDisabled());
+  });
+
   it("returns to the prior conversation after closing the application workspace", async () => {
     render(<App />);
     await openExistingConversation();

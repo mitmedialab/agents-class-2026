@@ -1523,6 +1523,15 @@ class CourseApplication(BaseModel):
     questions_or_comments_for_instructors: str = Field(min_length=1, max_length=4_000)
     photo_upload_id: UUID
 
+    @field_validator("registration_status", mode="before")
+    @classmethod
+    def normalize_registration_status(cls, value: object) -> object:
+        if isinstance(value, int) and 1 <= value <= len(REGISTRATION_STATUS_OPTIONS):
+            return REGISTRATION_STATUS_OPTIONS[value - 1]
+        if isinstance(value, str) and re.fullmatch(r"[1-6]", value.strip()):
+            return REGISTRATION_STATUS_OPTIONS[int(value.strip()) - 1]
+        return value
+
     @field_validator(
         "name",
         "department_research_group_year_of_study_mit",

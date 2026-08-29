@@ -16,6 +16,7 @@ export interface CalendarEvent {
 
 export interface CalendarData {
   events: CalendarEvent[];
+  location?: string;
   status?: string;
 }
 
@@ -80,11 +81,13 @@ function normalizedEvent(value: unknown, index: number): CalendarEvent | null {
 export function normalizeCalendarData(value: unknown): CalendarData {
   if (!isRecord(value)) return { events: [] };
   const status = text(value.status);
+  const meeting = isRecord(value.meeting) ? value.meeting : null;
+  const location = meeting ? text(meeting.location) : undefined;
   if (Array.isArray(value.events)) {
     const events = value.events
       .map((event, index) => normalizedEvent(event, index))
       .filter((event): event is CalendarEvent => event !== null);
-    return status ? { events, status } : { events };
+    return { events, ...(location ? { location } : {}), ...(status ? { status } : {}) };
   }
   if (Array.isArray(value.weeks)) {
     const events = value.weeks.flatMap((week, index) => {
@@ -110,9 +113,9 @@ export function normalizeCalendarData(value: unknown): CalendarData {
       if (readings) event.readings = readings;
       return [event];
     });
-    return status ? { events, status } : { events };
+    return { events, ...(location ? { location } : {}), ...(status ? { status } : {}) };
   }
-  return status ? { events: [], status } : { events: [] };
+  return { events: [], ...(location ? { location } : {}), ...(status ? { status } : {}) };
 }
 
 function localDate(value: string): Date | null {
@@ -194,6 +197,7 @@ export function Calendar({
       <header className="ca-viewer-toolbar ca-calendar-toolbar">
         <div>
           <strong>Course schedule</strong>
+          {data.location ? <span>{data.location}</span> : null}
         </div>
         <div aria-label="Calendar view" className="ca-calendar-view-switch" role="group">
           <button

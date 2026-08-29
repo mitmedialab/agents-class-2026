@@ -395,7 +395,7 @@ textarea {
   background: transparent !important;
   border: 0;
   border-radius: 50%;
-  color: var(--color-text-muted);
+  color: var(--color-text);
   display: flex;
   flex: none;
   height: 2.25rem;
@@ -430,7 +430,7 @@ textarea {
 .workspace-single-close {
   position: absolute;
   right: 1.5rem;
-  top: 0.75rem;
+  top: 1.25rem;
   z-index: 4;
 }
 

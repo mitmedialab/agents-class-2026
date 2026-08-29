@@ -469,6 +469,55 @@ export default function App() {
       }
       const activeConversationId = conversationId;
 
+      const applicationPanel = workspaceState.panels.find((panel) => {
+        if (
+          panel.resourceUri !== "course://application" &&
+          panel.state.document_kind !== "course-application"
+        ) {
+          return false;
+        }
+        return Array.isArray(panel.props.fields) && panel.props.fields.some(
+          (field) =>
+            field !== null &&
+            typeof field === "object" &&
+            !Array.isArray(field) &&
+            field.id === "name" &&
+            !String(field.value ?? "").trim(),
+        );
+      });
+      if (applicationPanel && !isSuggestedPrompt) {
+        setWorkspaceState((current) => ({
+          ...current,
+          panels: current.panels.map((panel) => {
+            if (panel.id !== applicationPanel.id || !Array.isArray(panel.props.fields)) {
+              return panel;
+            }
+            return {
+              ...panel,
+              props: {
+                ...panel.props,
+                fields: panel.props.fields.map((field) =>
+                  field !== null &&
+                  typeof field === "object" &&
+                  !Array.isArray(field) &&
+                  field.id === "name"
+                    ? { ...field, value: visibleText }
+                    : field,
+                ),
+              },
+            };
+          }),
+        }));
+        void recordWorkspaceInteraction(activeConversationId, applicationPanel.id, "draft.change", {
+          field_id: "name",
+          value: visibleText,
+        }).then((event) => {
+          setWorkspaceState((current) =>
+            builtInComponentRegistry.apply(current, event.payload.command),
+          );
+        });
+      }
+
       const handleStreamEvent = (event: AgentStreamEvent) => {
         if (controller.signal.aborted) return;
         if (event.kind === "text") {

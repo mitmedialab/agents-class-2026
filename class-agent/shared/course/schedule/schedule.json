@@ -4,6 +4,7 @@
   "meeting": {
     "frequency": "weekly",
     "modality": "in_person",
+    "location": "E15-341",
     "start_time": "11:00 AM",
     "show_and_tell_minutes": 15
   },

@@ -160,6 +160,7 @@ def test_public_resource_registry_includes_provisional_schedule() -> None:
     schedule_data = json.loads(schedule_contents.text)
     assert schedule_contents.media_type == "application/json"
     assert schedule_data["status"] == "provisional"
+    assert schedule_data["meeting"]["location"] == "E15-341"
     assert len(schedule_data["weeks"]) == 13
 
     instructor_contents = asyncio.run(resources.read(COURSE_INSTRUCTORS_URI))
@@ -321,7 +322,8 @@ def test_application_information_tool_reads_official_guide_directly() -> None:
         assert "Capacity | 25 in-person students" in result.content
         assert "Email" in result.content
         assert "Recent profile photo" in result.content
-        assert "ask only for the applicant's full name" in result.content
+        assert "application is required and enrollment is limited" in result.content
+        assert "ask only for their full name" in result.content
         assert "every required field has a supported candidate value" in result.content
         assert "later field-by-field interview" in result.content
         assert result.resource_uris == [COURSE_APPLICATION_URI]
@@ -700,6 +702,19 @@ def test_application_tool_stores_private_json_with_server_generated_name(
                 {**application, "registration_status": "Taking for credit"},
                 context,
             )
+
+        assert (
+            CourseApplication.model_validate(
+                {**application, "registration_status": "6"}
+            ).registration_status
+            == "Other student listener"
+        )
+        assert (
+            CourseApplication.model_validate(
+                {**application, "registration_status": 4}
+            ).registration_status
+            == "MIT student listener"
+        )
 
         result = await tool.execute(application, context)
 
