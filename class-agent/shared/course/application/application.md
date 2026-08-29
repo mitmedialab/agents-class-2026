@@ -9,7 +9,7 @@
 | Priority 2 | Other MIT students |
 | Priority 3 | Students taking the class for credit |
 | Application deadline | Thursday, September 4, midnight |
-| Acceptance notification | Monday, September 9, midnight |
+| Acceptance notification | To be announced |
 | Meeting schedule | Course schedule |
 
 ## Required fields
