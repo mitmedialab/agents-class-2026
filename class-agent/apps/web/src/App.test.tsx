@@ -388,7 +388,8 @@ describe("Course Agent interface", () => {
                 { id: "interests", label: "Interests", status: "missing" },
                 {
                   id: "why_take_this_class",
-                  label: "Why do you want to take this class?",
+                  label:
+                    "Motivation: why this course; what you have built and want to build; your past project roles",
                   status: "missing",
                 },
                 { id: "knowledgeable_about", label: "Knowledgeable about", status: "missing" },

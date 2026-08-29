@@ -324,11 +324,17 @@ def test_application_information_tool_reads_official_guide_directly() -> None:
         )
 
         assert isinstance(result.content, str)
-        assert "Capacity | 25 in-person students" in result.content
+        normalized_content = " ".join(result.content.split())
+        assert "Capacity | 20 students" in result.content
         assert "Email" in result.content
         assert "Recent profile photo" in result.content
-        assert "Acceptance notification | September 9" in result.content
-        assert "ask only for the applicant's full name" in result.content
+        assert "Application deadline | September 5, midnight" in result.content
+        assert "Acceptance notification | September 9, midnight" in result.content
+        assert "document each weekly build in a GitHub repository" in result.content
+        assert "present the technical details of the implementation in class" in result.content
+        assert "Then ask only for the applicant's full name" in result.content
+        assert "what they have built, what they want to build and why" in result.content
+        assert "their roles in past projects" in normalized_content
         assert "every required field has a supported candidate value" in result.content
         assert "later field-by-field interview" in result.content
         assert result.resource_uris == [COURSE_APPLICATION_URI]

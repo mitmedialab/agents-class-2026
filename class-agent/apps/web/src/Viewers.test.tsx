@@ -90,11 +90,11 @@ describe("Calendar", () => {
     });
     expect(data.notices).toContainEqual({
       label: "Application deadline",
-      text: "September 4th, midnight",
+      text: "September 5, midnight",
     });
     expect(data.notices).toContainEqual({
       label: "Acceptance notification",
-      text: "September 9",
+      text: "September 9, midnight",
     });
 
     render(<Calendar data={data} focusDate="2025-09-15" view="month" />);
@@ -111,8 +111,8 @@ describe("Calendar", () => {
     const data = normalizeCalendarData(`# Fall 2026 Schedule
 
 **Notes: Every lecture begins with a 15 minute show and tell.**
-**Application deadline: September 4th, midnight**
-**Acceptance notification: September 9**
+**Application deadline: September 5, midnight**
+**Acceptance notification: September 9, midnight**
 
 | Date / Week | Lecture Topics (45 min) | Hands-on tutorial (50 min) | Suggested Readings |
 | --- | --- | --- | --- |
@@ -123,8 +123,8 @@ describe("Calendar", () => {
 
     expect(data.notices).toEqual([
       { label: "Notes", text: "Every lecture begins with a 15 minute show and tell." },
-      { label: "Application deadline", text: "September 4th, midnight" },
-      { label: "Acceptance notification", text: "September 9" },
+      { label: "Application deadline", text: "September 5, midnight" },
+      { label: "Acceptance notification", text: "September 9, midnight" },
     ]);
     expect(data.year).toBe(2026);
     expect(data.events).toEqual([
@@ -161,7 +161,7 @@ describe("Calendar", () => {
 
     render(<Calendar data={data} focusDate="2026-09-20" view="agenda" />);
     expect(screen.getByRole("complementary", { name: "Schedule notices" })).toHaveTextContent(
-      "Application deadlineSeptember 4th, midnight",
+      "Application deadlineSeptember 5, midnight",
     );
     expect(screen.getByText("The history of AI agents.")).toBeInTheDocument();
     expect(screen.getByText("Tutorial lead: Wazeer Zulfikar")).toBeInTheDocument();

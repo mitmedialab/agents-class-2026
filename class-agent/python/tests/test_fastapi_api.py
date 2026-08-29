@@ -670,6 +670,10 @@ def test_application_draft_opens_complete_and_persists_user_edits() -> None:
     assert panel["resource_uri"] == "course://application"
     assert panel["state"]["document_kind"] == "course-application"
     assert len(panel["props"]["fields"]) == 13
+    assert "limited to 20 students" in panel["props"]["description"]
+    assert "Apply by September 5 at midnight" in panel["props"]["description"]
+    assert "notifications are sent September 9 at midnight" in panel["props"]["description"]
+    assert "document each build in a GitHub repository" in panel["props"]["description"]
     assert [field["id"] for field in panel["props"]["fields"]] == [
         "name",
         "email",
@@ -685,6 +689,13 @@ def test_application_draft_opens_complete_and_persists_user_edits() -> None:
         "questions_or_comments_for_instructors",
         "photo_upload_id",
     ]
+    motivation = next(
+        field for field in panel["props"]["fields"] if field["id"] == "why_take_this_class"
+    )
+    assert motivation["label"] == (
+        "Motivation: why this course; what you have built and want to build; "
+        "your past project roles"
+    )
     assert all(field["value"] == "" for field in panel["props"]["fields"])
 
     malformed_github_id = client.post(

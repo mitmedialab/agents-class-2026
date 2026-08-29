@@ -39,7 +39,7 @@ By the end of the course, students will complete some of the following based on 
 
 The course will meet once per week for two hours. Each session will include a one hour lecture covering concepts, systems, papers, and design principles, followed by a one hour hands-on tutorial where students implement technical components.
 
-Every two weeks, students will complete an open-ended agent build based on the previous lectures and tutorials. Similar in spirit to *How to Make (Almost) Anything*, the assignments will emphasize technical demonstration, creative interpretation, and personal exploration. Students will maintain an “agentic website” throughout the semester, updating it with each assignment, documenting what they built, how it works, what failed, and what they learned.
+Every week, students will complete an open-ended agent build based on the lectures and tutorials. Similar in spirit to *How to Make (Almost) Anything*, the assignments will emphasize technical demonstration, creative interpretation, and personal exploration. Students will maintain an “agentic website” and GitHub repository throughout the semester, updating them with each assignment and documenting what they built, how it works, what failed, and what they learned. They will show each build and present its technical implementation in class.
 
 The semester will culminate in a final project: either a substantial agentic system or an empirical study evaluating an agent’s capabilities, limitations, or effects on people.
 
@@ -78,4 +78,3 @@ For the final projects, students will work in small groups and build a functioni
 | In-class demos and critique | 15% |
 | Final project system or study | 25% |
 | Final paper-style report | 10% |
-

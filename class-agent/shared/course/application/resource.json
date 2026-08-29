@@ -3,7 +3,7 @@
   "resource": {
     "uri": "course://application",
     "title": "Course Application Guide",
-    "description": "Capacity, priority, deadlines, required fields, and photo requirement.",
+    "description": "Capacity, deadlines, weekly build expectations, required fields, and submission requirements.",
     "media_type": "text/markdown",
     "file": "application.md",
     "visibility": "public",

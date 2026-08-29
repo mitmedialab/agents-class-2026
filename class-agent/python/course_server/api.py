@@ -476,7 +476,11 @@ APPLICATION_DRAFT_FIELDS: tuple[tuple[str, str], ...] = (
     ),
     ("personal_webpage", "Personal Webpage"),
     ("interests", "Interests"),
-    ("why_take_this_class", "Why do you want to take this class?"),
+    (
+        "why_take_this_class",
+        "Motivation: why this course; what you have built and want to build; "
+        "your past project roles",
+    ),
     ("knowledgeable_about", "Knowledgeable about"),
     ("skill_set", "Skill-set (practical knowledge and builder experience)"),
     ("registration_status", "Registration Status"),
@@ -498,7 +502,13 @@ LEGACY_APPLICATION_FIELD_IDS: dict[str, str] = {
 def _empty_application_draft_props() -> dict[str, JsonValue]:
     return {
         "title": "Course Application Draft",
-        "description": "Complete every field below. Your changes are saved when you leave a field.",
+        "description": (
+            "Enrollment is limited to 20 students. Apply by September 5 at midnight; "
+            "notifications are sent September 9 at midnight. Expect to build a technical "
+            "implementation every week, document each build in a GitHub repository, and show "
+            "and present it in class. Complete every field below; changes are saved when you "
+            "leave a field."
+        ),
         "status": "draft",
         "fields": [
             {"id": field_id, "label": label, "value": "", "status": "missing"}

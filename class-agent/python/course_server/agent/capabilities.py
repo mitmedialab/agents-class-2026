@@ -1674,7 +1674,11 @@ class CourseSubmitApplicationTool:
             },
             "why_take_this_class": {
                 "type": "string",
-                "description": "Why do you want to take this class? field.",
+                "description": (
+                    "Application motivation: why the course interests the applicant, what "
+                    "they have built, what they want to build and why, and their roles in "
+                    "past projects. Ask a follow-up for any part they have not addressed."
+                ),
             },
             "knowledgeable_about": {
                 "type": "string",

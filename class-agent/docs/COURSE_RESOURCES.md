@@ -64,11 +64,17 @@ marks removed seeded FAQ entries inactive. It does not use embeddings.
 `course://application` is the public guide. The private submission tool accepts a
 structured application only after the user explicitly approves it. Required fields are
 Name, Email, Department / Research Group / Year of Study MIT, Personal
-Webpage, Interests, reason for taking the class, Knowledgeable about, Skill-set,
+Webpage, Interests, motivation, Knowledgeable about, Skill-set,
 Registration Status, listener commitment to weekly builds, questions or comments, and a
 temporary JPEG, PNG, or WebP face-photo upload. Missing, blank, placeholder, malformed,
 expired, and inaccessible values produce a model-visible validation error naming the
 fields that still need answers.
+
+The public guide opens with the 20-student capacity, application and notification
+deadlines, and the expectation that students build every week, document each build in a
+GitHub repository, and show and present the technical implementation in class. The
+motivation response covers why the course interests the applicant, what they have built,
+what they want to build and why, and their roles in past projects.
 
 Registration Status is a closed six-option combination of affiliation (`MAS student`,
 `MIT student`, or `Other student`) and participation mode (`for credit` or `listener`).
