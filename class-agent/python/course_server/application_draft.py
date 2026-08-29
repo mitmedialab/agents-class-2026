@@ -6,35 +6,25 @@ from typing import cast
 
 from pydantic import JsonValue
 
+from course_server.course_application import (
+    APPLICATION_FIELD_SPECS,
+    application_field_validation_error,
+)
 from course_server.workspace.models import WorkspacePanel, WorkspaceState
 
 COURSE_APPLICATION_URI = "course://application"
 
-APPLICATION_DRAFT_FIELDS: tuple[tuple[str, str], ...] = (
-    ("name", "Name"),
-    ("email", "Email"),
-    ("github_id", "GitHub ID (username only; no @ or URL)"),
-    (
-        "department_research_group_year_of_study_mit",
-        "Department / Research Group / Year of Study MIT",
-    ),
-    ("personal_webpage", "Personal Webpage"),
-    ("interests", "Interests"),
-    (
-        "why_take_this_class",
-        "Motivation: why this course; what you have built and want to build; "
-        "your past project roles",
-    ),
-    ("knowledgeable_about", "Knowledgeable about"),
-    ("skill_set", "Skill-set (practical knowledge and builder experience)"),
-    ("registration_status", "Registration Status"),
-    ("listener_willing_to_do_weekly_builds", "For listeners: willing to do weekly builds"),
-    ("questions_or_comments_for_instructors", "Questions or comments for instructors"),
-    ("photo_upload_id", "Class-only picture that represents you (JPEG, PNG, or WebP)"),
+
+class ApplicationDraftValidationError(ValueError):
+    """A populated application draft field does not satisfy its final contract."""
+
+
+APPLICATION_DRAFT_FIELDS: tuple[tuple[str, str], ...] = tuple(
+    (field.id, field.label) for field in APPLICATION_FIELD_SPECS
 )
 
 _LEGACY_APPLICATION_FIELD_IDS: dict[str, tuple[str, ...]] = {
-    "department_research_group_year_of_study_mit": ("background", "department"),
+    "department": ("department_research_group_year_of_study_mit", "background"),
     "personal_webpage": ("webpage",),
     "why_take_this_class": ("why", "motivation"),
     "skill_set": ("skills",),
@@ -42,6 +32,28 @@ _LEGACY_APPLICATION_FIELD_IDS: dict[str, tuple[str, ...]] = {
     "listener_willing_to_do_weekly_builds": ("listener_builds",),
     "questions_or_comments_for_instructors": ("questions",),
     "photo_upload_id": ("photo",),
+}
+
+_LEGACY_REGISTRATION_VALUES: dict[str, str] = {
+    "MAS student for credit": "for credit",
+    "MIT student for credit": "for credit",
+    "Other student for credit": "for credit",
+    "MAS student listener": "listener",
+    "MIT student listener": "listener",
+    "Other student listener": "listener",
+}
+
+_LEGACY_SCHOOL_VALUES: dict[str, str] = {
+    "MAS student for credit": "MIT Media Lab",
+    "MAS student listener": "MIT Media Lab",
+    "MIT student for credit": "MIT",
+    "MIT student listener": "MIT",
+    "Other student for credit": "Other",
+    "Other student listener": "Other",
+}
+
+_APPLICATION_FIELD_OPTIONS = {
+    field.id: field.options for field in APPLICATION_FIELD_SPECS if field.options
 }
 
 
@@ -59,8 +71,14 @@ def application_draft_props() -> dict[str, JsonValue]:
         ),
         "status": "draft",
         "fields": [
-            {"id": field_id, "label": label, "value": "", "status": "missing"}
-            for field_id, label in APPLICATION_DRAFT_FIELDS
+            {
+                "id": field.id,
+                "label": field.label,
+                "value": "",
+                "status": "missing",
+                **({"options": list(field.options)} if field.options else {}),
+            }
+            for field in APPLICATION_FIELD_SPECS
         ],
     }
 
@@ -86,29 +104,56 @@ def normalized_application_draft_props(
     normalized_fields = cast(list[dict[str, JsonValue]], normalized["fields"])
     for field in normalized_fields:
         field_id = cast(str, field["id"])
-        prior = next(
+        prior_match = next(
             (
-                fields_by_id[candidate_id]
+                (candidate_id, fields_by_id[candidate_id])
                 for candidate_id in (
                     field_id,
                     *_LEGACY_APPLICATION_FIELD_IDS.get(field_id, ()),
                 )
                 if candidate_id in fields_by_id
             ),
-            None,
+            (None, None),
         )
+        prior_id, prior = prior_match
+        if prior is None and field_id == "school":
+            legacy_registration = fields_by_id.get("registration_status")
+            legacy_value = (
+                legacy_registration.get("value") if isinstance(legacy_registration, dict) else None
+            )
+            if isinstance(legacy_value, str) and legacy_value in _LEGACY_SCHOOL_VALUES:
+                field["value"] = _LEGACY_SCHOOL_VALUES[legacy_value]
+                field["status"] = "candidate"
+                field["source"] = "Migrated from the previous registration response"
+            continue
         if prior is None:
             continue
         value = prior.get("value")
         field["value"] = value if isinstance(value, str) else ""
+        if field_id == "registration_status" and field["value"] in _LEGACY_REGISTRATION_VALUES:
+            field["value"] = _LEGACY_REGISTRATION_VALUES[cast(str, field["value"])]
+        if field_id == "listener_willing_to_do_weekly_builds":
+            normalized_listener_value = cast(str, field["value"]).strip().casefold()
+            if "not applicable" in normalized_listener_value:
+                field["value"] = "not applicable"
+            elif normalized_listener_value.startswith("yes"):
+                field["value"] = "yes"
+            elif normalized_listener_value.startswith("no"):
+                field["value"] = "no"
         status = prior.get("status")
         field["status"] = (
             status
             if status in {"missing", "candidate", "inferred", "confirmed"}
             else ("candidate" if field["value"] else "missing")
         )
+        allowed_options = _APPLICATION_FIELD_OPTIONS.get(field_id)
+        if allowed_options is not None and field["value"] not in allowed_options:
+            field["status"] = "candidate" if field["value"] else "missing"
+        if prior_id == "department_research_group_year_of_study_mit":
+            field["status"] = "candidate"
+            field["source"] = "Migrated from the previous combined background field"
         source = prior.get("source")
-        if isinstance(source, str) and source:
+        if isinstance(source, str) and source and "source" not in field:
             field["source"] = source
     return normalized
 
@@ -122,7 +167,17 @@ def merged_application_draft_props(
     merged = normalized_application_draft_props(existing_props)
     merged_fields = cast(list[dict[str, JsonValue]], merged["fields"])
     fields_by_id = {cast(str, field["id"]): field for field in merged_fields}
-    for changed in _draft_fields(changes):
+    changed_fields = _draft_fields(changes)
+    proposed_registration = next(
+        (
+            changed.get("value")
+            for changed in changed_fields
+            if changed.get("id") == "registration_status" and isinstance(changed.get("value"), str)
+        ),
+        fields_by_id["registration_status"].get("value"),
+    )
+    registration_status = proposed_registration if isinstance(proposed_registration, str) else None
+    for changed in changed_fields:
         field_id = changed.get("id")
         if not isinstance(field_id, str) or field_id not in fields_by_id:
             continue
@@ -136,6 +191,14 @@ def merged_application_draft_props(
             and current_value.strip()
         ):
             continue
+        if isinstance(changed_value, str):
+            validation_error = application_field_validation_error(
+                field_id,
+                changed_value,
+                registration_status=registration_status,
+            )
+            if validation_error is not None:
+                raise ApplicationDraftValidationError(f"{field_id} {validation_error}")
         for key in ("value", "status", "source"):
             if key in changed:
                 current[key] = changed[key]

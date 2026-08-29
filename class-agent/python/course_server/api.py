@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import re
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
@@ -69,6 +68,7 @@ from course_server.browser import (
 )
 from course_server.browser.tools import browser_page_props
 from course_server.config import AgentSettings
+from course_server.course_application import application_field_validation_error
 from course_server.index_resources import index_resources
 from course_server.migrations import apply_migrations
 from course_server.postgres.auth_store import PostgresAuthStore, create_auth_pool
@@ -450,19 +450,39 @@ def _valid_draft_change(props: dict[str, JsonValue], value: JsonValue) -> bool:
     field_id = value.get("field_id")
     changed_value = value.get("value")
     fields = _draft_fields(props)
+    target_field = next(
+        (
+            field
+            for field in fields or []
+            if isinstance(field_id, str) and field.get("id") == field_id
+        ),
+        None,
+    )
+    registration_field = next(
+        (field for field in fields or [] if field.get("id") == "registration_status"),
+        None,
+    )
+    registration_status = (
+        registration_field.get("value") if registration_field is not None else None
+    )
+    field_validation_error = (
+        application_field_validation_error(
+            field_id,
+            changed_value,
+            registration_status=(
+                registration_status if isinstance(registration_status, str) else None
+            ),
+        )
+        if isinstance(field_id, str) and isinstance(changed_value, str)
+        else "invalid field value"
+    )
     return (
         isinstance(field_id, str)
         and isinstance(changed_value, str)
         and len(changed_value) <= 4_000
-        and (
-            field_id != "github_id"
-            or changed_value == ""
-            or bool(
-                re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}", changed_value)
-            )
-        )
+        and field_validation_error is None
         and fields is not None
-        and any(field.get("id") == field_id for field in fields)
+        and target_field is not None
     )
 
 

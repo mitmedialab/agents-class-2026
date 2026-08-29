@@ -165,7 +165,7 @@ def test_application_draft_allows_one_atomic_update_per_user_turn() -> None:
         assert panel.state == {"document_kind": "course-application"}
         opened_fields = panel.props["fields"]
         assert isinstance(opened_fields, list)
-        assert len(opened_fields) == 13
+        assert len(opened_fields) == 17
         tool = WorkspaceUpdateComponentTool(registry)
 
         with pytest.raises(ToolValidationError, match="initial public-web research"):
@@ -212,7 +212,7 @@ def test_application_draft_allows_one_atomic_update_per_user_turn() -> None:
         updated_state = WorkspaceState.model_validate(context.workspace_state)
         updated_fields = updated_state.panels[0].props["fields"]
         assert isinstance(updated_fields, list)
-        assert len(updated_fields) == 13
+        assert len(updated_fields) == 17
         updated_name = updated_fields[0]
         assert isinstance(updated_name, dict)
         assert updated_name["value"] == "Ada Example"
@@ -226,6 +226,43 @@ def test_application_draft_allows_one_atomic_update_per_user_turn() -> None:
         with pytest.raises(ToolValidationError, match="already updated for this user turn"):
             await tool.execute(
                 {"panel_id": panel_id, "props": {"description": "A redundant update"}},
+                context,
+            )
+
+    asyncio.run(scenario())
+
+
+def test_application_draft_rejects_values_outside_canonical_options() -> None:
+    async def scenario() -> None:
+        registry = load_component_registry()
+        context = execution_context()
+        opened = await WorkspaceOpenComponentTool(registry).execute(
+            {
+                "component_id": "draft-document",
+                "resource_uri": "course://application",
+            },
+            context,
+        )
+        assert isinstance(opened.content, dict)
+        panel_id = str(opened.content["panel_id"])
+
+        with pytest.raises(
+            ToolValidationError,
+            match="school must be one of: MIT Media Lab, MIT, Harvard, Wellesley, Other",
+        ):
+            await WorkspaceUpdateComponentTool(registry).execute(
+                {
+                    "panel_id": panel_id,
+                    "props": {
+                        "fields": [
+                            {
+                                "id": "school",
+                                "value": "Stanford",
+                                "status": "confirmed",
+                            }
+                        ]
+                    },
+                },
                 context,
             )
 

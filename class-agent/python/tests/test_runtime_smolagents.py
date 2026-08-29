@@ -23,6 +23,7 @@ from course_server.agent import (
     WEB_SEARCH_TOOL_ID,
     CourseGetApplicationTool,
     CourseReadSyllabusTool,
+    CourseSubmitApplicationTool,
     FileResourceProvider,
     PublicImageSearchTool,
     PublicVisitWebpageTool,
@@ -32,10 +33,32 @@ from course_server.workspace import load_component_registry
 from course_server.workspace.constants import OPEN_COMPONENT_TOOL_ID
 from course_server.workspace.tools import WorkspaceOpenComponentTool
 from runtime_smolagents import SmolagentsRuntime
+from runtime_smolagents.runtime import _smolagents_inputs
 
 
 class HiddenCourseTool(CourseReadSyllabusTool):
     id = "ta.list_questions"
+
+
+def test_runtime_preserves_application_tool_constraints() -> None:
+    inputs = _smolagents_inputs(CourseSubmitApplicationTool.input_schema)
+
+    assert inputs["school"]["enum"] == [
+        "MIT Media Lab",
+        "MIT",
+        "Harvard",
+        "Wellesley",
+        "Other",
+    ]
+    assert inputs["registration_status"]["enum"] == ["for credit", "listener"]
+    assert inputs["listener_willing_to_do_weekly_builds"]["enum"] == [
+        "yes",
+        "no",
+        "not applicable",
+    ]
+    assert inputs["github_id"]["pattern"].startswith("^[A-Za-z0-9]")
+    assert inputs["degree_start_year"]["pattern"] == "^\\d{4}$"
+    assert inputs["email"]["format"] == "email"
 
 
 class ScriptedToolCallingModel(Model):  # type: ignore[misc]
@@ -679,7 +702,7 @@ def test_agent_owned_application_start_opens_canonical_draft_once() -> None:
         assert isinstance(props, dict)
         fields = props["fields"]
         assert isinstance(fields, list)
-        assert len(fields) == 13
+        assert len(fields) == 17
         assert result.output_text == "The application is open. What is your full name?"
         assert "Recognize course-application intent semantically" in model.message_text
         assert "call course.get_application exactly once" in model.message_text

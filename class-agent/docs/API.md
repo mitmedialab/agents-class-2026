@@ -51,7 +51,7 @@ matches its registered component before appending the event.
 the required `filename` query parameter, and its media type in `Content-Type`. It
 returns a principal-scoped upload UUID, metadata, and expiry time. Uploads are limited
 to 10 MB and expire after 24 hours. Supported types are JPEG, PNG, WebP, GIF, PDF,
-JSON, CSV, Markdown, and plain text; course applications accept only JPEG, PNG, or WebP
+JSON, CSV, Markdown, and plain text; course applications accept only JPG/JPEG, PNG, or WebP
 for the required photo. The same session cookie must own both upload and tool call.
 `GET /api/v1/uploads/{upload_id}/content` serves that same owned, unexpired artifact to
 DocumentViewer with private no-store caching; foreign and expired receipts return `404`.

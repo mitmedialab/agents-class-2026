@@ -358,10 +358,16 @@ def _agent_instructions(
                     "question for a value already present in the draft. If an answer is too "
                     "shallow, ask one specific follow-up about the same field. Never use a blanket "
                     "confirmation request or end with only an acknowledgement such as 'Okay.' "
+                    "School must be one of MIT Media Lab, MIT, Harvard, Wellesley, or Other. "
+                    "If the applicant has no GitHub account, ask them to create one before "
+                    "continuing. Registration must be exactly 'for credit' or 'listener'. For a "
+                    "listener, weekly-build willingness must be exactly 'yes' or 'no'; for an "
+                    "applicant registering for credit, record 'not applicable' without asking a "
+                    "separate listener-only question. "
                     "For the picture field, explain that it is for class use only and may be any "
-                    "JPEG, PNG, or WebP image the applicant wants to represent them; it need not "
-                    "be a formal headshot. Submit only after every canonical field is confirmed "
-                    "and the applicant explicitly requests submission."
+                    "JPG/JPEG, PNG, or WebP image the applicant wants to represent them; it need "
+                    "not be a formal headshot. Submit only after every canonical field is "
+                    "confirmed and the applicant explicitly requests submission."
                 )
     if public_resource_index:
         entries = "\n".join(f"- {entry}" for entry in public_resource_index)
@@ -396,12 +402,16 @@ def _smolagents_inputs(schema: Mapping[str, JsonValue]) -> dict[str, dict[str, A
         if not isinstance(raw_property, dict):
             raise ValueError(f"tool input property {name} must be an object")
         raw_type = raw_property.get("type", "any")
-        input_type = raw_type if isinstance(raw_type, str) else "any"
+        input_type = (
+            raw_type
+            if isinstance(raw_type, str)
+            or (isinstance(raw_type, list) and all(isinstance(item, str) for item in raw_type))
+            else "any"
+        )
         description = raw_property.get("description", name)
-        inputs[name] = {
-            "type": input_type,
-            "description": description if isinstance(description, str) else name,
-        }
+        inputs[name] = dict(raw_property)
+        inputs[name]["type"] = input_type
+        inputs[name]["description"] = description if isinstance(description, str) else name
         if name not in required:
             inputs[name]["nullable"] = True
     return inputs

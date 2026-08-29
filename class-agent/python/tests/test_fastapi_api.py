@@ -726,7 +726,7 @@ def test_application_draft_opens_complete_and_persists_user_edits() -> None:
     assert panel["component_id"] == "draft-document"
     assert panel["resource_uri"] == "course://application"
     assert panel["state"]["document_kind"] == "course-application"
-    assert len(panel["props"]["fields"]) == 13
+    assert len(panel["props"]["fields"]) == 17
     assert "limited to 20 students" in panel["props"]["description"]
     assert "Apply by September 4 at midnight" in panel["props"]["description"]
     assert "notifications are sent September 9 at midnight" in panel["props"]["description"]
@@ -735,7 +735,11 @@ def test_application_draft_opens_complete_and_persists_user_edits() -> None:
         "name",
         "email",
         "github_id",
-        "department_research_group_year_of_study_mit",
+        "school",
+        "department",
+        "research_group",
+        "degree",
+        "degree_start_year",
         "personal_webpage",
         "interests",
         "why_take_this_class",
@@ -754,7 +758,13 @@ def test_application_draft_opens_complete_and_persists_user_edits() -> None:
         "your past project roles"
     )
     photo = next(field for field in panel["props"]["fields"] if field["id"] == "photo_upload_id")
-    assert photo["label"] == "Class-only picture that represents you (JPEG, PNG, or WebP)"
+    assert photo["label"] == "Class-only picture that represents you (JPG/JPEG, PNG, or WebP)"
+    school = next(field for field in panel["props"]["fields"] if field["id"] == "school")
+    assert school["options"] == ["MIT Media Lab", "MIT", "Harvard", "Wellesley", "Other"]
+    registration = next(
+        field for field in panel["props"]["fields"] if field["id"] == "registration_status"
+    )
+    assert registration["options"] == ["for credit", "listener"]
     assert all(field["value"] == "" for field in panel["props"]["fields"])
 
     malformed_github_id = client.post(
@@ -766,6 +776,26 @@ def test_application_draft_opens_complete_and_persists_user_edits() -> None:
         },
     )
     assert malformed_github_id.status_code == 400
+
+    invalid_school = client.post(
+        f"/conversations/{conversation_id}/workspace/interactions",
+        json={
+            "panel_id": panel["id"],
+            "action": "draft.change",
+            "value": {"field_id": "school", "value": "Stanford"},
+        },
+    )
+    assert invalid_school.status_code == 400
+
+    invalid_degree_year = client.post(
+        f"/conversations/{conversation_id}/workspace/interactions",
+        json={
+            "panel_id": panel["id"],
+            "action": "draft.change",
+            "value": {"field_id": "degree_start_year", "value": "second year"},
+        },
+    )
+    assert invalid_degree_year.status_code == 400
 
     changed = client.post(
         f"/conversations/{conversation_id}/workspace/interactions",
@@ -830,11 +860,11 @@ def test_application_draft_migrates_unmarked_legacy_field_aliases() -> None:
                                 "status": "confirmed",
                             },
                             {
-                                "id": "department",
+                                "id": "department_research_group_year_of_study_mit",
                                 "label": "Background",
-                                "value": "MIT Media Lab",
-                                "status": "inferred",
-                                "source": "Public profile",
+                                "value": "MIT Media Lab, Fluid Interfaces, second year",
+                                "status": "confirmed",
+                                "source": "Provided by applicant",
                             },
                             {
                                 "id": "motivation",
@@ -842,6 +872,18 @@ def test_application_draft_migrates_unmarked_legacy_field_aliases() -> None:
                                 "value": "I want to build dependable agents.",
                                 "status": "confirmed",
                                 "source": "Provided by applicant",
+                            },
+                            {
+                                "id": "registration_status",
+                                "label": "Registration Status",
+                                "value": "MAS student for credit",
+                                "status": "confirmed",
+                            },
+                            {
+                                "id": "listener_willing_to_do_weekly_builds",
+                                "label": "Listener builds",
+                                "value": "Not applicable; taking for credit",
+                                "status": "confirmed",
                             },
                         ],
                     },
@@ -867,16 +909,18 @@ def test_application_draft_migrates_unmarked_legacy_field_aliases() -> None:
     assert command["resource_uri"] == "course://application"
     assert command["state"] == {"document_kind": "course-application"}
     fields = command["props"]["fields"]
-    assert len(fields) == 13
+    assert len(fields) == 17
     assert fields[0]["value"] == "Ada Example"
-    assert fields[3] == {
-        "id": "department_research_group_year_of_study_mit",
-        "label": "Department / Research Group / Year of Study MIT",
-        "value": "MIT Media Lab",
-        "status": "inferred",
-        "source": "Public profile",
+    assert fields[3]["value"] == "MIT Media Lab"
+    assert fields[3]["status"] == "candidate"
+    assert fields[4] == {
+        "id": "department",
+        "label": "Department",
+        "value": "MIT Media Lab, Fluid Interfaces, second year",
+        "status": "candidate",
+        "source": "Migrated from the previous combined background field",
     }
-    assert fields[6] == {
+    assert fields[10] == {
         "id": "why_take_this_class",
         "label": (
             "Motivation: why this course; what you have built and want to build; "
@@ -886,6 +930,10 @@ def test_application_draft_migrates_unmarked_legacy_field_aliases() -> None:
         "status": "confirmed",
         "source": "Provided by applicant",
     }
+    assert fields[13]["value"] == "for credit"
+    assert fields[13]["status"] == "confirmed"
+    assert fields[14]["value"] == "not applicable"
+    assert fields[14]["status"] == "confirmed"
 
 
 def test_agent_run_repairs_unmarked_model_created_application_draft() -> None:
@@ -946,7 +994,7 @@ def test_agent_run_repairs_unmarked_model_created_application_draft() -> None:
     assert panel["resource_uri"] == "course://application"
     assert panel["state"] == {"document_kind": "course-application"}
     fields = panel["props"]["fields"]
-    assert len(fields) == 13
+    assert len(fields) == 17
     assert fields[1] == {
         "id": "email",
         "label": "Email",

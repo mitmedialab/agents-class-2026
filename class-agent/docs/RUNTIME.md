@@ -95,10 +95,11 @@ for inspection and later MCP-backed search without requiring embeddings.
 `course.submit_application` is public so prospective students do not need an account.
 Its schema requires every structured application field and a principal-owned temporary
 photo upload. Server-side validation rejects missing, placeholder, too-short, malformed,
-expired, foreign, and non-image inputs. Safe validation failures name the affected
-fields to the model so it can ask the applicant follow-up questions; unexpected tool
-errors remain generic. A successful call writes the structured record and copied photo
-through a private server-side store and returns a receipt UUID. Submitted content is not
+expired, foreign, and non-image inputs. Safe validation failures give the model every
+affected field and the precise failed rule, including permitted enum values, so it can
+ask the applicant a corrective question; unexpected tool errors remain generic. A
+successful call writes the structured record and copied photo through a private server-side
+store and returns a receipt UUID. Submitted content is not
 a public resource and is not included in the tool-completion result persisted by the
 runtime.
 
@@ -117,10 +118,12 @@ update; a second update is rejected with an instruction to return one final ques
 wait. Research updates preserve every supported public email, affiliation, webpage,
 interest, knowledge area, and practical skill as a sourced candidate or inference, including
 fields that occur later in the form. Non-final model chatter is never streamed, so a
-confirmation request cannot appear while tools are still running. The picture prompt says it
-is for class use only and can be any JPEG, PNG, or WebP image the applicant wants to
-represent them. After every field is individually confirmed, the
-agent summarizes the completed form for explicit approval and only then calls
+confirmation request cannot appear while tools are still running. Closed application
+choices are carried in the draft and rendered as selects. The runtime preserves JSON
+Schema enums, patterns, formats, and length bounds when adapting tools for smolagents.
+The picture prompt says it is for class use only and can be any JPG/JPEG, PNG, or WebP
+image the applicant wants to represent them. After every field is individually confirmed,
+the agent summarizes the completed form for explicit approval and only then calls
 `course.submit_application`. It must not draft an application letter or invent criteria.
 Submission arguments are redacted from tool-request audit events; the private
 application store remains canonical.

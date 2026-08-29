@@ -1,5 +1,7 @@
 """Application services for the one logical Course Agent."""
 
+from course_server.course_application import CourseApplication
+
 from .capabilities import (
     COURSE_APPLICATION_URI,
     COURSE_FAQ_URI,
@@ -21,7 +23,6 @@ from .capabilities import (
     WEB_IMAGE_SEARCH_TOOL_ID,
     WEB_SEARCH_TOOL_ID,
     ApplicantStore,
-    CourseApplication,
     CourseGetApplicationTool,
     CourseGetScheduleTool,
     CourseReadPublicFileTool,

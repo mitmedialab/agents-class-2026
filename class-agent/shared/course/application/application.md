@@ -29,17 +29,22 @@ This is a build-intensive course. Every student is expected to:
 1. Name
 2. Email
 3. GitHub ID
-4. Department / Research Group / Year of Study MIT
-5. Personal Webpage
-6. Interests
-7. Motivation: Why are you interested in this course? Tell us what you have built,
+4. School (choose exactly one option below)
+5. Department
+6. Research group (if applicable; otherwise state `Not applicable`)
+7. Degree
+8. Year of degree start (the four-digit year when you started the degree)
+9. Personal Webpage
+10. Interests
+11. Motivation: Why are you interested in this course? Tell us what you have built,
    what you want to build and why, and what roles you had in past projects.
-8. Knowledgeable about
-9. Skill-set (practical knowledge and builder experience)
-10. Registration Status (choose exactly one option below)
-11. (For listeners) I am willing to do the weekly builds
-12. Questions or comments for instructors
-13. A class-only picture uploaded in chat (`JPEG`, `PNG`, or `WebP`). This can be
+12. Knowledgeable about
+13. Skill-set (practical knowledge and builder experience)
+14. Registration (choose `for credit` or `listener`)
+15. For listeners only: willingness to do the weekly builds (choose `yes` or `no`;
+    applications for credit record `not applicable`)
+16. Questions or comments for instructors
+17. A class-only picture uploaded in chat (`JPG`/`JPEG`, `PNG`, or `WebP`). This can be
     whatever image you want to represent you and does not need to be a formal headshot.
 
 ## Submission constraints
@@ -51,21 +56,29 @@ This is a build-intensive course. Every student is expected to:
 | Missing, blank, placeholder, or malformed value | Rejected |
 | Expired or inaccessible photo upload | Rejected |
 | GitHub ID | Username only: 1-39 letters, numbers, or single hyphens; no `@`, URL, leading/trailing hyphen, or consecutive hyphens |
+| No GitHub account | Create one before continuing the application |
+| Year of degree start | Four digits, representing the year the applicant started the degree |
 
-## Registration status options
+## School options
 
 Choose exactly one:
 
-1. MAS student for credit
-2. MIT student for credit
-3. MAS student listener
-4. MIT student listener
-5. Other student for credit
-6. Other student listener
+1. MIT Media Lab
+2. MIT
+3. Harvard
+4. Wellesley
+5. Other
 
-`MAS student` means a student in the Program in Media Arts and Sciences. `MIT student`
-means an MIT student outside MAS. `Other student` means a student outside MIT.
-Affiliation does not determine whether someone is applying for credit or as a listener.
+## Registration options
+
+Choose exactly one:
+
+1. for credit
+2. listener
+
+If the applicant chooses `listener`, ask whether they will do the weekly builds and
+require exactly `yes` or `no`. For an applicant choosing `for credit`, record the
+listener-only field as `not applicable` without asking a separate question.
 
 ## Agent interaction
 
@@ -102,23 +115,29 @@ Affiliation does not determine whether someone is applying for credit or as a li
    using one atomic draft update. After that update, end the turn by asking about only
    the next unconfirmed field and wait for the applicant. Never update the application
    draft more than once in a user turn.
-9. Motivation, `Registration Status`, listener willingness, instructor questions, and
+9. Motivation, School, Registration, listener willingness, instructor questions, and
    the chat-uploaded picture are `missing` unless explicitly supplied by the applicant.
    Never infer motivation from public sources.
 10. For motivation, collect why the course interests the applicant, what they have
     built, what they want to build and why, and their roles in past projects. If an
     answer is incomplete, ask about one missing part at a time before advancing.
-11. For `Registration Status`, show the six options above and ask the applicant to
-    choose exactly one. Never infer for-credit or listener status from affiliation,
-    department, degree program, or enrollment.
-12. For the picture, explain that it is for class use only and can be any image the
+11. For School, show the five options and require exactly one. For Research group,
+    accept `Not applicable` when appropriate. For Year of degree start, ask for the
+    four-digit year when the applicant began the degree, not their current year of study.
+12. If the applicant does not have a GitHub ID, ask them to create a GitHub account and
+    return with the username before advancing.
+13. For Registration, show `for credit` and `listener` and require exactly one. Never
+    infer registration from school, department, degree program, or enrollment. If the
+    applicant chooses `listener`, require exactly `yes` or `no` for weekly-build
+    willingness. If they choose `for credit`, record `not applicable` and continue.
+14. For the picture, explain that it is for class use only and can be any image the
     applicant wants to represent them. It does not need to be a formal headshot. Then
-    make the upload the single current request and accept `JPEG`, `PNG`, or `WebP`.
-13. Mark a field `confirmed` only when the applicant supplies, edits, or explicitly
+    make the upload the single current request and accept `JPG`/`JPEG`, `PNG`, or `WebP`.
+15. Mark a field `confirmed` only when the applicant supplies, edits, or explicitly
     confirms its value. Never turn a group of candidate or inferred fields into one
     blanket confirmation request. Put questions and confirmation requests only in the
     final response for the turn, never in progress text before a tool call.
-14. Once every field is individually confirmed, present the complete application and
+16. Once every field is individually confirmed, present the complete application and
     ask one final question: whether the applicant approves submission.
-15. Submit only after explicit approval. After submission, remind the applicant that
+17. Submit only after explicit approval. After submission, remind the applicant that
     acceptance notifications will be sent September 9 at midnight.

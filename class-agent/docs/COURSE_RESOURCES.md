@@ -63,13 +63,13 @@ marks removed seeded FAQ entries inactive. It does not use embeddings.
 
 `course://application` is the public guide. The private submission tool accepts a
 structured application only after the user explicitly approves it. Required fields are
-Name, Email, Department / Research Group / Year of Study MIT, Personal
-Webpage, Interests, motivation, Knowledgeable about, Skill-set,
-Registration Status, listener commitment to weekly builds, questions or comments, and a
-temporary JPEG, PNG, or WebP representative-picture upload for class use only. The
-picture can be any image the applicant wants to represent them and need not be a formal
-headshot. Missing, blank, placeholder, malformed, expired, and inaccessible values
-produce a model-visible validation error naming the fields that still need answers.
+Name, Email, GitHub ID, School, Department, Research group, Degree, Year of degree
+start, Personal Webpage, Interests, motivation, Knowledgeable about, Skill-set,
+Registration, conditional listener commitment to weekly builds, questions or comments,
+and a temporary JPG/JPEG, PNG, or WebP representative-picture upload for class use only.
+The picture can be any image the applicant wants to represent them and need not be a
+formal headshot. Missing, blank, placeholder, malformed, expired, and inaccessible
+values produce a model-visible validation error naming the fields that still need answers.
 
 The public guide opens with the 20-student capacity, application and notification
 deadlines, and the expectation that students build every week, document each build in a
@@ -77,10 +77,12 @@ GitHub repository, and show and present the technical implementation in class. T
 motivation response covers why the course interests the applicant, what they have built,
 what they want to build and why, and their roles in past projects.
 
-Registration Status is a closed six-option combination of affiliation (`MAS student`,
-`MIT student`, or `Other student`) and participation mode (`for credit` or `listener`).
-The guide and tool contract require the agent to ask for this choice rather than infer
-participation mode from a researched affiliation.
+School is one of `MIT Media Lab`, `MIT`, `Harvard`, `Wellesley`, or `Other`.
+Registration is independently one of `for credit` or `listener`. Listeners must answer
+`yes` or `no` about completing weekly builds; for-credit applicants record
+`not applicable`. The year field is the four-digit year the applicant started the
+degree, not their current year of study. Applicants without a GitHub account must create
+one before continuing.
 
 Temporary uploads are principal-scoped, expire after 24 hours, and default to
 `var/uploads/`. A successful submission copies the selected photo into a durable,

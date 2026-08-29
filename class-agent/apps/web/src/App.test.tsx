@@ -379,9 +379,31 @@ describe("Course Agent interface", () => {
               fields: [
                 { id: "name", label: "Name", status: "missing" },
                 { id: "email", label: "Email", status: "missing" },
+                { id: "github_id", label: "GitHub ID", status: "missing" },
                 {
-                  id: "department_research_group_year_of_study_mit",
-                  label: "Department / Research Group / Year of Study MIT",
+                  id: "school",
+                  label: "School",
+                  status: "missing",
+                  options: ["MIT Media Lab", "MIT", "Harvard", "Wellesley", "Other"],
+                },
+                {
+                  id: "department",
+                  label: "Department",
+                  status: "missing",
+                },
+                {
+                  id: "research_group",
+                  label: "Research group",
+                  status: "missing",
+                },
+                {
+                  id: "degree",
+                  label: "Degree",
+                  status: "missing",
+                },
+                {
+                  id: "degree_start_year",
+                  label: "Year degree started",
                   status: "missing",
                 },
                 { id: "personal_webpage", label: "Personal Webpage", status: "missing" },
@@ -394,11 +416,17 @@ describe("Course Agent interface", () => {
                 },
                 { id: "knowledgeable_about", label: "Knowledgeable about", status: "missing" },
                 { id: "skill_set", label: "Skill-set", status: "missing" },
-                { id: "registration_status", label: "Registration Status", status: "missing" },
+                {
+                  id: "registration_status",
+                  label: "Registration",
+                  status: "missing",
+                  options: ["for credit", "listener"],
+                },
                 {
                   id: "listener_willing_to_do_weekly_builds",
                   label: "For listeners: willing to do weekly builds",
                   status: "missing",
+                  options: ["yes", "no", "not applicable"],
                 },
                 {
                   id: "questions_or_comments_for_instructors",
@@ -407,7 +435,7 @@ describe("Course Agent interface", () => {
                 },
                 {
                   id: "photo_upload_id",
-                  label: "Class-only picture that represents you (JPEG, PNG, or WebP)",
+                  label: "Class-only picture that represents you (JPG/JPEG, PNG, or WebP)",
                   status: "missing",
                 },
               ],
@@ -426,7 +454,7 @@ describe("Course Agent interface", () => {
     expect(submit).toBeDisabled();
     expect(submit.parentElement).toHaveAttribute(
       "title",
-      "0/12 required fields confirmed",
+      "0/17 required fields confirmed",
     );
   });
 

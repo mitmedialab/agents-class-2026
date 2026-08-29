@@ -26,17 +26,21 @@ from uuid import UUID, uuid4
 from pydantic import (
     BaseModel,
     ConfigDict,
-    EmailStr,
     Field,
     JsonValue,
     ValidationError,
-    field_validator,
 )
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
 from agent_core import PrincipalContext
 from course_server.browser.constants import BROWSER_TOOL_IDS
+from course_server.course_application import (
+    LISTENER_BUILD_OPTIONS,
+    REGISTRATION_STATUS_OPTIONS,
+    SCHOOL_OPTIONS,
+    CourseApplication,
+)
 from course_server.uploads import (
     APPLICATION_PHOTO_MEDIA_TYPES,
     StoredTemporaryUpload,
@@ -79,27 +83,9 @@ _IMAGE_SEARCH_OVERSAMPLE_FACTOR = 4
 _IMAGE_SEARCH_MIN_CANDIDATES = 12
 _IMAGE_SEARCH_MAX_CANDIDATES = 30
 _MAX_UPLOAD_TEXT_LENGTH = 50_000
-_GITHUB_ID = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}\Z")
-
 StoragePolicy = Literal["server_full", "server_summary", "local_only", "ephemeral"]
 ResourceVisibility = Literal["public"]
 ResourceStatus = Literal["published", "provisional"]
-RegistrationStatus = Literal[
-    "MAS student for credit",
-    "MIT student for credit",
-    "MAS student listener",
-    "MIT student listener",
-    "Other student for credit",
-    "Other student listener",
-]
-REGISTRATION_STATUS_OPTIONS: tuple[RegistrationStatus, ...] = (
-    "MAS student for credit",
-    "MIT student for credit",
-    "MAS student listener",
-    "MIT student listener",
-    "Other student for credit",
-    "Other student listener",
-)
 
 
 class CapabilityCatalogError(RuntimeError):
@@ -1556,54 +1542,6 @@ class ApplicationReceipt(BaseModel):
     submitted_at: datetime
 
 
-class CourseApplication(BaseModel):
-    """Complete structured application; every field must contain meaningful input."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
-
-    name: str = Field(min_length=2, max_length=200)
-    email: EmailStr
-    github_id: str = Field(min_length=1, max_length=39)
-    department_research_group_year_of_study_mit: str = Field(min_length=1, max_length=1_000)
-    personal_webpage: str = Field(min_length=1, max_length=2_000)
-    interests: str = Field(min_length=1, max_length=4_000)
-    why_take_this_class: str = Field(min_length=1, max_length=4_000)
-    knowledgeable_about: str = Field(min_length=1, max_length=4_000)
-    skill_set: str = Field(min_length=1, max_length=4_000)
-    registration_status: RegistrationStatus
-    listener_willing_to_do_weekly_builds: str = Field(min_length=1, max_length=500)
-    questions_or_comments_for_instructors: str = Field(min_length=1, max_length=4_000)
-    photo_upload_id: UUID
-
-    @field_validator(
-        "name",
-        "department_research_group_year_of_study_mit",
-        "personal_webpage",
-        "interests",
-        "why_take_this_class",
-        "knowledgeable_about",
-        "skill_set",
-        "registration_status",
-        "listener_willing_to_do_weekly_builds",
-        "questions_or_comments_for_instructors",
-    )
-    @classmethod
-    def reject_placeholders(cls, value: str) -> str:
-        if value.strip().casefold() in {"-", "tbd", "unknown"}:
-            raise ValueError("placeholder answers are not accepted")
-        return value
-
-    @field_validator("github_id")
-    @classmethod
-    def validate_github_id(cls, value: str) -> str:
-        if not _GITHUB_ID.fullmatch(value):
-            raise ValueError(
-                "must be a GitHub username (1-39 letters, numbers, or single hyphens; "
-                "no leading or trailing hyphen)"
-            )
-        return value
-
-
 class ApplicantStore(Protocol):
     async def submit(
         self,
@@ -1629,7 +1567,7 @@ class FileApplicantStore:
     ) -> ApplicationReceipt:
         receipt = ApplicationReceipt(application_id=uuid4(), submitted_at=datetime.now(UTC))
         payload: dict[str, JsonValue] = {
-            "schema_version": 1,
+            "schema_version": 2,
             "application_id": str(receipt.application_id),
             "submitted_at": receipt.submitted_at.isoformat(),
             "application": application.model_dump(mode="json"),
@@ -1677,6 +1615,52 @@ class FileApplicantStore:
             raise
 
 
+def _application_validation_details(error: ValidationError) -> list[str]:
+    """Return safe, field-specific reasons suitable for model correction."""
+
+    option_fields = {
+        "school": SCHOOL_OPTIONS,
+        "registration_status": REGISTRATION_STATUS_OPTIONS,
+        "listener_willing_to_do_weekly_builds": LISTENER_BUILD_OPTIONS,
+    }
+    details: list[str] = []
+    for item in error.errors(include_url=False, include_input=False):
+        location = item["loc"]
+        field_name = str(location[0]) if location else "application"
+        error_type = item["type"]
+        context = item.get("ctx") or {}
+        if error_type == "missing":
+            reason = "is required"
+        elif field_name in option_fields and error_type == "literal_error":
+            reason = "must be one of: " + ", ".join(option_fields[field_name])
+        elif field_name == "email":
+            reason = "must be a valid email address"
+        elif field_name == "github_id":
+            reason = (
+                "must be a GitHub username with 1-39 letters, numbers, or single hyphens; "
+                "if the applicant has no GitHub account, they must create one first"
+            )
+        elif field_name == "degree_start_year":
+            reason = "must be the four-digit year when the applicant started the degree"
+        elif field_name == "photo_upload_id":
+            reason = "must be a valid upload UUID"
+        elif error_type == "string_too_short":
+            reason = f"must contain at least {context.get('min_length')} characters"
+        elif error_type == "string_too_long":
+            reason = f"must contain at most {context.get('max_length')} characters"
+        elif error_type == "extra_forbidden":
+            reason = "is not an accepted application field"
+        else:
+            message = str(item["msg"])
+            reason = (
+                message.removeprefix("Value error, ").removeprefix("String should ").rstrip(".")
+            )
+        detail = f"{field_name} {reason}"
+        if detail not in details:
+            details.append(detail)
+    return details
+
+
 class CourseSubmitApplicationTool:
     """Store an explicitly requested course application outside the public catalog."""
 
@@ -1693,10 +1677,13 @@ class CourseSubmitApplicationTool:
         "properties": {
             "name": {
                 "type": "string",
+                "minLength": 2,
+                "maxLength": 200,
                 "description": "Name field.",
             },
             "email": {
                 "type": "string",
+                "format": "email",
                 "description": "Email field.",
             },
             "github_id": {
@@ -1706,23 +1693,58 @@ class CourseSubmitApplicationTool:
                 "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$",
                 "description": (
                     "Required GitHub username only, without @ or a profile URL. It may contain "
-                    "letters, numbers, and single hyphens, and cannot begin or end with a hyphen."
+                    "letters, numbers, and single hyphens, and cannot begin or end with a hyphen. "
+                    "If the applicant has no GitHub account, ask them to create one before "
+                    "continuing."
                 ),
             },
-            "department_research_group_year_of_study_mit": {
+            "school": {
                 "type": "string",
-                "description": "Department / Research Group / Year of Study MIT field.",
+                "enum": list(SCHOOL_OPTIONS),
+                "description": "School; choose exactly one listed option.",
+            },
+            "department": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1_000,
+                "description": "Department field.",
+            },
+            "research_group": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1_000,
+                "description": (
+                    "Research group field; state 'Not applicable' when the applicant does not "
+                    "belong to one."
+                ),
+            },
+            "degree": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500,
+                "description": "Degree field.",
+            },
+            "degree_start_year": {
+                "type": "string",
+                "pattern": "^\\d{4}$",
+                "description": "Four-digit year when the applicant started the degree.",
             },
             "personal_webpage": {
                 "type": "string",
+                "minLength": 1,
+                "maxLength": 2_000,
                 "description": "Personal Webpage field; state explicitly if there is none.",
             },
             "interests": {
                 "type": "string",
+                "minLength": 1,
+                "maxLength": 4_000,
                 "description": "Interests field.",
             },
             "why_take_this_class": {
                 "type": "string",
+                "minLength": 1,
+                "maxLength": 4_000,
                 "description": (
                     "Application motivation: why the course interests the applicant, what "
                     "they have built, what they want to build and why, and their roles in "
@@ -1731,39 +1753,46 @@ class CourseSubmitApplicationTool:
             },
             "knowledgeable_about": {
                 "type": "string",
+                "minLength": 1,
+                "maxLength": 4_000,
                 "description": "Knowledgeable about field.",
             },
             "skill_set": {
                 "type": "string",
+                "minLength": 1,
+                "maxLength": 4_000,
                 "description": "Skill-set field.",
             },
             "registration_status": {
                 "type": "string",
                 "enum": list(REGISTRATION_STATUS_OPTIONS),
                 "description": (
-                    "The applicant's combined affiliation and participation mode. Ask the "
-                    "applicant to choose one option; never infer for-credit or listener status "
-                    "from an MAS, MIT, or other affiliation."
+                    "Choose exactly 'for credit' or 'listener'; never infer the choice from "
+                    "school, department, degree, or affiliation."
                 ),
             },
             "listener_willing_to_do_weekly_builds": {
                 "type": "string",
+                "enum": list(LISTENER_BUILD_OPTIONS),
                 "description": (
-                    "For listeners: whether the applicant is willing to complete the "
-                    "weekly builds; use not applicable for non-listeners."
+                    "Use 'yes' or 'no' for listeners. Use 'not applicable' for applicants "
+                    "registering for credit."
                 ),
             },
             "questions_or_comments_for_instructors": {
                 "type": "string",
+                "minLength": 1,
+                "maxLength": 4_000,
                 "description": (
                     "Questions or comments for instructors field; state explicitly if none."
                 ),
             },
             "photo_upload_id": {
                 "type": "string",
+                "format": "uuid",
                 "description": (
                     "UUID returned after the applicant uploads a class-only representative "
-                    "picture in chat. It may be any JPEG, PNG, or WebP image they want to "
+                    "picture in chat. It may be any JPG/JPEG, PNG, or WebP image they want to "
                     "represent them and does not need to be a formal headshot."
                 ),
             },
@@ -1772,7 +1801,11 @@ class CourseSubmitApplicationTool:
             "name",
             "email",
             "github_id",
-            "department_research_group_year_of_study_mit",
+            "school",
+            "department",
+            "research_group",
+            "degree",
+            "degree_start_year",
             "personal_webpage",
             "interests",
             "why_take_this_class",
@@ -1802,15 +1835,9 @@ class CourseSubmitApplicationTool:
         try:
             application = CourseApplication.model_validate(arguments)
         except ValidationError as error:
-            invalid_fields = sorted(
-                {
-                    str(item["loc"][0]) if item["loc"] else "application"
-                    for item in error.errors(include_url=False)
-                }
-            )
             raise ToolValidationError(
-                "Application incomplete or invalid. Ask the user for: "
-                + ", ".join(invalid_fields)
+                "Application validation failed: "
+                + "; ".join(_application_validation_details(error))
                 + "."
             ) from error
         try:
@@ -1820,13 +1847,19 @@ class CourseSubmitApplicationTool:
             )
         except UploadError as error:
             raise ToolValidationError(
-                "The application photo is unavailable or expired. Ask the user to upload it again."
+                "Application validation failed: photo_upload_id refers to an upload that is "
+                "expired or unavailable to this session; upload the JPG/JPEG, PNG, or WebP "
+                "picture again."
             ) from error
         if photo.receipt.media_type not in APPLICATION_PHOTO_MEDIA_TYPES:
-            raise ToolValidationError("The application photo must be a JPEG, PNG, or WebP image.")
+            raise ToolValidationError(
+                "Application validation failed: photo_upload_id must refer to a JPG/JPEG, PNG, "
+                "or WebP image."
+            )
         if not await asyncio.to_thread(_has_valid_image_signature, photo):
             raise ToolValidationError(
-                "The application photo content is not a valid JPEG, PNG, or WebP image."
+                "Application validation failed: the uploaded picture's content is not a valid "
+                "JPG/JPEG, PNG, or WebP image."
             )
         receipt = await self._applicants.submit(
             application=application,

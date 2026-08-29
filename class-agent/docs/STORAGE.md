@@ -38,6 +38,12 @@ and a durable copy of its validated photo. Model-controlled text cannot choose a
 The tool result stores only a receipt summary in its completion event, although the
 user's original conversation messages remain part of ordinary conversation history.
 
+New application records use `schema_version: 2`. Version 2 separates School, Department,
+Research group, Degree, and Year of degree start, and separates School from Registration.
+Existing version 1 files remain immutable historical records and require no database or
+filesystem migration; any staff-side reader must branch on `schema_version` rather than
+reinterpret the former combined fields.
+
 ## Migrations
 
 Apply migrations with:

@@ -329,6 +329,11 @@ def test_application_information_tool_reads_official_guide_directly() -> None:
         normalized_content = " ".join(result.content.split())
         assert "Capacity | 20 students" in result.content
         assert "Email" in result.content
+        assert "MIT Media Lab" in result.content
+        assert "Year of degree start" in result.content
+        assert "for credit" in result.content
+        assert "listener" in result.content
+        assert "create a GitHub account" in result.content
         assert "A class-only picture" in result.content
         assert "Application deadline | September 4, midnight" in result.content
         assert "Acceptance notification | September 9, midnight" in result.content
@@ -708,9 +713,9 @@ def test_application_tool_stores_private_json_with_server_generated_name(
         )
         uploads = FileTemporaryUploadStore(tmp_path / "uploads")
         photo = await uploads.store(
-            filename="portrait.png",
-            media_type="image/png",
-            content=b"\x89PNG\r\n\x1a\nphoto-data",
+            filename="portrait.jpg",
+            media_type="image/jpeg",
+            content=b"\xff\xd8\xffphoto-data",
             principal=principal,
         )
         tool = CourseSubmitApplicationTool(
@@ -721,9 +726,11 @@ def test_application_tool_stores_private_json_with_server_generated_name(
             "name": "Ada Applicant",
             "email": "ada@example.edu",
             "github_id": "ada-lovelace",
-            "department_research_group_year_of_study_mit": (
-                "Media Lab, Fluid Interfaces, second year"
-            ),
+            "school": "MIT Media Lab",
+            "department": "Media Arts and Sciences",
+            "research_group": "Fluid Interfaces",
+            "degree": "PhD",
+            "degree_start_year": "2024",
             "personal_webpage": "https://example.edu/ada",
             "interests": "Learning agents and human agency",
             "why_take_this_class": (
@@ -732,17 +739,21 @@ def test_application_tool_stores_private_json_with_server_generated_name(
             ),
             "knowledgeable_about": "Human-computer interaction and learning sciences",
             "skill_set": "Python, TypeScript, interface design, qualitative research",
-            "registration_status": "MAS student for credit",
-            "listener_willing_to_do_weekly_builds": "Not applicable; taking for credit",
+            "registration_status": "for credit",
+            "listener_willing_to_do_weekly_builds": "not applicable",
             "questions_or_comments_for_instructors": "No questions",
             "photo_upload_id": str(photo.id),
         }
 
-        with pytest.raises(ToolValidationError, match="registration_status"):
+        with pytest.raises(ToolValidationError) as invalid_registration:
             await tool.execute(
                 {**application, "registration_status": "Taking for credit"},
                 context,
             )
+        assert str(invalid_registration.value) == (
+            "Application validation failed: registration_status must be one of: "
+            "for credit, listener."
+        )
 
         result = await tool.execute(application, context)
 
@@ -752,12 +763,13 @@ def test_application_tool_stores_private_json_with_server_generated_name(
         assert len(stored_directories) == 1
         application_file = stored_directories[0] / "application.json"
         stored = json.loads(application_file.read_text(encoding="utf-8"))
+        assert stored["schema_version"] == 2
         assert stored["application"]["name"] == "Ada Applicant"
         assert stored["application"]["github_id"] == "ada-lovelace"
         assert stored["application"]["photo_upload_id"] == str(photo.id)
         assert stored["principal"]["anonymous_session_id"] is not None
-        photo_file = stored_directories[0] / "photo.png"
-        assert photo_file.read_bytes() == b"\x89PNG\r\n\x1a\nphoto-data"
+        photo_file = stored_directories[0] / "photo.jpg"
+        assert photo_file.read_bytes() == b"\xff\xd8\xffphoto-data"
         assert stat.S_IMODE(application_file.stat().st_mode) == 0o600
         assert stat.S_IMODE(photo_file.stat().st_mode) == 0o600
 
@@ -778,18 +790,29 @@ def test_application_tool_reports_every_incomplete_field(tmp_path: Path) -> None
             )
 
         message = str(raised.value)
-        assert "email" in message
-        assert "github_id" in message
-        assert "photo_upload_id" in message
-        assert "registration_status" in message
-        assert "questions_or_comments_for_instructors" in message
+        assert "email must be a valid email address" in message
+        assert "github_id is required" in message
+        assert "school is required" in message
+        assert "degree_start_year is required" in message
+        assert "photo_upload_id is required" in message
+        assert "registration_status is required" in message
+        assert "questions_or_comments_for_instructors is required" in message
 
     asyncio.run(scenario())
 
 
 @pytest.mark.parametrize(
     "github_id",
-    ["@ada", "https://github.com/ada", "-ada", "ada-", "ada--dev", "a" * 40],
+    [
+        "@ada",
+        "https://github.com/ada",
+        "-ada",
+        "ada-",
+        "ada--dev",
+        "a" * 40,
+        "none",
+        "not applicable",
+    ],
 )
 def test_application_rejects_malformed_github_id(github_id: str) -> None:
     with pytest.raises(ValidationError):
@@ -798,14 +821,18 @@ def test_application_rejects_malformed_github_id(github_id: str) -> None:
                 "name": "Ada Applicant",
                 "email": "ada@example.edu",
                 "github_id": github_id,
-                "department_research_group_year_of_study_mit": "MIT",
+                "school": "MIT",
+                "department": "Electrical Engineering and Computer Science",
+                "research_group": "Not applicable",
+                "degree": "SM",
+                "degree_start_year": "2025",
                 "personal_webpage": "None",
                 "interests": "Agents",
                 "why_take_this_class": "To learn",
                 "knowledgeable_about": "Python",
                 "skill_set": "Building software",
-                "registration_status": "MIT student for credit",
-                "listener_willing_to_do_weekly_builds": "Not applicable",
+                "registration_status": "for credit",
+                "listener_willing_to_do_weekly_builds": "not applicable",
                 "questions_or_comments_for_instructors": "None",
                 "photo_upload_id": str(uuid4()),
             }
@@ -817,7 +844,11 @@ def test_application_tool_requires_supplied_form_categories_and_photo() -> None:
         "name",
         "email",
         "github_id",
-        "department_research_group_year_of_study_mit",
+        "school",
+        "department",
+        "research_group",
+        "degree",
+        "degree_start_year",
         "personal_webpage",
         "interests",
         "why_take_this_class",
@@ -833,19 +864,47 @@ def test_application_tool_requires_supplied_form_categories_and_photo() -> None:
     github_id = properties["github_id"]
     assert isinstance(github_id, dict)
     assert github_id["pattern"] == ("^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$")
+    school = properties["school"]
+    assert isinstance(school, dict)
+    assert school["enum"] == ["MIT Media Lab", "MIT", "Harvard", "Wellesley", "Other"]
+    degree_start_year = properties["degree_start_year"]
+    assert isinstance(degree_start_year, dict)
+    assert degree_start_year["pattern"] == "^\\d{4}$"
     registration_status = properties["registration_status"]
     assert isinstance(registration_status, dict)
-    assert registration_status["enum"] == [
-        "MAS student for credit",
-        "MIT student for credit",
-        "MAS student listener",
-        "MIT student listener",
-        "Other student for credit",
-        "Other student listener",
-    ]
+    assert registration_status["enum"] == ["for credit", "listener"]
+    listener_builds = properties["listener_willing_to_do_weekly_builds"]
+    assert isinstance(listener_builds, dict)
+    assert listener_builds["enum"] == ["yes", "no", "not applicable"]
     photo = properties["photo_upload_id"]
     assert isinstance(photo, dict)
+    assert photo["format"] == "uuid"
     photo_description = photo["description"]
     assert isinstance(photo_description, str)
     assert "class-only representative picture" in photo_description
     assert "does not need to be a formal headshot" in photo_description
+
+
+def test_application_requires_a_listener_to_answer_yes_or_no() -> None:
+    application = {
+        "name": "Ada Applicant",
+        "email": "ada@example.edu",
+        "github_id": "ada-lovelace",
+        "school": "MIT Media Lab",
+        "department": "Media Arts and Sciences",
+        "research_group": "Fluid Interfaces",
+        "degree": "PhD",
+        "degree_start_year": "2024",
+        "personal_webpage": "https://example.edu/ada",
+        "interests": "Learning agents",
+        "why_take_this_class": "To build dependable learning agents",
+        "knowledgeable_about": "Human-computer interaction",
+        "skill_set": "Python and TypeScript",
+        "registration_status": "listener",
+        "listener_willing_to_do_weekly_builds": "not applicable",
+        "questions_or_comments_for_instructors": "None",
+        "photo_upload_id": str(uuid4()),
+    }
+
+    with pytest.raises(ValidationError, match="must be 'yes' or 'no'"):
+        CourseApplication.model_validate(application)

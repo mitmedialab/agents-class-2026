@@ -20,6 +20,7 @@ from course_server.agent.capabilities import (
     ToolValidationError,
 )
 from course_server.application_draft import (
+    ApplicationDraftValidationError,
     merged_application_draft_props,
     normalized_application_draft_props,
 )
@@ -716,7 +717,12 @@ class WorkspaceUpdateComponentTool:
                             "applicant's name; then combine the confirmed name and every supported "
                             "research result in one application draft update"
                         )
-                    value = merged_application_draft_props(target_panel.props, value)
+                    try:
+                        value = merged_application_draft_props(target_panel.props, value)
+                    except ApplicationDraftValidationError as error:
+                        raise ToolValidationError(
+                            f"application draft update failed: {error}"
+                        ) from error
                 changes[name] = value
         title = _optional_string(arguments, "title")
         if title is not None:
