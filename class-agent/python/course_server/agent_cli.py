@@ -8,7 +8,6 @@ import re
 from collections.abc import Sequence
 
 from dotenv import load_dotenv
-from smolagents import DuckDuckGoSearchTool
 
 from agent_core import AgentResult, AgentRuntime, Conversation
 from course_server.agent import (
@@ -57,6 +56,7 @@ from course_server.uploads import (
     TemporaryUploadStore,
 )
 from course_server.web_search import (
+    BraveWebSearchClient,
     fetch_public_webpage,
     inspect_images_with_openai,
     probe_public_image_url,
@@ -129,7 +129,12 @@ def build_runtime(
         CourseSearchTool(course_resources),
         ReadTemporaryUploadTool(upload_store),
         CourseSubmitApplicationTool(applicant_store, upload_store),
-        PublicWebSearchTool(DuckDuckGoSearchTool(max_results=5).forward),
+        PublicWebSearchTool(
+            BraveWebSearchClient(
+                settings.brave_search_api_key.get_secret_value(),
+                max_results=5,
+            )
+        ),
         PublicImageSearchTool(search_duckduckgo_images, probe_public_image_url),
         PublicImageInspectionTool(
             lambda urls, prompt: inspect_images_with_openai(

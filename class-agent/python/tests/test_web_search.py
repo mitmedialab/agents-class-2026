@@ -21,6 +21,80 @@ def _allow_public_web_test_hosts(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
+def test_brave_web_search_uses_authenticated_api_and_formats_results() -> None:
+    requests: list[httpx.Request] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "web": {
+                    "results": [
+                        {
+                            "title": "  Example   profile ",
+                            "url": "https://public.example.org/profile",
+                            "description": " Public <strong>research</strong>   profile. ",
+                        }
+                    ]
+                }
+            },
+        )
+
+    client = web_search.BraveWebSearchClient(
+        "test-brave-secret",
+        max_results=5,
+        requests_per_second=None,
+        transport=httpx.MockTransport(respond),
+    )
+
+    assert client("Ada Lovelace") == (
+        "## Search Results\n\n"
+        "[Example profile](https://public.example.org/profile)\n"
+        "Public research profile."
+    )
+    assert len(requests) == 1
+    assert requests[0].url.params["q"] == "Ada Lovelace"
+    assert requests[0].url.params["count"] == "5"
+    assert requests[0].headers["x-subscription-token"] == "test-brave-secret"
+
+
+def test_brave_web_search_retries_rate_limit_using_reset_header() -> None:
+    request_count = 0
+    sleeps: list[float] = []
+
+    def respond(_request: httpx.Request) -> httpx.Response:
+        nonlocal request_count
+        request_count += 1
+        if request_count == 1:
+            return httpx.Response(429, headers={"X-RateLimit-Reset": "0.5"})
+        return httpx.Response(
+            200,
+            json={
+                "web": {
+                    "results": [
+                        {
+                            "title": "Result",
+                            "url": "https://public.example.org/result",
+                            "description": "Found after retry.",
+                        }
+                    ]
+                }
+            },
+        )
+
+    client = web_search.BraveWebSearchClient(
+        "test-brave-secret",
+        requests_per_second=None,
+        transport=httpx.MockTransport(respond),
+        sleep=sleeps.append,
+    )
+
+    assert "Found after retry." in client("retry me")
+    assert request_count == 2
+    assert sleeps == [0.5]
+
+
 def test_image_probe_accepts_a_fetchable_image(monkeypatch: pytest.MonkeyPatch) -> None:
     _allow_public_test_hosts(monkeypatch)
     requests: list[httpx.Request] = []

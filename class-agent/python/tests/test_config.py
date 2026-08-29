@@ -11,12 +11,14 @@ def test_settings_accept_standard_openai_environment_without_exposing_secret() -
         {
             "DATABASE_URL": "postgresql://example",
             "OPENAI_API_KEY": "  test-secret-value\n\n",
+            "BRAVE_API_KEY": "  test-brave-value\n\n",
             "MODEL_ID": "test-model",
         }
     )
 
     assert settings.model_id == "test-model"
     assert settings.model_api_key.get_secret_value() == "test-secret-value"
+    assert settings.brave_search_api_key.get_secret_value() == "test-brave-value"
     assert settings.applicant_data_path.name == "applicants"
     assert settings.upload_data_path.name == "uploads"
     assert settings.browser_enabled is True
@@ -24,6 +26,7 @@ def test_settings_accept_standard_openai_environment_without_exposing_secret() -
     assert settings.browser_max_sessions_per_principal == 2
     assert settings.anonymous_quotas_enabled is True
     assert "test-secret-value" not in repr(settings)
+    assert "test-brave-value" not in repr(settings)
 
 
 def test_settings_accept_private_applicant_storage_path() -> None:
@@ -31,6 +34,7 @@ def test_settings_accept_private_applicant_storage_path() -> None:
         {
             "DATABASE_URL": "postgresql://example",
             "OPENAI_API_KEY": "test-secret-value",
+            "BRAVE_API_KEY": "test-brave-value",
             "APPLICANT_DATA_PATH": "/srv/class-agent/applicants",
             "UPLOAD_DATA_PATH": "/srv/class-agent/uploads",
         }
@@ -45,6 +49,7 @@ def test_settings_can_disable_and_bound_the_remote_browser() -> None:
         {
             "DATABASE_URL": "postgresql://example",
             "OPENAI_API_KEY": "test-secret-value",
+            "BRAVE_API_KEY": "test-brave-value",
             "BROWSER_ENABLED": "false",
             "BROWSER_MAX_SESSIONS": "12",
             "BROWSER_MAX_SESSIONS_PER_PRINCIPAL": "1",
@@ -65,6 +70,7 @@ def test_settings_can_disable_strict_workspace_visual_policy() -> None:
         {
             "DATABASE_URL": "postgresql://example",
             "OPENAI_API_KEY": "test-secret-value",
+            "BRAVE_API_KEY": "test-brave-value",
             "WORKSPACE_STRICT_VISUAL_POLICY": "false",
         }
     )
@@ -106,6 +112,7 @@ def test_settings_reject_embedded_api_key_line_breaks() -> None:
             {
                 "DATABASE_URL": "postgresql://example",
                 "OPENAI_API_KEY": "first-line\nsecond-line",
+                "BRAVE_API_KEY": "test-brave-value",
             }
         )
 
@@ -117,5 +124,28 @@ def test_settings_reject_literal_api_key_line_break_sequences(line_break: str) -
             {
                 "DATABASE_URL": "postgresql://example",
                 "OPENAI_API_KEY": f"test-secret-value{line_break}",
+                "BRAVE_API_KEY": "test-brave-value",
+            }
+        )
+
+
+def test_settings_require_brave_search_api_key() -> None:
+    with pytest.raises(ConfigurationError, match="BRAVE_API_KEY is required"):
+        AgentSettings.from_environment(
+            {
+                "DATABASE_URL": "postgresql://example",
+                "OPENAI_API_KEY": "test-secret-value",
+            }
+        )
+
+
+@pytest.mark.parametrize("line_break", ["\n", "\r", r"\n", r"\r"])
+def test_settings_reject_brave_api_key_line_breaks(line_break: str) -> None:
+    with pytest.raises(ConfigurationError, match=r"BRAVE_API_KEY.*single line"):
+        AgentSettings.from_environment(
+            {
+                "DATABASE_URL": "postgresql://example",
+                "OPENAI_API_KEY": "test-secret-value",
+                "BRAVE_API_KEY": f"test-brave-value{line_break}suffix",
             }
         )

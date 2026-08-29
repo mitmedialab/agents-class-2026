@@ -16,7 +16,7 @@ smolagents 1.x sends `ToolCallingAgent` function tools through Chat Completions.
 
 ## Configuration and secrets
 
-The CLI loads `.env` without overriding existing process variables. `OPENAI_API_KEY` is the canonical key name and follows official OpenAI environment-variable conventions. The previous `MODEL_API_KEY` name remains accepted temporarily so existing Phase 2 development files continue working. Surrounding whitespace is removed; actual line breaks and literal `\\n`/`\\r` sequences are rejected. Neither value is printed, logged, or written to events. CLI failures report only a sanitized exception-type chain plus strictly validated HTTP status, error type, code, and parameter fields. They never render provider exception messages, request bodies, headers, or tracebacks.
+The CLI loads `.env` without overriding existing process variables. `OPENAI_API_KEY` is the canonical model key name and follows official OpenAI environment-variable conventions. `BRAVE_API_KEY` authenticates public text search. The previous `MODEL_API_KEY` name remains accepted temporarily so existing Phase 2 development files continue working. Surrounding whitespace is removed; actual line breaks and literal `\\n`/`\\r` sequences are rejected. Secrets are never printed, logged, or written to events. CLI failures report only a sanitized exception-type chain plus strictly validated HTTP status, error type, code, and parameter fields. They never render provider exception messages, request bodies, headers, or tracebacks.
 
 The initial defaults are:
 
@@ -63,8 +63,12 @@ The runtime tells the agent to prefer those official assets, attach them to a vi
 composition through the source resource URI and exact asset ID, and skip redundant web
 image search. Asset ownership is revalidated by the workspace tool and HTTP endpoint.
 
-`web.search` and `web.visit` wrap smolagents' toolkit implementations inside the same
-authorized platform boundary. `web.search_images` wraps DuckDuckGo-first DDGS image
+`web.search` uses Brave's authenticated Web Search API behind the application-owned,
+smolagents-visible tool boundary. Requests are serialized at the configured provider rate,
+retry only bounded transport, rate-limit, and service failures, and have a hard timeout.
+Provider authentication, query, quota, and temporary failures retain distinct safe categories
+instead of being reported as generic invalid requests. `web.visit` remains an application-owned
+public-page reader. `web.search_images` wraps DuckDuckGo-first DDGS image
 search, with another DDGS public-image backend as an availability fallback, and returns
 normalized direct HTTPS image candidates for registered workspace components. Results
 include provider pixel dimensions when available plus derived aspect, orientation,

@@ -25,6 +25,7 @@ class AgentSettings(BaseModel):
     model_provider: Literal["openai"] = "openai"
     model_id: str = "gpt-5.6-terra"
     model_api_key: SecretStr = Field(repr=False)
+    brave_search_api_key: SecretStr = Field(repr=False)
     max_steps: int = Field(default=10, ge=1, le=50)
     database_url: str
     applicant_data_path: Path = Path(__file__).resolve().parents[2] / "var/applicants"
@@ -65,6 +66,19 @@ class AgentSettings(BaseModel):
             or r"\r" in api_key
         ):
             raise ConfigurationError("OPENAI_API_KEY must be a non-empty single line")
+
+        raw_brave_search_api_key = values.get("BRAVE_API_KEY")
+        if not raw_brave_search_api_key:
+            raise ConfigurationError("BRAVE_API_KEY is required")
+        brave_search_api_key = raw_brave_search_api_key.strip()
+        if (
+            not brave_search_api_key
+            or "\n" in brave_search_api_key
+            or "\r" in brave_search_api_key
+            or r"\n" in brave_search_api_key
+            or r"\r" in brave_search_api_key
+        ):
+            raise ConfigurationError("BRAVE_API_KEY must be a non-empty single line")
 
         raw_database_url = values.get("DATABASE_URL")
         if not raw_database_url:
@@ -111,6 +125,7 @@ class AgentSettings(BaseModel):
             model_provider="openai",
             model_id=model_id,
             model_api_key=SecretStr(api_key),
+            brave_search_api_key=SecretStr(brave_search_api_key),
             max_steps=int(values.get("AGENT_MAX_STEPS", "10")),
             database_url=database_url,
             applicant_data_path=applicant_data_path,

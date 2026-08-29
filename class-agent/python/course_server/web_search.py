@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import ipaddress
 import socket
+import time
+from collections.abc import Callable
+from threading import Lock
 from typing import Any, cast
 from urllib.parse import urljoin, urlsplit
 
@@ -17,6 +20,8 @@ _MAX_IMAGE_REDIRECTS = 3
 _MAX_WEBPAGE_REDIRECTS = 5
 _MAX_WEBPAGE_BYTES = 2 * 1024 * 1024
 _MAX_PAGE_IMAGES = 20
+_BRAVE_WEB_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search"
+_BRAVE_RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 _IMAGE_PROBE_HEADERS = {
     "Accept": "image/*,*/*;q=0.5",
     "User-Agent": (
@@ -24,6 +29,143 @@ _IMAGE_PROBE_HEADERS = {
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
     ),
 }
+
+
+class BraveWebSearchClient:
+    """Call Brave's authenticated Web Search API with bounded retries and rate limiting."""
+
+    def __init__(
+        self,
+        api_key: str,
+        *,
+        max_results: int = 5,
+        requests_per_second: float | None = 1.0,
+        transport: httpx.BaseTransport | None = None,
+        sleep: Callable[[float], None] = time.sleep,
+        monotonic: Callable[[], float] = time.monotonic,
+    ) -> None:
+        if not api_key.strip():
+            raise ValueError("Brave Search API key must not be blank")
+        if not 1 <= max_results <= 20:
+            raise ValueError("Brave Search result count must be between 1 and 20")
+        if requests_per_second is not None and requests_per_second <= 0:
+            raise ValueError("Brave Search request rate must be positive")
+        self._api_key = api_key
+        self._max_results = max_results
+        self._minimum_interval = (
+            1.0 / requests_per_second if requests_per_second is not None else 0.0
+        )
+        self._transport = transport
+        self._sleep = sleep
+        self._monotonic = monotonic
+        self._last_request_at: float | None = None
+        self._request_lock = Lock()
+
+    def __call__(self, query: str) -> str:
+        with self._request_lock:
+            return self._search(query)
+
+    def _search(self, query: str) -> str:
+        with httpx.Client(
+            timeout=10.0,
+            transport=self._transport,
+            trust_env=False,
+        ) as client:
+            for attempt in range(3):
+                self._wait_for_rate_limit()
+                try:
+                    response = client.get(
+                        _BRAVE_WEB_SEARCH_URL,
+                        headers={
+                            "Accept": "application/json",
+                            "X-Subscription-Token": self._api_key,
+                        },
+                        params={
+                            "q": query,
+                            "count": self._max_results,
+                            "safesearch": "moderate",
+                        },
+                    )
+                except httpx.TransportError:
+                    if attempt == 2:
+                        raise
+                    self._sleep(0.25 * (2**attempt))
+                    continue
+                if response.status_code in _BRAVE_RETRYABLE_STATUS_CODES and attempt < 2:
+                    self._sleep(_brave_retry_delay(response, attempt))
+                    continue
+                response.raise_for_status()
+                return _format_brave_web_results(response.json(), self._max_results)
+        raise RuntimeError("Brave Search retry loop ended unexpectedly")
+
+    def _wait_for_rate_limit(self) -> None:
+        now = self._monotonic()
+        if self._last_request_at is not None:
+            remaining = self._minimum_interval - (now - self._last_request_at)
+            if remaining > 0:
+                self._sleep(remaining)
+        self._last_request_at = self._monotonic()
+
+
+def _brave_retry_delay(response: httpx.Response, attempt: int) -> float:
+    for name in ("retry-after", "x-ratelimit-reset"):
+        raw_value = response.headers.get(name)
+        if raw_value:
+            try:
+                return min(max(float(raw_value.split(",", 1)[0]), 0.0), 5.0)
+            except ValueError:
+                pass
+    return 0.25 * float(2**attempt)
+
+
+def _format_brave_web_results(payload: object, max_results: int) -> str:
+    if not isinstance(payload, dict):
+        raise ValueError("Brave Search returned an invalid response")
+    web = payload.get("web")
+    if not isinstance(web, dict):
+        return ""
+    raw_results = web.get("results")
+    if not isinstance(raw_results, list):
+        return ""
+    results: list[str] = []
+    for raw_result in raw_results:
+        if not isinstance(raw_result, dict):
+            continue
+        raw_title = raw_result.get("title")
+        raw_url = raw_result.get("url")
+        if not isinstance(raw_title, str) or not isinstance(raw_url, str):
+            continue
+        parsed_url = urlsplit(raw_url)
+        if (
+            parsed_url.scheme not in {"http", "https"}
+            or not parsed_url.hostname
+            or parsed_url.username is not None
+            or parsed_url.password is not None
+        ):
+            continue
+        title = _normalize_brave_text(raw_title, max_length=500)
+        if not title:
+            continue
+        description = raw_result.get("description")
+        normalized_description = (
+            _normalize_brave_text(description, max_length=2_000)
+            if isinstance(description, str)
+            else ""
+        )
+        entry = f"[{title}]({raw_url})"
+        if normalized_description:
+            entry += f"\n{normalized_description}"
+        results.append(entry)
+        if len(results) >= max_results:
+            break
+    if not results:
+        return ""
+    return "## Search Results\n\n" + "\n\n".join(results)
+
+
+def _normalize_brave_text(value: str, *, max_length: int) -> str:
+    visible_text = BeautifulSoup(value, "html.parser").get_text(" ", strip=True)
+    return " ".join(visible_text.split())[:max_length]
 
 
 def search_duckduckgo_images(query: str, max_results: int) -> list[dict[str, object]]:

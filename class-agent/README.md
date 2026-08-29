@@ -41,6 +41,7 @@ Put your key in `.env` as one unquoted, single-line assignment and leave `.env` 
 
 ```dotenv
 OPENAI_API_KEY=your-key-here
+BRAVE_API_KEY=your-brave-search-key-here
 MODEL_ID=gpt-5.6-terra
 ```
 
@@ -52,7 +53,7 @@ set `ANONYMOUS_QUOTAS_ENABLED=false`, but deployed environments should keep it e
 Production should also
 enforce the per-IP limits in `deploy/cognitive-agents.nginx` because browser cookies can be reset.
 
-The CLI intentionally does not override variables already exported in the shell. If you previously exported an old key, run `unset OPENAI_API_KEY MODEL_API_KEY` so `.env` is used. Then run one CLI turn:
+The CLI intentionally does not override variables already exported in the shell. If you previously exported an old key, run `unset OPENAI_API_KEY MODEL_API_KEY BRAVE_API_KEY` so `.env` is used. Then run one CLI turn:
 
 ```bash
 uv run python -m course_server.agent_cli "What does the syllabus say?"
