@@ -34,7 +34,7 @@ describe("agent event stream", () => {
         );
         controller.enqueue(
           encoder.encode(
-            '\nevent: progress\ndata: {"type":"agent.progress.delta","text":"I’ll read the syllabus.","replace":true}\n\n',
+            '\nevent: progress\ndata: {"type":"agent.progress.delta","text":"Legacy model chatter","replace":true}\n\n',
           ),
         );
         controller.enqueue(
@@ -102,7 +102,6 @@ describe("agent event stream", () => {
           },
         },
       },
-      { kind: "progress", text: "I’ll read the syllabus.", replace: true },
       { kind: "text", text: "Hello" },
       { kind: "text_final", text: "Hello world" },
       { kind: "done" },

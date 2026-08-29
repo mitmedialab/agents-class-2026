@@ -647,7 +647,7 @@ def test_toolcalling_adapter_observes_portable_events_during_the_run() -> None:
     asyncio.run(scenario())
 
 
-def test_toolcalling_adapter_streams_only_decoded_final_answer_text() -> None:
+def test_toolcalling_adapter_discards_nonfinal_text_and_streams_final_answer() -> None:
     async def scenario() -> None:
         model = ScriptedStreamingToolCallingModel()
         resources = FileResourceProvider.with_sample_syllabus()
@@ -668,25 +668,19 @@ def test_toolcalling_adapter_streams_only_decoded_final_answer_text() -> None:
         )
         observed_events: list[Event] = []
         text_deltas: list[str] = []
-        progress_deltas: list[tuple[str, bool]] = []
 
         result = await runtime.run_observed(
             context=context,
             input=agent_input,
             event_observer=observed_events.append,
             text_delta_observer=text_deltas.append,
-            progress_delta_observer=(lambda text, replace: progress_deltas.append((text, replace))),
         )
 
         expected = 'The syllabus says "agents" are inspectable.\nDone.'
         assert "".join(text_deltas) == expected
         assert result.output_text == expected
-        assert progress_deltas == [
-            ("I'll read ", True),
-            ("the syllabus before answering.", False),
-            ("I'll verify ", True),
-            ("one more detail.", False),
-        ]
+        assert "syllabus before answering" not in "".join(text_deltas)
+        assert "one more detail" not in "".join(text_deltas)
         assert all("course_read_syllabus" not in delta for delta in text_deltas)
         assert [event.type for event in observed_events] == [
             "agent.run.started",

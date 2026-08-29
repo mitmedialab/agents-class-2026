@@ -52,14 +52,11 @@ occurred. Expanding the trace does not alter the horizontal center of its summar
 independently centered list fades into reserved space while the response stage
 transitions upward.
 
-The agent may publish a concise intermediate note such as `I’ll read the
-syllabus first.` before it uses a non-final tool. Provider fragments appear as
-the temporary main response, with only a neutral `Shared intermediate update`
-entry in the trace. The next intermediate or final response replaces this text.
-This channel is explicitly user-facing, transient, and separate from both the
-canonical final response and private reasoning. Future workspace tools,
-including a PDF viewer, can add their verified operations to the same trace; the
-PDF UI tool is not yet implemented.
+Non-final model prose is not shown in chat. While a run is active, the interface
+shows only verified platform activity; decoded final-answer fragments replace
+the prior answer when the model reaches its final response. Future workspace
+tools, including a PDF viewer, can add their verified operations to the same
+trace; the PDF UI tool is not yet implemented.
 
 Press Enter to send and Shift+Enter for a newline. The composer is an ordinary
 accessible textarea despite having no visible input box. Typing a printable key

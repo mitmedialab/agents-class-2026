@@ -85,11 +85,8 @@ class RecordingRuntime:
         input: AgentInput,
         event_observer: Any,
         text_delta_observer: Any = None,
-        progress_delta_observer: Any = None,
     ) -> AgentResult:
         result = await self.run(context=context, input=input)
-        if progress_delta_observer is not None:
-            progress_delta_observer("I'll prepare a concise response.", True)
         if text_delta_observer is not None:
             text_delta_observer("Echo: ")
             text_delta_observer(input.text)
@@ -662,6 +659,7 @@ def test_stream_route_emits_typed_sse_events() -> None:
 
     assert "event: message" in body
     assert "event: done" in body
+    assert "agent.progress.delta" not in body
     payloads = [
         json.loads(line.removeprefix("data: "))
         for line in body.splitlines()
@@ -672,14 +670,9 @@ def test_stream_route_emits_typed_sse_events() -> None:
         "stage": "preparing_context",
         "label": "Preparing conversation context",
     }
-    assert payloads[1] == {
-        "type": "agent.progress.delta",
-        "text": "I'll prepare a concise response.",
-        "replace": True,
-    }
-    assert payloads[2] == {"type": "agent.text.delta", "text": "Echo: "}
-    assert payloads[3] == {"type": "agent.text.delta", "text": "hello"}
-    assert payloads[4] == {"type": "agent.text.done", "text": "Echo: hello"}
+    assert payloads[1] == {"type": "agent.text.delta", "text": "Echo: "}
+    assert payloads[2] == {"type": "agent.text.delta", "text": "hello"}
+    assert payloads[3] == {"type": "agent.text.done", "text": "Echo: hello"}
     assert payloads[-1] == {"type": "agent.run.completed"}
 
 

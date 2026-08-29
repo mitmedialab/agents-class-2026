@@ -92,27 +92,15 @@ event: status
 data: {"type":"agent.status","stage":"preparing_context","label":"Preparing conversation context"}
 ```
 
-The concrete runtime may also emit brief, explicitly user-facing progress text
-before a non-final tool call:
-
-```text
-event: progress
-data: {"type":"agent.progress.delta","text":"I’ll read the syllabus first.","replace":true}
-```
-
-`replace: true` starts a new public progress message and replaces the previous
-temporary projection. Later chunks from the same message carry `replace: false`
-and append to that new projection. These deltas update a transient activity entry. They are neither final-answer
-text nor canonical conversation messages, and clients must not append them to
-the answer. They contain only ordinary assistant content intended for the user;
-private reasoning remains unavailable.
+Non-final model content is discarded. It is not transported as an SSE event or
+projected into chat. Clients receive verified platform activity and decoded
+final-answer text only.
 
 Tool and resource activity use `event: platform` with their canonical event type,
 and stream completion uses `event: done`. The smolagents adapter reports the same
 portable events placed in `AgentResult` through an optional application-owned
 observer while the run is active. Its final-text observer decodes only the
-arguments of the model's final-answer tool call. A separate progress observer
-accepts only explicit user-facing assistant content; private reasoning and
+arguments of the model's final-answer tool call. Private reasoning and
 non-final tool-call arguments are never sent to the client. Runtimes without
 these optional behaviors still work. The stable `AgentRuntime` interface remains
 unchanged, and provider-specific framework objects never enter the stream.

@@ -49,7 +49,6 @@ export interface AgentActivity {
 export type AgentStreamEvent =
   | { kind: "text"; text: string }
   | { kind: "text_final"; text: string }
-  | { kind: "progress"; text: string; replace: boolean }
   | { kind: "activity"; activity: AgentActivity }
   | { kind: "workspace"; command: unknown }
   | { kind: "application_submitted" }
@@ -437,14 +436,6 @@ function emitSseEvent(
     onEvent({
       kind: parsed.data.type === "agent.text.done" ? "text_final" : "text",
       text: parsed.data.text,
-    });
-    return;
-  }
-  if (parsed.event === "progress" && typeof parsed.data.text === "string") {
-    onEvent({
-      kind: "progress",
-      text: parsed.data.text,
-      replace: parsed.data.replace === true,
     });
     return;
   }

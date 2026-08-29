@@ -230,12 +230,6 @@ class StreamTextDelta:
     text: str
 
 
-@dataclass(frozen=True)
-class StreamProgressDelta:
-    text: str
-    replace: bool
-
-
 CookieAction = Callable[[Response], None]
 
 
@@ -658,7 +652,6 @@ async def _run_agent(
     text: str,
     event_observer: Callable[[Event], None] | None = None,
     text_delta_observer: Callable[[str], None] | None = None,
-    progress_delta_observer: Callable[[str, bool], None] | None = None,
 ) -> AgentResult:
     assert state.services is not None
     try:
@@ -678,7 +671,6 @@ async def _run_agent(
             text=text,
             event_observer=event_observer,
             text_delta_observer=text_delta_observer,
-            progress_delta_observer=progress_delta_observer,
         )
         if application_event is None:
             return result
@@ -712,9 +704,7 @@ async def _stream_agent_run(
             "label": "Preparing conversation context",
         },
     )
-    event_queue: asyncio.Queue[Event | StreamTextDelta | StreamProgressDelta | None] = (
-        asyncio.Queue()
-    )
+    event_queue: asyncio.Queue[Event | StreamTextDelta | None] = asyncio.Queue()
     loop = asyncio.get_running_loop()
 
     def observe_event(event: Event) -> None:
@@ -728,13 +718,6 @@ async def _stream_agent_run(
                 StreamTextDelta(text=text_delta),
             )
 
-    def observe_progress_delta(progress_delta: str, replace: bool) -> None:
-        with suppress(RuntimeError):
-            loop.call_soon_threadsafe(
-                event_queue.put_nowait,
-                StreamProgressDelta(text=progress_delta, replace=replace),
-            )
-
     run_task = asyncio.create_task(
         _run_agent(
             state=state,
@@ -743,7 +726,6 @@ async def _stream_agent_run(
             text=text,
             event_observer=observe_event,
             text_delta_observer=observe_text_delta,
-            progress_delta_observer=observe_progress_delta,
         )
     )
     run_task.add_done_callback(lambda _task: event_queue.put_nowait(None))
@@ -758,16 +740,6 @@ async def _stream_agent_run(
             yield _sse(
                 event="message",
                 data={"type": "agent.text.delta", "text": update.text},
-            )
-            continue
-        if isinstance(update, StreamProgressDelta):
-            yield _sse(
-                event="progress",
-                data={
-                    "type": "agent.progress.delta",
-                    "text": update.text,
-                    "replace": update.replace,
-                },
             )
             continue
         event = update

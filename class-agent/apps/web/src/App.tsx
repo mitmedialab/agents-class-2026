@@ -454,7 +454,6 @@ export default function App() {
     let conversationId = existingConversationId ?? selectedConversationId;
     let receivedError = false;
     let writingActivityRecorded = false;
-    let progressText = "";
     let streamedText = "";
     const controller = new AbortController();
     activeRun.current = controller;
@@ -486,27 +485,6 @@ export default function App() {
         } else if (event.kind === "text_final") {
           streamedText = event.text;
           setLatestResponse(event.text);
-        } else if (event.kind === "progress") {
-          progressText = event.replace ? event.text : progressText + event.text;
-          const progressResponse = progressText.trim();
-          if (!progressResponse) return;
-          setLatestResponse(progressResponse);
-          setIsStreamingText(true);
-          setCurrentAction("Sharing intermediate update");
-          setActivities((current) => {
-            const progressActivity: AgentActivity = {
-              id: "model-progress",
-              kind: "output",
-              label: "Shared intermediate update",
-            };
-            const existingIndex = current.findIndex(
-              (activity) => activity.id === progressActivity.id,
-            );
-            if (existingIndex < 0) return [...current, progressActivity];
-            const next = [...current];
-            next[existingIndex] = progressActivity;
-            return next;
-          });
         } else if (event.kind === "activity") {
           setActivities((current) => [...current, event.activity]);
           setCurrentAction(event.activity.label);

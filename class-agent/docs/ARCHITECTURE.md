@@ -145,15 +145,10 @@ expanded and runtime replacement remains possible. FastAPI uses this observer to
 stream verified run, tool, and resource activity; it does not expose private
 model reasoning.
 
-The adapter has a second transient channel for concise assistant progress
-messages such as an announced next tool action. It accepts only ordinary
-assistant content deliberately addressed to the user, never reasoning or tool
-arguments. FastAPI transports it as `agent.progress.delta`, with an explicit
-`replace` flag marking the first fragment of each public progress message. The
-browser temporarily projects it in the main response area while a neutral activity
-state marks the update in the trace. The next public progress or final response
-replaces that projection instead of accumulating earlier progress. Progress text is not persisted as an `agent.message`
-and never joins the final response.
+Non-final model content is discarded at the runtime boundary. FastAPI never
+transports it, and the browser projects only verified platform activity plus the
+decoded final answer. This prevents pre-tool assistant chatter from appearing as
+a question or update that the user cannot answer yet.
 
 When the application supplies a text observer, that concrete adapter enables
 smolagents' native provider stream and incrementally decodes only the

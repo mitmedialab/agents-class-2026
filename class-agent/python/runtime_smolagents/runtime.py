@@ -52,7 +52,7 @@ def _agent_instructions(
         (
             "Capability names, resource identifiers, storage locations, filenames, and "
             "other implementation details are internal. Do not mention them in "
-            "user-facing progress or answers unless the user explicitly asks how the "
+            "answers unless the user explicitly asks how the "
             "system is implemented. Never present an internal resource pointer as the "
             "answer; follow it with the appropriate read tool."
         ),
@@ -68,10 +68,9 @@ def _agent_instructions(
     sections.extend(
         [
             (
-                "Before using a non-final tool, briefly state the user-facing action without "
-                "naming the tool or resource identifier, except for workspace focus operations, "
-                "which are silent UI housekeeping. Do not reveal private reasoning, and do not "
-                "include a progress message alongside the final_answer tool."
+                "Use non-final tools directly without emitting assistant commentary first. "
+                "The application reports verified tool activity separately. Do not reveal "
+                "private reasoning."
             ),
             f"Trusted principal roles: {', '.join(context.principal.roles)}.",
         ]
@@ -110,11 +109,11 @@ def _agent_instructions(
             "open duplicate draft panels."
         )
         sections.append(
-            "Workspace focus is silent UI housekeeping, not meaningful user-facing "
-            "progress. Never announce that you will focus, refocus, keep focused, or keep "
+            "Workspace focus is silent UI housekeeping. Never announce that you will focus, "
+            "refocus, keep focused, or keep "
             "a draft visible. Do not call workspace.focus_component when the intended panel "
-            "is already focused. If a focus call is genuinely needed, call it without a "
-            "preceding progress message and continue with the substantive task."
+            "is already focused. If a focus call is genuinely needed, call it directly and "
+            "continue with the substantive task."
         )
         sections.append(
             "Use visual-composition by default when a result benefits from a composed interface "
@@ -497,20 +496,13 @@ def _run_streaming_agent(
     agent: ToolCallingAgent,
     text: str,
     text_delta_observer: Callable[[str], None],
-    progress_delta_observer: Callable[[str, bool], None] | None = None,
 ) -> object:
     extractor = _FinalAnswerDeltaExtractor(text_delta_observer)
     output: object | None = None
-    progress_message_active = False
     stream = cast(Iterable[object], agent.run(text, stream=True, reset=False))
     for item in stream:
         if isinstance(item, ChatMessageStreamDelta):
-            if item.content and progress_delta_observer is not None:
-                progress_delta_observer(item.content, not progress_message_active)
-                progress_message_active = True
             extractor.add(item)
-            if item.tool_calls:
-                progress_message_active = False
         elif isinstance(item, FinalAnswerStep):
             output = item.output
     if output is None:
@@ -742,7 +734,6 @@ class SmolagentsRuntime:
         input: AgentInput,
         event_observer: Callable[[Event], None],
         text_delta_observer: Callable[[str], None] | None = None,
-        progress_delta_observer: Callable[[str, bool], None] | None = None,
     ) -> AgentResult:
         """Run while reporting the same portable events included in the result."""
 
@@ -751,7 +742,6 @@ class SmolagentsRuntime:
             input=input,
             event_observer=event_observer,
             text_delta_observer=text_delta_observer,
-            progress_delta_observer=progress_delta_observer,
         )
 
     async def _run(
@@ -761,7 +751,6 @@ class SmolagentsRuntime:
         input: AgentInput,
         event_observer: Callable[[Event], None] | None,
         text_delta_observer: Callable[[str], None] | None = None,
-        progress_delta_observer: Callable[[str, bool], None] | None = None,
     ) -> AgentResult:
         if input.conversation_id != context.conversation_id:
             raise ValueError("agent input and context must reference the same conversation")
@@ -803,7 +792,7 @@ class SmolagentsRuntime:
             max_steps=self._max_steps,
             add_base_tools=False,
             max_tool_threads=1,
-            stream_outputs=(text_delta_observer is not None or progress_delta_observer is not None),
+            stream_outputs=text_delta_observer is not None,
             verbosity_level=LogLevel.OFF,
         )
         _seed_dialogue_memory(agent, context)
@@ -825,7 +814,7 @@ class SmolagentsRuntime:
         if event_observer is not None:
             event_observer(started)
 
-        if text_delta_observer is None and progress_delta_observer is None:
+        if text_delta_observer is None:
             output = await asyncio.to_thread(agent.run, input.text, reset=False)
         else:
 
@@ -842,7 +831,6 @@ class SmolagentsRuntime:
                 agent,
                 input.text,
                 observe_final_text,
-                progress_delta_observer,
             )
         collected_events = collector.snapshot()
         output_text = str(output)

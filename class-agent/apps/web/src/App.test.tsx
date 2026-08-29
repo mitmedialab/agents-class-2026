@@ -518,53 +518,6 @@ describe("Course Agent interface", () => {
     );
   });
 
-  it("replaces an earlier progress message while appending chunks within each message", async () => {
-    let releaseStream = () => {};
-    vi.mocked(api.streamAgentRun).mockImplementation(async (_id, _text, onEvent) => {
-      onEvent({ kind: "progress", text: "I’m going to read ", replace: true });
-      onEvent({ kind: "progress", text: "the syllabus.", replace: false });
-      onEvent({ kind: "progress", text: "I found the schedule", replace: true });
-      onEvent({ kind: "progress", text: " and I’m checking it.", replace: false });
-      await new Promise<void>((resolve) => {
-        releaseStream = resolve;
-      });
-      onEvent({ kind: "text_final", text: "Here is the final answer." });
-      onEvent({ kind: "done" });
-    });
-    render(<App />);
-    await openExistingConversation();
-
-    const composer = screen.getByRole("textbox", { name: "Message" });
-    fireEvent.change(composer, { target: { value: "What is covered?" } });
-    fireEvent.keyDown(composer, { key: "Enter" });
-
-    await waitFor(() =>
-      expect(screen.queryByText("The earlier response.")).not.toBeInTheDocument(),
-    );
-    expect(document.querySelector(".latest-response")).toHaveTextContent(
-      "I found the schedule and I’m checking it.",
-    );
-    expect(document.querySelector(".latest-response")).not.toHaveTextContent(
-      "I’m going to read the syllabus.",
-    );
-    expect(
-      screen.getByText("Sharing intermediate update", {
-        selector: ".activity-summary-label",
-      }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("list", { name: "Agent activity" })).not.toHaveTextContent(
-      "I found the schedule and I’m checking it.",
-    );
-    expect(composer).toBeDisabled();
-
-    releaseStream();
-    expect(await screen.findByText("Here is the final answer.")).toBeInTheDocument();
-    expect(document.querySelector(".latest-response")).not.toHaveTextContent(
-      "I’m going to read the syllabus.",
-    );
-    await waitFor(() => expect(composer).not.toBeDisabled());
-  });
-
   it("reveals conversation and account navigation from the history icon", async () => {
     render(<App />);
     await openExistingConversation();

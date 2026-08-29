@@ -34,7 +34,6 @@ _DIALOGUE_EVENT_TYPES = frozenset({"user.message", "agent.message"})
 _SUPPORTING_EVENT_TYPES = frozenset({"agent.tool.completed", "workspace.interaction"})
 EventObserver = Callable[[Event], None]
 TextDeltaObserver = Callable[[str], None]
-ProgressDeltaObserver = Callable[[str, bool], None]
 _UPLOAD_REFERENCE = re.compile(
     r"(?:upload_id:\s*|upload://)([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-"
     r"[89ab][0-9a-f]{3}-[0-9a-f]{12})",
@@ -52,7 +51,6 @@ class ObservableAgentRuntime(Protocol):
         input: AgentInput,
         event_observer: EventObserver,
         text_delta_observer: TextDeltaObserver | None = None,
-        progress_delta_observer: ProgressDeltaObserver | None = None,
     ) -> AgentResult: ...
 
 
@@ -149,7 +147,6 @@ class CourseAgentService:
         text: str,
         event_observer: EventObserver | None = None,
         text_delta_observer: TextDeltaObserver | None = None,
-        progress_delta_observer: ProgressDeltaObserver | None = None,
     ) -> AgentResult:
         conversation = await self._conversations.get_conversation(conversation_id)
         if conversation is None or not principal_owns_conversation(principal, conversation):
@@ -192,11 +189,7 @@ class CourseAgentService:
             },
         )
         observed_method = getattr(self._runtime, "run_observed", None)
-        observers_requested = (
-            event_observer is not None
-            or text_delta_observer is not None
-            or progress_delta_observer is not None
-        )
+        observers_requested = event_observer is not None or text_delta_observer is not None
         if observers_requested and observed_method is not None:
             observed_runtime = cast(ObservableAgentRuntime, self._runtime)
             result = await observed_runtime.run_observed(
@@ -204,7 +197,6 @@ class CourseAgentService:
                 input=agent_input,
                 event_observer=event_observer or (lambda _event: None),
                 text_delta_observer=text_delta_observer,
-                progress_delta_observer=progress_delta_observer,
             )
         else:
             result = await self._runtime.run(context=context, input=agent_input)
