@@ -395,7 +395,7 @@ textarea {
   background: transparent !important;
   border: 0;
   border-radius: 50%;
-  color: var(--color-text-muted);
+  color: var(--color-text);
   display: flex;
   flex: none;
   height: 2.25rem;
@@ -432,6 +432,12 @@ textarea {
   right: 1.5rem;
   top: 0.75rem;
   z-index: 4;
+}
+
+@media (min-width: 901px) {
+  .workspace-pane[data-tabbed="false"]:has(.ca-viewer-toolbar) .workspace-single-close {
+    top: calc((4rem - 2.25rem) / 2);
+  }
 }
 
 .workspace-panel {
