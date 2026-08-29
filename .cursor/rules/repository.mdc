@@ -1,0 +1,28 @@
+---
+description: Mandatory architecture, modularity, hardcoding, and visual rules for this repository
+alwaysApply: true
+---
+
+`@AGENTS.md` is the canonical repository contract. Read it before editing. For any work
+under `class-agent/`, also read `@class-agent/AGENTS.md`, every nearer `AGENTS.md`, the
+relevant constitution sections, and the relevant documentation.
+
+Do not start from a generic generated solution. Inspect and reuse the repository's
+existing components, adapters, schemas, registries, resources, tokens, tests, and
+extension points first.
+
+- Let the Course Agent make semantic user-intent choices only among authorized tools,
+  resources, registered components, skills and validated variants.
+- Keep identity, authorization, validation, sandboxing, confirmations, persistence, and
+  all other trust decisions in deterministic platform code.
+- Put changeable values in configuration, registries, maintained resources, or design
+  tokens; hardcode only intentional invariants and bounded trusted policy.
+- Do not add chat keyword heuristics, arbitrary generated UI, scattered styling literals,
+  parallel abstractions, speculative dependencies, or unrelated branches in large
+  orchestrators. Unless explicitly requested but always with a warning that the priority is for the agent to make choices.
+- Preserve the sparse monochrome editorial aesthetic and first-party semantic components.
+- Treat stable contracts as migration/versioned boundaries and update every binding, test,
+  fixture, and document required by the root instructions.
+
+Keep changes focused, review the complete diff, and report actual verification rather than
+assuming generated code is correct.
