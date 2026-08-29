@@ -188,6 +188,12 @@ describe("Calendar", () => {
     expect(screen.getByText("Speaker: Pattie Maes")).toBeInTheDocument();
     expect(screen.getByText("Build a minimal agent.")).toBeInTheDocument();
     expect(screen.queryByText("ReAct")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Suggested readings" }));
+    const readings = screen.getByRole("region", { name: "Suggested readings" });
+    expect(readings).toHaveTextContent("Week 1");
+    expect(readings).toHaveTextContent("Introduction");
+    expect(readings).toHaveTextContent("ReAct");
+    fireEvent.click(screen.getByRole("button", { name: "Agenda" }));
     fireEvent.click(screen.getByRole("button", { name: /Introduction/ }));
     expect(screen.getByRole("region", { name: "Readings for Introduction" })).toHaveTextContent(
       "ReAct",

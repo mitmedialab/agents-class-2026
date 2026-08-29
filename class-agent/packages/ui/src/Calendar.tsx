@@ -36,6 +36,8 @@ export interface CalendarProps {
   onInteraction?: ((action: string, value: string) => void) | undefined;
 }
 
+type CalendarView = "month" | "agenda" | "readings";
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -182,7 +184,7 @@ export function Calendar({
   selectedEventId,
   onInteraction,
 }: CalendarProps) {
-  const [activeView, setActiveView] = useState(view);
+  const [activeView, setActiveView] = useState<CalendarView>(view);
   const firstDatedEvent = data.events.find((event) => event.start)?.start;
   const initialFocus =
     (focusDate && localDate(focusDate)) ||
@@ -191,13 +193,14 @@ export function Calendar({
   const [focus, setFocus] = useState(initialFocus);
   const [selectedId, setSelectedId] = useState(selectedEventId);
   const cells = useMemo(() => monthCells(focus), [focus]);
+  const readingEvents = data.events.filter((event) => event.readings);
 
   function chooseEvent(event: CalendarEvent) {
     setSelectedId(event.id);
     onInteraction?.("select_event", event.id);
   }
 
-  function changeView(next: "month" | "agenda") {
+  function changeView(next: CalendarView) {
     setActiveView(next);
     onInteraction?.("change_view", next);
   }
@@ -222,6 +225,13 @@ export function Calendar({
             type="button"
           >
             Agenda
+          </button>
+          <button
+            aria-pressed={activeView === "readings"}
+            onClick={() => changeView("readings")}
+            type="button"
+          >
+            Suggested readings
           </button>
         </div>
       </header>
@@ -298,6 +308,32 @@ export function Calendar({
             </p>
           ) : null}
         </div>
+      ) : activeView === "readings" ? (
+        <section aria-label="Suggested readings" className="ca-calendar-readings">
+          <header>
+            <span>Course bibliography</span>
+            <h2>Suggested readings</h2>
+            <p>Week-by-week references from the current course schedule.</p>
+          </header>
+          {readingEvents.length ? (
+            <ol>
+              {readingEvents.map((event) => (
+                <li key={event.id}>
+                  <span className="ca-calendar-reading-meta">
+                    {event.week ? <b>Week {event.week}</b> : null}
+                    <time dateTime={event.start}>{formatEventDate(event)}</time>
+                  </span>
+                  <span className="ca-calendar-reading-content">
+                    <strong>{event.title}</strong>
+                    <span>{event.readings}</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="ca-calendar-readings-empty">No suggested readings yet.</p>
+          )}
+        </section>
       ) : (
         <ol className="ca-calendar-agenda">
           {data.events.map((event) => (

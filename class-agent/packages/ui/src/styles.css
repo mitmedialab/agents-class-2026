@@ -1757,7 +1757,8 @@
 }
 
 .ca-calendar-month,
-.ca-calendar-agenda {
+.ca-calendar-agenda,
+.ca-calendar-readings {
   flex: 1;
   min-height: 0;
   overflow: auto;
@@ -1923,6 +1924,96 @@
   padding: 1rem calc(8rem + clamp(1.25rem, 3vw, 3.5rem)) 1.25rem;
 }
 
+.ca-calendar-readings {
+  padding: clamp(1.25rem, 3vw, 2.5rem) var(--space-4) var(--space-5);
+  scrollbar-color: var(--color-border) transparent;
+}
+
+.ca-calendar-readings > header {
+  border-bottom: 1px solid var(--color-border);
+  display: grid;
+  gap: var(--space-2);
+  padding: 0 var(--space-2) var(--space-5);
+}
+
+.ca-calendar-readings > header > span {
+  color: var(--color-text-muted);
+  font-size: 0.625rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.ca-calendar-readings h2 {
+  font-size: clamp(1.25rem, 2.5vw, 1.85rem);
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  margin: 0;
+}
+
+.ca-calendar-readings > header p,
+.ca-calendar-readings-empty {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.ca-calendar-readings ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ca-calendar-readings li {
+  border-bottom: 1px solid var(--color-border);
+  display: grid;
+  gap: clamp(1.25rem, 3vw, 3.5rem);
+  grid-template-columns: minmax(6rem, 8rem) minmax(0, 1fr);
+  padding: 1.35rem var(--space-2);
+}
+
+.ca-calendar-reading-meta,
+.ca-calendar-reading-content {
+  display: grid;
+}
+
+.ca-calendar-reading-meta {
+  align-content: start;
+  gap: 0.35rem;
+}
+
+.ca-calendar-reading-meta b {
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ca-calendar-reading-meta time {
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+}
+
+.ca-calendar-reading-content {
+  gap: 0.65rem;
+}
+
+.ca-calendar-reading-content strong {
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.ca-calendar-reading-content > span {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+
+.ca-calendar-readings-empty {
+  padding: var(--space-5) var(--space-2);
+}
+
 @media (max-width: 640px) {
   .ca-viewer-toolbar {
     align-items: stretch;
@@ -1970,6 +2061,22 @@
   .ca-calendar-agenda-readings {
     margin-inline: 0;
     padding: 0 0 1rem;
+  }
+
+  .ca-calendar-readings {
+    padding-inline: var(--space-3);
+  }
+
+  .ca-calendar-readings li {
+    gap: 0.75rem;
+    grid-template-columns: 1fr;
+    padding-block: 1rem;
+  }
+
+  .ca-calendar-reading-meta {
+    align-items: baseline;
+    display: flex;
+    justify-content: space-between;
   }
 }
 
