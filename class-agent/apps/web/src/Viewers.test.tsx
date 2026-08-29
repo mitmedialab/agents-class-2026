@@ -144,7 +144,7 @@ describe("Calendar", () => {
       },
     ]);
 
-    render(<Calendar data={data} view="agenda" />);
+    render(<Calendar data={data} focusDate="2026-09-20" view="agenda" />);
     expect(screen.getByRole("complementary", { name: "Schedule notices" })).toHaveTextContent(
       "Application deadlineSeptember 4th, midnight",
     );
@@ -200,6 +200,7 @@ describe("Calendar", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Month" }));
     expect(screen.getByRole("grid", { name: "Month" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Introduction" })).toBeInTheDocument();
     expect(
       screen.getByText("Events without confirmed dates are listed in Agenda view."),
     ).toBeInTheDocument();

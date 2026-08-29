@@ -147,9 +147,27 @@ function dateKey(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-function eventDateKey(event: CalendarEvent): string | null {
+function dateLabelKey(value: string, year: number): string | null {
+  const match = /^(\d{1,2})\/(\d{1,2})$/.exec(value.trim());
+  if (!match) return null;
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+  const date = new Date(year, month - 1, day, 12);
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+  return dateKey(date);
+}
+
+function eventDateKey(event: CalendarEvent, scheduleYear: number): string | null {
   const date = event.start ? localDate(event.start) : null;
-  return date ? dateKey(date) : null;
+  if (date) return dateKey(date);
+  return event.dateLabel ? dateLabelKey(event.dateLabel, scheduleYear) : null;
 }
 
 function formatEventDate(event: CalendarEvent): string {
@@ -186,10 +204,19 @@ export function Calendar({
 }: CalendarProps) {
   const [activeView, setActiveView] = useState<CalendarView>(view);
   const firstDatedEvent = data.events.find((event) => event.start)?.start;
-  const initialFocus =
-    (focusDate && localDate(focusDate)) ||
-    (firstDatedEvent && localDate(firstDatedEvent)) ||
-    new Date();
+  const requestedFocus = focusDate ? localDate(focusDate) : null;
+  const firstEventDate = firstDatedEvent ? localDate(firstDatedEvent) : null;
+  const scheduleYear =
+    requestedFocus?.getFullYear() ??
+    firstEventDate?.getFullYear() ??
+    new Date().getFullYear();
+  const firstLabeledEvent = data.events.find(
+    (event) => event.dateLabel && dateLabelKey(event.dateLabel, scheduleYear),
+  );
+  const labeledFocus = firstLabeledEvent?.dateLabel
+    ? localDate(dateLabelKey(firstLabeledEvent.dateLabel, scheduleYear) ?? "")
+    : null;
+  const initialFocus = requestedFocus || firstEventDate || labeledFocus || new Date();
   const [focus, setFocus] = useState(initialFocus);
   const [selectedId, setSelectedId] = useState(selectedEventId);
   const cells = useMemo(() => monthCells(focus), [focus]);
@@ -280,7 +307,9 @@ export function Calendar({
             ))}
             {cells.map((date) => {
               const key = dateKey(date);
-              const events = data.events.filter((event) => eventDateKey(event) === key);
+              const events = data.events.filter(
+                (event) => eventDateKey(event, scheduleYear) === key,
+              );
               return (
                 <div
                   aria-label={new Intl.DateTimeFormat(undefined, {
