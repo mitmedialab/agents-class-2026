@@ -66,9 +66,10 @@ structured application only after the user explicitly approves it. Required fiel
 Name, Email, Department / Research Group / Year of Study MIT, Personal
 Webpage, Interests, motivation, Knowledgeable about, Skill-set,
 Registration Status, listener commitment to weekly builds, questions or comments, and a
-temporary JPEG, PNG, or WebP face-photo upload. Missing, blank, placeholder, malformed,
-expired, and inaccessible values produce a model-visible validation error naming the
-fields that still need answers.
+temporary JPEG, PNG, or WebP representative-picture upload for class use only. The
+picture can be any image the applicant wants to represent them and need not be a formal
+headshot. Missing, blank, placeholder, malformed, expired, and inaccessible values
+produce a model-visible validation error naming the fields that still need answers.
 
 The public guide opens with the 20-student capacity, application and notification
 deadlines, and the expectation that students build every week, document each build in a

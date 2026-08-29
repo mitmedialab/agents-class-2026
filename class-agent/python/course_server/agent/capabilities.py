@@ -1636,8 +1636,9 @@ class CourseSubmitApplicationTool:
     redact_arguments_in_events = True
     description = (
         "Submit a course application only after the user explicitly approves the complete "
-        "application. Every field must come from the user. Gather any missing field and a "
-        "temporary face-photo upload before calling this tool."
+        "application. Every field must be supplied or individually confirmed by the user. "
+        "Gather any missing field and a temporary class-only representative-picture upload "
+        "before calling this tool."
     )
     input_schema: ClassVar[dict[str, JsonValue]] = {
         "type": "object",
@@ -1713,7 +1714,9 @@ class CourseSubmitApplicationTool:
             "photo_upload_id": {
                 "type": "string",
                 "description": (
-                    "UUID returned after the applicant uploads a recent face photo in chat."
+                    "UUID returned after the applicant uploads a class-only representative "
+                    "picture in chat. It may be any JPEG, PNG, or WebP image they want to "
+                    "represent them and does not need to be a formal headshot."
                 ),
             },
         },

@@ -405,7 +405,11 @@ describe("Course Agent interface", () => {
                   label: "Questions or comments for instructors",
                   status: "missing",
                 },
-                { id: "photo_upload_id", label: "Recent profile photo", status: "missing" },
+                {
+                  id: "photo_upload_id",
+                  label: "Class-only picture that represents you (JPEG, PNG, or WebP)",
+                  status: "missing",
+                },
               ],
             },
             state: {},

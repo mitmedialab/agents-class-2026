@@ -98,12 +98,20 @@ through a private server-side store and returns a receipt UUID. Submitted conten
 a public resource and is not included in the tool-completion result persisted by the
 runtime.
 
-Application intent has a dedicated workflow. The agent must first call
-`course.get_application`, collect only the official fields and photo, retain values from
-conversation history, summarize the completed form for explicit approval, and only then
-call `course.submit_application`. It must not draft an application letter or invent
-criteria. Submission arguments are redacted from tool-request audit events; the private
-application store remains canonical.
+Application intent has a dedicated workflow. Explicit requests such as “I want to apply”
+deterministically open the canonical application draft before the model runs; this is not
+limited to the UI's Apply button. Older model-created course-application drafts are
+recognized, migrated to the canonical fields, and marked as application state before the
+next turn. The agent must first call `course.get_application`, retain values from
+conversation history and the trusted draft, and interview in displayed field order. Each
+turn discusses exactly one unconfirmed field. Existing researched candidates are shown
+for confirmation instead of prompting for the value again, and later missing fields are
+not previewed as a checklist. The picture prompt says it is for class use only and can be
+any JPEG, PNG, or WebP image the applicant wants to represent them. After every field is
+individually confirmed, the agent summarizes the completed form for explicit approval
+and only then calls `course.submit_application`. It must not draft an application letter
+or invent criteria. Submission arguments are redacted from tool-request audit events;
+the private application store remains canonical.
 
 Chat attachments are uploaded before a message is sent. The user message includes only
 the temporary receipt metadata—not file bytes or a server path—so an authorized tool can

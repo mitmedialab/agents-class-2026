@@ -562,6 +562,62 @@ def test_conversation_routes_persist_events_and_enforce_ownership() -> None:
     )
 
 
+def test_free_text_application_intent_bootstraps_canonical_draft_before_runtime() -> None:
+    client, _, runtime = _build_client()
+    conversation_id = _create_conversation(client, title="Apply")
+
+    with client.stream(
+        "POST",
+        f"/conversations/{conversation_id}/run/stream",
+        json={"text": "i want to apply"},
+    ) as response:
+        assert response.status_code == 200
+        body = "".join(response.iter_text())
+
+    assert '"type":"workspace.panel.opened"' in body
+    workspace = cast(dict[str, Any], runtime.contexts[-1].metadata["workspace_state"])
+    panels = cast(list[dict[str, Any]], workspace["panels"])
+    assert len(panels) == 1
+    panel = panels[0]
+    assert panel["resource_uri"] == "course://application"
+    assert panel["state"] == {"document_kind": "course-application"}
+    assert [field["id"] for field in panel["props"]["fields"]] == [
+        "name",
+        "email",
+        "github_id",
+        "department_research_group_year_of_study_mit",
+        "personal_webpage",
+        "interests",
+        "why_take_this_class",
+        "knowledgeable_about",
+        "skill_set",
+        "registration_status",
+        "listener_willing_to_do_weekly_builds",
+        "questions_or_comments_for_instructors",
+        "photo_upload_id",
+    ]
+    detail = client.get(f"/conversations/{conversation_id}").json()
+    assert [event["type"] for event in detail["events"]] == [
+        "workspace.panel.opened",
+        "user.message",
+        "agent.message",
+    ]
+
+
+def test_application_information_question_does_not_start_an_application() -> None:
+    client, _, runtime = _build_client()
+    conversation_id = _create_conversation(client, title="Deadline")
+
+    response = client.post(
+        f"/conversations/{conversation_id}/run",
+        json={"text": "What is the application deadline?"},
+    )
+
+    assert response.status_code == 200
+    workspace = cast(dict[str, Any], runtime.contexts[-1].metadata["workspace_state"])
+    assert workspace["panels"] == []
+
+
 def test_stream_route_emits_typed_sse_events() -> None:
     client, access_code, _ = _build_client()
     _login(client, access_code)
@@ -696,6 +752,8 @@ def test_application_draft_opens_complete_and_persists_user_edits() -> None:
         "Motivation: why this course; what you have built and want to build; "
         "your past project roles"
     )
+    photo = next(field for field in panel["props"]["fields"] if field["id"] == "photo_upload_id")
+    assert photo["label"] == "Class-only picture that represents you (JPEG, PNG, or WebP)"
     assert all(field["value"] == "" for field in panel["props"]["fields"])
 
     malformed_github_id = client.post(
@@ -742,7 +800,7 @@ def test_application_draft_opens_complete_and_persists_user_edits() -> None:
     }
 
 
-def test_application_draft_migrates_legacy_nine_field_panel() -> None:
+def test_application_draft_migrates_unmarked_legacy_field_aliases() -> None:
     client, _, _ = _build_client()
     principal = PrincipalContext.model_validate(client.get("/auth/me").json())
     conversation_id = _create_conversation(client, title="Legacy application")
@@ -760,7 +818,6 @@ def test_application_draft_migrates_legacy_nine_field_panel() -> None:
                     "id": str(panel_id),
                     "component_id": "draft-document",
                     "title": "Course application",
-                    "resource_uri": "course://application",
                     "props": {
                         "title": "Course application",
                         "status": "draft",
@@ -772,11 +829,18 @@ def test_application_draft_migrates_legacy_nine_field_panel() -> None:
                                 "status": "confirmed",
                             },
                             {
-                                "id": "background",
+                                "id": "department",
                                 "label": "Background",
                                 "value": "MIT Media Lab",
                                 "status": "inferred",
                                 "source": "Public profile",
+                            },
+                            {
+                                "id": "motivation",
+                                "label": "Motivation",
+                                "value": "I want to build dependable agents.",
+                                "status": "confirmed",
+                                "source": "Provided by applicant",
                             },
                         ],
                     },
@@ -811,6 +875,91 @@ def test_application_draft_migrates_legacy_nine_field_panel() -> None:
         "status": "inferred",
         "source": "Public profile",
     }
+    assert fields[6] == {
+        "id": "why_take_this_class",
+        "label": (
+            "Motivation: why this course; what you have built and want to build; "
+            "your past project roles"
+        ),
+        "value": "I want to build dependable agents.",
+        "status": "confirmed",
+        "source": "Provided by applicant",
+    }
+
+
+def test_agent_run_repairs_unmarked_model_created_application_draft() -> None:
+    client, _, runtime = _build_client()
+    principal = PrincipalContext.model_validate(client.get("/auth/me").json())
+    conversation_id = UUID(_create_conversation(client, title="Course application"))
+    panel_id = uuid4()
+    generic_draft = Event(
+        type="workspace.panel.opened",
+        actor="course-agent",
+        anonymous_session_id=principal.anonymous_session_id,
+        conversation_id=conversation_id,
+        payload={
+            "command": {
+                "type": "open",
+                "panel": {
+                    "id": str(panel_id),
+                    "component_id": "draft-document",
+                    "title": "Course Application — Ada Example",
+                    "props": {
+                        "title": "Course Application — Ada Example",
+                        "fields": [
+                            {
+                                "id": "email",
+                                "label": "Email",
+                                "value": "ada@example.edu",
+                                "status": "candidate",
+                                "source": "Public profile",
+                            },
+                            {
+                                "id": "photo",
+                                "label": "Photo",
+                                "status": "missing",
+                            },
+                        ],
+                    },
+                    "state": {},
+                },
+            }
+        },
+    )
+    app = cast(Any, client.app)
+    asyncio.run(
+        app.state.course_state.services.conversations.append_events(
+            conversation_id,
+            [generic_draft],
+        )
+    )
+
+    response = client.post(
+        f"/conversations/{conversation_id}/run",
+        json={"text": "continue"},
+    )
+
+    assert response.status_code == 200
+    workspace = cast(dict[str, Any], runtime.contexts[-1].metadata["workspace_state"])
+    panel = cast(list[dict[str, Any]], workspace["panels"])[0]
+    assert panel["resource_uri"] == "course://application"
+    assert panel["state"] == {"document_kind": "course-application"}
+    fields = panel["props"]["fields"]
+    assert len(fields) == 13
+    assert fields[1] == {
+        "id": "email",
+        "label": "Email",
+        "value": "ada@example.edu",
+        "status": "candidate",
+        "source": "Public profile",
+    }
+    detail = client.get(f"/conversations/{conversation_id}").json()
+    assert [event["type"] for event in detail["events"]] == [
+        "workspace.panel.opened",
+        "workspace.panel.updated",
+        "user.message",
+        "agent.message",
+    ]
 
 
 def test_visual_composition_records_only_bounded_editable_field_changes() -> None:

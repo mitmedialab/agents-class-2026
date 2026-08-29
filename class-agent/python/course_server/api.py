@@ -81,6 +81,7 @@ from course_server.workspace import (
     OpenWorkspaceCommand,
     UpdateWorkspaceCommand,
     WorkspacePanel,
+    WorkspaceState,
     WorkspaceValidationError,
     load_component_registry,
     project_workspace_events,
@@ -486,17 +487,29 @@ APPLICATION_DRAFT_FIELDS: tuple[tuple[str, str], ...] = (
     ("registration_status", "Registration Status"),
     ("listener_willing_to_do_weekly_builds", "For listeners: willing to do weekly builds"),
     ("questions_or_comments_for_instructors", "Questions or comments for instructors"),
-    ("photo_upload_id", "Recent profile photo"),
+    ("photo_upload_id", "Class-only picture that represents you (JPEG, PNG, or WebP)"),
 )
 
-LEGACY_APPLICATION_FIELD_IDS: dict[str, str] = {
-    "department_research_group_year_of_study_mit": "background",
-    "personal_webpage": "webpage",
-    "why_take_this_class": "why",
-    "skill_set": "skills",
-    "registration_status": "registration",
-    "photo_upload_id": "photo",
+LEGACY_APPLICATION_FIELD_IDS: dict[str, tuple[str, ...]] = {
+    "department_research_group_year_of_study_mit": ("background", "department"),
+    "personal_webpage": ("webpage",),
+    "why_take_this_class": ("why", "motivation"),
+    "skill_set": ("skills",),
+    "registration_status": ("registration",),
+    "listener_willing_to_do_weekly_builds": ("listener_builds",),
+    "questions_or_comments_for_instructors": ("questions",),
+    "photo_upload_id": ("photo",),
 }
+
+_APPLICATION_START_REQUEST = re.compile(
+    r"\b(?:"
+    r"i(?:'d| would)?\s+(?:like|want)\s+to\s+apply|"
+    r"apply\s+for\s+(?:the\s+)?(?:course|class)|"
+    r"(?:start|begin|fill(?:\s+out)?|complete)\s+"
+    r"(?:(?:my|the|a|an)\s+)?(?:course\s+)?application"
+    r")\b",
+    re.IGNORECASE,
+)
 
 
 def _empty_application_draft_props() -> dict[str, JsonValue]:
@@ -530,8 +543,13 @@ def _normalized_application_draft_props(
     normalized_fields = cast(list[dict[str, JsonValue]], normalized["fields"])
     for field in normalized_fields:
         field_id = cast(str, field["id"])
-        prior = fields_by_id.get(field_id) or fields_by_id.get(
-            LEGACY_APPLICATION_FIELD_IDS.get(field_id, "")
+        prior = next(
+            (
+                fields_by_id[candidate_id]
+                for candidate_id in (field_id, *LEGACY_APPLICATION_FIELD_IDS.get(field_id, ()))
+                if candidate_id in fields_by_id
+            ),
+            None,
         )
         if prior is None:
             continue
@@ -549,6 +567,89 @@ def _normalized_application_draft_props(
     return normalized
 
 
+def _requests_application_start(text: str) -> bool:
+    return _APPLICATION_START_REQUEST.search(" ".join(text.split())) is not None
+
+
+def _application_draft_panel(workspace: WorkspaceState) -> WorkspacePanel | None:
+    for panel in workspace.panels:
+        if panel.component_id != "draft-document":
+            continue
+        if (
+            panel.state.get("document_kind") == "course-application"
+            or panel.resource_uri == "course://application"
+        ):
+            return panel
+        prop_title = panel.props.get("title")
+        titles = [panel.title, prop_title if isinstance(prop_title, str) else None]
+        if any(
+            isinstance(title, str) and "course application" in title.casefold() for title in titles
+        ):
+            return panel
+    return None
+
+
+async def _prepare_application_draft(
+    *,
+    services: AppServices,
+    principal: PrincipalContext,
+    conversation_id: UUID,
+    create_if_missing: bool,
+    focus_existing: bool,
+) -> Event | None:
+    events = await services.conversations.list_events(conversation_id)
+    registry = services.workspace_registry or load_component_registry()
+    workspace = project_workspace_events(events, registry)
+    existing = _application_draft_panel(workspace)
+    canonical_field_ids = [field_id for field_id, _ in APPLICATION_DRAFT_FIELDS]
+    if existing is None:
+        if not create_if_missing:
+            return None
+        command: OpenWorkspaceCommand | FocusWorkspaceCommand | UpdateWorkspaceCommand = (
+            OpenWorkspaceCommand(
+                panel=WorkspacePanel(
+                    id=uuid4(),
+                    component_id="draft-document",
+                    title="Course Application Draft",
+                    resource_uri="course://application",
+                    props=_empty_application_draft_props(),
+                    state={"document_kind": "course-application"},
+                )
+            )
+        )
+        event_type = "workspace.panel.opened"
+    elif (
+        existing.resource_uri != "course://application"
+        or existing.state.get("document_kind") != "course-application"
+        or [field.get("id") for field in (_draft_fields(existing.props) or [])]
+        != canonical_field_ids
+    ):
+        command = UpdateWorkspaceCommand(
+            panel_id=existing.id,
+            title="Course Application Draft",
+            props=_normalized_application_draft_props(existing.props),
+            resource_uri="course://application",
+            state={"document_kind": "course-application"},
+        )
+        event_type = "workspace.panel.updated"
+    elif focus_existing:
+        command = FocusWorkspaceCommand(panel_id=existing.id)
+        event_type = "workspace.panel.updated"
+    else:
+        return None
+    registry.apply(workspace, command)
+    event = Event(
+        type=event_type,
+        actor="course-agent",
+        principal_user_id=principal.user_id,
+        anonymous_session_id=principal.anonymous_session_id,
+        conversation_id=conversation_id,
+        payload={"command": command.model_dump(mode="json", exclude_none=True)},
+    )
+    await services.conversations.append_events(conversation_id, [event])
+    return event
+
+
 async def _run_agent(
     *,
     state: AppState,
@@ -561,7 +662,17 @@ async def _run_agent(
 ) -> AgentResult:
     assert state.services is not None
     try:
-        return await state.services.agent.run(
+        application_start = _requests_application_start(text)
+        application_event = await _prepare_application_draft(
+            services=state.services,
+            principal=principal,
+            conversation_id=conversation_id,
+            create_if_missing=application_start,
+            focus_existing=False,
+        )
+        if application_event is not None and event_observer is not None:
+            event_observer(application_event)
+        result = await state.services.agent.run(
             principal=principal,
             conversation_id=conversation_id,
             text=text,
@@ -569,6 +680,9 @@ async def _run_agent(
             text_delta_observer=text_delta_observer,
             progress_delta_observer=progress_delta_observer,
         )
+        if application_event is None:
+            return result
+        return result.model_copy(update={"events": [application_event, *result.events]})
     except ConversationAccessDenied as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from error
     except Exception as error:
@@ -1104,61 +1218,14 @@ def create_app(
             conversation_id=conversation_id,
         )
         assert state.services is not None
-        events = await state.services.conversations.list_events(conversation_id)
-        registry = state.services.workspace_registry or load_component_registry()
-        workspace = project_workspace_events(events, registry)
-        existing = next(
-            (
-                panel
-                for panel in workspace.panels
-                if panel.component_id == "draft-document"
-                and (
-                    panel.state.get("document_kind") == "course-application"
-                    or panel.resource_uri == "course://application"
-                )
-            ),
-            None,
-        )
-        if existing is None:
-            command: OpenWorkspaceCommand | FocusWorkspaceCommand | UpdateWorkspaceCommand = (
-                OpenWorkspaceCommand(
-                    panel=WorkspacePanel(
-                        id=uuid4(),
-                        component_id="draft-document",
-                        title="Course Application Draft",
-                        resource_uri="course://application",
-                        props=_empty_application_draft_props(),
-                        state={"document_kind": "course-application"},
-                    )
-                )
-            )
-            event_type = "workspace.panel.opened"
-        elif (
-            existing.resource_uri != "course://application"
-            or existing.state.get("document_kind") != "course-application"
-            or [field.get("id") for field in (_draft_fields(existing.props) or [])]
-            != [field_id for field_id, _ in APPLICATION_DRAFT_FIELDS]
-        ):
-            command = UpdateWorkspaceCommand(
-                panel_id=existing.id,
-                props=_normalized_application_draft_props(existing.props),
-                resource_uri="course://application",
-                state={"document_kind": "course-application"},
-            )
-            event_type = "workspace.panel.updated"
-        else:
-            command = FocusWorkspaceCommand(panel_id=existing.id)
-            event_type = "workspace.panel.updated"
-        registry.apply(workspace, command)
-        event = Event(
-            type=event_type,
-            actor="course-agent",
-            principal_user_id=principal.user_id,
-            anonymous_session_id=principal.anonymous_session_id,
+        event = await _prepare_application_draft(
+            services=state.services,
+            principal=principal,
             conversation_id=conversation_id,
-            payload={"command": command.model_dump(mode="json", exclude_none=True)},
+            create_if_missing=True,
+            focus_existing=True,
         )
-        await state.services.conversations.append_events(conversation_id, [event])
+        assert event is not None
         return event
 
     @router.post(

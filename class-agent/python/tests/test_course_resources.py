@@ -327,16 +327,19 @@ def test_application_information_tool_reads_official_guide_directly() -> None:
         normalized_content = " ".join(result.content.split())
         assert "Capacity | 20 students" in result.content
         assert "Email" in result.content
-        assert "Recent profile photo" in result.content
+        assert "A class-only picture" in result.content
         assert "Application deadline | September 5, midnight" in result.content
         assert "Acceptance notification | September 9, midnight" in result.content
         assert "document each weekly build in a GitHub repository" in result.content
         assert "present the technical details of the implementation in class" in result.content
         assert "Then ask only for the applicant's full name" in result.content
-        assert "what they have built, what they want to build and why" in result.content
+        assert "what they have built, what they want to build and why" in normalized_content
         assert "their roles in past projects" in normalized_content
-        assert "every required field has a supported candidate value" in result.content
-        assert "later field-by-field interview" in result.content
+        assert "Make one bounded research pass" in normalized_content
+        assert "Never list, preview, or ask about later missing fields" in normalized_content
+        assert "Never ask for a value from scratch" in normalized_content
+        assert "for class use only" in result.content
+        assert "does not need to be a formal headshot" in result.content
         assert result.resource_uris == [COURSE_APPLICATION_URI]
 
     asyncio.run(scenario())
@@ -813,3 +816,9 @@ def test_application_tool_requires_supplied_form_categories_and_photo() -> None:
         "Other student for credit",
         "Other student listener",
     ]
+    photo = properties["photo_upload_id"]
+    assert isinstance(photo, dict)
+    photo_description = photo["description"]
+    assert isinstance(photo_description, str)
+    assert "class-only representative picture" in photo_description
+    assert "does not need to be a formal headshot" in photo_description

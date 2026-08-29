@@ -386,7 +386,7 @@ def test_dialogue_history_is_replayed_with_roles_and_continuity_guidance() -> No
                     actor="course-agent",
                     anonymous_session_id=principal.anonymous_session_id,
                     conversation_id=conversation_id,
-                    payload={"text": "Please upload a recent face photo."},
+                    payload={"text": "Please upload a class-only representative picture."},
                 ),
             ],
             permitted_tool_ids=[READ_SYLLABUS_TOOL_ID],
@@ -411,9 +411,11 @@ def test_dialogue_history_is_replayed_with_roles_and_continuity_guidance() -> No
         system_text = str(first_messages[0].content)
         assert "Continue the conversation coherently" in system_text
         assert "I am applying to the course." not in system_text
-        assert "Please upload a recent face photo." not in system_text
+        assert "Please upload a class-only representative picture." not in system_text
         assert "I am applying to the course." in str(first_messages[1].content)
-        assert "Please upload a recent face photo." in str(first_messages[2].content)
+        assert "Please upload a class-only representative picture." in str(
+            first_messages[2].content
+        )
         assert "[Temporary upload: face.png]" in str(first_messages[3].content)
 
     asyncio.run(scenario())
@@ -561,11 +563,16 @@ def test_workspace_tool_emits_validated_portable_panel_event() -> None:
         assert "Workspace focus is silent UI housekeeping" in model.message_text
         assert "Do not call workspace.focus_component when" in model.message_text
         assert "call it without a preceding progress message" in model.message_text
-        assert "proactively use authorized public-web search" in model.message_text
+        assert "make one bounded public-web research pass" in model.message_text
         assert "sourced candidate or inferred values" in model.message_text
         assert "too shallow" in model.message_text
-        assert "same field instead of advancing" in model.message_text
-        assert "all canonical fields are confirmed" in model.message_text
+        assert "strict turn-by-turn interview" in model.message_text
+        assert "contain exactly one focused request or question" in model.message_text
+        assert "Never list, preview, or ask about later missing fields" in model.message_text
+        assert "never ask an open-ended question for a value already present" in model.message_text
+        assert "for class use only" in model.message_text
+        assert "need not be a formal headshot" in model.message_text
+        assert "every canonical field is confirmed" in model.message_text
         assert "Current trusted workspace state" in model.message_text
         assert str(draft_panel_id) in model.message_text
         assert "Ada Applicant" in model.message_text
