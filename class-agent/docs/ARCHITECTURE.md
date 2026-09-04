@@ -233,3 +233,15 @@ fabricating them. The Markdown is the schedule's sole maintained content source.
 No database migration is required. Panel history uses the existing canonical event
 table. The new workspace schema is an independent additive v1 contract and does not
 reinterpret any Phase 1 event envelope.
+
+### Progressive Agent Skills
+
+Repository-owned procedural knowledge uses standard `SKILL.md` bundles. A separate internal
+registry maps each bundle to a deterministic audience because authentication and authorization
+belong to platform code, not model-readable instructions. `CourseAgentService` discloses only
+metadata authorized for the reconstructed principal. Two narrowly scoped tools read the full
+skill or one registered reference on demand and repeat the authorization check at execution.
+
+This uses the existing `AgentContext` metadata without changing a stable contract. Full
+instructions remain transient model context and are summarized,
+not copied, in canonical tool events. No database migration is required.

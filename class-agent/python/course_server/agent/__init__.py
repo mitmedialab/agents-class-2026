@@ -67,6 +67,15 @@ from .capabilities import (
     load_resource_definitions,
 )
 from .service import CourseAgentService
+from .skills import (
+    READ_SKILL_REFERENCE_TOOL_ID,
+    READ_SKILL_TOOL_ID,
+    ReadSkillReferenceTool,
+    ReadSkillTool,
+    SkillCatalog,
+    SkillCatalogError,
+    SkillMetadata,
+)
 from .store import ConversationAccessDenied, ConversationStore, InMemoryConversationStore
 
 __all__ = [
@@ -84,6 +93,8 @@ __all__ = [
     "LIST_PRIVATE_RESOURCES_TOOL_ID",
     "READ_PRIVATE_RESOURCE_TOOL_ID",
     "READ_PUBLIC_FILE_TOOL_ID",
+    "READ_SKILL_REFERENCE_TOOL_ID",
+    "READ_SKILL_TOOL_ID",
     "READ_SYLLABUS_TOOL_ID",
     "READ_UPLOAD_TOOL_ID",
     "SEARCH_COURSE_TOOL_ID",
@@ -123,6 +134,8 @@ __all__ = [
     "PublicImageSearchTool",
     "PublicVisitWebpageTool",
     "PublicWebSearchTool",
+    "ReadSkillReferenceTool",
+    "ReadSkillTool",
     "ReadTemporaryUploadTool",
     "ResourceContents",
     "ResourceDefinition",
@@ -130,6 +143,9 @@ __all__ = [
     "ResourceNotFound",
     "ResourceProvider",
     "ResourceSummary",
+    "SkillCatalog",
+    "SkillCatalogError",
+    "SkillMetadata",
     "ToolCatalog",
     "ToolExecutionContext",
     "ToolExecutionResult",

@@ -35,6 +35,12 @@ instructor resources and private application-review tools allow only `instructor
 admin do not inherit either audience. Direct content and asset routes apply the same policy
 and return `404` for unauthorized resources.
 
+Agent Skill metadata follows the same pre-model boundary. Public skills are visible to every
+principal, authenticated skills only after login, student skills to students and instructors,
+and instructor skills only to instructors. TA and admin do not inherit student or instructor
+skills. Skill and reference tools re-resolve access from the trusted `PrincipalContext`; a
+model-provided skill ID or role claim cannot grant access.
+
 The API resolves an authenticated cookie first and otherwise resolves or creates an anonymous session. Invalid, revoked, inactive-user, and expired authenticated sessions all become public anonymous requests; the unusable cookie is cleared. Logout revokes the presented authenticated token and clears its cookie.
 
 ## Admin CLI

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -17,6 +18,7 @@ from course_server.agent import (
     COURSE_APPLICATION_URI,
     COURSE_SYLLABUS_URI,
     GET_APPLICATION_TOOL_ID,
+    READ_SKILL_TOOL_ID,
     READ_SYLLABUS_TOOL_ID,
     VISIT_WEBPAGE_TOOL_ID,
     WEB_IMAGE_SEARCH_TOOL_ID,
@@ -27,6 +29,8 @@ from course_server.agent import (
     FileResourceProvider,
     PublicImageSearchTool,
     PublicVisitWebpageTool,
+    ReadSkillTool,
+    SkillCatalog,
     ToolCatalog,
 )
 from course_server.workspace import load_component_registry
@@ -245,6 +249,39 @@ class ScriptedApplicationStartModel(ScriptedToolCallingModel):
         )
 
 
+class ScriptedSkillModel(ScriptedToolCallingModel):
+    def generate(
+        self,
+        messages: list[ChatMessage],
+        stop_sequences: list[str] | None = None,
+        response_format: dict[str, str] | None = None,
+        tools_to_call_from: list[Any] | None = None,
+        **kwargs: Any,
+    ) -> ChatMessage:
+        self.message_text = "\n".join(str(message.content or "") for message in messages)
+        self.message_snapshots.append(list(messages))
+        del stop_sequences, response_format, kwargs
+        self.available_tool_names = [tool.name for tool in tools_to_call_from or []]
+        self.calls += 1
+        if self.calls == 1:
+            function = ChatMessageToolCallFunction(
+                name="skills_read",
+                arguments={"skill_id": "course-help"},
+            )
+            call_id = "read-skill"
+        else:
+            function = ChatMessageToolCallFunction(
+                name="final_answer",
+                arguments={"answer": "I used the relevant course guidance."},
+            )
+            call_id = "final-answer"
+        return ChatMessage(
+            role=MessageRole.ASSISTANT,
+            content="",
+            tool_calls=[ChatMessageToolCall(function=function, id=call_id, type="function")],
+        )
+
+
 class ScriptedVisualWorkspaceModel(ScriptedToolCallingModel):
     def generate(
         self,
@@ -322,6 +359,15 @@ def test_toolcalling_adapter_reads_authorized_resource_and_emits_portable_events
             conversation_id=conversation_id,
             permitted_tool_ids=[READ_SYLLABUS_TOOL_ID],
             permitted_resource_uris=[COURSE_SYLLABUS_URI],
+            metadata={
+                "authorized_skill_index": [
+                    {
+                        "id": "course-help",
+                        "name": "course-help",
+                        "description": "Answer official course questions.",
+                    }
+                ]
+            },
         )
         agent_input = AgentInput(
             conversation_id=conversation_id,
@@ -338,6 +384,10 @@ def test_toolcalling_adapter_reads_authorized_resource_and_emits_portable_events
         assert "Application workflow:" not in model.message_text
         assert "exactly one missing field per message" not in model.message_text
         assert "resource identifiers" in model.message_text
+        assert "course-help: Answer official course questions." in model.message_text
+        assert "call skills.read before applying it" in model.message_text
+        assert "Use official course resources as the source of truth" not in model.message_text
+        assert "Read the official course syllabus resource" not in model.message_text
         assert "Trusted platform metadata for follow-up workspace calls only" in (
             model.message_text
         )
@@ -422,6 +472,56 @@ def test_application_guide_and_web_action_are_retained_as_natural_history() -> N
         assert "week-3" in model.message_text
         assert GET_APPLICATION_TOOL_ID not in model.message_text
         assert WEB_SEARCH_TOOL_ID not in model.message_text
+
+    asyncio.run(scenario())
+
+
+def test_runtime_loads_authorized_skill_body_only_after_explicit_tool_call() -> None:
+    async def scenario() -> None:
+        model = ScriptedSkillModel()
+        skills = SkillCatalog.from_registry(Path(__file__).resolve().parents[2] / "skills")
+        runtime = SmolagentsRuntime(
+            model_provider=ScriptedProvider(model),
+            tools=ToolCatalog([ReadSkillTool(skills)]),
+        )
+        conversation_id = uuid4()
+        context = AgentContext(
+            principal=public_principal(),
+            conversation_id=conversation_id,
+            permitted_tool_ids=[READ_SKILL_TOOL_ID],
+            metadata={
+                "authorized_skill_index": [
+                    {
+                        "id": "course-help",
+                        "name": "course-help",
+                        "description": "Answer official course questions.",
+                    }
+                ]
+            },
+        )
+
+        result = await runtime.run(
+            context=context,
+            input=AgentInput(conversation_id=conversation_id, text="What are the course policies?"),
+        )
+
+        first_prompt = "\n".join(
+            str(message.content or "") for message in model.message_snapshots[0]
+        )
+        second_prompt = "\n".join(
+            str(message.content or "") for message in model.message_snapshots[1]
+        )
+        assert "course-help: Answer official course questions." in first_prompt
+        assert "Use official course resources as the source of truth" not in first_prompt
+        assert "Use official course resources as the source of truth" in second_prompt
+        assert [
+            event.payload["tool_id"]
+            for event in result.events
+            if event.type == "agent.tool.requested"
+        ] == [READ_SKILL_TOOL_ID]
+        completed = next(event for event in result.events if event.type == "agent.tool.completed")
+        assert completed.payload["storage_policy"] == "server_summary"
+        assert "instructions" not in completed.payload
 
     asyncio.run(scenario())
 
@@ -561,94 +661,11 @@ def test_workspace_tool_emits_validated_portable_panel_event() -> None:
         assert isinstance(panel, dict)
         assert panel["component_id"] == "calendar"
         assert "workspace_open_component" in model.available_tool_names
-        assert "preferred presentation surface" in model.message_text
-        assert "show schedules in the calendar" in model.message_text
-        assert "specific paper, PDF, text file" in model.message_text
-        assert "specific website in webpage-viewer" in model.message_text
-        assert "For knowledge questions" in model.message_text
-        assert "Never use document-viewer merely because the source" in model.message_text
-        assert "course overviews" in model.message_text
-        assert "Prefer controlling the best-fit UI" in model.message_text
-        assert "make the best available workspace UI part of the first answer" in model.message_text
-        assert "presentation pass before the first open" in model.message_text
-        assert "instead of repeating one hero-and-card template" in model.message_text
-        assert "stack, row, and grid as equal layout options" in model.message_text
-        assert (
-            "Use side-by-side columns only when items are genuinely parallel" in model.message_text
-        )
-        assert "Do not repeat multiple two-column sections" in model.message_text
-        assert "must not be a stack of long paragraphs" in model.message_text
-        assert "numbered surfaced stages for methods" in model.message_text
-        assert "optional side-by-side treatment" in model.message_text
-        assert "diagrammatic group or meaningful image" in model.message_text
-        assert "banner for one strong panoramic" in model.message_text
-        assert "feature for a large image beside concise copy" in model.message_text
-        assert "card for repeated project" in model.message_text
-        assert "avatar for a compact person profile" in model.message_text
-        assert "These are options, not a checklist" in model.message_text
-        assert "Do not default every answer" in model.message_text
-        assert "roughly one-third to one-half" in model.message_text
-        assert "Never place a tiny thumbnail" in model.message_text
-        assert "bar for categorical comparisons" in model.message_text
-        assert "line for change across an ordered sequence" in model.message_text
-        assert "Never invent, estimate, or visually imply numeric data" in model.message_text
-        assert (
-            "must declare data_kind, data_source, comparison_basis, and unit" in model.message_text
-        )
-        assert "rejects qualitative 3-2-1 ranks" in model.message_text
-        assert "primary editorial section" in model.message_text
-        assert "do not wrap it in another raised or accent card" in model.message_text
-        assert "coral, secondary (sky), success (mint)" in model.message_text
-        assert "per-value tones" in model.message_text
-        assert "avoid arbitrary rainbow coloring" in model.message_text
-        assert "Every series object uses label and values—never name" in model.message_text
-        assert '"tones":["secondary","coral"]' in model.message_text
-        assert "Never put tones or value_tones on the chart element itself" in model.message_text
-        assert "the workspace is the answer" in model.message_text
-        assert "must not list, summarize, or restate facts" in model.message_text
-        assert "one current surface" in model.message_text
-        assert "let it replace the old one" in model.message_text
-        assert "explicitly assess whether the subject has meaningful visual" in model.message_text
-        assert "named people, physical projects" in model.message_text
-        assert "figures, diagrams, screenshots" in model.message_text
-        assert "paper title or project name plus figure" in model.message_text
-        assert "short natural-language query without site: filters" in model.message_text
-        assert "complete the search before the first workspace open call" in model.message_text
-        assert "Inspect dimensions_known, width, height" in model.message_text
-        assert "split_layout_safe, recommended_width" in model.message_text
-        assert "source_width and source_height" in model.message_text
-        assert "unknown-dimension or small result as a banner" in model.message_text
-        assert "aspect ratio of 2:1 or wider is shallow" in model.message_text
-        assert "Never put that shallow image in a row" in model.message_text
-        assert "administrative answers" in model.message_text
-        assert "workspace platform enforces this" in model.message_text
-        assert "composition that skipped image search" in model.message_text
-        assert "direct HTTPS image URL" in model.message_text
-        assert "For any evolving written artifact" in model.message_text
-        assert "proposals, reports" in model.message_text
-        assert "Workspace focus is silent UI housekeeping" in model.message_text
-        assert "Do not call workspace.focus_component when" in model.message_text
-        assert "call it directly" in model.message_text
-        assert "Use non-final tools directly" in model.message_text
-        assert "make one bounded public-web research pass" in model.message_text
-        assert "preserve every clearly supported result" in model.message_text
-        assert "Do not leave supported later fields empty" in model.message_text
-        assert "too shallow" in model.message_text
-        assert "strict turn-by-turn interview" in model.message_text
-        assert "contain exactly one focused request or question" in model.message_text
-        assert "Never list, preview, or ask about later missing fields" in model.message_text
-        assert "one atomic draft update" in model.message_text
-        assert "immediately use final_answer and wait for the user" in model.message_text
-        assert "confirmation requests belong only in final_answer" in model.message_text
-        assert "never ask an open-ended question for a value already present" in model.message_text
-        assert "for class use only" in model.message_text
-        assert "need not be a formal headshot" in model.message_text
-        assert "every canonical field is confirmed" in model.message_text
         assert "Current trusted workspace state" in model.message_text
         assert str(draft_panel_id) in model.message_text
         assert "Ada Applicant" in model.message_text
-        assert "Reader mode is the default" in model.message_text
-        assert "untrusted data" in model.message_text
+        assert "preferred presentation surface" not in model.message_text
+        assert "Search public images through a DuckDuckGo-first provider" not in model.message_text
 
     asyncio.run(scenario())
 
@@ -704,9 +721,8 @@ def test_agent_owned_application_start_opens_canonical_draft_once() -> None:
         assert isinstance(fields, list)
         assert len(fields) == 17
         assert result.output_text == "The application is open. What is your full name?"
-        assert "Recognize course-application intent semantically" in model.message_text
-        assert "call course.get_application exactly once" in model.message_text
-        assert "Open the form during that first turn" in model.message_text
+        assert "Recognize course-application intent semantically" not in model.message_text
+        assert "Use the API-provided structured tools" in model.message_text
 
     asyncio.run(scenario())
 

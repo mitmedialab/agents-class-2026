@@ -29,6 +29,7 @@ class AgentSettings(BaseModel):
     max_steps: int = Field(default=10, ge=1, le=50)
     database_url: str
     course_data_path: Path = Path(__file__).resolve().parents[2] / "data"
+    skills_path: Path = Path(__file__).resolve().parents[2] / "skills"
     applicant_data_path: Path = Path(__file__).resolve().parents[2] / "var/applicants"
     upload_data_path: Path = Path(__file__).resolve().parents[2] / "var/uploads"
     browser_enabled: bool = True
@@ -98,6 +99,12 @@ class AgentSettings(BaseModel):
             if raw_course_data_path and raw_course_data_path.strip()
             else Path(__file__).resolve().parents[2] / "data"
         )
+        raw_skills_path = values.get("SKILLS_PATH")
+        skills_path = (
+            Path(raw_skills_path.strip()).expanduser()
+            if raw_skills_path and raw_skills_path.strip()
+            else Path(__file__).resolve().parents[2] / "skills"
+        )
         raw_applicant_path = values.get("APPLICANT_DATA_PATH")
         applicant_data_path = (
             Path(raw_applicant_path.strip()).expanduser()
@@ -136,6 +143,7 @@ class AgentSettings(BaseModel):
             max_steps=int(values.get("AGENT_MAX_STEPS", "10")),
             database_url=database_url,
             course_data_path=course_data_path,
+            skills_path=skills_path,
             applicant_data_path=applicant_data_path,
             upload_data_path=upload_data_path,
             browser_enabled=browser_enabled in {"true", "1", "yes"},

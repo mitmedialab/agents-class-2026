@@ -34,7 +34,10 @@ from course_server.agent import (
     PublicImageSearchTool,
     PublicVisitWebpageTool,
     PublicWebSearchTool,
+    ReadSkillReferenceTool,
+    ReadSkillTool,
     ReadTemporaryUploadTool,
+    SkillCatalog,
     ToolCatalog,
 )
 from course_server.agent.capabilities import ExecutableTool
@@ -88,6 +91,7 @@ async def run_cli_turn(
     auth_store: AuthStore,
     conversation_store: ConversationStore,
     capability_policy: CourseCapabilityPolicy | None = None,
+    skills: SkillCatalog | None = None,
 ) -> tuple[Conversation, AgentResult]:
     """Run the CLI flow with injectable adapters so tests never call an external model."""
 
@@ -98,6 +102,7 @@ async def run_cli_turn(
         runtime=runtime,
         conversations=conversation_store,
         capability_policy=capability_policy,
+        skills=skills,
     )
     conversation = await service.create_conversation(principal)
     result = await service.run(
@@ -116,6 +121,7 @@ def build_runtime(
     uploads: TemporaryUploadStore | None = None,
     components: ComponentRegistry | None = None,
     browser: BrowserSessionService | None = None,
+    skills: SkillCatalog | None = None,
 ) -> SmolagentsRuntime:
     course_resources = (
         resources
@@ -193,6 +199,8 @@ def build_runtime(
                 BrowserHighlightTextTool(browser, component_registry),
             ]
         )
+    if skills is not None:
+        executable_tools.extend([ReadSkillTool(skills), ReadSkillReferenceTool(skills)])
     tools = ToolCatalog(executable_tools)
     provider = OpenAIModelProvider(
         model_id=settings.model_id,
@@ -221,12 +229,14 @@ async def _run_postgres_turn(
         course_resources = FileResourceProvider.from_registry(
             protected_data_path=settings.course_data_path
         )
+        skills = SkillCatalog.from_registry(settings.skills_path)
         return await run_cli_turn(
             text,
-            runtime=build_runtime(settings, resources=course_resources),
+            runtime=build_runtime(settings, resources=course_resources, skills=skills),
             auth_store=PostgresAuthStore(pool),
             conversation_store=PostgresConversationStore(pool),
             capability_policy=CourseCapabilityPolicy(course_resources),
+            skills=skills,
         )
     finally:
         await pool.close()

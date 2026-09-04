@@ -1,6 +1,6 @@
 # Course Agent runtime
 
-There is one logical agent definition: `course-agent`. Each run combines that definition with a trusted `PrincipalContext`, portable conversation events, and an already-authorized list of tool and resource IDs.
+There is one logical agent definition: `course-agent`. Each run combines that definition with a trusted `PrincipalContext`, portable conversation events, and already-authorized tool, resource, and skill metadata.
 
 ## Runtime boundary
 
@@ -14,6 +14,12 @@ No smolagents agent, memory, model, `RunResult`, or pickle is canonical persiste
 
 smolagents 1.x sends `ToolCallingAgent` function tools through Chat Completions. GPT-5.6 Terra requires `reasoning_effort="none"` for function tools on that endpoint, so the adapter sets it explicitly. A future Responses API model adapter can restore reasoning effort without changing the `AgentRuntime` contract or persisted history.
 
+The runtime supplies tool definitions only through the provider's structured function-tool
+field. Its small application-owned Smolagents template does not render names, descriptions,
+schemas, or notional tool examples into the textual system prompt. The permanent prompt is
+limited to identity, provenance, trust boundaries, conversational continuity, authorized
+resource and skill metadata, and non-empty workspace state needed for follow-up actions.
+
 ## Configuration and secrets
 
 The CLI loads `.env` without overriding existing process variables. `OPENAI_API_KEY` is the canonical model key name and follows official OpenAI environment-variable conventions. `BRAVE_API_KEY` authenticates public text search. The previous `MODEL_API_KEY` name remains accepted temporarily so existing Phase 2 development files continue working. Surrounding whitespace is removed; actual line breaks and literal `\\n`/`\\r` sequences are rejected. Secrets are never printed, logged, or written to events. CLI failures report only a sanitized exception-type chain plus strictly validated HTTP status, error type, code, and parameter fields. They never render provider exception messages, request bodies, headers, or tracebacks.
@@ -26,6 +32,7 @@ runtime: smolagents-toolcalling
 provider: openai
 model: gpt-5.6-terra (overridable with MODEL_ID)
 max steps: 10 (overridable with AGENT_MAX_STEPS)
+skills path: ./skills (overridable with SKILLS_PATH)
 ```
 
 ## Tool and resource boundary
@@ -44,6 +51,8 @@ course.submit_application
 web.search
 web.search_images
 web.visit
+skills.read
+skills.read_reference
 ```
 
 The readable resources are `course://syllabus`, `course://schedule`,
@@ -59,6 +68,16 @@ trusted context names an unregistered tool. Read and search tools independently 
 work to authorized resource URIs during execution. Model-controlled input cannot select a
 filesystem path or applicant directory. The schedule tool identifies its source as
 provisional.
+
+Skills use standard `SKILL.md` directories with optional Markdown files under
+`references/`. The repository-owned `skills/registry.json` is a separate authorization
+registry, not a replacement skill format. It assigns each bundle one deterministic audience:
+public, authenticated, students, or instructors. `CourseAgentService` filters skill metadata
+from the trusted principal before constructing `AgentContext`; unauthorized skill names and
+descriptions never reach the model. `skills.read` and `skills.read_reference` re-check that
+same principal during execution and confine reference reads to registered files within the
+skill directory. Full skill and reference contents are returned only to the current model
+run; durable events keep a generic completion summary.
 
 The instructor-only `instructor.inspect_application_images` tool resolves one to four
 server-issued application UUIDs inside the private applicant store and submits their validated
@@ -101,6 +120,13 @@ instructions require the model to resolve internal pointers before answering and
 mentioning capability names, resource identifiers, storage locations, or filenames
 unless the user explicitly asks about implementation.
 
+The same progressive-disclosure rule applies to skills. At startup the application validates
+the registry and scans standard frontmatter. A run initially receives authorized skill IDs
+and descriptions. The agent calls `skills.read` when one matches the task and calls
+`skills.read_reference` only for a reference listed by the loaded skill. Course application,
+workspace presentation, visual composition, web/image/browser research, student-resource,
+and instructor-review procedures therefore do not occupy every turn's system prompt.
+
 `course.search` uses deterministic paragraph-level lexical matching over the current
 registered files, so edits are visible without a server restart. The companion
 `course_server.index_resources` command maintains normalized PostgreSQL full-text data
@@ -117,7 +143,7 @@ store and returns a receipt UUID. Submitted content is not
 a public resource and is not included in the tool-completion result persisted by the
 runtime.
 
-Application intent has a dedicated workflow. The header's Apply action opens the canonical
+Application intent has a dedicated standard Agent Skill. The header's Apply action opens the canonical
 draft directly. For ordinary conversation, there is no phrase or keyword trigger in the API:
 the agent recognizes application intent, reads `course.get_application` once, and opens the
 canonical draft with the workspace tool during that first turn. The workspace boundary
@@ -162,4 +188,4 @@ The Phase 3 additions to the stable application boundary are `Conversation` and 
 
 ## Deviations
 
-There are no architecture deviations. `Conversation` was added to schema v1 additively because it was already named as an `agent_core` type in the constitution and no existing v1 document changed. MCP server transport and skill loading remain deferred to their specified phases. Phase 5 reports the concrete adapter's portable run/tool/resource events live through an optional application observer without changing `AgentRuntime`. The same adapter can optionally run smolagents in streaming mode and expose decoded final-answer text through one application callback. Private reasoning, non-final model content, and non-final tool arguments are discarded; non-streaming runtimes retain the ordinary `run` path, and no provider object becomes a core or persistence contract.
+There are no architecture deviations. `Conversation` was added to schema v1 additively because it was already named as an `agent_core` type in the constitution and no existing v1 document changed. MCP server transport remains deferred to its specified phase. Skill loading uses the constitution's standard directory shape and existing `AgentContext` fields and metadata, so it adds no wire-contract version or persistence migration. Phase 5 reports the concrete adapter's portable run/tool/resource events live through an optional application observer without changing `AgentRuntime`. The same adapter can optionally run smolagents in streaming mode and expose decoded final-answer text through one application callback. Private reasoning, non-final model content, full skill contents, and non-final tool arguments are discarded; non-streaming runtimes retain the ordinary `run` path, and no provider object becomes a core or persistence contract.

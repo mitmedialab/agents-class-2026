@@ -21,6 +21,8 @@ from course_server.agent import (
     INSTRUCTOR_READ_APPLICATION_TOOL_ID,
     LIST_PRIVATE_RESOURCES_TOOL_ID,
     READ_PRIVATE_RESOURCE_TOOL_ID,
+    READ_SKILL_REFERENCE_TOOL_ID,
+    READ_SKILL_TOOL_ID,
     READ_UPLOAD_TOOL_ID,
     SEARCH_COURSE_TOOL_ID,
     VISIT_WEBPAGE_TOOL_ID,
@@ -32,6 +34,7 @@ from course_server.agent import (
     FileResourceProvider,
     InMemoryConversationStore,
     ResourceDefinition,
+    SkillCatalog,
 )
 from course_server.agent_cli import _safe_failure_message, run_cli_turn
 from course_server.auth import InMemoryAuthStore
@@ -170,6 +173,54 @@ def test_course_policy_filters_role_scoped_resources_and_instructor_tools(
     assert INSTRUCTOR_READ_APPLICATION_TOOL_ID in instructor.tool_ids
     assert INSTRUCTOR_INSPECT_APPLICATION_IMAGES_TOOL_ID in instructor.tool_ids
     assert LIST_PRIVATE_RESOURCES_TOOL_ID not in ta.tool_ids
+
+
+def test_course_agent_discloses_only_login_authorized_skill_metadata() -> None:
+    async def scenario() -> None:
+        runtime = RecordingRuntime()
+        conversations = InMemoryConversationStore()
+        skills = SkillCatalog.from_registry(Path(__file__).resolve().parents[2] / "skills")
+        service = CourseAgentService(
+            runtime=runtime,
+            conversations=conversations,
+            skills=skills,
+        )
+
+        principals = [public_principal(), authenticated_principal("instructor")]
+        for principal in principals:
+            conversation = await service.create_conversation(principal)
+            await service.run(
+                principal=principal,
+                conversation_id=conversation.id,
+                text="Hello",
+            )
+
+        public_context, instructor_context = runtime.contexts
+        public_skill_index = public_context.metadata["authorized_skill_index"]
+        instructor_skill_index = instructor_context.metadata["authorized_skill_index"]
+        assert isinstance(public_skill_index, list)
+        assert isinstance(instructor_skill_index, list)
+        assert all(isinstance(skill, dict) for skill in public_skill_index)
+        assert all(isinstance(skill, dict) for skill in instructor_skill_index)
+        public_skill_ids = {
+            skill_id
+            for skill in public_skill_index
+            if isinstance(skill, dict) and isinstance((skill_id := skill.get("id")), str)
+        }
+        instructor_skill_ids = {
+            skill_id
+            for skill in instructor_skill_index
+            if isinstance(skill, dict) and isinstance((skill_id := skill.get("id")), str)
+        }
+        assert "student-course-resources" not in public_skill_ids
+        assert "instructor-application-review" not in public_skill_ids
+        assert "student-course-resources" in instructor_skill_ids
+        assert "instructor-application-review" in instructor_skill_ids
+        assert READ_SKILL_TOOL_ID in public_context.permitted_tool_ids
+        assert READ_SKILL_REFERENCE_TOOL_ID in public_context.permitted_tool_ids
+        assert public_context.active_skill_ids == []
+
+    asyncio.run(scenario())
 
 
 def test_course_agent_authorizes_owned_uploads_for_current_and_follow_up_turns(

@@ -26,6 +26,11 @@ from course_server.workspace import (
 )
 
 from .capabilities import CourseCapabilityPolicy
+from .skills import (
+    READ_SKILL_REFERENCE_TOOL_ID,
+    READ_SKILL_TOOL_ID,
+    SkillCatalog,
+)
 from .store import ConversationAccessDenied, ConversationStore, principal_owns_conversation
 
 RECENT_DIALOGUE_EVENT_LIMIT = 24
@@ -84,12 +89,14 @@ class CourseAgentService:
         runtime: AgentRuntime,
         conversations: ConversationStore,
         capability_policy: CourseCapabilityPolicy | None = None,
+        skills: SkillCatalog | None = None,
         workspace_registry: ComponentRegistry | None = None,
         uploads: TemporaryUploadStore | None = None,
     ) -> None:
         self._runtime = runtime
         self._conversations = conversations
         self._capability_policy = capability_policy or CourseCapabilityPolicy()
+        self._skills = skills
         self._workspace_registry = workspace_registry or load_component_registry()
         self._uploads = uploads
 
@@ -166,6 +173,11 @@ class CourseAgentService:
         await self._conversations.append_events(conversation_id, [user_event])
 
         authorized = self._capability_policy.authorize(principal)
+        authorized_skills = self._skills.authorized_metadata(principal) if self._skills else ()
+        skill_tool_ids = (
+            (READ_SKILL_TOOL_ID, READ_SKILL_REFERENCE_TOOL_ID) if authorized_skills else ()
+        )
+        permitted_tool_ids = (*authorized.tool_ids, *skill_tool_ids)
         authorized_uploads = await self._authorized_upload_uris(
             principal=principal,
             current_text=text,
@@ -180,13 +192,21 @@ class CourseAgentService:
             conversation_id=conversation_id,
             recent_events=_recent_context_events(previous_events),
             capabilities=[
-                Capability(id=tool_id, status="available") for tool_id in authorized.tool_ids
+                Capability(id=tool_id, status="available") for tool_id in permitted_tool_ids
             ],
-            permitted_tool_ids=list(authorized.tool_ids),
+            permitted_tool_ids=list(permitted_tool_ids),
             permitted_resource_uris=[*authorized.resource_uris, *authorized_uploads],
             metadata={
                 "workspace_state": workspace_state.model_dump(mode="json", exclude_none=True),
                 "authorized_resource_index": list(authorized.resource_index),
+                "authorized_skill_index": [
+                    {
+                        "id": skill.id,
+                        "name": skill.name,
+                        "description": skill.description,
+                    }
+                    for skill in authorized_skills
+                ],
             },
         )
         observed_method = getattr(self._runtime, "run_observed", None)

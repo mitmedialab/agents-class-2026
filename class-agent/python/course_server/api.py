@@ -31,6 +31,7 @@ from course_server.agent import (
     FileResourceProvider,
     ResourceNotFound,
     ResourceSummary,
+    SkillCatalog,
     ToolValidationError,
 )
 from course_server.agent.store import principal_owns_conversation
@@ -687,6 +688,7 @@ def create_app(
         course_resources = FileResourceProvider.from_registry(
             protected_data_path=resolved_settings.course_data_path
         )
+        skills = SkillCatalog.from_registry(resolved_settings.skills_path)
         upload_store = FileTemporaryUploadStore(resolved_settings.upload_data_path)
         component_registry = load_component_registry()
         browser_service: BrowserSessionService | None = None
@@ -714,12 +716,14 @@ def create_app(
                     uploads=upload_store,
                     components=component_registry,
                     browser=browser_service,
+                    skills=skills,
                 ),
                 conversations=conversation_store,
                 capability_policy=CourseCapabilityPolicy(
                     course_resources,
                     browser_enabled=browser_service is not None,
                 ),
+                skills=skills,
                 workspace_registry=component_registry,
                 uploads=upload_store,
             ),

@@ -466,6 +466,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "pypdf" },
     { name = "python-dotenv" },
+    { name = "pyyaml" },
     { name = "smolagents", extra = ["openai", "toolkit"] },
     { name = "uvicorn" },
 ]
@@ -492,6 +493,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.10,<3" },
     { name = "pypdf", specifier = ">=6,<7" },
     { name = "python-dotenv", specifier = ">=1.0,<2" },
+    { name = "pyyaml", specifier = ">=6,<7" },
     { name = "smolagents", extras = ["openai", "toolkit"], specifier = ">=1.26,<2" },
     { name = "uvicorn", specifier = ">=0.34,<1" },
 ]
