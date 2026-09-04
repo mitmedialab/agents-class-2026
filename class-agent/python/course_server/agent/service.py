@@ -25,7 +25,7 @@ from course_server.workspace import (
     project_workspace_events,
 )
 
-from .capabilities import PublicCapabilityPolicy
+from .capabilities import CourseCapabilityPolicy
 from .store import ConversationAccessDenied, ConversationStore, principal_owns_conversation
 
 RECENT_DIALOGUE_EVENT_LIMIT = 24
@@ -83,13 +83,13 @@ class CourseAgentService:
         *,
         runtime: AgentRuntime,
         conversations: ConversationStore,
-        capability_policy: PublicCapabilityPolicy | None = None,
+        capability_policy: CourseCapabilityPolicy | None = None,
         workspace_registry: ComponentRegistry | None = None,
         uploads: TemporaryUploadStore | None = None,
     ) -> None:
         self._runtime = runtime
         self._conversations = conversations
-        self._capability_policy = capability_policy or PublicCapabilityPolicy()
+        self._capability_policy = capability_policy or CourseCapabilityPolicy()
         self._workspace_registry = workspace_registry or load_component_registry()
         self._uploads = uploads
 
@@ -185,7 +185,8 @@ class CourseAgentService:
             permitted_tool_ids=list(authorized.tool_ids),
             permitted_resource_uris=[*authorized.resource_uris, *authorized_uploads],
             metadata={
-                "workspace_state": workspace_state.model_dump(mode="json", exclude_none=True)
+                "workspace_state": workspace_state.model_dump(mode="json", exclude_none=True),
+                "authorized_resource_index": list(authorized.resource_index),
             },
         )
         observed_method = getattr(self._runtime, "run_observed", None)

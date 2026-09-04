@@ -90,6 +90,11 @@ normally belongs in protected production backups. See
 [docs/COURSE_RESOURCES.md](docs/COURSE_RESOURCES.md) for resource manifests, automatic
 indexing, uploads, and application-storage operations.
 
+Role-scoped course resources live under `COURSE_DATA_PATH` (default `data/`): student
+resources are available to logged-in students and instructors, while instructor resources
+are available only to instructors. Their contents are ignored by Git and are never added to
+the public registry or PostgreSQL public search index.
+
 Run the real PostgreSQL integration test with:
 
 ```bash
@@ -129,6 +134,7 @@ shared/schemas/v1/       canonical JSON Schemas and shared examples
 database/migrations/     permanent checksummed PostgreSQL migrations
 shared/course/            public course content and per-resource manifests
 shared/registry/          public resource and trusted component registries
+data/                     untracked role-scoped student and instructor resources
 docs/                    architecture and versioning decisions
 ```
 

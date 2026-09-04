@@ -225,3 +225,45 @@ def test_webpage_fetch_follows_only_revalidated_public_redirects(
         },
         {"image_url": "https://public.example.org/second.png"},
     ]
+
+
+def test_private_image_inspection_uses_data_urls_without_provider_storage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeResponses:
+        def create(self, **kwargs: object) -> object:
+            captured.update(kwargs)
+            return type("Response", (), {"output_text": "Visible geometric illustration."})()
+
+    class FakeOpenAI:
+        def __init__(self, *, api_key: str) -> None:
+            assert api_key == "test-openai-key"
+            self.responses = FakeResponses()
+
+    monkeypatch.setattr(web_search, "OpenAI", FakeOpenAI)
+
+    result = web_search.inspect_private_images_with_openai(
+        [("image/png", b"\x89PNG\r\n\x1a\nprivate-image")],
+        "Describe the visible composition.",
+        model_id="test-vision-model",
+        api_key="test-openai-key",
+    )
+
+    assert result == "Visible geometric illustration."
+    assert captured["model"] == "test-vision-model"
+    assert captured["store"] is False
+    raw_input = captured["input"]
+    assert isinstance(raw_input, list)
+    message = raw_input[0]
+    assert isinstance(message, dict)
+    content = message["content"]
+    assert isinstance(content, list)
+    policy_text = content[0]
+    assert isinstance(policy_text, dict)
+    assert "Do not identify a person" in str(policy_text["text"])
+    image = content[2]
+    assert isinstance(image, dict)
+    assert str(image["image_url"]).startswith("data:image/png;base64,")
+    assert "private-image" not in str(captured)

@@ -28,6 +28,7 @@ class AgentSettings(BaseModel):
     brave_search_api_key: SecretStr = Field(repr=False)
     max_steps: int = Field(default=10, ge=1, le=50)
     database_url: str
+    course_data_path: Path = Path(__file__).resolve().parents[2] / "data"
     applicant_data_path: Path = Path(__file__).resolve().parents[2] / "var/applicants"
     upload_data_path: Path = Path(__file__).resolve().parents[2] / "var/uploads"
     browser_enabled: bool = True
@@ -91,6 +92,12 @@ class AgentSettings(BaseModel):
         if not model_id:
             raise ConfigurationError("MODEL_ID must not be blank")
 
+        raw_course_data_path = values.get("COURSE_DATA_PATH")
+        course_data_path = (
+            Path(raw_course_data_path.strip()).expanduser()
+            if raw_course_data_path and raw_course_data_path.strip()
+            else Path(__file__).resolve().parents[2] / "data"
+        )
         raw_applicant_path = values.get("APPLICANT_DATA_PATH")
         applicant_data_path = (
             Path(raw_applicant_path.strip()).expanduser()
@@ -128,6 +135,7 @@ class AgentSettings(BaseModel):
             brave_search_api_key=SecretStr(brave_search_api_key),
             max_steps=int(values.get("AGENT_MAX_STEPS", "10")),
             database_url=database_url,
+            course_data_path=course_data_path,
             applicant_data_path=applicant_data_path,
             upload_data_path=upload_data_path,
             browser_enabled=browser_enabled in {"true", "1", "yes"},

@@ -15,6 +15,8 @@ GET  /api/v1/auth/me
 
 GET  /api/v1/course/resources
 GET  /api/v1/course/resources/content?uri={resource_uri}
+GET  /api/v1/course/resources/asset?uri={resource_uri}&asset_id={asset_id}
+GET  /api/v1/instructor/applications/{application_id}/photo
 POST /api/v1/uploads?filename={filename}
 
 GET  /api/v1/conversations
@@ -28,14 +30,26 @@ POST /api/v1/conversations/{conversation_id}/run/stream
 POST /api/v1/agent/run
 ```
 
-`GET /api/v1/course/resources` returns path-free public metadata for the syllabus,
-provisional schedule, repository overview, FAQ, course staff, and application guide. It
-never returns private applicant files, temporary uploads, or server filesystem paths.
+`GET /api/v1/course/resources` returns path-free metadata for resources authorized to the
+current principal. Anonymous visitors receive the six public resources. Students also
+receive resources registered under the student audience, and instructors receive both
+student and instructor resources. It never returns private applicant files, temporary
+uploads, or server filesystem paths.
 
 `GET /api/v1/course/resources/content` resolves one authorized registered URI to its
 original bytes and media type for a trusted native viewer. The URI is checked against
 the principal's resource catalog before reading; model- or browser-provided filesystem
 paths are never accepted.
+
+Role-scoped resource content and assets use `Cache-Control: private, no-store`. An unknown
+or unauthorized URI returns the same `404` response so the route does not disclose private
+resource existence.
+
+`GET /api/v1/instructor/applications/{application_id}/photo` resolves only a server-issued
+application UUID through the private applicant store. It requires an authenticated instructor,
+returns `404` to every other role, and serves validated image bytes with private no-store caching.
+It never accepts or exposes a filesystem path. The browser reaches this route only after resolving
+an `applicant://{application_id}/photo` URI issued by the instructor image-inspection tool.
 
 `POST /api/v1/conversations/{conversation_id}/workspace/actions` accepts only `focus`
 and `close` for an existing panel UUID. It checks conversation ownership, reconstructs

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from typing import Literal
 from uuid import uuid4
 
 import pytest
@@ -15,6 +16,11 @@ from course_server.agent import (
     COURSE_SCHEDULE_URI,
     COURSE_SYLLABUS_URI,
     GET_APPLICATION_TOOL_ID,
+    INSTRUCTOR_INSPECT_APPLICATION_IMAGES_TOOL_ID,
+    INSTRUCTOR_LIST_APPLICATIONS_TOOL_ID,
+    INSTRUCTOR_READ_APPLICATION_TOOL_ID,
+    LIST_PRIVATE_RESOURCES_TOOL_ID,
+    READ_PRIVATE_RESOURCE_TOOL_ID,
     READ_UPLOAD_TOOL_ID,
     SEARCH_COURSE_TOOL_ID,
     VISIT_WEBPAGE_TOOL_ID,
@@ -22,8 +28,10 @@ from course_server.agent import (
     WEB_SEARCH_TOOL_ID,
     ConversationAccessDenied,
     CourseAgentService,
+    CourseCapabilityPolicy,
+    FileResourceProvider,
     InMemoryConversationStore,
-    PublicCapabilityPolicy,
+    ResourceDefinition,
 )
 from course_server.agent_cli import _safe_failure_message, run_cli_turn
 from course_server.auth import InMemoryAuthStore
@@ -38,6 +46,19 @@ def public_principal() -> PrincipalContext:
         anonymous_session_id=session_id,
         roles=["public"],
         session_id=session_id,
+    )
+
+
+def authenticated_principal(
+    role: Literal["student", "ta", "instructor", "admin"],
+) -> PrincipalContext:
+    return PrincipalContext(
+        authenticated=True,
+        user_id=uuid4(),
+        username=f"test-{role}",
+        display_name=f"Test {role.title()}",
+        roles=["public", role],
+        session_id=uuid4(),
     )
 
 
@@ -69,7 +90,7 @@ class RecordingRuntime:
 
 
 def test_public_policy_exposes_phase_six_course_capabilities() -> None:
-    authorized = PublicCapabilityPolicy().authorize(public_principal())
+    authorized = CourseCapabilityPolicy().authorize(public_principal())
 
     assert SEARCH_COURSE_TOOL_ID in authorized.tool_ids
     assert GET_APPLICATION_TOOL_ID in authorized.tool_ids
@@ -87,8 +108,68 @@ def test_public_policy_exposes_phase_six_course_capabilities() -> None:
         COURSE_APPLICATION_URI,
     )
 
-    browser_authorized = PublicCapabilityPolicy(browser_enabled=True).authorize(public_principal())
+    browser_authorized = CourseCapabilityPolicy(browser_enabled=True).authorize(public_principal())
     assert set(BROWSER_TOOL_IDS) <= set(browser_authorized.tool_ids)
+
+
+def test_course_policy_filters_role_scoped_resources_and_instructor_tools(
+    tmp_path: Path,
+) -> None:
+    public_file = tmp_path / "public.md"
+    student_file = tmp_path / "students.md"
+    instructor_file = tmp_path / "instructors.md"
+    public_file.write_text("Public", encoding="utf-8")
+    student_file.write_text("Students", encoding="utf-8")
+    instructor_file.write_text("Instructors", encoding="utf-8")
+    resources = FileResourceProvider(
+        [
+            ResourceDefinition(
+                uri="course://public",
+                title="Public",
+                media_type="text/markdown",
+                path=public_file,
+            ),
+            ResourceDefinition(
+                uri="course://students/notes",
+                title="Student Notes",
+                media_type="text/markdown",
+                path=student_file,
+                visibility="students",
+            ),
+            ResourceDefinition(
+                uri="course://instructors/notes",
+                title="Instructor Notes",
+                media_type="text/markdown",
+                path=instructor_file,
+                visibility="instructors",
+            ),
+        ]
+    )
+    policy = CourseCapabilityPolicy(resources)
+
+    public = policy.authorize(public_principal())
+    student = policy.authorize(authenticated_principal("student"))
+    instructor = policy.authorize(authenticated_principal("instructor"))
+    ta = policy.authorize(authenticated_principal("ta"))
+    admin = policy.authorize(authenticated_principal("admin"))
+
+    assert public.resource_uris == ("course://public",)
+    assert student.resource_uris == ("course://public", "course://students/notes")
+    assert instructor.resource_uris == (
+        "course://public",
+        "course://students/notes",
+        "course://instructors/notes",
+    )
+    assert ta.resource_uris == admin.resource_uris == ("course://public",)
+    assert LIST_PRIVATE_RESOURCES_TOOL_ID in student.tool_ids
+    assert READ_PRIVATE_RESOURCE_TOOL_ID in student.tool_ids
+    assert INSTRUCTOR_LIST_APPLICATIONS_TOOL_ID not in student.tool_ids
+    assert INSTRUCTOR_READ_APPLICATION_TOOL_ID not in student.tool_ids
+    assert INSTRUCTOR_INSPECT_APPLICATION_IMAGES_TOOL_ID not in student.tool_ids
+    assert INSTRUCTOR_LIST_APPLICATIONS_TOOL_ID in instructor.tool_ids
+    assert INSTRUCTOR_READ_APPLICATION_TOOL_ID in instructor.tool_ids
+    assert INSTRUCTOR_INSPECT_APPLICATION_IMAGES_TOOL_ID in instructor.tool_ids
+    assert LIST_PRIVATE_RESOURCES_TOOL_ID not in ta.tool_ids
 
 
 def test_course_agent_authorizes_owned_uploads_for_current_and_follow_up_turns(

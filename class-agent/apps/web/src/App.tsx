@@ -1209,7 +1209,7 @@ export default function App() {
                 </>
               ) : (
                 <form className="login-form" onSubmit={(event) => void handleLogin(event)}>
-                  <p className="drawer-label">Student login</p>
+                  <p className="drawer-label">Course login</p>
                   <TextInput
                     autoComplete="username"
                     label="Username"

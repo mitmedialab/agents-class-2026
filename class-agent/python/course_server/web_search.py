@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import ipaddress
 import socket
 import time
@@ -337,6 +338,51 @@ def inspect_images_with_openai(
             [
                 {"type": "input_text", "text": f"Image {index}: {url}"},
                 {"type": "input_image", "image_url": url, "detail": "high"},
+            ]
+        )
+    response = OpenAI(api_key=api_key).responses.create(
+        model=model_id,
+        input=cast(Any, [{"role": "user", "content": content}]),
+        store=False,
+    )
+    return response.output_text.strip()
+
+
+def inspect_private_images_with_openai(
+    images: list[tuple[str, bytes]],
+    prompt: str,
+    *,
+    model_id: str,
+    api_key: str,
+) -> str:
+    """Inspect bounded private image bytes without provider-side response storage."""
+
+    if not 1 <= len(images) <= 4:
+        raise ValueError("private image inspection requires one to four images")
+    content: list[dict[str, object]] = [
+        {
+            "type": "input_text",
+            "text": (
+                "Inspect the numbered private course-application images only for the requested "
+                "neutral visual description. Do not identify a person, infer sensitive or "
+                "demographic traits, judge personality or emotion, or assess admission or course "
+                "suitability from appearance. State uncertainty and decline any prohibited part "
+                "of the request.\n\nInstructor request: " + prompt
+            ),
+        }
+    ]
+    for index, (media_type, data) in enumerate(images, start=1):
+        if media_type not in {"image/jpeg", "image/png", "image/webp"} or not data:
+            raise ValueError("private image inspection received an invalid image")
+        encoded = base64.b64encode(data).decode("ascii")
+        content.extend(
+            [
+                {"type": "input_text", "text": f"Application image {index}:"},
+                {
+                    "type": "input_image",
+                    "image_url": f"data:{media_type};base64,{encoded}",
+                    "detail": "high",
+                },
             ]
         )
     response = OpenAI(api_key=api_key).responses.create(

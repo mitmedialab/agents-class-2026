@@ -19,6 +19,7 @@ def test_settings_accept_standard_openai_environment_without_exposing_secret() -
     assert settings.model_id == "test-model"
     assert settings.model_api_key.get_secret_value() == "test-secret-value"
     assert settings.brave_search_api_key.get_secret_value() == "test-brave-value"
+    assert settings.course_data_path.name == "data"
     assert settings.applicant_data_path.name == "applicants"
     assert settings.upload_data_path.name == "uploads"
     assert settings.browser_enabled is True
@@ -35,11 +36,13 @@ def test_settings_accept_private_applicant_storage_path() -> None:
             "DATABASE_URL": "postgresql://example",
             "OPENAI_API_KEY": "test-secret-value",
             "BRAVE_API_KEY": "test-brave-value",
+            "COURSE_DATA_PATH": "/srv/class-agent/data",
             "APPLICANT_DATA_PATH": "/srv/class-agent/applicants",
             "UPLOAD_DATA_PATH": "/srv/class-agent/uploads",
         }
     )
 
+    assert str(settings.course_data_path) == "/srv/class-agent/data"
     assert str(settings.applicant_data_path) == "/srv/class-agent/applicants"
     assert str(settings.upload_data_path) == "/srv/class-agent/uploads"
 

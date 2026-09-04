@@ -29,6 +29,12 @@ The Phase 4 FastAPI adapter places opaque tokens in cookies configured with `Htt
 
 Authenticated identity, display information, and roles are loaded from the database for every resolved session. Model-controlled IDs are never accepted. Authenticated roles become `public` plus the stored user role. Anonymous sessions produce only the `public` role and use the anonymous session ID as both the anonymous identity and session ID.
 
+Role-scoped course resources are filtered from this trusted principal before their URIs or
+tools reach the model. Student resources allow the `student` and `instructor` roles;
+instructor resources and private application-review tools allow only `instructor`. TA and
+admin do not inherit either audience. Direct content and asset routes apply the same policy
+and return `404` for unauthorized resources.
+
 The API resolves an authenticated cookie first and otherwise resolves or creates an anonymous session. Invalid, revoked, inactive-user, and expired authenticated sessions all become public anonymous requests; the unusable cookie is cleared. Logout revokes the presented authenticated token and clears its cookie.
 
 ## Admin CLI

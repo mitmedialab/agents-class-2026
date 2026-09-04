@@ -915,6 +915,7 @@ describe("Course Agent interface", () => {
     render(<App />);
     await openExistingConversation();
     fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
+    expect(screen.getByText("Course login")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Username"), { target: { value: "alice" } });
     fireEvent.change(screen.getByLabelText("Access code"), {

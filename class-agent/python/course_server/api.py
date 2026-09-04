@@ -21,12 +21,14 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, StringConstraints
 
 from agent_core import AgentResult, Conversation, Event, PrincipalContext
 from course_server.agent import (
+    ApplicantStore,
     ConversationAccessDenied,
     ConversationStore,
     CourseAgentService,
+    CourseCapabilityPolicy,
     CourseResourceCatalog,
+    FileApplicantStore,
     FileResourceProvider,
-    PublicCapabilityPolicy,
     ResourceNotFound,
     ResourceSummary,
     ToolValidationError,
@@ -204,6 +206,7 @@ class AppServices:
     authentication: AuthenticationService
     agent: CourseAgentService
     conversations: ConversationStore
+    applicants: ApplicantStore | None = None
     course_resources: CourseResourceCatalog | None = None
     uploads: TemporaryUploadStore | None = None
     workspace_registry: ComponentRegistry | None = None
@@ -721,7 +724,10 @@ def create_app(
         resources.pool = pool
         auth_store = PostgresAuthStore(pool)
         conversation_store = PostgresConversationStore(pool)
-        course_resources = FileResourceProvider.from_registry()
+        applicant_store = FileApplicantStore(resolved_settings.applicant_data_path)
+        course_resources = FileResourceProvider.from_registry(
+            protected_data_path=resolved_settings.course_data_path
+        )
         upload_store = FileTemporaryUploadStore(resolved_settings.upload_data_path)
         component_registry = load_component_registry()
         browser_service: BrowserSessionService | None = None
@@ -745,19 +751,21 @@ def create_app(
                 runtime=build_runtime(
                     resolved_settings,
                     resources=course_resources,
+                    applicants=applicant_store,
                     uploads=upload_store,
                     components=component_registry,
                     browser=browser_service,
                 ),
                 conversations=conversation_store,
-                capability_policy=PublicCapabilityPolicy(
-                    (resource.uri for resource in course_resources.list_public()),
+                capability_policy=CourseCapabilityPolicy(
+                    course_resources,
                     browser_enabled=browser_service is not None,
                 ),
                 workspace_registry=component_registry,
                 uploads=upload_store,
             ),
             conversations=conversation_store,
+            applicants=applicant_store,
             course_resources=course_resources,
             uploads=upload_store,
             workspace_registry=component_registry,
@@ -851,6 +859,7 @@ def create_app(
     @router.get("/course/resources", response_model=list[ResourceSummary])
     async def list_course_resources(
         request: Request,
+        response: Response,
         principal: Annotated[PrincipalContext, Depends(_require_principal)],
     ) -> list[ResourceSummary]:
         state = _get_app_state(request)
@@ -858,12 +867,10 @@ def create_app(
         catalog = state.services.course_resources
         if catalog is None:
             catalog = FileResourceProvider.from_registry()
-        permitted = frozenset(
-            PublicCapabilityPolicy(resource.uri for resource in catalog.list_public())
-            .authorize(principal)
-            .resource_uris
-        )
-        return [resource for resource in catalog.list_public() if resource.uri in permitted]
+        visible = catalog.list_authorized(principal)
+        if any(not catalog.is_public(resource.uri) for resource in visible):
+            response.headers["Cache-Control"] = "private, no-store"
+        return visible
 
     @router.get("/course/resources/content", response_model=None)
     async def read_course_resource_content(
@@ -876,11 +883,7 @@ def create_app(
         catalog = state.services.course_resources
         if catalog is None:
             catalog = FileResourceProvider.from_registry()
-        permitted = frozenset(
-            PublicCapabilityPolicy(resource.uri for resource in catalog.list_public())
-            .authorize(principal)
-            .resource_uris
-        )
+        permitted = frozenset(catalog.authorized_resource_uris(principal))
         if uri not in permitted:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
         try:
@@ -894,7 +897,9 @@ def create_app(
             content=resource.data,
             media_type=resource.media_type,
             headers={
-                "Cache-Control": "private, max-age=60",
+                "Cache-Control": (
+                    "private, max-age=60" if catalog.is_public(uri) else "private, no-store"
+                ),
                 "X-Class-Agent-Resource-Uri": resource.uri,
                 "X-Content-Type-Options": "nosniff",
             },
@@ -912,11 +917,7 @@ def create_app(
         catalog = state.services.course_resources
         if catalog is None:
             catalog = FileResourceProvider.from_registry()
-        permitted = frozenset(
-            PublicCapabilityPolicy(resource.uri for resource in catalog.list_public())
-            .authorize(principal)
-            .resource_uris
-        )
+        permitted = frozenset(catalog.authorized_resource_uris(principal))
         if uri not in permitted:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
         try:
@@ -930,9 +931,39 @@ def create_app(
             content=asset.data,
             media_type=asset.media_type,
             headers={
-                "Cache-Control": "private, max-age=3600",
+                "Cache-Control": (
+                    "private, max-age=3600" if catalog.is_public(uri) else "private, no-store"
+                ),
                 "X-Class-Agent-Resource-Uri": asset.uri,
                 "X-Class-Agent-Asset-Id": asset_id,
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+
+    @router.get("/instructor/applications/{application_id}/photo", response_model=None)
+    async def read_application_photo(
+        application_id: UUID,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> Response:
+        state = _get_app_state(request)
+        assert state.services is not None
+        applicants = state.services.applicants
+        if applicants is None or not principal.authenticated or "instructor" not in principal.roles:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+        try:
+            photo = await applicants.read_application_photo(application_id)
+        except (ResourceNotFound, ToolValidationError) as error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="not found",
+            ) from error
+        return Response(
+            content=photo.data,
+            media_type=photo.media_type,
+            headers={
+                "Cache-Control": "private, no-store",
+                "X-Class-Agent-Resource-Uri": photo.resource_uri,
                 "X-Content-Type-Options": "nosniff",
             },
         )

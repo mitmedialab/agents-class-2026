@@ -52,11 +52,25 @@ The readable resources are `course://syllabus`, `course://schedule`,
 input schemas that translate directly to MCP. They are not a second wire protocol, and
 an MCP server is intentionally deferred.
 
-Authorization happens before smolagents receives tools. `PublicCapabilityPolicy`
-grants only Phase 6 public course capabilities; `ToolCatalog` fails closed if trusted
-context names an unregistered tool. Read and search tools independently constrain work
-to authorized resource URIs during execution. Model-controlled input cannot select a
-filesystem path. The schedule tool identifies its source as provisional.
+Authorization happens before smolagents receives tools. `CourseCapabilityPolicy` grants
+public resources to everyone, student resources to students and instructors, and instructor
+resources plus application-review tools only to instructors; `ToolCatalog` fails closed if
+trusted context names an unregistered tool. Read and search tools independently constrain
+work to authorized resource URIs during execution. Model-controlled input cannot select a
+filesystem path or applicant directory. The schedule tool identifies its source as
+provisional.
+
+The instructor-only `instructor.inspect_application_images` tool resolves one to four
+server-issued application UUIDs inside the private applicant store and submits their validated
+photo bytes to the configured multimodal model only for an explicit visual request. Provider
+storage is disabled, tool arguments are redacted from events, and canonical history receives
+only resource provenance and a generic completion summary. The adapter prohibits identity,
+sensitive-trait, personality, emotion, and admission-suitability inference from appearance.
+Each inspected photo also receives an opaque `applicant://{application_id}/photo` reference.
+The workspace accepts only references issued by that tool in the current instructor turn, and
+the web client resolves them through the authenticated, no-store application-photo endpoint.
+This lets the agent build a real private gallery without inventing filenames or making the
+applicant directory web-accessible.
 
 Resource reads also return safe registered-asset IDs when a manifest declares them.
 The runtime tells the agent to prefer those official assets, attach them to a visual
@@ -80,7 +94,7 @@ reads reject non-HTTP, credential-bearing, local, and private-network
 destinations. Web result bodies are returned to the current model turn but are not
 copied into durable event history; only a generic completion summary is stored.
 
-Each transient agent receives a title-and-description index of its authorized public
+Each transient agent receives a title-and-description index of its authorized course
 information. The index contains no backing paths or canonical resource identifiers;
 full resource content is read through an authorized tool only when needed. The runtime
 instructions require the model to resolve internal pointers before answering and forbid

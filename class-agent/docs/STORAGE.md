@@ -44,6 +44,22 @@ Existing version 1 files remain immutable historical records and require no data
 filesystem migration; any staff-side reader must branch on `schema_version` rather than
 reinterpret the former combined fields.
 
+Authenticated instructors receive dedicated read-only tools to list applications and read
+one structured `application.json` by its server-issued application UUID. Students, TAs,
+admins, and anonymous visitors never receive those tools, and the tools also recheck the
+trusted principal at execution. Full records are available transiently to the instructor's
+agent run but only a summary is stored in canonical tool events. Representative photos are
+reported as protected metadata during ordinary record reads. If an instructor explicitly
+requests visual inspection, a separate instructor-only tool may send one to four selected
+photos to the configured multimodal model as in-memory data URLs with provider-side storage
+disabled. Photo bytes and raw inspection output are not copied into canonical tool events;
+the instructor-visible final answer remains ordinary conversation history. The inspection
+adapter forbids identification, sensitive-trait inference, and admission judgments from
+appearance. For display, the tool returns an opaque `applicant://{application_id}/photo`
+reference rather than a path or public URL. The trusted browser maps that reference to an
+authenticated instructor-only endpoint; anonymous, student, TA, and admin requests receive
+the same `404`, and successful responses use `Cache-Control: private, no-store`.
+
 ## Migrations
 
 Apply migrations with:

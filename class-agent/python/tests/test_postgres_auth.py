@@ -93,6 +93,21 @@ def test_postgres_auth_store_roundtrip() -> None:
                 assert principal.user_id == issued.user.id
                 assert principal.roles == ["public", "student"]
 
+                instructor = await admin.create_user(
+                    username="prof",
+                    display_name="Professor Example",
+                    email="prof@mit.edu",
+                    role="instructor",
+                )
+                instructor_credential = await auth.login(
+                    username="prof",
+                    access_code=instructor.access_code,
+                )
+                assert (await auth.resolve_authenticated(instructor_credential.token)).roles == [
+                    "public",
+                    "instructor",
+                ]
+
                 conversations = PostgresConversationStore(pool)
                 conversation = Conversation(user_id=principal.user_id)
                 await conversations.create_conversation(conversation)

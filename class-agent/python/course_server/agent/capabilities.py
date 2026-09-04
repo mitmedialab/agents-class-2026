@@ -1,4 +1,4 @@
-"""MCP-aligned public course tools and resources.
+"""MCP-aligned public and role-scoped course tools and resources.
 
 These are application wrappers, not a competing wire protocol. Their IDs, resource
 URIs, and JSON input schemas translate directly to MCP concepts when the gateway is
@@ -43,6 +43,7 @@ from course_server.course_application import (
 )
 from course_server.uploads import (
     APPLICATION_PHOTO_MEDIA_TYPES,
+    MAX_UPLOAD_BYTES,
     StoredTemporaryUpload,
     TemporaryUploadStore,
     UploadError,
@@ -58,6 +59,11 @@ SEARCH_FAQ_TOOL_ID = "course.search_faq"
 SEARCH_COURSE_TOOL_ID = "course.search"
 SUBMIT_APPLICATION_TOOL_ID = "course.submit_application"
 READ_UPLOAD_TOOL_ID = "upload.read"
+LIST_PRIVATE_RESOURCES_TOOL_ID = "course.list_private_resources"
+READ_PRIVATE_RESOURCE_TOOL_ID = "course.read_private_resource"
+INSTRUCTOR_LIST_APPLICATIONS_TOOL_ID = "instructor.list_applications"
+INSTRUCTOR_READ_APPLICATION_TOOL_ID = "instructor.read_application"
+INSTRUCTOR_INSPECT_APPLICATION_IMAGES_TOOL_ID = "instructor.inspect_application_images"
 WEB_SEARCH_TOOL_ID = "web.search"
 WEB_IMAGE_SEARCH_TOOL_ID = "web.search_images"
 WEB_IMAGE_INSPECT_TOOL_ID = "web.inspect_images"
@@ -71,6 +77,7 @@ COURSE_APPLICATION_URI = "course://application"
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_SYLLABUS_PATH = PROJECT_ROOT / "shared/course/syllabus/syllabus.md"
 DEFAULT_RESOURCE_REGISTRY_PATH = PROJECT_ROOT / "shared/registry/resources.json"
+DEFAULT_COURSE_DATA_PATH = PROJECT_ROOT / "data"
 DEFAULT_APPLICANT_DATA_PATH = PROJECT_ROOT / "var/applicants"
 
 _SEARCH_WORD = re.compile(r"[\w'-]+", re.UNICODE)
@@ -83,8 +90,9 @@ _IMAGE_SEARCH_OVERSAMPLE_FACTOR = 4
 _IMAGE_SEARCH_MIN_CANDIDATES = 12
 _IMAGE_SEARCH_MAX_CANDIDATES = 30
 _MAX_UPLOAD_TEXT_LENGTH = 50_000
+_MAX_APPLICATION_RECORD_BYTES = 256 * 1024
 StoragePolicy = Literal["server_full", "server_summary", "local_only", "ephemeral"]
-ResourceVisibility = Literal["public"]
+ResourceVisibility = Literal["public", "students", "instructors"]
 ResourceStatus = Literal["published", "provisional"]
 
 
@@ -836,7 +844,7 @@ class ResourceRegistryEntry(BaseModel):
     media_type: str
     path: str
     assets: dict[str, str] = Field(default_factory=dict)
-    visibility: ResourceVisibility = "public"
+    visibility: Literal["public"] = "public"
     status: ResourceStatus = "published"
 
 
@@ -847,8 +855,30 @@ class ResourceRegistry(BaseModel):
     resources: list[ResourceRegistryEntry]
 
 
+class ProtectedResourceManifestEntry(BaseModel):
+    """One role-scoped resource kept outside the public generated registry."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    uri: str
+    title: str
+    description: str = ""
+    media_type: str
+    file: str
+    assets: dict[str, str] = Field(default_factory=dict)
+    visibility: Literal["students", "instructors"]
+    status: ResourceStatus = "published"
+
+
+class ProtectedResourceManifest(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal[1] = 1
+    resource: ProtectedResourceManifestEntry
+
+
 class ResourceSummary(BaseModel):
-    """Safe public metadata; backing server paths are intentionally absent."""
+    """Safe path-free resource metadata for an authorized principal."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -897,6 +927,12 @@ class ResourceProvider(Protocol):
 
 class CourseResourceCatalog(ResourceProvider, Protocol):
     def list_public(self) -> list[ResourceSummary]: ...
+
+    def list_authorized(self, principal: PrincipalContext) -> list[ResourceSummary]: ...
+
+    def authorized_resource_uris(self, principal: PrincipalContext) -> tuple[str, ...]: ...
+
+    def is_public(self, uri: str) -> bool: ...
 
     def asset_ids(self, uri: str) -> tuple[str, ...]: ...
 
@@ -992,6 +1028,28 @@ class FileResourceProvider:
             if resource.visibility == "public"
         ]
 
+    def list_authorized(self, principal: PrincipalContext) -> list[ResourceSummary]:
+        return [
+            ResourceSummary(
+                uri=resource.uri,
+                title=resource.title,
+                description=resource.description,
+                media_type=resource.media_type,
+                status=resource.status,
+            )
+            for resource in self._resources.values()
+            if _resource_visible_to_principal(resource.visibility, principal)
+        ]
+
+    def authorized_resource_uris(self, principal: PrincipalContext) -> tuple[str, ...]:
+        return tuple(resource.uri for resource in self.list_authorized(principal))
+
+    def is_public(self, uri: str) -> bool:
+        resource = self._resources.get(uri)
+        if resource is None:
+            raise ResourceNotFound(uri)
+        return resource.visibility == "public"
+
     async def search(
         self,
         query: str,
@@ -1007,14 +1065,22 @@ class FileResourceProvider:
         if not 1 <= limit <= _MAX_SEARCH_LIMIT:
             raise ValueError(f"search limit must be between 1 and {_MAX_SEARCH_LIMIT}")
 
-        allowed = resource_uris if resource_uris is not None else frozenset(self._resources)
+        allowed = (
+            resource_uris
+            if resource_uris is not None
+            else frozenset(
+                resource.uri
+                for resource in self._resources.values()
+                if resource.visibility == "public"
+            )
+        )
         terms = tuple(dict.fromkeys(_search_terms(normalized_query)))
         if not terms:
             raise ValueError("search query must contain searchable text")
 
         matches: list[CourseSearchResult] = []
         for resource in self._resources.values():
-            if resource.uri not in allowed or resource.visibility != "public":
+            if resource.uri not in allowed:
                 continue
             contents = await self.read(resource.uri)
             for block in _search_blocks(contents.text):
@@ -1036,8 +1102,13 @@ class FileResourceProvider:
     def from_registry(
         cls,
         registry_path: Path = DEFAULT_RESOURCE_REGISTRY_PATH,
+        *,
+        protected_data_path: Path | None = None,
     ) -> FileResourceProvider:
-        return cls(load_resource_definitions(registry_path))
+        resources = load_resource_definitions(registry_path)
+        if protected_data_path is not None:
+            resources.extend(load_protected_resource_definitions(protected_data_path))
+        return cls(resources)
 
     @classmethod
     def with_sample_syllabus(cls) -> FileResourceProvider:
@@ -1091,6 +1162,89 @@ def load_resource_definitions(
                 assets=assets,
             )
         )
+    return resources
+
+
+def _resource_visible_to_principal(
+    visibility: ResourceVisibility,
+    principal: PrincipalContext,
+) -> bool:
+    if visibility == "public":
+        return True
+    if not principal.authenticated:
+        return False
+    if visibility == "students":
+        return "student" in principal.roles or "instructor" in principal.roles
+    return visibility == "instructors" and "instructor" in principal.roles
+
+
+def load_protected_resource_definitions(data_path: Path) -> list[ResourceDefinition]:
+    """Load explicit role-scoped manifests while keeping backing paths private."""
+
+    data_root = data_path.resolve()
+    resources: list[ResourceDefinition] = []
+    seen_uris: set[str] = set()
+    seen_paths: set[Path] = set()
+    audience_roots: tuple[tuple[str, Literal["students", "instructors"]], ...] = (
+        ("students", "students"),
+        ("instructors", "instructors"),
+    )
+    for directory_name, expected_visibility in audience_roots:
+        audience_root = (data_root / directory_name).resolve()
+        if not audience_root.is_dir():
+            continue
+        for manifest_path in sorted(audience_root.rglob("resource.json")):
+            try:
+                manifest = ProtectedResourceManifest.model_validate_json(
+                    manifest_path.read_text(encoding="utf-8")
+                )
+            except (OSError, ValidationError) as error:
+                raise ResourceNotFound(str(manifest_path)) from error
+            entry = manifest.resource
+            if entry.visibility != expected_visibility:
+                raise ValueError(
+                    f"protected resource visibility does not match {directory_name} directory: "
+                    f"{entry.uri}"
+                )
+            expected_uri_prefix = f"course://{directory_name}/"
+            if not entry.uri.startswith(expected_uri_prefix):
+                raise ValueError(
+                    f"protected resource URI must start with {expected_uri_prefix}: {entry.uri}"
+                )
+            if entry.uri in seen_uris:
+                raise ValueError(f"duplicate protected resource URI: {entry.uri}")
+            path = (manifest_path.parent / entry.file).resolve()
+            if not path.is_relative_to(audience_root) or not path.is_file():
+                raise ValueError(f"invalid protected resource file for {entry.uri}")
+            if path in seen_paths:
+                raise ValueError(f"duplicate protected resource file for {entry.uri}")
+            assets: dict[str, Path] = {}
+            for asset_id, asset_path_string in sorted(entry.assets.items()):
+                asset_path = (manifest_path.parent / asset_path_string).resolve()
+                if not asset_path.is_relative_to(audience_root) or not asset_path.is_file():
+                    raise ValueError(
+                        f"invalid protected resource asset for {entry.uri}: {asset_id}"
+                    )
+                if asset_path == path or asset_path in seen_paths:
+                    raise ValueError(
+                        f"duplicate protected resource asset for {entry.uri}: {asset_id}"
+                    )
+                seen_paths.add(asset_path)
+                assets[asset_id] = asset_path
+            seen_uris.add(entry.uri)
+            seen_paths.add(path)
+            resources.append(
+                ResourceDefinition(
+                    uri=entry.uri,
+                    title=entry.title,
+                    description=entry.description,
+                    media_type=entry.media_type,
+                    path=path,
+                    visibility=entry.visibility,
+                    status=entry.status,
+                    assets=assets,
+                )
+            )
     return resources
 
 
@@ -1219,7 +1373,7 @@ class CourseReadPublicFileTool:
         "additionalProperties": False,
     }
 
-    def __init__(self, resources: ResourceProvider) -> None:
+    def __init__(self, resources: CourseResourceCatalog) -> None:
         self._resources = resources
 
     async def execute(
@@ -1231,6 +1385,8 @@ class CourseReadPublicFileTool:
         uri = _required_text_argument(arguments, "resource_uri", max_length=200)
         if uri not in context.permitted_resource_uris:
             raise PermissionError(f"{uri} is not authorized for this run")
+        if not self._resources.is_public(uri):
+            raise PermissionError(f"{uri} is not a public course resource")
         resource = await self._resources.read(uri)
         content: JsonValue = resource.text
         if resource.assets:
@@ -1245,6 +1401,61 @@ class CourseReadPublicFileTool:
             content=content,
             summary=f"Read public course resource {resource.uri}.",
             storage_policy="server_full",
+            resource_uris=[resource.uri],
+        )
+
+
+class CourseReadPrivateResourceTool:
+    """Read one pre-authorized role-scoped resource without persisting its contents."""
+
+    id = READ_PRIVATE_RESOURCE_TOOL_ID
+    redact_arguments_in_events = True
+    description = (
+        "Read a private course resource available to the current logged-in account. "
+        "Use course.list_private_resources when the canonical URI is unknown."
+    )
+    input_schema: ClassVar[dict[str, JsonValue]] = {
+        "type": "object",
+        "properties": {
+            "resource_uri": {
+                "type": "string",
+                "description": "Canonical course:// URI returned by the private resource list.",
+            }
+        },
+        "required": ["resource_uri"],
+        "additionalProperties": False,
+    }
+
+    def __init__(self, resources: CourseResourceCatalog) -> None:
+        self._resources = resources
+
+    async def execute(
+        self,
+        arguments: Mapping[str, JsonValue],
+        context: ToolExecutionContext,
+    ) -> ToolExecutionResult:
+        _reject_unknown_arguments(arguments, frozenset({"resource_uri"}))
+        uri = _required_text_argument(arguments, "resource_uri", max_length=200)
+        if (
+            uri not in context.permitted_resource_uris
+            or uri not in self._resources.authorized_resource_uris(context.principal)
+        ):
+            raise PermissionError("The private course resource is not authorized for this run.")
+        if self._resources.is_public(uri):
+            raise ToolValidationError("Use the public course resource reader for this URI.")
+        resource = await self._resources.read(uri)
+        content: JsonValue = resource.text
+        if resource.assets:
+            content = {
+                "text": resource.text,
+                "registered_assets": {
+                    asset_id: media_type for asset_id, media_type in resource.assets.items()
+                },
+            }
+        return ToolExecutionResult(
+            content=content,
+            summary=f"Read authorized private course resource {resource.uri}.",
+            storage_policy="server_summary",
             resource_uris=[resource.uri],
         )
 
@@ -1441,13 +1652,50 @@ class CourseShowPublicFilesTool:
         )
 
 
+class CourseListPrivateResourcesTool:
+    """List only role-scoped resources already authorized for this principal."""
+
+    id = LIST_PRIVATE_RESOURCES_TOOL_ID
+    description = (
+        "List private course resources available to the current logged-in account. "
+        "The result contains opaque course:// identifiers, never server paths."
+    )
+    input_schema: ClassVar[dict[str, JsonValue]] = {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": False,
+    }
+
+    def __init__(self, resources: CourseResourceCatalog) -> None:
+        self._resources = resources
+
+    async def execute(
+        self,
+        arguments: Mapping[str, JsonValue],
+        context: ToolExecutionContext,
+    ) -> ToolExecutionResult:
+        if arguments:
+            raise ValueError("course.list_private_resources does not accept arguments")
+        public_uris = {summary.uri for summary in self._resources.list_public()}
+        visible = [
+            summary.model_dump(mode="json")
+            for summary in self._resources.list_authorized(context.principal)
+            if summary.uri in context.permitted_resource_uris and summary.uri not in public_uris
+        ]
+        return ToolExecutionResult(
+            content=visible,
+            summary=f"Listed {len(visible)} authorized private course resources.",
+            storage_policy="server_summary",
+        )
+
+
 class CourseSearchTool:
-    """Search authorized public course resources using inspectable lexical matching."""
+    """Search authorized course resources using inspectable lexical matching."""
 
     id = SEARCH_COURSE_TOOL_ID
     description = (
-        "Search the official syllabus, provisional schedule, repository overview, "
-        "public FAQ, course staff profiles, and application guide."
+        "Search the official course resources authorized for the current account, including "
+        "role-scoped resources after login."
     )
     input_schema: ClassVar[dict[str, JsonValue]] = {
         "type": "object",
@@ -1481,20 +1729,29 @@ class CourseSearchTool:
             "query",
             max_length=_MAX_SEARCH_QUERY_LENGTH,
         )
+        authorized_uris = frozenset(
+            uri
+            for uri in self._resources.authorized_resource_uris(context.principal)
+            if uri in context.permitted_resource_uris
+        )
         results = await self._resources.search(
             query,
             limit=_optional_limit(arguments),
-            resource_uris=context.permitted_resource_uris,
+            resource_uris=authorized_uris,
         )
-        searched_uris = [
-            resource.uri
-            for resource in self._resources.list_public()
-            if resource.uri in context.permitted_resource_uris
+        authorized_resources = [
+            resource
+            for resource in self._resources.list_authorized(context.principal)
+            if resource.uri in authorized_uris
         ]
+        searched_uris = [resource.uri for resource in authorized_resources]
+        includes_private = any(
+            not self._resources.is_public(resource.uri) for resource in authorized_resources
+        )
         return ToolExecutionResult(
             content=[result.model_dump(mode="json") for result in results],
-            summary=f"Found {len(results)} public course resource matches.",
-            storage_policy="server_full",
+            summary=f"Found {len(results)} authorized course resource matches.",
+            storage_policy="server_summary" if includes_private else "server_full",
             resource_uris=searched_uris,
         )
 
@@ -1542,6 +1799,33 @@ class ApplicationReceipt(BaseModel):
     submitted_at: datetime
 
 
+class ApplicationSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    application_id: UUID
+    submitted_at: datetime
+    name: str
+    email: str
+    registration_status: str | None = None
+
+
+@dataclass(frozen=True)
+class ApplicationPhoto:
+    """Private applicant photo bytes loaded only by an authorized server-side tool."""
+
+    application_id: UUID
+    filename: str
+    media_type: str
+    data: bytes
+
+    @property
+    def resource_uri(self) -> str:
+        return f"applicant://{self.application_id}/photo"
+
+
+ApplicantImageInspectionRunner = Callable[[list[ApplicationPhoto], str], str]
+
+
 class ApplicantStore(Protocol):
     async def submit(
         self,
@@ -1550,6 +1834,12 @@ class ApplicantStore(Protocol):
         principal: PrincipalContext,
         photo: StoredTemporaryUpload,
     ) -> ApplicationReceipt: ...
+
+    async def list_applications(self) -> list[ApplicationSummary]: ...
+
+    async def read_application(self, application_id: UUID) -> dict[str, JsonValue]: ...
+
+    async def read_application_photo(self, application_id: UUID) -> ApplicationPhoto: ...
 
 
 class FileApplicantStore:
@@ -1584,6 +1874,15 @@ class FileApplicantStore:
         await asyncio.to_thread(self._write_private_application, receipt, payload, photo)
         return receipt
 
+    async def list_applications(self) -> list[ApplicationSummary]:
+        return await asyncio.to_thread(self._list_private_applications)
+
+    async def read_application(self, application_id: UUID) -> dict[str, JsonValue]:
+        return await asyncio.to_thread(self._read_private_application, application_id)
+
+    async def read_application_photo(self, application_id: UUID) -> ApplicationPhoto:
+        return await asyncio.to_thread(self._read_private_application_photo, application_id)
+
     def _write_private_application(
         self,
         receipt: ApplicationReceipt,
@@ -1613,6 +1912,110 @@ class FileApplicantStore:
         except Exception:
             shutil.rmtree(temporary_directory, ignore_errors=True)
             raise
+
+    def _list_private_applications(self) -> list[ApplicationSummary]:
+        if not self._directory.is_dir():
+            return []
+        summaries: list[ApplicationSummary] = []
+        for directory in sorted(self._directory.iterdir(), reverse=True):
+            if not directory.is_dir() or directory.name.startswith("."):
+                continue
+            try:
+                application_id = UUID(directory.name.rsplit("_", 1)[1])
+                record = self._read_private_application(application_id)
+                application = record.get("application")
+                if not isinstance(application, dict):
+                    raise ValueError("application payload is unavailable")
+                summaries.append(
+                    ApplicationSummary(
+                        application_id=application_id,
+                        submitted_at=str(record.get("submitted_at", "")),
+                        name=str(application.get("name", "")),
+                        email=str(application.get("email", "")),
+                        registration_status=(
+                            str(application["registration_status"])
+                            if application.get("registration_status") is not None
+                            else None
+                        ),
+                    )
+                )
+            except (IndexError, OSError, ValueError, ValidationError) as error:
+                raise ToolValidationError(
+                    "A stored course application is malformed or unavailable."
+                ) from error
+        return summaries
+
+    def _read_private_application(self, application_id: UUID) -> dict[str, JsonValue]:
+        directory = self._application_directory(application_id)
+        application_path = (directory / "application.json").resolve()
+        if not application_path.is_relative_to(directory) or not application_path.is_file():
+            raise ResourceNotFound("course application not found")
+        try:
+            if application_path.stat().st_size > _MAX_APPLICATION_RECORD_BYTES:
+                raise ToolValidationError("The stored course application is too large to read.")
+            raw_record = json.loads(application_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise ToolValidationError("The stored course application could not be read.") from error
+        if not isinstance(raw_record, dict):
+            raise ToolValidationError("The stored course application has an invalid format.")
+        try:
+            stored_id = UUID(str(raw_record.get("application_id", "")))
+        except ValueError as error:
+            raise ToolValidationError("The stored course application has an invalid ID.") from error
+        if stored_id != application_id:
+            raise ToolValidationError("The stored course application ID does not match its record.")
+        record = cast(dict[str, JsonValue], raw_record)
+        photo_filename = record.get("photo_filename")
+        if isinstance(photo_filename, str) and Path(photo_filename).name == photo_filename:
+            photo_path = (directory / photo_filename).resolve()
+            if photo_path.is_relative_to(directory) and photo_path.is_file():
+                record = {
+                    **record,
+                    "photo": {
+                        "filename": photo_filename,
+                        "media_type": _asset_media_type(photo_path),
+                        "size_bytes": photo_path.stat().st_size,
+                    },
+                }
+        return record
+
+    def _application_directory(self, application_id: UUID) -> Path:
+        root = self._directory.resolve()
+        candidates = sorted(self._directory.glob(f"*_{application_id}"))
+        if len(candidates) != 1:
+            raise ResourceNotFound("course application not found")
+        directory = candidates[0].resolve()
+        if not directory.is_relative_to(root) or not directory.is_dir():
+            raise ResourceNotFound("course application not found")
+        return directory
+
+    def _read_private_application_photo(self, application_id: UUID) -> ApplicationPhoto:
+        directory = self._application_directory(application_id)
+        record = self._read_private_application(application_id)
+        photo_filename = record.get("photo_filename")
+        if not isinstance(photo_filename, str) or Path(photo_filename).name != photo_filename:
+            raise ToolValidationError("The stored application photo has an invalid filename.")
+        photo_path = (directory / photo_filename).resolve()
+        if not photo_path.is_relative_to(directory) or not photo_path.is_file():
+            raise ResourceNotFound("course application photo not found")
+        media_type = _asset_media_type(photo_path)
+        if media_type not in APPLICATION_PHOTO_MEDIA_TYPES:
+            raise ToolValidationError("The stored application photo has an unsupported type.")
+        try:
+            size_bytes = photo_path.stat().st_size
+            if size_bytes > MAX_UPLOAD_BYTES:
+                raise ToolValidationError("The stored application photo is too large to inspect.")
+            data = photo_path.read_bytes()
+        except OSError as error:
+            raise ToolValidationError("The stored application photo could not be read.") from error
+        if not _has_valid_image_header(media_type, data[:12]):
+            raise ToolValidationError("The stored application photo is not a valid image.")
+        return ApplicationPhoto(
+            application_id=application_id,
+            filename=photo_filename,
+            media_type=media_type,
+            data=data,
+        )
 
 
 def _application_validation_details(error: ValidationError) -> list[str]:
@@ -1877,6 +2280,195 @@ class CourseSubmitApplicationTool:
         )
 
 
+def _require_instructor(principal: PrincipalContext) -> None:
+    if not principal.authenticated or "instructor" not in principal.roles:
+        raise PermissionError("Instructor access is required.")
+
+
+class InstructorListApplicationsTool:
+    """List private applicant records for an authenticated instructor."""
+
+    id = INSTRUCTOR_LIST_APPLICATIONS_TOOL_ID
+    description = (
+        "List submitted course applications available for instructor review. "
+        "Returns application IDs and concise applicant metadata, never filesystem paths."
+    )
+    input_schema: ClassVar[dict[str, JsonValue]] = {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": False,
+    }
+
+    def __init__(self, applicants: ApplicantStore) -> None:
+        self._applicants = applicants
+
+    async def execute(
+        self,
+        arguments: Mapping[str, JsonValue],
+        context: ToolExecutionContext,
+    ) -> ToolExecutionResult:
+        if arguments:
+            raise ValueError("instructor.list_applications does not accept arguments")
+        _require_instructor(context.principal)
+        applications = await self._applicants.list_applications()
+        return ToolExecutionResult(
+            content=[application.model_dump(mode="json") for application in applications],
+            summary=f"Listed {len(applications)} private course applications.",
+            storage_policy="server_summary",
+        )
+
+
+class InstructorReadApplicationTool:
+    """Read one private applicant record by its server-issued UUID."""
+
+    id = INSTRUCTOR_READ_APPLICATION_TOOL_ID
+    redact_arguments_in_events = True
+    description = (
+        "Read the complete structured contents of one submitted course application by the "
+        "application ID returned from instructor.list_applications. The representative photo "
+        "is reported as protected metadata. If the instructor explicitly asks about visible "
+        "image content, use instructor.inspect_application_images with the application ID."
+    )
+    input_schema: ClassVar[dict[str, JsonValue]] = {
+        "type": "object",
+        "properties": {
+            "application_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Server-issued application UUID.",
+            }
+        },
+        "required": ["application_id"],
+        "additionalProperties": False,
+    }
+
+    def __init__(self, applicants: ApplicantStore) -> None:
+        self._applicants = applicants
+
+    async def execute(
+        self,
+        arguments: Mapping[str, JsonValue],
+        context: ToolExecutionContext,
+    ) -> ToolExecutionResult:
+        _require_instructor(context.principal)
+        _reject_unknown_arguments(arguments, frozenset({"application_id"}))
+        try:
+            application_id = UUID(
+                _required_text_argument(arguments, "application_id", max_length=36)
+            )
+        except ValueError as error:
+            raise ToolValidationError("application_id must be a UUID.") from error
+        try:
+            application = await self._applicants.read_application(application_id)
+        except ResourceNotFound as error:
+            raise ToolValidationError("The course application was not found.") from error
+        return ToolExecutionResult(
+            content=application,
+            summary=f"Read private course application {application_id}.",
+            storage_policy="server_summary",
+        )
+
+
+class InstructorInspectApplicationImagesTool:
+    """Inspect selected private applicant images for an authenticated instructor."""
+
+    id = INSTRUCTOR_INSPECT_APPLICATION_IMAGES_TOOL_ID
+    redact_arguments_in_events = True
+    description = (
+        "Visually inspect one to four submitted application images only when the authenticated "
+        "instructor explicitly asks about their visible content. Use application IDs returned "
+        "by instructor.list_applications. This sends the selected private images and inspection "
+        "request to the configured multimodal model without provider-side storage. Each result "
+        "includes an exact protected applicant:// image_uri that may be used as the url of a "
+        "visual-composition image in the same turn; never invent, replace, or web-search for an "
+        "application image URL. Never use appearance to identify someone, infer sensitive traits, "
+        "or assess admission suitability."
+    )
+    input_schema: ClassVar[dict[str, JsonValue]] = {
+        "type": "object",
+        "properties": {
+            "application_ids": {
+                "type": "array",
+                "items": {"type": "string", "format": "uuid"},
+                "minItems": 1,
+                "maxItems": 4,
+                "description": "One to four server-issued application UUIDs.",
+            },
+            "prompt": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1_000,
+                "description": "Neutral visual question requested by the instructor.",
+            },
+        },
+        "required": ["application_ids", "prompt"],
+        "additionalProperties": False,
+    }
+
+    def __init__(
+        self,
+        applicants: ApplicantStore,
+        inspect: ApplicantImageInspectionRunner,
+    ) -> None:
+        self._applicants = applicants
+        self._inspect = inspect
+
+    async def execute(
+        self,
+        arguments: Mapping[str, JsonValue],
+        context: ToolExecutionContext,
+    ) -> ToolExecutionResult:
+        _require_instructor(context.principal)
+        _reject_unknown_arguments(arguments, frozenset({"application_ids", "prompt"}))
+        raw_application_ids = arguments.get("application_ids")
+        if (
+            not isinstance(raw_application_ids, list)
+            or not 1 <= len(raw_application_ids) <= 4
+            or any(not isinstance(value, str) for value in raw_application_ids)
+        ):
+            raise ToolValidationError("application_ids must contain one to four UUIDs.")
+        try:
+            application_ids = list(
+                dict.fromkeys(UUID(value) for value in cast(list[str], raw_application_ids))
+            )
+        except ValueError as error:
+            raise ToolValidationError("application_ids must contain valid UUIDs.") from error
+        prompt = _required_text_argument(arguments, "prompt", max_length=1_000)
+        photos: list[ApplicationPhoto] = []
+        try:
+            for application_id in application_ids:
+                photos.append(await self._applicants.read_application_photo(application_id))
+        except ResourceNotFound as error:
+            raise ToolValidationError("An application image was not found.") from error
+        try:
+            analysis = await asyncio.to_thread(self._inspect, photos, prompt)
+        except Exception as error:
+            raise ToolValidationError("The application images could not be inspected.") from error
+        if not analysis.strip():
+            raise ToolValidationError("Image inspection returned no visual analysis.")
+        image_uris = [photo.resource_uri for photo in photos]
+        context.transient_state["private_application_image_candidates"] = cast(
+            JsonValue, image_uris
+        )
+        return ToolExecutionResult(
+            content={
+                "images": [
+                    {
+                        "application_id": str(photo.application_id),
+                        "image_uri": photo.resource_uri,
+                        "media_type": photo.media_type,
+                        "size_bytes": len(photo.data),
+                    }
+                    for photo in photos
+                ],
+                "analysis": analysis.strip(),
+            },
+            summary=f"Inspected {len(photos)} private application images.",
+            storage_policy="server_summary",
+            resource_uris=image_uris,
+        )
+
+
 class ToolCatalog:
     """Registry that fails closed if trusted context names an unknown tool."""
 
@@ -1900,38 +2492,55 @@ class ToolCatalog:
 class AuthorizedCapabilities:
     tool_ids: tuple[str, ...]
     resource_uris: tuple[str, ...]
+    resource_index: tuple[str, ...] = ()
 
 
-class PublicCapabilityPolicy:
-    """Every principal receives the Phase 6 public course capabilities."""
+class CourseCapabilityPolicy:
+    """Authorize public and role-scoped course capabilities from trusted identity."""
 
     def __init__(
         self,
-        resource_uris: Iterable[str] | None = None,
+        resources: CourseResourceCatalog | None = None,
         *,
         browser_enabled: bool = False,
     ) -> None:
-        resolved = tuple(
-            resource_uris
-            if resource_uris is not None
-            else (
-                COURSE_SYLLABUS_URI,
-                COURSE_SCHEDULE_URI,
-                COURSE_REPOSITORIES_URI,
-                COURSE_FAQ_URI,
-                COURSE_INSTRUCTORS_URI,
-                COURSE_APPLICATION_URI,
-            )
-        )
-        if len(resolved) != len(set(resolved)):
-            raise ValueError("public resource URIs must be unique")
-        if any(not uri.startswith("course://") for uri in resolved):
-            raise ValueError("public resource URIs must use the course:// scheme")
-        self._resource_uris = resolved
+        self._resources = resources
         self._browser_enabled = browser_enabled
 
     def authorize(self, principal: PrincipalContext) -> AuthorizedCapabilities:
-        del principal
+        if self._resources is None:
+            visible_resources = [
+                ResourceSummary(
+                    uri=uri,
+                    title=title,
+                    description="",
+                    media_type="text/markdown",
+                    status="published",
+                )
+                for uri, title in (
+                    (COURSE_SYLLABUS_URI, "Course Syllabus"),
+                    (COURSE_SCHEDULE_URI, "Course Schedule"),
+                    (COURSE_REPOSITORIES_URI, "Student Repository Overview"),
+                    (COURSE_FAQ_URI, "Course FAQ"),
+                    (COURSE_INSTRUCTORS_URI, "Course Staff"),
+                    (COURSE_APPLICATION_URI, "Course Application Guide"),
+                )
+            ]
+            public_uris = {resource.uri for resource in visible_resources}
+        else:
+            visible_resources = self._resources.list_authorized(principal)
+            public_uris = {resource.uri for resource in self._resources.list_public()}
+        resource_uris = tuple(resource.uri for resource in visible_resources)
+        has_private_resources = any(uri not in public_uris for uri in resource_uris)
+        instructor_tools = (
+            (
+                INSTRUCTOR_LIST_APPLICATIONS_TOOL_ID,
+                INSTRUCTOR_READ_APPLICATION_TOOL_ID,
+                INSTRUCTOR_INSPECT_APPLICATION_IMAGES_TOOL_ID,
+            )
+            if principal.authenticated and "instructor" in principal.roles
+            else ()
+        )
         return AuthorizedCapabilities(
             tool_ids=(
                 READ_SYLLABUS_TOOL_ID,
@@ -1948,9 +2557,19 @@ class PublicCapabilityPolicy:
                 WEB_IMAGE_INSPECT_TOOL_ID,
                 VISIT_WEBPAGE_TOOL_ID,
                 *WORKSPACE_TOOL_IDS,
+                *(
+                    (LIST_PRIVATE_RESOURCES_TOOL_ID, READ_PRIVATE_RESOURCE_TOOL_ID)
+                    if has_private_resources
+                    else ()
+                ),
+                *instructor_tools,
                 *(BROWSER_TOOL_IDS if self._browser_enabled else ()),
             ),
-            resource_uris=self._resource_uris,
+            resource_uris=resource_uris,
+            resource_index=tuple(
+                resource.title + (f" — {resource.description}" if resource.description else "")
+                for resource in visible_resources
+            ),
         )
 
 
@@ -1964,10 +2583,14 @@ def _photo_extension(media_type: str) -> str:
 
 def _has_valid_image_signature(upload: StoredTemporaryUpload) -> bool:
     header = upload.path.read_bytes()[:12]
-    if upload.receipt.media_type == "image/jpeg":
+    return _has_valid_image_header(upload.receipt.media_type, header)
+
+
+def _has_valid_image_header(media_type: str, header: bytes) -> bool:
+    if media_type == "image/jpeg":
         return header.startswith(b"\xff\xd8\xff")
-    if upload.receipt.media_type == "image/png":
+    if media_type == "image/png":
         return header.startswith(b"\x89PNG\r\n\x1a\n")
-    if upload.receipt.media_type == "image/webp":
+    if media_type == "image/webp":
         return len(header) >= 12 and header[:4] == b"RIFF" and header[8:12] == b"WEBP"
     return False

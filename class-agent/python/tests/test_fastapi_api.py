@@ -10,7 +10,15 @@ from uuid import UUID, uuid4
 from fastapi.testclient import TestClient
 
 from agent_core import AgentContext, AgentInput, AgentResult, Event, PrincipalContext
-from course_server.agent import CourseAgentService, InMemoryConversationStore
+from course_server.agent import (
+    INSTRUCTOR_LIST_APPLICATIONS_TOOL_ID,
+    CourseAgentService,
+    CourseCapabilityPolicy,
+    FileApplicantStore,
+    FileResourceProvider,
+    InMemoryConversationStore,
+    ResourceDefinition,
+)
 from course_server.anonymous_quotas import AnonymousQuotaPolicy
 from course_server.api import API_PREFIX, AppServices, create_app
 from course_server.auth import AuthenticationService, InMemoryAuthStore, UserAdminService
@@ -445,6 +453,170 @@ def test_public_course_resource_catalog_marks_schedule_provisional() -> None:
         resource for resource in response.json() if resource["uri"] == "course://schedule"
     )
     assert schedule["status"] == "provisional"
+
+
+def test_role_scoped_resource_routes_and_agent_context_fail_closed(tmp_path: Path) -> None:
+    public_path = tmp_path / "public.md"
+    student_path = tmp_path / "student.md"
+    instructor_path = tmp_path / "instructor.md"
+    public_path.write_text("Public course information", encoding="utf-8")
+    student_path.write_text("Student cohort information", encoding="utf-8")
+    instructor_path.write_text("Instructor planning information", encoding="utf-8")
+    application_id = uuid4()
+    applicant_root = tmp_path / "applicants"
+    application_directory = applicant_root / f"20260903T120000Z_{application_id}"
+    application_directory.mkdir(parents=True)
+    (application_directory / "application.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "application_id": str(application_id),
+                "photo_filename": "photo.png",
+            }
+        ),
+        encoding="utf-8",
+    )
+    photo_bytes = b"\x89PNG\r\n\x1a\nprivate-application-photo"
+    (application_directory / "photo.png").write_bytes(photo_bytes)
+    applicants = FileApplicantStore(applicant_root)
+    resources = FileResourceProvider(
+        [
+            ResourceDefinition(
+                uri="course://public",
+                title="Public",
+                media_type="text/markdown",
+                path=public_path,
+            ),
+            ResourceDefinition(
+                uri="course://students/cohort",
+                title="Student Cohort",
+                media_type="text/markdown",
+                path=student_path,
+                visibility="students",
+            ),
+            ResourceDefinition(
+                uri="course://instructors/planning",
+                title="Instructor Planning",
+                media_type="text/markdown",
+                path=instructor_path,
+                visibility="instructors",
+            ),
+        ]
+    )
+    auth_store = InMemoryAuthStore()
+    authentication = AuthenticationService(auth_store)
+    admin = UserAdminService(auth_store)
+
+    async def create_users() -> tuple[str, str]:
+        student = await admin.create_user(
+            username="student",
+            display_name="Student Example",
+            email="student@mit.edu",
+            role="student",
+        )
+        instructor = await admin.create_user(
+            username="instructor",
+            display_name="Instructor Example",
+            email="instructor@mit.edu",
+            role="instructor",
+        )
+        return student.access_code, instructor.access_code
+
+    student_code, instructor_code = asyncio.run(create_users())
+    conversations = InMemoryConversationStore()
+    runtime = RecordingRuntime()
+    app = create_app(
+        services=AppServices(
+            authentication=authentication,
+            agent=CourseAgentService(
+                runtime=runtime,
+                conversations=conversations,
+                capability_policy=CourseCapabilityPolicy(resources),
+            ),
+            conversations=conversations,
+            applicants=applicants,
+            course_resources=resources,
+        )
+    )
+    anonymous_client = TestClient(app, base_url="https://testserver")
+    student_client = TestClient(app, base_url="https://testserver")
+    instructor_client = TestClient(app, base_url="https://testserver")
+
+    assert [resource["uri"] for resource in anonymous_client.get("/course/resources").json()] == [
+        "course://public"
+    ]
+    assert (
+        student_client.post(
+            "/auth/login",
+            json={"username": "student", "access_code": student_code},
+        ).status_code
+        == 200
+    )
+    assert (
+        instructor_client.post(
+            "/auth/login",
+            json={"username": "instructor", "access_code": instructor_code},
+        ).status_code
+        == 200
+    )
+
+    student_resources = student_client.get("/course/resources")
+    assert student_resources.headers["cache-control"] == "private, no-store"
+    assert [resource["uri"] for resource in student_resources.json()] == [
+        "course://public",
+        "course://students/cohort",
+    ]
+    instructor_resources = instructor_client.get("/course/resources")
+    assert instructor_resources.headers["cache-control"] == "private, no-store"
+    assert [resource["uri"] for resource in instructor_resources.json()] == [
+        "course://public",
+        "course://students/cohort",
+        "course://instructors/planning",
+    ]
+    denied = student_client.get(
+        "/course/resources/content",
+        params={"uri": "course://instructors/planning"},
+    )
+    assert denied.status_code == 404
+    allowed = instructor_client.get(
+        "/course/resources/content",
+        params={"uri": "course://instructors/planning"},
+    )
+    assert allowed.status_code == 200
+    assert allowed.text == "Instructor planning information"
+    assert allowed.headers["cache-control"] == "private, no-store"
+
+    photo_path = f"/instructor/applications/{application_id}/photo"
+    assert anonymous_client.get(photo_path).status_code == 404
+    assert student_client.get(photo_path).status_code == 404
+    photo = instructor_client.get(photo_path)
+    assert photo.status_code == 200
+    assert photo.content == photo_bytes
+    assert photo.headers["content-type"].startswith("image/png")
+    assert photo.headers["cache-control"] == "private, no-store"
+    assert photo.headers["x-class-agent-resource-uri"] == f"applicant://{application_id}/photo"
+    assert photo.headers["x-content-type-options"] == "nosniff"
+
+    student_conversation = _create_conversation(student_client)
+    assert (
+        student_client.post(
+            f"/conversations/{student_conversation}/run", json={"text": "student data"}
+        ).status_code
+        == 200
+    )
+    assert "course://students/cohort" in runtime.contexts[-1].permitted_resource_uris
+    assert "course://instructors/planning" not in runtime.contexts[-1].permitted_resource_uris
+    assert INSTRUCTOR_LIST_APPLICATIONS_TOOL_ID not in runtime.contexts[-1].permitted_tool_ids
+
+    instructor_conversation = _create_conversation(instructor_client)
+    assert (
+        instructor_client.post(
+            f"/conversations/{instructor_conversation}/run", json={"text": "applications"}
+        ).status_code
+        == 200
+    )
+    assert "course://instructors/planning" in runtime.contexts[-1].permitted_resource_uris
+    assert INSTRUCTOR_LIST_APPLICATIONS_TOOL_ID in runtime.contexts[-1].permitted_tool_ids
 
 
 def test_authorized_resource_content_is_served_by_uri_without_exposing_paths() -> None:

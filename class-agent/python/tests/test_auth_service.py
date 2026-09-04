@@ -79,6 +79,26 @@ def test_create_login_and_resolve_student_without_storing_secrets() -> None:
     asyncio.run(scenario())
 
 
+def test_create_login_and_resolve_instructor_role() -> None:
+    async def scenario() -> None:
+        _, _, admin, auth = services()
+        issued = await admin.create_user(
+            username="prof",
+            display_name="Professor Example",
+            email="prof@mit.edu",
+            role="instructor",
+        )
+
+        credential = await auth.login(username="prof", access_code=issued.access_code)
+        principal = await auth.resolve_authenticated(credential.token)
+
+        assert principal.authenticated
+        assert principal.username == "prof"
+        assert principal.roles == ["public", "instructor"]
+
+    asyncio.run(scenario())
+
+
 def test_invalid_user_and_invalid_code_have_same_public_failure() -> None:
     async def scenario() -> None:
         _, _, admin, auth = services()

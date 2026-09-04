@@ -59,6 +59,24 @@ editing resources when an immediate database refresh is needed without a restart
 Indexing upserts current resources and FAQ entries, removes stale resource rows, and
 marks removed seeded FAQ entries inactive. It does not use embeddings.
 
+## Role-scoped resources
+
+`COURSE_DATA_PATH` defaults to `data/` and contains `students/` and `instructors/`.
+Protected contents are not part of `shared/course`, the generated public registry, or the
+PostgreSQL public search index. Production should point this setting at a protected
+server-owned directory outside the Git checkout.
+
+Every readable file requires a sibling `resource.json`. Student manifests use a
+`course://students/...` URI and `visibility: students`; instructor manifests use a
+`course://instructors/...` URI and `visibility: instructors`. The loader verifies that the
+manifest audience matches its directory, confines files and assets to that audience root,
+and rejects duplicate URIs. Directory placement alone never publishes a file.
+
+Students can list, search, read, and display student resources after login. Instructors can
+do the same for both audiences. Anonymous, TA, and admin principals receive neither set.
+The API and agent capability catalog use the same trusted-principal policy. Private tool
+results use summary-only durable storage, and protected HTTP responses use `no-store`.
+
 ## Applications
 
 `course://application` is the public guide. The private submission tool accepts a
@@ -98,3 +116,9 @@ Neither directory may be web-served or registered as a public resource. Restrict
 access, include the applicant directory in encrypted backups, and define application
 and upload retention policies before accepting real applications. The service validates
 image type and file signature; it intentionally does not perform face recognition.
+Authenticated instructors may explicitly ask the Course Agent to inspect selected application
+images. That bounded operation sends the selected private bytes to the configured multimodal
+provider with provider storage disabled; ordinary application reads expose metadata only.
+For an instructor-visible gallery, the tool returns opaque applicant image URIs that the trusted
+web client resolves through an authenticated no-store endpoint. The private directory itself is
+never mounted or exposed as static content.

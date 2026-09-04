@@ -369,8 +369,14 @@ def _agent_instructions(
                     "not be a formal headshot. Submit only after every canonical field is "
                     "confirmed and the applicant explicitly requests submission."
                 )
-    if public_resource_index:
-        entries = "\n".join(f"- {entry}" for entry in public_resource_index)
+    raw_authorized_index = context.metadata.get("authorized_resource_index")
+    authorized_resource_index = (
+        tuple(entry for entry in raw_authorized_index if isinstance(entry, str) and entry.strip())
+        if isinstance(raw_authorized_index, list)
+        else public_resource_index
+    )
+    if authorized_resource_index:
+        entries = "\n".join(f"- {entry}" for entry in authorized_resource_index)
         sections.append(f"Official information available through tools:\n{entries}")
     if supporting_history:
         sections.append(f"Relevant prior actions:\n{supporting_history}")

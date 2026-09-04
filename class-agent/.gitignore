@@ -14,3 +14,7 @@ playwright-report/
 test-results/
 var/applicants/
 var/uploads/
+data/students/*
+!data/students/.gitkeep
+data/instructors/*
+!data/instructors/.gitkeep

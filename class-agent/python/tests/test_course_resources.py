@@ -5,6 +5,7 @@ import json
 import stat
 from io import BytesIO
 from pathlib import Path
+from typing import Literal
 from uuid import uuid4
 
 import httpx
@@ -20,8 +21,11 @@ from course_server.agent import (
     COURSE_INSTRUCTORS_URI,
     COURSE_SCHEDULE_URI,
     COURSE_SYLLABUS_URI,
+    ApplicationPhoto,
     CourseApplication,
     CourseGetApplicationTool,
+    CourseListPrivateResourcesTool,
+    CourseReadPrivateResourceTool,
     CourseReadPublicFileTool,
     CourseSearchFaqTool,
     CourseSearchTool,
@@ -29,6 +33,9 @@ from course_server.agent import (
     CourseSubmitApplicationTool,
     FileApplicantStore,
     FileResourceProvider,
+    InstructorInspectApplicationImagesTool,
+    InstructorListApplicationsTool,
+    InstructorReadApplicationTool,
     PublicImageInspectionTool,
     PublicImageSearchTool,
     PublicVisitWebpageTool,
@@ -37,6 +44,7 @@ from course_server.agent import (
     ToolExecutionContext,
     ToolProviderError,
     ToolValidationError,
+    load_protected_resource_definitions,
     load_resource_definitions,
 )
 from course_server.uploads import FileTemporaryUploadStore
@@ -52,9 +60,25 @@ def public_principal() -> PrincipalContext:
     )
 
 
-def execution_context(*resource_uris: str) -> ToolExecutionContext:
+def authenticated_principal(
+    role: Literal["student", "ta", "instructor", "admin"],
+) -> PrincipalContext:
+    return PrincipalContext(
+        authenticated=True,
+        user_id=uuid4(),
+        username=f"test-{role}",
+        display_name=f"Test {role.title()}",
+        roles=["public", role],
+        session_id=uuid4(),
+    )
+
+
+def execution_context(
+    *resource_uris: str,
+    principal: PrincipalContext | None = None,
+) -> ToolExecutionContext:
     return ToolExecutionContext(
-        principal=public_principal(),
+        principal=principal or public_principal(),
         conversation_id=uuid4(),
         permitted_resource_uris=frozenset(resource_uris),
     )
@@ -190,6 +214,128 @@ def test_public_resource_registry_includes_provisional_schedule() -> None:
         "wazeer_zulfikar_portrait",
         "yasith_samaradivakara_portrait",
     ]
+
+
+def _write_protected_resource(
+    data_path: Path,
+    *,
+    audience: Literal["students", "instructors"],
+    slug: str,
+    content: str,
+) -> str:
+    resource_directory = data_path / audience / slug
+    resource_directory.mkdir(parents=True)
+    (resource_directory / "content.md").write_text(content, encoding="utf-8")
+    uri = f"course://{audience}/{slug}"
+    (resource_directory / "resource.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "resource": {
+                    "uri": uri,
+                    "title": f"{audience.title()} {slug.title()}",
+                    "description": f"Protected {audience} material.",
+                    "media_type": "text/markdown",
+                    "file": "content.md",
+                    "visibility": audience,
+                    "status": "published",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return uri
+
+
+def test_protected_resources_follow_the_role_access_matrix(tmp_path: Path) -> None:
+    student_uri = _write_protected_resource(
+        tmp_path,
+        audience="students",
+        slug="week-one",
+        content="Student-only cohort note about alpha protocol.",
+    )
+    instructor_uri = _write_protected_resource(
+        tmp_path,
+        audience="instructors",
+        slug="teaching-note",
+        content="Instructor-only teaching note about beta protocol.",
+    )
+    resources = FileResourceProvider.from_registry(protected_data_path=tmp_path)
+    student = authenticated_principal("student")
+    instructor = authenticated_principal("instructor")
+
+    assert student_uri not in resources.authorized_resource_uris(public_principal())
+    assert resources.authorized_resource_uris(student)[-1:] == (student_uri,)
+    assert resources.authorized_resource_uris(instructor)[-2:] == (
+        student_uri,
+        instructor_uri,
+    )
+    assert student_uri not in resources.authorized_resource_uris(authenticated_principal("ta"))
+    assert instructor_uri not in resources.authorized_resource_uris(
+        authenticated_principal("admin")
+    )
+
+    async def scenario() -> None:
+        student_context = execution_context(student_uri, principal=student)
+        listed = await CourseListPrivateResourcesTool(resources).execute({}, student_context)
+        assert isinstance(listed.content, list)
+        assert [item["uri"] for item in listed.content if isinstance(item, dict)] == [student_uri]
+        read = await CourseReadPrivateResourceTool(resources).execute(
+            {"resource_uri": student_uri}, student_context
+        )
+        assert "alpha protocol" in str(read.content)
+        assert read.storage_policy == "server_summary"
+
+        forged_context = execution_context(student_uri, instructor_uri, principal=student)
+        with pytest.raises(PermissionError, match="not authorized"):
+            await CourseReadPrivateResourceTool(resources).execute(
+                {"resource_uri": instructor_uri}, forged_context
+            )
+        search = await CourseSearchTool(resources).execute({"query": "protocol"}, forged_context)
+        assert student_uri in str(search.content)
+        assert instructor_uri not in str(search.content)
+        assert "beta protocol" not in str(search.content)
+        assert search.storage_policy == "server_summary"
+
+        with pytest.raises(PermissionError, match="not a public"):
+            await CourseReadPublicFileTool(resources).execute(
+                {"resource_uri": student_uri}, student_context
+            )
+
+    asyncio.run(scenario())
+
+
+def test_protected_manifest_must_match_its_audience_directory(tmp_path: Path) -> None:
+    uri = _write_protected_resource(
+        tmp_path,
+        audience="students",
+        slug="mismatch",
+        content="Private",
+    )
+    manifest_path = tmp_path / "students/mismatch/resource.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["resource"]["visibility"] = "instructors"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="visibility does not match"):
+        load_protected_resource_definitions(tmp_path)
+    assert uri == "course://students/mismatch"
+
+
+def test_protected_manifest_rejects_primary_file_reused_as_an_asset(tmp_path: Path) -> None:
+    _write_protected_resource(
+        tmp_path,
+        audience="students",
+        slug="duplicate-file",
+        content="Private",
+    )
+    manifest_path = tmp_path / "students/duplicate-file/resource.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["resource"]["assets"] = {"duplicate": "content.md"}
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="duplicate protected resource asset"):
+        load_protected_resource_definitions(tmp_path)
 
 
 def test_public_resource_contents_do_not_expose_internal_resource_identifiers() -> None:
@@ -718,10 +864,8 @@ def test_application_tool_stores_private_json_with_server_generated_name(
             content=b"\xff\xd8\xffphoto-data",
             principal=principal,
         )
-        tool = CourseSubmitApplicationTool(
-            FileApplicantStore(tmp_path / "applicants"),
-            uploads,
-        )
+        applicant_store = FileApplicantStore(tmp_path / "applicants")
+        tool = CourseSubmitApplicationTool(applicant_store, uploads)
         application = {
             "name": "Ada Applicant",
             "email": "ada@example.edu",
@@ -772,6 +916,108 @@ def test_application_tool_stores_private_json_with_server_generated_name(
         assert photo_file.read_bytes() == b"\xff\xd8\xffphoto-data"
         assert stat.S_IMODE(application_file.stat().st_mode) == 0o600
         assert stat.S_IMODE(photo_file.stat().st_mode) == 0o600
+
+        instructor_context = execution_context(principal=authenticated_principal("instructor"))
+        listed = await InstructorListApplicationsTool(applicant_store).execute(
+            {}, instructor_context
+        )
+        assert listed.storage_policy == "server_summary"
+        assert isinstance(listed.content, list)
+        first_application = listed.content[0]
+        assert isinstance(first_application, dict)
+        assert first_application["name"] == "Ada Applicant"
+        application_id = str(first_application["application_id"])
+        read = await InstructorReadApplicationTool(applicant_store).execute(
+            {"application_id": application_id}, instructor_context
+        )
+        assert read.storage_policy == "server_summary"
+        assert isinstance(read.content, dict)
+        application_payload = read.content["application"]
+        assert isinstance(application_payload, dict)
+        assert application_payload["name"] == "Ada Applicant"
+        assert read.content["photo"] == {
+            "filename": "photo.jpg",
+            "media_type": "image/jpeg",
+            "size_bytes": len(b"\xff\xd8\xffphoto-data"),
+        }
+        assert str(tmp_path) not in str(read.content)
+
+        inspected_inputs: list[tuple[str, bytes, str]] = []
+
+        def inspect_application_images(photos: list[ApplicationPhoto], prompt: str) -> str:
+            photo = photos[0]
+            inspected_inputs.append((photo.media_type, photo.data, prompt))
+            return "The submitted image visibly contains a geometric portrait."
+
+        image_tool = InstructorInspectApplicationImagesTool(
+            applicant_store,
+            inspect_application_images,
+        )
+        inspected = await image_tool.execute(
+            {
+                "application_ids": [application_id],
+                "prompt": "Describe the visible composition.",
+            },
+            instructor_context,
+        )
+        assert inspected.storage_policy == "server_summary"
+        assert inspected_inputs == [
+            ("image/jpeg", b"\xff\xd8\xffphoto-data", "Describe the visible composition.")
+        ]
+        assert inspected.resource_uris == [f"applicant://{application_id}/photo"]
+        assert isinstance(inspected.content, dict)
+        images = inspected.content["images"]
+        assert isinstance(images, list)
+        first_image = images[0]
+        assert isinstance(first_image, dict)
+        assert first_image["image_uri"] == f"applicant://{application_id}/photo"
+        assert inspected.content["analysis"] == (
+            "The submitted image visibly contains a geometric portrait."
+        )
+        assert instructor_context.transient_state["private_application_image_candidates"] == [
+            f"applicant://{application_id}/photo"
+        ]
+        assert b"photo-data" not in str(inspected.content).encode()
+
+        photo_file.write_bytes(b"not-an-image")
+        with pytest.raises(ToolValidationError, match="not a valid image"):
+            await image_tool.execute(
+                {
+                    "application_ids": [application_id],
+                    "prompt": "Describe the visible composition.",
+                },
+                instructor_context,
+            )
+        assert len(inspected_inputs) == 1
+
+        for role in ("student", "ta", "admin"):
+            unauthorized = execution_context(principal=authenticated_principal(role))
+            with pytest.raises(PermissionError, match="Instructor access"):
+                await InstructorListApplicationsTool(applicant_store).execute({}, unauthorized)
+            with pytest.raises(PermissionError, match="Instructor access"):
+                await InstructorReadApplicationTool(applicant_store).execute(
+                    {"application_id": application_id}, unauthorized
+                )
+            with pytest.raises(PermissionError, match="Instructor access"):
+                await image_tool.execute(
+                    {
+                        "application_ids": [application_id],
+                        "prompt": "Describe it.",
+                    },
+                    unauthorized,
+                )
+
+        anonymous = execution_context(principal=public_principal())
+        with pytest.raises(PermissionError, match="Instructor access"):
+            await InstructorListApplicationsTool(applicant_store).execute({}, anonymous)
+        with pytest.raises(PermissionError, match="Instructor access"):
+            await image_tool.execute(
+                {
+                    "application_ids": [application_id],
+                    "prompt": "Describe it.",
+                },
+                anonymous,
+            )
 
     asyncio.run(scenario())
 

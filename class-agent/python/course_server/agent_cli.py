@@ -13,8 +13,11 @@ from agent_core import AgentResult, AgentRuntime, Conversation
 from course_server.agent import (
     ApplicantStore,
     CourseAgentService,
+    CourseCapabilityPolicy,
     CourseGetApplicationTool,
     CourseGetScheduleTool,
+    CourseListPrivateResourcesTool,
+    CourseReadPrivateResourceTool,
     CourseReadPublicFileTool,
     CourseReadSyllabusTool,
     CourseResourceCatalog,
@@ -24,7 +27,9 @@ from course_server.agent import (
     CourseSubmitApplicationTool,
     FileApplicantStore,
     FileResourceProvider,
-    PublicCapabilityPolicy,
+    InstructorInspectApplicationImagesTool,
+    InstructorListApplicationsTool,
+    InstructorReadApplicationTool,
     PublicImageInspectionTool,
     PublicImageSearchTool,
     PublicVisitWebpageTool,
@@ -59,6 +64,7 @@ from course_server.web_search import (
     BraveWebSearchClient,
     fetch_public_webpage,
     inspect_images_with_openai,
+    inspect_private_images_with_openai,
     probe_public_image_url,
     search_duckduckgo_images,
 )
@@ -81,7 +87,7 @@ async def run_cli_turn(
     runtime: AgentRuntime,
     auth_store: AuthStore,
     conversation_store: ConversationStore,
-    capability_policy: PublicCapabilityPolicy | None = None,
+    capability_policy: CourseCapabilityPolicy | None = None,
 ) -> tuple[Conversation, AgentResult]:
     """Run the CLI flow with injectable adapters so tests never call an external model."""
 
@@ -111,7 +117,11 @@ def build_runtime(
     components: ComponentRegistry | None = None,
     browser: BrowserSessionService | None = None,
 ) -> SmolagentsRuntime:
-    course_resources = resources if resources is not None else FileResourceProvider.from_registry()
+    course_resources = (
+        resources
+        if resources is not None
+        else FileResourceProvider.from_registry(protected_data_path=settings.course_data_path)
+    )
     applicant_store = (
         applicants if applicants is not None else FileApplicantStore(settings.applicant_data_path)
     )
@@ -122,13 +132,26 @@ def build_runtime(
     executable_tools: list[ExecutableTool] = [
         CourseReadSyllabusTool(course_resources),
         CourseReadPublicFileTool(course_resources),
+        CourseReadPrivateResourceTool(course_resources),
         CourseGetScheduleTool(course_resources),
         CourseGetApplicationTool(course_resources),
         CourseShowPublicFilesTool(course_resources),
+        CourseListPrivateResourcesTool(course_resources),
         CourseSearchFaqTool(course_resources),
         CourseSearchTool(course_resources),
         ReadTemporaryUploadTool(upload_store),
         CourseSubmitApplicationTool(applicant_store, upload_store),
+        InstructorListApplicationsTool(applicant_store),
+        InstructorReadApplicationTool(applicant_store),
+        InstructorInspectApplicationImagesTool(
+            applicant_store,
+            lambda photos, prompt: inspect_private_images_with_openai(
+                [(photo.media_type, photo.data) for photo in photos],
+                prompt,
+                model_id=settings.model_id,
+                api_key=settings.model_api_key.get_secret_value(),
+            ),
+        ),
         PublicWebSearchTool(
             BraveWebSearchClient(
                 settings.brave_search_api_key.get_secret_value(),
@@ -195,15 +218,15 @@ async def _run_postgres_turn(
     await pool.open()
     await pool.wait()
     try:
-        course_resources = FileResourceProvider.from_registry()
+        course_resources = FileResourceProvider.from_registry(
+            protected_data_path=settings.course_data_path
+        )
         return await run_cli_turn(
             text,
             runtime=build_runtime(settings, resources=course_resources),
             auth_store=PostgresAuthStore(pool),
             conversation_store=PostgresConversationStore(pool),
-            capability_policy=PublicCapabilityPolicy(
-                resource.uri for resource in course_resources.list_public()
-            ),
+            capability_policy=CourseCapabilityPolicy(course_resources),
         )
     finally:
         await pool.close()
