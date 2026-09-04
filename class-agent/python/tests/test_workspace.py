@@ -200,8 +200,9 @@ def test_application_draft_allows_one_atomic_update_per_user_turn() -> None:
         )
         assert isinstance(opened.content, dict)
         assert opened.content["next_action"] == (
-            "The canonical application draft is open. Use final_answer to state the "
-            "requirements and ask only for the applicant's full name, then wait."
+            "The canonical application draft is the primary presentation. Do not restate "
+            "requirements or other content visible in it. Use final_answer only to ask for "
+            "the applicant's full name, then wait."
         )
         panel_id = str(opened.content["panel_id"])
         opened_state = WorkspaceState.model_validate(context.workspace_state)
@@ -251,8 +252,9 @@ def test_application_draft_allows_one_atomic_update_per_user_turn() -> None:
 
         assert isinstance(updated.content, dict)
         assert updated.content["next_action"] == (
-            "End this turn with final_answer containing exactly one question, "
-            "then wait for the applicant."
+            "The application draft is the primary presentation. Do not restate its visible "
+            "content. End this turn with final_answer containing exactly one question, then "
+            "wait for the applicant."
         )
         updated_state = WorkspaceState.model_validate(context.workspace_state)
         updated_fields = updated_state.panels[0].props["fields"]

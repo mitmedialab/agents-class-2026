@@ -44,10 +44,11 @@ separate from this stable contract.
 When workspace tools are authorized, runtime policy treats registered components as
 the preferred presentation surface. The agent should display schedules, documents,
 and other suitable structured results in a component rather than paste their complete
-contents into chat. When a visual composition carries the answer, chat gives only a
-short handoff and does not restate its facts. This preference never bypasses component,
-prop, operation, or resource authorization validation, and it does not permit generated
-JavaScript or arbitrary UI.
+contents into chat. When a workspace component carries the detailed result, chat gives
+only a short handoff or the single next question needed from the user; it does not restate
+content already visible in the component. This preference never bypasses component, prop,
+operation, or resource authorization validation, and it does not permit generated JavaScript
+or arbitrary UI.
 
 On desktop, the right column is the workspace canvas itself rather than a framed panel
 inside the column. The current panel receives the full available height and omits tab

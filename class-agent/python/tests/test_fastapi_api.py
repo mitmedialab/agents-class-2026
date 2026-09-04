@@ -1206,6 +1206,7 @@ def test_application_draft_migrates_unmarked_legacy_field_aliases() -> None:
         "value": "MIT Media Lab, Fluid Interfaces, second year",
         "status": "candidate",
         "source": "Migrated from the previous combined background field",
+        "input_type": "text",
     }
     assert fields[10] == {
         "id": "why_take_this_class",
@@ -1216,6 +1217,7 @@ def test_application_draft_migrates_unmarked_legacy_field_aliases() -> None:
         "value": "I want to build dependable agents.",
         "status": "confirmed",
         "source": "Provided by applicant",
+        "input_type": "multiline",
     }
     assert fields[13]["value"] == "for credit"
     assert fields[13]["status"] == "confirmed"
@@ -1288,6 +1290,7 @@ def test_agent_run_repairs_unmarked_model_created_application_draft() -> None:
         "value": "ada@example.edu",
         "status": "candidate",
         "source": "Public profile",
+        "input_type": "email",
     }
     detail = client.get(f"/conversations/{conversation_id}").json()
     assert [event["type"] for event in detail["events"]] == [

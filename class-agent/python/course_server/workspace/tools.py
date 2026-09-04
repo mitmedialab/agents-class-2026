@@ -682,8 +682,9 @@ class WorkspaceOpenComponentTool:
         }
         if application_open:
             content["next_action"] = (
-                "The canonical application draft is open. Use final_answer to state the "
-                "requirements and ask only for the applicant's full name, then wait."
+                "The canonical application draft is the primary presentation. Do not restate "
+                "requirements or other content visible in it. Use final_answer only to ask for "
+                "the applicant's full name, then wait."
             )
         return _command_result(
             command=command,
@@ -800,8 +801,9 @@ class WorkspaceUpdateComponentTool:
         }
         if application_update:
             content["next_action"] = (
-                "End this turn with final_answer containing exactly one question, "
-                "then wait for the applicant."
+                "The application draft is the primary presentation. Do not restate its visible "
+                "content. End this turn with final_answer containing exactly one question, then "
+                "wait for the applicant."
             )
         return _command_result(
             command=command,
