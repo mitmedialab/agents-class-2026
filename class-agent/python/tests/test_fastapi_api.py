@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, cast
 from uuid import UUID, uuid4
 
+import httpx
 from fastapi.testclient import TestClient
 
 from agent_core import AgentContext, AgentInput, AgentResult, Event, PrincipalContext
@@ -931,6 +932,14 @@ def test_application_draft_opens_complete_and_persists_user_edits() -> None:
     )
     photo = next(field for field in panel["props"]["fields"] if field["id"] == "photo_upload_id")
     assert photo["label"] == "Class-only picture that represents you (JPG/JPEG, PNG, or WebP)"
+    assert photo["input_type"] == "attachment"
+    assert "Attach files in the message box" in photo["help_text"]
+    email = next(field for field in panel["props"]["fields"] if field["id"] == "email")
+    assert email["input_type"] == "email"
+    degree_year = next(
+        field for field in panel["props"]["fields"] if field["id"] == "degree_start_year"
+    )
+    assert degree_year["input_type"] == "year"
     school = next(field for field in panel["props"]["fields"] if field["id"] == "school")
     assert school["options"] == ["MIT Media Lab", "MIT", "Harvard", "Wellesley", "Other"]
     registration = next(
@@ -947,7 +956,18 @@ def test_application_draft_opens_complete_and_persists_user_edits() -> None:
             "value": {"field_id": "github_id", "value": "https://github.com/ada"},
         },
     )
-    assert malformed_github_id.status_code == 400
+    assert malformed_github_id.status_code == 200
+    github_field = next(
+        field
+        for field in malformed_github_id.json()["payload"]["command"]["props"]["fields"]
+        if field["id"] == "github_id"
+    )
+    assert github_field["value"] == "https://github.com/ada"
+    assert github_field["status"] == "candidate"
+    assert github_field["validation_error"] == (
+        "must be a GitHub username with 1-39 letters, numbers, or single hyphens; "
+        "no @, URL, leading or trailing hyphen, or consecutive hyphens"
+    )
 
     invalid_school = client.post(
         f"/conversations/{conversation_id}/workspace/interactions",
@@ -957,7 +977,17 @@ def test_application_draft_opens_complete_and_persists_user_edits() -> None:
             "value": {"field_id": "school", "value": "Stanford"},
         },
     )
-    assert invalid_school.status_code == 400
+    assert invalid_school.status_code == 200
+    school_field = next(
+        field
+        for field in invalid_school.json()["payload"]["command"]["props"]["fields"]
+        if field["id"] == "school"
+    )
+    assert school_field["value"] == "Stanford"
+    assert school_field["status"] == "candidate"
+    assert school_field["validation_error"] == (
+        "must be one of: MIT Media Lab, MIT, Harvard, Wellesley, Other"
+    )
 
     invalid_degree_year = client.post(
         f"/conversations/{conversation_id}/workspace/interactions",
@@ -967,7 +997,32 @@ def test_application_draft_opens_complete_and_persists_user_edits() -> None:
             "value": {"field_id": "degree_start_year", "value": "second year"},
         },
     )
-    assert invalid_degree_year.status_code == 400
+    assert invalid_degree_year.status_code == 200
+    year_field = next(
+        field
+        for field in invalid_degree_year.json()["payload"]["command"]["props"]["fields"]
+        if field["id"] == "degree_start_year"
+    )
+    assert year_field["value"] == "second year"
+    assert year_field["status"] == "candidate"
+    assert year_field["validation_error"] == (
+        "must be the four-digit year when the applicant started the degree"
+    )
+
+    oversized = client.post(
+        f"/conversations/{conversation_id}/workspace/interactions",
+        json={
+            "panel_id": panel["id"],
+            "action": "draft.change",
+            "value": {"field_id": "interests", "value": "x" * 4_001},
+        },
+    )
+    assert oversized.status_code == 422
+    assert oversized.json()["detail"] == {
+        "code": "draft_field_too_long",
+        "field_id": "interests",
+        "message": "This field cannot contain more than 4,000 characters.",
+    }
 
     changed = client.post(
         f"/conversations/{conversation_id}/workspace/interactions",
@@ -1000,7 +1055,67 @@ def test_application_draft_opens_complete_and_persists_user_edits() -> None:
         "value": "Ada Example",
         "status": "confirmed",
         "source": "Confirmed by applicant",
+        "input_type": "text",
     }
+
+
+def test_application_draft_route_returns_saved_validation_state_and_structured_errors() -> None:
+    test_client, _, _ = _build_client()
+
+    async def scenario() -> None:
+        transport = httpx.ASGITransport(app=test_client.app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="https://testserver",
+        ) as client:
+            principal = await client.get(f"{API_PREFIX}/auth/me")
+            assert principal.status_code == 200
+            conversation = await client.post(
+                f"{API_PREFIX}/conversations",
+                json={"title": "Apply"},
+            )
+            assert conversation.status_code == 200
+            conversation_id = conversation.json()["id"]
+            opened = await client.post(
+                f"{API_PREFIX}/conversations/{conversation_id}/application-draft"
+            )
+            assert opened.status_code == 200
+            panel_id = opened.json()["payload"]["command"]["panel"]["id"]
+
+            invalid = await client.post(
+                f"{API_PREFIX}/conversations/{conversation_id}/workspace/interactions",
+                json={
+                    "panel_id": panel_id,
+                    "action": "draft.change",
+                    "value": {
+                        "field_id": "github_id",
+                        "value": "https://github.com/ada",
+                    },
+                },
+            )
+            assert invalid.status_code == 200
+            fields = invalid.json()["payload"]["command"]["props"]["fields"]
+            github = next(field for field in fields if field["id"] == "github_id")
+            assert github["value"] == "https://github.com/ada"
+            assert github["status"] == "candidate"
+            assert "validation_error" in github
+
+            oversized = await client.post(
+                f"{API_PREFIX}/conversations/{conversation_id}/workspace/interactions",
+                json={
+                    "panel_id": panel_id,
+                    "action": "draft.change",
+                    "value": {"field_id": "interests", "value": "x" * 4_001},
+                },
+            )
+            assert oversized.status_code == 422
+            assert oversized.json()["detail"] == {
+                "code": "draft_field_too_long",
+                "field_id": "interests",
+                "message": "This field cannot contain more than 4,000 characters.",
+            }
+
+    asyncio.run(scenario())
 
 
 def test_application_draft_migrates_unmarked_legacy_field_aliases() -> None:

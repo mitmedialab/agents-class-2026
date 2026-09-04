@@ -458,6 +458,23 @@ describe("Course Agent interface", () => {
     );
   });
 
+  it("shows draft save failures beside the field without replacing them with a generic trace", async () => {
+    vi.mocked(api.recordWorkspaceInteraction).mockRejectedValueOnce(
+      new Error("Enter at least two characters."),
+    );
+    render(<App />);
+    await openExistingConversation();
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    const name = await screen.findByRole("textbox", { name: "Name" });
+    fireEvent.change(name, { target: { value: "A" } });
+    fireEvent.blur(name);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Enter at least two characters.");
+    expect(name).toHaveValue("A");
+    expect(screen.queryByText("Workspace interaction was not saved")).not.toBeInTheDocument();
+  });
+
   it("allows only one shortcut operation while an agent run is active", async () => {
     let finishRun = () => {};
     vi.mocked(api.streamAgentRun).mockImplementation(

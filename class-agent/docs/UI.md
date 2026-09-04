@@ -101,7 +101,11 @@ Phase 7 fills the workspace shell with registered native components. A validated
 workspace event changes the desktop layout to conversation plus workspace; smaller
 screens stack the active workspace below the current response. MCP Apps remain Phase 8.
 Closed draft fields render as native selects using options supplied by validated
-component props; open-response fields remain textareas.
+component props. Drafts can also request semantic text, email, URL, year, multiline, or
+attachment-receipt presentations. Validation guidance appears beside the affected field,
+and a rejected transport save retains the applicant's typed value for retry. Application
+picture receipts remain internal; the field directs applicants to the existing message
+attachment control.
 The desktop workspace is a full-height right-side canvas without an enclosing card.
 It has one current surface. Opening or focusing a different subject, artifact, or view
 replaces the prior panel immediately, so stale workspaces never compete for attention.

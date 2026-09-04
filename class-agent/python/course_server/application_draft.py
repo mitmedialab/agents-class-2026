@@ -19,6 +19,16 @@ class ApplicationDraftValidationError(ValueError):
     """A populated application draft field does not satisfy its final contract."""
 
 
+class ApplicationDraftEditError(ValueError):
+    """A user draft edit cannot be represented safely."""
+
+    def __init__(self, code: str, message: str, *, field_id: str | None = None) -> None:
+        super().__init__(message)
+        self.code = code
+        self.field_id = field_id
+        self.message = message
+
+
 APPLICATION_DRAFT_FIELDS: tuple[tuple[str, str], ...] = tuple(
     (field.id, field.label) for field in APPLICATION_FIELD_SPECS
 )
@@ -77,6 +87,8 @@ def application_draft_props() -> dict[str, JsonValue]:
                 "value": "",
                 "status": "missing",
                 **({"options": list(field.options)} if field.options else {}),
+                "input_type": field.input_type,
+                **({"help_text": field.help_text} if field.help_text else {}),
             }
             for field in APPLICATION_FIELD_SPECS
         ],
@@ -88,6 +100,32 @@ def _draft_fields(props: dict[str, JsonValue]) -> list[dict[str, JsonValue]]:
     if not isinstance(fields, list) or not all(isinstance(field, dict) for field in fields):
         return []
     return cast(list[dict[str, JsonValue]], fields)
+
+
+def _refresh_application_validation(fields: list[dict[str, JsonValue]]) -> None:
+    registration_field = next(
+        (field for field in fields if field.get("id") == "registration_status"),
+        None,
+    )
+    registration_value = registration_field.get("value") if registration_field is not None else None
+    registration_status = registration_value if isinstance(registration_value, str) else None
+    for field in fields:
+        field_id = field.get("id")
+        value = field.get("value")
+        if not isinstance(field_id, str) or not isinstance(value, str):
+            field.pop("validation_error", None)
+            continue
+        validation_error = application_field_validation_error(
+            field_id,
+            value,
+            registration_status=registration_status,
+        )
+        if validation_error is None:
+            field.pop("validation_error", None)
+            continue
+        field["validation_error"] = validation_error
+        if field.get("status") == "confirmed":
+            field["status"] = "candidate"
 
 
 def normalized_application_draft_props(
@@ -155,7 +193,49 @@ def normalized_application_draft_props(
         source = prior.get("source")
         if isinstance(source, str) and source and "source" not in field:
             field["source"] = source
+    _refresh_application_validation(normalized_fields)
     return normalized
+
+
+def updated_application_draft_from_user(
+    existing_props: dict[str, JsonValue],
+    field_id: object,
+    value: object,
+) -> dict[str, JsonValue]:
+    """Save a bounded user edit and annotate any final-submission validation problem."""
+
+    if not isinstance(field_id, str) or not isinstance(value, str):
+        raise ApplicationDraftEditError(
+            "invalid_draft_change",
+            "The draft change must identify a field and provide text.",
+        )
+    if len(value) > 4_000:
+        raise ApplicationDraftEditError(
+            "draft_field_too_long",
+            "This field cannot contain more than 4,000 characters.",
+            field_id=field_id,
+        )
+    normalized = normalized_application_draft_props(existing_props)
+    fields = _draft_fields(normalized)
+    target = next((field for field in fields if field.get("id") == field_id), None)
+    if target is None:
+        raise ApplicationDraftEditError(
+            "unknown_draft_field",
+            "This field is not part of the current draft.",
+            field_id=field_id,
+        )
+    target["value"] = value
+    if value.strip():
+        target["status"] = "confirmed"
+        target["source"] = "Confirmed by applicant"
+    else:
+        target["status"] = "missing"
+        target["source"] = ""
+    _refresh_application_validation(fields)
+    if target.get("validation_error") is not None:
+        target["status"] = "candidate"
+        target["source"] = "Entered by applicant"
+    return {"fields": cast(list[JsonValue], fields)}
 
 
 def merged_application_draft_props(

@@ -777,11 +777,11 @@ export default function App() {
     }
   }
 
-  function handleWorkspaceInteraction(
+  async function handleWorkspaceInteraction(
     panelId: string,
     action: string,
     value: JsonValue,
-  ): void {
+  ): Promise<void> {
     if (!selectedConversationId) return;
     if (
       action !== "calendar.select_event" &&
@@ -794,24 +794,24 @@ export default function App() {
     ) {
       return;
     }
-    void recordWorkspaceInteraction(
-      selectedConversationId,
-      panelId,
-      action,
-      value,
-    )
-      .then((event) => {
-        if (action !== "draft.change") return;
-        setWorkspaceState((current) =>
-          builtInComponentRegistry.apply(current, event.payload.command),
-        );
-      })
-      .catch(() => {
-        setActivities((current) => [
-          ...current,
-          { kind: "error", label: "Workspace interaction was not saved" },
-        ]);
-      });
+    try {
+      const event = await recordWorkspaceInteraction(
+        selectedConversationId,
+        panelId,
+        action,
+        value,
+      );
+      if (action !== "draft.change") return;
+      setWorkspaceState((current) =>
+        builtInComponentRegistry.apply(current, event.payload.command),
+      );
+    } catch (error) {
+      if (action === "draft.change") throw error;
+      setActivities((current) => [
+        ...current,
+        { kind: "error", label: "Workspace interaction was not saved" },
+      ]);
+    }
   }
 
   async function handleBrowserScroll(

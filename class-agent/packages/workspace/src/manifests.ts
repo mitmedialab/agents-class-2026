@@ -519,7 +519,7 @@ export const VISUAL_COMPOSITION_MANIFEST: ComponentManifest = {
 
 export const DRAFT_DOCUMENT_MANIFEST: ComponentManifest = {
   id: "draft-document",
-  version: "1.1.0",
+  version: "1.2.0",
   title: "Draft Document",
   description: "Builds a structured document progressively from confirmed and draft fields.",
   propsSchema: {
@@ -548,6 +548,12 @@ export const DRAFT_DOCUMENT_MANIFEST: ComponentManifest = {
               enum: ["missing", "candidate", "inferred", "confirmed"],
             },
             source: { type: "string", maxLength: 500 },
+            help_text: { type: "string", maxLength: 500 },
+            validation_error: { type: "string", maxLength: 500 },
+            input_type: {
+              type: "string",
+              enum: ["text", "email", "url", "year", "multiline", "attachment"],
+            },
             options: {
               type: "array",
               minItems: 1,

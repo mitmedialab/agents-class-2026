@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
+from typing import cast
 from uuid import uuid4
 
 import pytest
@@ -11,6 +12,11 @@ from pydantic import JsonValue
 
 from agent_core import Event, PrincipalContext
 from course_server.agent import ToolExecutionContext, ToolValidationError
+from course_server.application_draft import (
+    ApplicationDraftEditError,
+    application_draft_props,
+    updated_application_draft_from_user,
+)
 from course_server.workspace import (
     COMPONENT_REGISTRY_PATH,
     WorkspacePanel,
@@ -71,6 +77,34 @@ def test_workspace_schema_validates_published_component_registry() -> None:
     ).evolve(schema=schema["$defs"]["ComponentRegistry"])
 
     assert not list(validator.iter_errors(registry))
+
+
+def test_user_application_edits_persist_validation_state_without_losing_text() -> None:
+    props = application_draft_props()
+
+    invalid = updated_application_draft_from_user(
+        props,
+        "github_id",
+        "https://github.com/ada",
+    )
+    invalid_fields = cast(list[dict[str, JsonValue]], invalid["fields"])
+    github = next(field for field in invalid_fields if field["id"] == "github_id")
+    assert github["value"] == "https://github.com/ada"
+    assert github["status"] == "candidate"
+    validation_error = github["validation_error"]
+    assert isinstance(validation_error, str)
+    assert "no @, URL" in validation_error
+
+    corrected = updated_application_draft_from_user(props, "github_id", "ada")
+    corrected_fields = cast(list[dict[str, JsonValue]], corrected["fields"])
+    github = next(field for field in corrected_fields if field["id"] == "github_id")
+    assert github["status"] == "confirmed"
+    assert "validation_error" not in github
+
+    with pytest.raises(ApplicationDraftEditError) as error:
+        updated_application_draft_from_user(props, "interests", "x" * 4_001)
+    assert error.value.code == "draft_field_too_long"
+    assert error.value.field_id == "interests"
 
 
 def test_workspace_tools_validate_and_apply_complete_panel_lifecycle() -> None:
@@ -233,6 +267,7 @@ def test_application_draft_allows_one_atomic_update_per_user_turn() -> None:
             "value": "ada@example.edu",
             "status": "candidate",
             "source": "Public profile",
+            "input_type": "email",
         }
         with pytest.raises(ToolValidationError, match="already updated for this user turn"):
             await tool.execute(

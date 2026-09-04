@@ -11,6 +11,7 @@ import {
   type DocumentResource,
   type DraftDocumentField,
   type DraftDocumentStatus,
+  type DraftFieldInputType,
   type DraftFieldStatus,
   type PageCardItem,
   type TextHighlightAnchor,
@@ -33,7 +34,7 @@ interface WorkspaceProps {
   onPanelAction: (action: "focus" | "close", panelId: string) => Promise<void>;
   onCloseWorkspace: () => Promise<void>;
   onSubmitApplication: () => void;
-  onInteraction: (panelId: string, action: string, value: JsonValue) => void;
+  onInteraction: (panelId: string, action: string, value: JsonValue) => Promise<void>;
   onBrowserScroll: (panelId: string, sessionId: string, deltaY: number) => Promise<void>;
   onBrowserActivate: (
     panelId: string,
@@ -115,6 +116,14 @@ function draftDocumentFields(value: JsonValue | undefined): DraftDocumentField[]
     "confirmed",
   ]);
   const fields: DraftDocumentField[] = [];
+  const inputTypes = new Set<DraftFieldInputType>([
+    "text",
+    "email",
+    "url",
+    "year",
+    "multiline",
+    "attachment",
+  ]);
   for (const item of value) {
     if (!item || typeof item !== "object" || Array.isArray(item)) return null;
     if (
@@ -132,6 +141,14 @@ function draftDocumentFields(value: JsonValue | undefined): DraftDocumentField[]
     };
     if (typeof item.value === "string") field.value = item.value;
     if (typeof item.source === "string") field.source = item.source;
+    if (typeof item.help_text === "string") field.helpText = item.help_text;
+    if (typeof item.validation_error === "string") {
+      field.validationError = item.validation_error;
+    }
+    if (typeof item.input_type === "string") {
+      if (!inputTypes.has(item.input_type as DraftFieldInputType)) return null;
+      field.inputType = item.input_type as DraftFieldInputType;
+    }
     if (item.options !== undefined) {
       if (
         !Array.isArray(item.options) ||
@@ -214,7 +231,7 @@ function ResourcePanel({
     width: number,
     height: number,
   ) => Promise<void>;
-  onInteraction: (panelId: string, action: string, value: JsonValue) => void;
+  onInteraction: (panelId: string, action: string, value: JsonValue) => Promise<void>;
   onSubmitApplication: () => void;
 }) {
   const [resource, setResource] = useState<CourseResourceContent | null>(null);
@@ -339,7 +356,7 @@ function ResourcePanel({
     return (
       <PageCards
         items={items}
-        onSelect={(id) => onInteraction(panel.id, "page_cards.select", id)}
+        onSelect={(id) => void onInteraction(panel.id, "page_cards.select", id)}
         {...(description === undefined ? {} : { description })}
         {...(heading === undefined ? {} : { heading })}
         {...(selectedId === undefined ? {} : { selectedId })}
@@ -365,7 +382,7 @@ function ResourcePanel({
         elements={elements}
         rootId={rootId}
         onChange={(elementId, value) =>
-          onInteraction(panel.id, "visual.change", {
+          void onInteraction(panel.id, "visual.change", {
             element_id: elementId,
             value,
           })
@@ -437,9 +454,9 @@ function ResourcePanel({
         highlight={highlightProp(panel.props.highlight)}
         page={numberProp(panel.props, "page")}
         resource={documentResource}
-        onFind={(query) => onInteraction(panel.id, "document.find_text", query)}
+        onFind={(query) => void onInteraction(panel.id, "document.find_text", query)}
         onPageChange={(page) =>
-          onInteraction(panel.id, "document.change_page", page)
+          void onInteraction(panel.id, "document.change_page", page)
         }
       />
     );
@@ -453,7 +470,7 @@ function ResourcePanel({
         selectedEventId={stringProp(panel.props, "selected_event_id")}
         view={view === "month" ? "month" : "agenda"}
         onInteraction={(action, value) =>
-          onInteraction(panel.id, `calendar.${action}`, value)
+          void onInteraction(panel.id, `calendar.${action}`, value)
         }
       />
     );

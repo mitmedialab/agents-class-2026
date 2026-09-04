@@ -59,7 +59,11 @@ the resulting canonical event. It cannot introduce an arbitrary component or pro
 `POST /api/v1/conversations/{conversation_id}/workspace/interactions` records a
 schema-limited calendar selection/view change or document page/find action as
 `workspace.interaction`. The server verifies that the panel exists and that the action
-matches its registered component before appending the event.
+matches its registered component before appending the event. Bounded application-draft
+edits are saved even when they do not yet satisfy the final submission rules; the
+resulting panel update marks the field as a candidate and carries a field-specific
+`validation_error`. Structurally invalid or oversized draft edits return `422` with a
+structured `code`, optional `field_id`, and user-safe `message`.
 
 `POST /api/v1/uploads` accepts the file as the raw request body, its original name in
 the required `filename` query parameter, and its media type in `Content-Type`. It

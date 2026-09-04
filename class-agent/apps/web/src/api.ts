@@ -68,6 +68,8 @@ export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    readonly code?: string,
+    readonly fieldId?: string,
   ) {
     super(message);
     this.name = "ApiError";
@@ -78,16 +80,24 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-async function errorMessage(response: Response): Promise<string> {
+async function responseError(response: Response): Promise<ApiError> {
   try {
     const body: unknown = await response.json();
     if (isRecord(body) && typeof body.detail === "string") {
-      return body.detail;
+      return new ApiError(body.detail, response.status);
+    }
+    if (isRecord(body) && isRecord(body.detail) && typeof body.detail.message === "string") {
+      return new ApiError(
+        body.detail.message,
+        response.status,
+        typeof body.detail.code === "string" ? body.detail.code : undefined,
+        typeof body.detail.field_id === "string" ? body.detail.field_id : undefined,
+      );
     }
   } catch {
     // A transport error without JSON still receives a stable client message.
   }
-  return "request failed";
+  return new ApiError("request failed", response.status);
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
@@ -101,7 +111,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    throw new ApiError(await errorMessage(response), response.status);
+    throw await responseError(response);
   }
 
   return (await response.json()) as T;
@@ -124,7 +134,7 @@ export async function logout(): Promise<void> {
     credentials: "include",
   });
   if (!response.ok) {
-    throw new ApiError(await errorMessage(response), response.status);
+    throw await responseError(response);
   }
 }
 
@@ -156,7 +166,7 @@ export async function getCourseResourceContent(
       `${API_BASE_URL}/course/resources/content?${new URLSearchParams({ uri: resourceUri }).toString()}`);
   const response = await fetch(requestUrl, { credentials: "include" });
   if (!response.ok) {
-    throw new ApiError(await errorMessage(response), response.status);
+    throw await responseError(response);
   }
   const mediaType = response.headers.get("content-type")?.split(";", 1)[0] ?? "text/plain";
   return {
@@ -298,7 +308,7 @@ export async function uploadFile(file: File): Promise<TemporaryUpload> {
       signal: controller.signal,
     });
     if (!response.ok) {
-      throw new ApiError(await errorMessage(response), response.status);
+      throw await responseError(response);
     }
     return (await response.json()) as TemporaryUpload;
   } catch (error) {
@@ -519,7 +529,7 @@ export async function streamAgentRun(
   );
 
   if (!response.ok) {
-    throw new ApiError(await errorMessage(response), response.status);
+    throw await responseError(response);
   }
   if (!response.body) {
     throw new ApiError("streaming is unavailable", response.status);

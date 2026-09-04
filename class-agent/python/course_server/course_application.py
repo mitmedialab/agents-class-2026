@@ -20,6 +20,7 @@ from pydantic import (
 School = Literal["MIT Media Lab", "MIT", "Harvard", "Wellesley", "Other"]
 RegistrationStatus = Literal["for credit", "listener"]
 ListenerBuildCommitment = Literal["yes", "no", "not applicable"]
+ApplicationFieldInput = Literal["text", "email", "url", "year", "multiline", "attachment"]
 
 SCHOOL_OPTIONS: tuple[School, ...] = (
     "MIT Media Lab",
@@ -42,20 +43,6 @@ _GITHUB_ID = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}\Z")
 _DEGREE_START_YEAR = re.compile(r"\d{4}\Z")
 _EMAIL = TypeAdapter(EmailStr)
 
-_FIELD_LENGTH_BOUNDS: dict[str, tuple[int, int]] = {
-    "name": (2, 200),
-    "github_id": (1, 39),
-    "department": (1, 1_000),
-    "research_group": (1, 1_000),
-    "degree": (1, 500),
-    "personal_webpage": (1, 2_000),
-    "interests": (1, 4_000),
-    "why_take_this_class": (1, 4_000),
-    "knowledgeable_about": (1, 4_000),
-    "skill_set": (1, 4_000),
-    "questions_or_comments_for_instructors": (1, 4_000),
-}
-
 _FIELD_OPTIONS: dict[str, tuple[str, ...]] = {
     "school": SCHOOL_OPTIONS,
     "registration_status": REGISTRATION_STATUS_OPTIONS,
@@ -70,48 +57,83 @@ class ApplicationFieldSpec:
     id: str
     label: str
     options: tuple[str, ...] = ()
+    input_type: ApplicationFieldInput = "multiline"
+    help_text: str = ""
+    length_bounds: tuple[int, int] | None = None
 
 
 APPLICATION_FIELD_SPECS: tuple[ApplicationFieldSpec, ...] = (
-    ApplicationFieldSpec("name", "Name"),
-    ApplicationFieldSpec("email", "Email"),
+    ApplicationFieldSpec("name", "Name", input_type="text", length_bounds=(2, 200)),
+    ApplicationFieldSpec("email", "Email", input_type="email"),
     ApplicationFieldSpec(
         "github_id",
         "GitHub ID (username only; create an account first if needed)",
+        input_type="text",
+        help_text="Username only, for example octocat — not a GitHub URL.",
+        length_bounds=(1, 39),
     ),
-    ApplicationFieldSpec("school", "School", SCHOOL_OPTIONS),
-    ApplicationFieldSpec("department", "Department"),
+    ApplicationFieldSpec("school", "School", options=SCHOOL_OPTIONS),
+    ApplicationFieldSpec("department", "Department", input_type="text", length_bounds=(1, 1_000)),
     ApplicationFieldSpec(
         "research_group",
         "Research group (if applicable; otherwise enter Not applicable)",
+        input_type="text",
+        length_bounds=(1, 1_000),
     ),
-    ApplicationFieldSpec("degree", "Degree"),
-    ApplicationFieldSpec("degree_start_year", "Year degree started (YYYY)"),
-    ApplicationFieldSpec("personal_webpage", "Personal Webpage"),
-    ApplicationFieldSpec("interests", "Interests"),
+    ApplicationFieldSpec("degree", "Degree", input_type="text", length_bounds=(1, 500)),
+    ApplicationFieldSpec(
+        "degree_start_year",
+        "Year degree started (YYYY)",
+        input_type="year",
+        help_text="Use four digits, for example 2024.",
+    ),
+    ApplicationFieldSpec(
+        "personal_webpage", "Personal Webpage", input_type="url", length_bounds=(1, 2_000)
+    ),
+    ApplicationFieldSpec("interests", "Interests", length_bounds=(1, 4_000)),
     ApplicationFieldSpec(
         "why_take_this_class",
         "Motivation: why this course; what you have built and want to build; "
         "your past project roles",
+        length_bounds=(1, 4_000),
     ),
-    ApplicationFieldSpec("knowledgeable_about", "Knowledgeable about"),
-    ApplicationFieldSpec("skill_set", "Skill-set (practical knowledge and builder experience)"),
+    ApplicationFieldSpec("knowledgeable_about", "Knowledgeable about", length_bounds=(1, 4_000)),
+    ApplicationFieldSpec(
+        "skill_set",
+        "Skill-set (practical knowledge and builder experience)",
+        length_bounds=(1, 4_000),
+    ),
     ApplicationFieldSpec(
         "registration_status",
         "Registration",
-        REGISTRATION_STATUS_OPTIONS,
+        options=REGISTRATION_STATUS_OPTIONS,
     ),
     ApplicationFieldSpec(
         "listener_willing_to_do_weekly_builds",
         "For listeners: willing to do weekly builds",
-        LISTENER_BUILD_OPTIONS,
+        options=LISTENER_BUILD_OPTIONS,
     ),
-    ApplicationFieldSpec("questions_or_comments_for_instructors", "Questions or comments"),
+    ApplicationFieldSpec(
+        "questions_or_comments_for_instructors",
+        "Questions or comments",
+        length_bounds=(1, 4_000),
+    ),
     ApplicationFieldSpec(
         "photo_upload_id",
         "Class-only picture that represents you (JPG/JPEG, PNG, or WebP)",
+        input_type="attachment",
+        help_text=(
+            "Use Attach files in the message box, choose a JPG, PNG, or WebP picture, "
+            "then send it to the Course Agent."
+        ),
     ),
 )
+
+_FIELD_LENGTH_BOUNDS: dict[str, tuple[int, int]] = {
+    field.id: field.length_bounds
+    for field in APPLICATION_FIELD_SPECS
+    if field.length_bounds is not None
+}
 
 
 def application_field_validation_error(

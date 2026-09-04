@@ -1,10 +1,45 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  recordWorkspaceInteraction,
   getCourseResourceContent,
   streamAgentRun,
   uploadFile,
   type AgentStreamEvent,
 } from "./api.js";
+
+describe("API errors", () => {
+  it("preserves structured field validation details", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 422,
+        json: vi.fn().mockResolvedValue({
+          detail: {
+            code: "draft_field_too_long",
+            field_id: "interests",
+            message: "This field cannot contain more than 4,000 characters.",
+          },
+        }),
+      }),
+    );
+
+    await expect(
+      recordWorkspaceInteraction(
+        "20000000-0000-4000-8000-000000000001",
+        "40000000-0000-4000-8000-000000000001",
+        "draft.change",
+        { field_id: "interests", value: "too long" },
+      ),
+    ).rejects.toMatchObject({
+      code: "draft_field_too_long",
+      fieldId: "interests",
+      message: "This field cannot contain more than 4,000 characters.",
+      status: 422,
+    });
+    vi.unstubAllGlobals();
+  });
+});
 
 describe("agent event stream", () => {
   it("parses split CRLF events into process and text updates", async () => {

@@ -4,6 +4,13 @@ import { DocumentViewer } from "./DocumentViewer.js";
 
 export type DraftFieldStatus = "missing" | "candidate" | "inferred" | "confirmed";
 export type DraftDocumentStatus = "draft" | "ready" | "final" | "submitted";
+export type DraftFieldInputType =
+  | "text"
+  | "email"
+  | "url"
+  | "year"
+  | "multiline"
+  | "attachment";
 
 export interface DraftDocumentField {
   id: string;
@@ -12,6 +19,9 @@ export interface DraftDocumentField {
   status: DraftFieldStatus;
   source?: string | undefined;
   options?: readonly string[] | undefined;
+  inputType?: DraftFieldInputType | undefined;
+  helpText?: string | undefined;
+  validationError?: string | undefined;
 }
 
 export interface DraftDocumentProps {
@@ -20,7 +30,7 @@ export interface DraftDocumentProps {
   status?: DraftDocumentStatus | undefined;
   content?: string | undefined;
   fields?: readonly DraftDocumentField[] | undefined;
-  onChange?: ((id: string, value: string) => void) | undefined;
+  onChange?: ((id: string, value: string) => void | Promise<void>) | undefined;
 }
 
 const FIELD_STATUS_LABELS: Record<DraftFieldStatus, string> = {
@@ -38,18 +48,26 @@ function resizeToContent(element: HTMLTextAreaElement): void {
 interface DraftFieldEditorProps {
   field: DraftDocumentField;
   value: string;
+  error?: string | undefined;
+  helpText?: string | undefined;
   onChange: (value: string) => void;
-  onCommit: (value: string) => void;
+  onCommit: (value: string) => Promise<void>;
 }
 
 function DraftFieldEditor({
   field,
   value,
+  error,
+  helpText,
   onChange,
   onCommit,
 }: DraftFieldEditorProps) {
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const options = field.options ?? [];
+  const inputType = field.inputType ?? "multiline";
+  const helpId = helpText ? `draft-${field.id}-help` : undefined;
+  const errorId = error ? `draft-${field.id}-error` : undefined;
+  const describedBy = [helpId, errorId].filter(Boolean).join(" ") || undefined;
 
   useLayoutEffect(() => {
     if (editorRef.current) resizeToContent(editorRef.current);
@@ -63,8 +81,10 @@ function DraftFieldEditor({
         onChange={(event) => {
           const nextValue = event.currentTarget.value;
           onChange(nextValue);
-          onCommit(nextValue);
+          void onCommit(nextValue);
         }}
+        aria-describedby={describedBy}
+        aria-invalid={Boolean(error)}
         value={value}
       >
         <option disabled value="">
@@ -84,11 +104,49 @@ function DraftFieldEditor({
     );
   }
 
+  if (inputType === "attachment") {
+    const attached = Boolean(value.trim()) && !error;
+    return (
+      <div
+        aria-describedby={describedBy}
+        aria-label={field.label}
+        className="ca-draft-attachment"
+        data-attached={attached}
+        role="status"
+      >
+        {attached ? "Picture attached" : "No picture attached yet"}
+      </div>
+    );
+  }
+
+  if (inputType !== "multiline") {
+    const type = inputType === "year" ? "text" : inputType;
+    return (
+      <input
+        aria-describedby={describedBy}
+        aria-invalid={Boolean(error)}
+        aria-label={field.label}
+        autoComplete={inputType === "email" ? "email" : inputType === "url" ? "url" : undefined}
+        inputMode={inputType === "year" ? "numeric" : undefined}
+        maxLength={4_000}
+        onBlur={(event) => void onCommit(event.currentTarget.value)}
+        onChange={(event) => onChange(event.currentTarget.value)}
+        pattern={inputType === "year" ? "[0-9]{4}" : undefined}
+        placeholder="Waiting for information"
+        type={type}
+        value={value}
+      />
+    );
+  }
+
   return (
     <textarea
       ref={editorRef}
+      aria-describedby={describedBy}
+      aria-invalid={Boolean(error)}
       aria-label={field.label}
-      onBlur={(event) => onCommit(event.currentTarget.value)}
+      maxLength={4_000}
+      onBlur={(event) => void onCommit(event.currentTarget.value)}
       onChange={(event) => {
         resizeToContent(event.currentTarget);
         onChange(event.currentTarget.value);
@@ -113,6 +171,7 @@ export function DraftDocument({
     [fields],
   );
   const [values, setValues] = useState<Record<string, string>>({});
+  const [commitErrors, setCommitErrors] = useState<Record<string, string>>({});
   useEffect(() => {
     setValues(Object.fromEntries(fields.map((field) => [field.id, field.value ?? ""])));
   }, [fieldSignature]);
@@ -174,15 +233,56 @@ export function DraftDocument({
                 <span>{FIELD_STATUS_LABELS[field.status]}</span>
               </header>
               <DraftFieldEditor
+                error={commitErrors[field.id] ?? field.validationError}
                 field={field}
-                onChange={(value) =>
-                  setValues((current) => ({ ...current, [field.id]: value }))
-                }
-                onCommit={(value) => {
-                  if (value !== (field.value ?? "")) onChange?.(field.id, value);
+                helpText={field.helpText}
+                onChange={(value) => {
+                  setValues((current) => ({ ...current, [field.id]: value }));
+                  setCommitErrors((current) => {
+                    if (!(field.id in current)) return current;
+                    const next = { ...current };
+                    delete next[field.id];
+                    return next;
+                  });
+                }}
+                onCommit={async (value) => {
+                  if (value === (field.value ?? "") || !onChange) return;
+                  setCommitErrors((current) => {
+                    const next = { ...current };
+                    delete next[field.id];
+                    return next;
+                  });
+                  try {
+                    await onChange(field.id, value);
+                  } catch (commitError) {
+                    const message =
+                      commitError instanceof Error && commitError.message !== "request failed"
+                        ? commitError.message
+                        : "This change could not be saved. Please try again.";
+                    setCommitErrors((current) => ({ ...current, [field.id]: message }));
+                  }
                 }}
                 value={values[field.id] ?? ""}
               />
+              {field.helpText ? (
+                <small className="ca-draft-field-help" id={`draft-${field.id}-help`}>
+                  {field.helpText}
+                </small>
+              ) : null}
+              {commitErrors[field.id] ?? field.validationError ? (
+                <p
+                  className="ca-draft-field-error"
+                  id={`draft-${field.id}-error`}
+                  role="alert"
+                >
+                  {commitErrors[field.id] ?? field.validationError}
+                </p>
+              ) : null}
+              {field.inputType === "multiline" && field.status !== "confirmed" ? (
+                <small className="ca-draft-field-count">
+                  {(values[field.id] ?? "").length.toLocaleString()}/4,000
+                </small>
+              ) : null}
               {field.source ? <small>Source: {field.source}</small> : null}
             </li>
           ))}

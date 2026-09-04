@@ -153,8 +153,12 @@ form. It renders safe Markdown prose, up to 50 structured fields, or both, witho
 injection. It can hold proposals, reports, notes, letters, outlines, plans, forms, and
 applications. Fields may be marked `missing`, `candidate`, `inferred`, or `confirmed`.
 Fields may also declare a bounded list of options; `draft-document` version 1.1.0 renders
-those fields as native selects while retaining textareas for open responses. This is an
-additive component-props change; version 1.0.0 drafts remain valid.
+those fields as native selects while retaining textareas for open responses. Version
+1.2.0 adds optional semantic input types, help text, and field validation messages.
+Application drafts use short text, email, URL, year, multiline, and attachment-receipt
+presentations without exposing the internal photo receipt as an editable value. Bounded
+invalid text remains durable as a candidate so applicants can correct it without losing
+work. These are additive component-props changes; version 1.0.0 drafts remain valid.
 The runtime receives current trusted workspace state and instructs the agent to update
 the existing panel rather than open duplicates. Updates are canonical workspace events
 and survive conversation reloads. A rendered draft never counts as submission,

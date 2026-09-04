@@ -46,9 +46,11 @@ from course_server.anonymous_quotas import (
 )
 from course_server.application_draft import (
     APPLICATION_DRAFT_FIELDS,
+    ApplicationDraftEditError,
     application_draft_panel,
     application_draft_props,
     normalized_application_draft_props,
+    updated_application_draft_from_user,
 )
 from course_server.auth import (
     AuthenticationService,
@@ -70,7 +72,6 @@ from course_server.browser import (
 )
 from course_server.browser.tools import browser_page_props
 from course_server.config import AgentSettings
-from course_server.course_application import application_field_validation_error
 from course_server.index_resources import index_resources
 from course_server.migrations import apply_migrations
 from course_server.postgres.auth_store import PostgresAuthStore, create_auth_pool
@@ -445,48 +446,6 @@ def _draft_fields(props: dict[str, JsonValue]) -> list[dict[str, JsonValue]] | N
     if not isinstance(fields, list) or not all(isinstance(field, dict) for field in fields):
         return None
     return cast(list[dict[str, JsonValue]], fields)
-
-
-def _valid_draft_change(props: dict[str, JsonValue], value: JsonValue) -> bool:
-    if not isinstance(value, dict):
-        return False
-    field_id = value.get("field_id")
-    changed_value = value.get("value")
-    fields = _draft_fields(props)
-    target_field = next(
-        (
-            field
-            for field in fields or []
-            if isinstance(field_id, str) and field.get("id") == field_id
-        ),
-        None,
-    )
-    registration_field = next(
-        (field for field in fields or [] if field.get("id") == "registration_status"),
-        None,
-    )
-    registration_status = (
-        registration_field.get("value") if registration_field is not None else None
-    )
-    field_validation_error = (
-        application_field_validation_error(
-            field_id,
-            changed_value,
-            registration_status=(
-                registration_status if isinstance(registration_status, str) else None
-            ),
-        )
-        if isinstance(field_id, str) and isinstance(changed_value, str)
-        else "invalid field value"
-    )
-    return (
-        isinstance(field_id, str)
-        and isinstance(changed_value, str)
-        and len(changed_value) <= 4_000
-        and field_validation_error is None
-        and fields is not None
-        and target_field is not None
-    )
 
 
 async def _prepare_application_draft(
@@ -1226,6 +1185,26 @@ def create_app(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="unknown panel",
             )
+        draft_update: dict[str, JsonValue] | None = None
+        if payload.action == "draft.change" and panel.component_id == "draft-document":
+            draft_value = payload.value if isinstance(payload.value, dict) else {}
+            try:
+                draft_update = updated_application_draft_from_user(
+                    panel.props,
+                    draft_value.get("field_id"),
+                    draft_value.get("value"),
+                )
+            except ApplicationDraftEditError as error:
+                detail: dict[str, str] = {
+                    "code": error.code,
+                    "message": error.message,
+                }
+                if error.field_id is not None:
+                    detail["field_id"] = error.field_id
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail=detail,
+                ) from error
         valid = (
             (
                 payload.action == "calendar.select_event"
@@ -1265,7 +1244,7 @@ def create_app(
             or (
                 payload.action == "draft.change"
                 and panel.component_id == "draft-document"
-                and _valid_draft_change(panel.props, payload.value)
+                and draft_update is not None
             )
         )
         if not valid:
@@ -1288,22 +1267,10 @@ def create_app(
         )
         persisted_events = [event]
         if payload.action == "draft.change":
-            assert isinstance(payload.value, dict)
-            field_id = cast(str, payload.value["field_id"])
-            changed_value = cast(str, payload.value["value"])
-            fields = _draft_fields(panel.props)
-            assert fields is not None
-            updated_fields: list[dict[str, JsonValue]] = []
-            for field in fields:
-                updated = dict(field)
-                if updated.get("id") == field_id:
-                    updated["value"] = changed_value
-                    updated["status"] = "confirmed" if changed_value.strip() else "missing"
-                    updated["source"] = "Confirmed by applicant" if changed_value.strip() else ""
-                updated_fields.append(updated)
+            assert draft_update is not None
             command = UpdateWorkspaceCommand(
                 panel_id=panel.id,
-                props={"fields": updated_fields},
+                props=draft_update,
             )
             persisted_events.append(
                 Event(

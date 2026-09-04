@@ -66,6 +66,98 @@ describe("DocumentViewer", () => {
   });
 });
 
+describe("DraftDocument", () => {
+  it("uses semantic field controls and renders validation guidance inline", () => {
+    render(
+      <DraftDocument
+        fields={[
+          { id: "name", label: "Name", status: "confirmed", value: "Ada", inputType: "text" },
+          {
+            id: "email",
+            label: "Email",
+            status: "confirmed",
+            value: "ada@example.edu",
+            inputType: "email",
+          },
+          {
+            id: "personal_webpage",
+            label: "Personal webpage",
+            status: "confirmed",
+            value: "https://example.edu",
+            inputType: "url",
+          },
+          {
+            id: "degree_start_year",
+            label: "Year degree started",
+            status: "candidate",
+            value: "second year",
+            inputType: "year",
+            helpText: "Use four digits, for example 2024.",
+            validationError: "Must be the four-digit year when the degree started.",
+          },
+        ]}
+        title="Application draft"
+      />,
+    );
+
+    expect(screen.getByRole("textbox", { name: "Email" })).toHaveAttribute("type", "email");
+    expect(screen.getByRole("textbox", { name: "Personal webpage" })).toHaveAttribute(
+      "type",
+      "url",
+    );
+    const year = screen.getByRole("textbox", { name: "Year degree started" });
+    expect(year).toHaveAttribute("inputmode", "numeric");
+    expect(year).toHaveAttribute("pattern", "[0-9]{4}");
+    expect(year).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByRole("alert")).toHaveTextContent("four-digit year");
+    expect(screen.getByText("Use four digits, for example 2024.")).toBeInTheDocument();
+  });
+
+  it("keeps attachment receipts internal and directs applicants to the existing uploader", () => {
+    render(
+      <DraftDocument
+        fields={[
+          {
+            id: "photo_upload_id",
+            label: "Class-only picture",
+            status: "confirmed",
+            value: "40000000-0000-4000-8000-000000000001",
+            inputType: "attachment",
+            helpText: "Use Attach files in the message box, then send it to the Course Agent.",
+          },
+        ]}
+        title="Application draft"
+      />,
+    );
+
+    expect(screen.getByRole("status", { name: "Class-only picture" })).toHaveTextContent(
+      "Picture attached",
+    );
+    expect(screen.queryByDisplayValue("40000000-0000-4000-8000-000000000001")).toBeNull();
+    expect(screen.getByText(/Use Attach files in the message box/)).toBeInTheDocument();
+  });
+
+  it("keeps a typed value and shows a transport save error beside its field", async () => {
+    const onChange = vi.fn().mockRejectedValue(new Error("The server is temporarily unavailable."));
+    render(
+      <DraftDocument
+        fields={[{ id: "name", label: "Name", status: "missing", inputType: "text" }]}
+        onChange={onChange}
+        title="Application draft"
+      />,
+    );
+
+    const name = screen.getByRole("textbox", { name: "Name" });
+    fireEvent.change(name, { target: { value: "Ada Example" } });
+    fireEvent.blur(name);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The server is temporarily unavailable.",
+    );
+    expect(name).toHaveValue("Ada Example");
+  });
+});
+
 describe("Calendar", () => {
   it("parses every row in the published schedule source", () => {
     const data = normalizeCalendarData(publishedSchedule);
