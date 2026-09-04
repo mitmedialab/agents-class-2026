@@ -4,10 +4,19 @@ import type { JsonValue } from "@class-agent/workspace";
 const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL as string | undefined;
 const API_BASE_URL = (configuredBaseUrl ?? "/api/v1").replace(/\/$/, "");
 const UPLOAD_TIMEOUT_MS = 60_000;
+const APPLICANT_PHOTO_URI =
+  /^applicant:\/\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/photo$/;
 
 export function courseResourceAssetUrl(resourceUri: string, assetId: string): string {
   const query = new URLSearchParams({ uri: resourceUri, asset_id: assetId }).toString();
   return `${API_BASE_URL}/course/resources/asset?${query}`;
+}
+
+export function applicantPhotoUrl(resourceUri: string): string | null {
+  const match = APPLICANT_PHOTO_URI.exec(resourceUri);
+  return match?.[1]
+    ? `${API_BASE_URL}/instructor/applications/${encodeURIComponent(match[1])}/photo`
+    : null;
 }
 
 export interface ConversationDetail {
@@ -140,10 +149,12 @@ export async function getCourseResourceContent(
   const uploadId = resourceUri.startsWith("upload://")
     ? resourceUri.slice("upload://".length)
     : null;
-  const path = uploadId
-    ? `/uploads/${encodeURIComponent(uploadId)}/content`
-    : `/course/resources/content?${new URLSearchParams({ uri: resourceUri }).toString()}`;
-  const response = await fetch(`${API_BASE_URL}${path}`, { credentials: "include" });
+  const applicantUrl = applicantPhotoUrl(resourceUri);
+  const requestUrl = uploadId
+    ? `${API_BASE_URL}/uploads/${encodeURIComponent(uploadId)}/content`
+    : (applicantUrl ??
+      `${API_BASE_URL}/course/resources/content?${new URLSearchParams({ uri: resourceUri }).toString()}`);
+  const response = await fetch(requestUrl, { credentials: "include" });
   if (!response.ok) {
     throw new ApiError(await errorMessage(response), response.status);
   }
@@ -326,12 +337,17 @@ const RESOURCE_ACTIVITY_LABELS: Record<string, string> = {
 const TOOL_ACTIVITY_LABELS: Record<string, string> = {
   "course.get_application": "Reading application information",
   "course.get_schedule": "Reading course schedule",
+  "course.list_private_resources": "Checking private course resources",
+  "course.read_private_resource": "Reading private course information",
   "course.read_public_file": "Reading course information",
   "course.read_syllabus": "Reading course syllabus",
   "course.search": "Searching course information",
   "course.search_faq": "Searching course information",
   "course.show_public_files": "Checking available course information",
   "course.submit_application": "Submitting application",
+  "instructor.inspect_application_images": "Inspecting application images",
+  "instructor.list_applications": "Listing course applications",
+  "instructor.read_application": "Reading course application",
   "web.search": "Searching the public web",
   "web.search_images": "Searching public images",
   "web.inspect_images": "Inspecting public images",

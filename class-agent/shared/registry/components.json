@@ -151,9 +151,9 @@
     },
     {
       "id": "visual-composition",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "title": "Visual Composition",
-      "description": "Builds a polished, presentation-ready visual surface rather than a stack of paragraphs. Match structure to the content's natural visual flow. Stack, row, and grid are equal options; use columns only for genuinely parallel items, direct comparisons, or coherent galleries—not as the default page pattern. Available elements include surfaced process stages, timelines, facts, charts for quantitative comparisons or trends, and cards for distinct entities. Charts use a vivid coral, sky, mint, amber, violet, and ivory palette. Image presentations include panoramic banners, split-layout features, repeated cards, and profile avatars. Images may use either a verified HTTPS URL or a registered asset ID from the panel's course resource. Use short text blocks, strong hierarchy, balanced composition, and meaningful available imagery with enough space to act as a visual anchor—not a tiny thumbnail beside oversized text. Use groups and element IDs instead of HTML or CSS.",
+      "description": "Builds a polished, presentation-ready surface from registered semantic elements. Match stack, row, or grid structure to the content; use columns only for parallel items, comparisons, or coherent galleries. Supports process stages, timelines, facts, quantitative charts, cards, images, headings, text, badges, links, fields, dividers, and spacing. Image presentations include banners, features, cards, and avatars. Images may use a verified HTTPS URL, a registered asset ID owned by the panel resource, or an exact protected applicant:// image URI returned by instructor.inspect_application_images in the same turn. Use concise text, clear hierarchy, balanced composition, and enough image space to act as an anchor. Use groups and element IDs; never emit HTML, CSS, or executable UI.",
       "props_schema": {
         "type": "object",
         "properties": {
@@ -201,7 +201,7 @@
                   "properties": {
                     "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$", "maxLength": 100 },
                     "type": { "const": "image" },
-                    "url": { "type": "string", "format": "uri", "pattern": "^https://[^\\s]+$", "maxLength": 2048 },
+                    "url": { "type": "string", "format": "uri", "pattern": "^(?:https://[^\\s]+|applicant://[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/photo)$", "maxLength": 2048 },
                     "asset_id": { "type": "string", "description": "Registered asset ID returned with the course resource named by the panel resource_uri.", "pattern": "^[a-z][a-z0-9_]*$", "maxLength": 100 },
                     "alt": { "type": "string", "maxLength": 500 },
                     "caption": { "type": "string", "maxLength": 1000 },

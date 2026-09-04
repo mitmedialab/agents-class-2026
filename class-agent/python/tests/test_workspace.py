@@ -41,13 +41,24 @@ def public_principal() -> PrincipalContext:
     )
 
 
-def execution_context() -> ToolExecutionContext:
+def execution_context(principal: PrincipalContext | None = None) -> ToolExecutionContext:
     return ToolExecutionContext(
-        principal=public_principal(),
+        principal=principal or public_principal(),
         conversation_id=uuid4(),
         permitted_resource_uris=frozenset(
             {"course://syllabus", "course://schedule", "course://application"}
         ),
+    )
+
+
+def instructor_principal() -> PrincipalContext:
+    return PrincipalContext(
+        authenticated=True,
+        user_id=uuid4(),
+        username="test-instructor",
+        display_name="Test Instructor",
+        roles=["public", "instructor"],
+        session_id=uuid4(),
     )
 
 
@@ -391,6 +402,62 @@ def test_concrete_visual_composition_requires_available_image_candidates() -> No
         )
         assert isinstance(fallback.content, dict)
         assert fallback.content["status"] == "opened"
+
+    asyncio.run(scenario())
+
+
+def test_private_application_images_require_instructor_and_inspector_provenance() -> None:
+    async def scenario() -> None:
+        registry = load_component_registry()
+        tool = WorkspaceOpenComponentTool(registry)
+        image_uri = "applicant://40000000-0000-4000-8000-000000000001/photo"
+        props: dict[str, JsonValue] = {
+            "root_id": "photo",
+            "elements": [
+                {
+                    "id": "photo",
+                    "type": "image",
+                    "url": image_uri,
+                    "alt": "Submitted application image",
+                    "presentation": "card",
+                }
+            ],
+        }
+
+        public_context = execution_context()
+        public_context.transient_state["private_application_image_candidates"] = [image_uri]
+        with pytest.raises(PermissionError, match="Instructor access"):
+            await tool.execute(
+                {"component_id": "visual-composition", "props": props},
+                public_context,
+            )
+
+        instructor_context = execution_context(instructor_principal())
+        with pytest.raises(ToolValidationError, match=r"inspect_application_images"):
+            await tool.execute(
+                {"component_id": "visual-composition", "props": props},
+                instructor_context,
+            )
+
+        instructor_context.transient_state["private_application_image_candidates"] = [image_uri]
+        image = props["elements"]
+        assert isinstance(image, list)
+        photo_element = image[0]
+        assert isinstance(photo_element, dict)
+        photo_element["url"] = "https://placeholder.invalid/applicant-1.png"
+        with pytest.raises(ToolValidationError, match="do not invent"):
+            await tool.execute(
+                {"component_id": "visual-composition", "props": props},
+                instructor_context,
+            )
+
+        photo_element["url"] = image_uri
+        opened = await tool.execute(
+            {"component_id": "visual-composition", "props": props},
+            instructor_context,
+        )
+        assert isinstance(opened.content, dict)
+        assert opened.content["status"] == "opened"
 
     asyncio.run(scenario())
 

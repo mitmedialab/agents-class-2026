@@ -74,6 +74,13 @@ asset endpoint. Existing `1.0.0` URL-based panel events remain valid, so this mi
 component version does not require a workspace schema version or persisted-data
 migration.
 
+Visual Composition `1.2.0` adds a second backward-compatible trusted image reference:
+`applicant://{application_id}/photo`. Only the instructor image-inspection tool may authorize
+these references for a workspace open in the current turn. The browser resolves them to the
+authenticated instructor photo endpoint; public and student sessions cannot fetch the bytes.
+Existing HTTPS and registered-asset panels remain valid, so this minor component version also
+requires no workspace schema version or persisted-data migration.
+
 ## Resource separation
 
 A panel stores a `resource_uri`; it does not permanently embed syllabus or schedule
@@ -83,6 +90,7 @@ content endpoint and supplies it to the trusted renderer:
 ```text
 course://schedule → Calendar
 course://instructors + registered portrait asset → VisualComposition
+applicant://{application_id}/photo → VisualComposition (instructor only)
 specific paper or file → DocumentViewer
 knowledge from one or more sources → VisualComposition
 specific website → WebpageViewer or BrowserViewer
@@ -165,9 +173,10 @@ The registry rejects unknown properties and variants. Both Python and TypeScript
 also require one unique root, unique element IDs, valid references, a single parent per
 element, no cycles, and no unreachable objects. The renderer accepts no HTML, CSS,
 Tailwind classes, JavaScript, event handlers, or arbitrary style values. Remote images
-must use HTTPS and are loaded without a referrer. Editable inputs remain local while
-typing and emit a bounded `visual.change` workspace interaction on blur; they do not
-submit or cause external effects.
+must use HTTPS and are loaded without a referrer; private applicant images instead use a
+tool-issued opaque URI resolved by the trusted host. Editable inputs remain local while typing
+and emit a bounded `visual.change` workspace interaction on blur; they do not submit or cause
+external effects.
 
 ## Phase boundary and deviations
 

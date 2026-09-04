@@ -29,6 +29,11 @@ describe("agent event stream", () => {
         );
         controller.enqueue(
           encoder.encode(
+            '\nevent: platform\ndata: {"type":"agent.tool.requested","event":{"payload":{"tool_id":"instructor.inspect_application_images","arguments_redacted":true}}}\n\n',
+          ),
+        );
+        controller.enqueue(
+          encoder.encode(
             '\nevent: platform\ndata: {"type":"workspace.panel.opened","event":{"payload":{"command":{"type":"open","panel":{"id":"40000000-0000-4000-8000-000000000001","component_id":"calendar","resource_uri":"course://schedule","props":{"view":"agenda"},"state":{}}}}}}\n\n',
           ),
         );
@@ -87,6 +92,13 @@ describe("agent event stream", () => {
         activity: {
           kind: "tool",
           label: "Reading application information",
+        },
+      },
+      {
+        kind: "activity",
+        activity: {
+          kind: "tool",
+          label: "Inspecting application images",
         },
       },
       {
@@ -192,6 +204,30 @@ describe("temporary uploads", () => {
     });
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/v1/uploads/40000000-0000-4000-8000-000000000001/content",
+      { credentials: "include" },
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it("reads an applicant image from its instructor-only content route", async () => {
+    const bytes = new Uint8Array([137, 80, 78, 71]);
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "image/png" }),
+      arrayBuffer: vi.fn().mockResolvedValue(bytes.buffer),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const resourceUri =
+      "applicant://40000000-0000-4000-8000-000000000001/photo";
+
+    await expect(getCourseResourceContent(resourceUri)).resolves.toEqual({
+      uri: resourceUri,
+      mediaType: "image/png",
+      data: bytes,
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/instructor/applications/40000000-0000-4000-8000-000000000001/photo",
       { credentials: "include" },
     );
     vi.unstubAllGlobals();

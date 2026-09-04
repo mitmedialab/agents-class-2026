@@ -68,6 +68,10 @@ _NONCOMPARABLE_CHART = re.compile(
 )
 _CHART_PROVENANCE_FIELDS = ("data_kind", "data_source", "comparison_basis", "unit")
 _APPLICATION_UPDATED_THIS_TURN = "application_draft_updated_this_turn"
+_APPLICANT_PHOTO_URI = re.compile(
+    r"^applicant://[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-"
+    r"[89ab][0-9a-f]{3}-[0-9a-f]{12}/photo$"
+)
 
 
 def _reject_unknown(
@@ -239,6 +243,53 @@ def _enforce_registered_course_assets(
     if unknown:
         raise ToolValidationError(
             "Unknown registered asset for this course resource: " + ", ".join(unknown)
+        )
+
+
+def _enforce_private_application_images(
+    *,
+    command: WorkspaceCommand,
+    state: WorkspaceState,
+    context: ToolExecutionContext,
+) -> None:
+    if isinstance(command, OpenWorkspaceCommand):
+        panel_id = command.panel.id
+    elif isinstance(command, UpdateWorkspaceCommand):
+        panel_id = command.panel_id
+    else:
+        return
+    panel = next((candidate for candidate in state.panels if candidate.id == panel_id), None)
+    if panel is None or panel.component_id != "visual-composition":
+        return
+    elements = panel.props.get("elements")
+    if not isinstance(elements, list):
+        return
+    image_urls = [
+        str(element["url"])
+        for element in elements
+        if isinstance(element, dict)
+        and element.get("type") == "image"
+        and isinstance(element.get("url"), str)
+    ]
+    private_image_uris = [
+        image_url
+        for image_url in image_urls
+        if _APPLICANT_PHOTO_URI.fullmatch(image_url) is not None
+    ]
+    raw_candidates = context.transient_state.get("private_application_image_candidates")
+    candidates = (
+        frozenset(value for value in raw_candidates if isinstance(value, str))
+        if isinstance(raw_candidates, list)
+        else frozenset()
+    )
+    if not private_image_uris and not candidates:
+        return
+    if not context.principal.authenticated or "instructor" not in context.principal.roles:
+        raise PermissionError("Instructor access is required for application images.")
+    if not image_urls or not set(image_urls).issubset(candidates):
+        raise ToolValidationError(
+            "Call instructor.inspect_application_images in this turn and use only the exact "
+            "applicant:// image_uri values it returns; do not invent or substitute HTTPS URLs."
         )
 
 
@@ -452,6 +503,7 @@ def _apply_command(
         raise ToolValidationError(str(error)) from error
     _enforce_chart_data_contract(command=command, state=state)
     _enforce_registered_course_assets(command=command, state=state, resources=resources)
+    _enforce_private_application_images(command=command, state=state, context=context)
     if strict_visual_policy:
         _enforce_visual_media(command=command, state=state, context=context)
         _enforce_image_layout_metadata(command=command, state=state, context=context)

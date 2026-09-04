@@ -19,6 +19,7 @@ import type { JsonObject, JsonValue, WorkspacePanel, WorkspaceState } from "@cla
 import { useEffect, useMemo, useState } from "react";
 
 import {
+  applicantPhotoUrl,
   browserSnapshotUrl,
   browserPreviewSnapshotUrl,
   courseResourceAssetUrl,
@@ -75,14 +76,25 @@ export function resolveVisualCourseAssets(
   value: JsonValue | undefined,
   resourceUri: string | undefined,
 ): JsonValue | undefined {
-  if (!Array.isArray(value) || !resourceUri) return value;
+  if (!Array.isArray(value)) return value;
   return value.map((element) => {
+    if (
+      element &&
+      typeof element === "object" &&
+      !Array.isArray(element) &&
+      element.type === "image" &&
+      typeof element.url === "string"
+    ) {
+      const protectedUrl = applicantPhotoUrl(element.url);
+      if (protectedUrl) return { ...element, url: protectedUrl };
+    }
     if (
       !element ||
       typeof element !== "object" ||
       Array.isArray(element) ||
       element.type !== "image" ||
-      typeof element.asset_id !== "string"
+      typeof element.asset_id !== "string" ||
+      !resourceUri
     ) {
       return element;
     }

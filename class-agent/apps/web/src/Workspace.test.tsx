@@ -46,4 +46,46 @@ describe("Workspace registered course assets", () => {
       "/api/v1/course/resources/asset?uri=course%3A%2F%2Finstructors&asset_id=pattie_maes_portrait",
     );
   });
+
+  it("resolves a protected applicant URI through the instructor photo route", () => {
+    render(
+      <Workspace
+        conversationId="20000000-0000-4000-8000-000000000001"
+        onBrowserActivate={vi.fn(async () => undefined)}
+        onBrowserResize={vi.fn(async () => undefined)}
+        onBrowserScroll={vi.fn(async () => undefined)}
+        onCloseWorkspace={vi.fn(async () => undefined)}
+        onInteraction={vi.fn()}
+        onPanelAction={vi.fn(async () => undefined)}
+        onSubmitApplication={vi.fn()}
+        state={{
+          focusedPanelId: "40000000-0000-4000-8000-000000000001",
+          panels: [
+            {
+              id: "40000000-0000-4000-8000-000000000001",
+              componentId: "visual-composition",
+              props: {
+                root_id: "photo",
+                elements: [
+                  {
+                    id: "photo",
+                    type: "image",
+                    url: "applicant://50000000-0000-4000-8000-000000000002/photo",
+                    alt: "Submitted application image",
+                    presentation: "card",
+                  },
+                ],
+              },
+              state: {},
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByAltText("Submitted application image")).toHaveAttribute(
+      "src",
+      "/api/v1/instructor/applications/50000000-0000-4000-8000-000000000002/photo",
+    );
+  });
 });
