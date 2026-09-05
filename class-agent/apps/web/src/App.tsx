@@ -10,14 +10,18 @@ import {
 import {
   applyWorkspacePanelAction,
   clickBrowserSession,
+  confirmTAQuestion,
+  continueAgentAfterEvent,
   createConversation,
   ensureApplicationDraft,
   getCourseResourceContent,
   getConversation,
   getPrincipal,
   listConversations,
+  listNotifications,
   login,
   logout,
+  markNotificationRead,
   recordWorkspaceInteraction,
   resizeBrowserSession,
   scrollBrowserSession,
@@ -25,16 +29,25 @@ import {
   uploadFile,
   type AgentActivity,
   type AgentStreamEvent,
+  type CourseNotification,
   type TemporaryUpload,
 } from "./api.js";
 import { ActivityTrace } from "./ActivityTrace.js";
+import { CourseNotifications } from "./CourseNotifications.js";
 import {
   AgentResponse,
   RESPONSE_CHARACTER_STAGGER_MS,
 } from "./AgentResponse.js";
 import { MorphingLineFigure } from "./MorphingLineFigure.js";
 import { SyllabusPage } from "./SyllabusPage.js";
+import { TAQuestionConfirmation } from "./TAQuestionConfirmation.js";
 import { Workspace } from "./Workspace.js";
+import {
+  applyTAQuestionEvent,
+  pendingTAQuestionContinuation,
+  projectTAQuestionEvents,
+  type TAQuestionConfirmation as TAQuestionConfirmationState,
+} from "./taQuestions.js";
 import {
   type DragEvent,
   type FormEvent,
@@ -95,6 +108,12 @@ function newestFirst(conversations: Conversation[]): Conversation[] {
 function latestAgentResponse(events: Event[]): string {
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index];
+    if (
+      event?.type === "email.ta_answer.received" &&
+      typeof event.payload.answer === "string"
+    ) {
+      return `Course staff replied:\n\n${event.payload.answer}`;
+    }
     if (event?.type === "agent.message" && typeof event.payload.text === "string") {
       return event.payload.text;
     }
@@ -164,6 +183,22 @@ function workspaceFromEvents(events: Event[]): WorkspaceState {
   }
 }
 
+async function notificationsFor(
+  resolvedPrincipal: PrincipalContext,
+): Promise<CourseNotification[]> {
+  if (
+    !resolvedPrincipal.authenticated ||
+    !resolvedPrincipal.roles.includes("student")
+  ) {
+    return [];
+  }
+  try {
+    return await listNotifications();
+  } catch {
+    return [];
+  }
+}
+
 export default function App() {
   const [principal, setPrincipal] = useState<PrincipalContext | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -199,12 +234,18 @@ export default function App() {
   const [accessCode, setAccessCode] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSubmitting, setAuthSubmitting] = useState(false);
+  const [taQuestion, setTAQuestion] = useState<TAQuestionConfirmationState | null>(null);
+  const [notifications, setNotifications] = useState<CourseNotification[]>([]);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const historyRef = useRef<HTMLElement>(null);
   const activeRun = useRef<AbortController | null>(null);
   const operationInFlight = useRef(false);
   const applicationReturnResponse = useRef<string | null>(null);
+  const awaitingTAQuestionAction =
+    taQuestion?.status === "pending_confirmation" ||
+    taQuestion?.status === "submitting" ||
+    taQuestion?.status === "error";
 
   const showWelcomeMessage = useCallback(() => {
     setLatestResponse(WELCOME_MESSAGE);
@@ -225,6 +266,7 @@ export default function App() {
     setMessage("");
     setUploads([]);
     setUploadError(null);
+    setTAQuestion(null);
     setIsRunning(false);
     setIsStreamingText(false);
     setHistoryOpen(false);
@@ -241,9 +283,14 @@ export default function App() {
       if (response) setLatestResponse(response);
       else showWelcomeMessage();
       setWorkspaceState(workspaceFromEvents(detail.events));
+      setTAQuestion(projectTAQuestionEvents(detail.events));
       setActivities([]);
       setHistoryOpen(false);
       setAboutOpen(false);
+      const pendingContinuation = pendingTAQuestionContinuation(detail.events);
+      if (pendingContinuation) {
+        await runAgentContinuation(conversation.id, pendingContinuation.id);
+      }
     } catch {
       setLatestResponse(CONNECTION_ERROR);
     } finally {
@@ -265,10 +312,14 @@ export default function App() {
         const resolvedPrincipal = await getPrincipal();
         if (disposed) return;
         setPrincipal(resolvedPrincipal);
-        const loaded = await listConversations();
+        const [loaded, loadedNotifications] = await Promise.all([
+          listConversations(),
+          notificationsFor(resolvedPrincipal),
+        ]);
         if (disposed) return;
         const sorted = newestFirst(loaded);
         setConversations(sorted);
+        setNotifications(loadedNotifications);
         // A full page load always begins as a fresh, unsaved conversation. Existing
         // conversations remain available from history and a new server record is
         // created only when the visitor sends their first message.
@@ -450,6 +501,14 @@ export default function App() {
     setIsStreamingText(false);
     setCurrentAction("Preparing conversation context");
     setActivities([]);
+    if (
+      taQuestion?.status === "queued" ||
+      taQuestion?.status === "sent" ||
+      taQuestion?.status === "answered" ||
+      taQuestion?.status === "cancelled"
+    ) {
+      setTAQuestion(null);
+    }
     setLatestResponse("");
     let conversationId = existingConversationId ?? selectedConversationId;
     let receivedError = false;
@@ -516,6 +575,8 @@ export default function App() {
             return next;
           });
           applicationReturnResponse.current = null;
+        } else if (event.kind === "ta_question_confirmation") {
+          setTAQuestion(event.confirmation);
         } else if (event.kind === "done") {
           setActivities((current) => [
             ...current,
@@ -616,7 +677,8 @@ export default function App() {
     !historyOpen &&
     !isInitializing &&
     !isRunning &&
-    !isUploading;
+    !isUploading &&
+    !awaitingTAQuestionAction;
 
   function dragContainsFiles(event: DragEvent<HTMLDivElement>): boolean {
     return Array.from(event.dataTransfer.types).includes("Files");
@@ -680,7 +742,11 @@ export default function App() {
       const nextPrincipal = await login(username.trim(), accessCode);
       setPrincipal(nextPrincipal);
       setAccessCode("");
-      const loaded = await loadConversationList();
+      const [loaded, loadedNotifications] = await Promise.all([
+        loadConversationList(),
+        notificationsFor(nextPrincipal),
+      ]);
+      setNotifications(loadedNotifications);
       const newest = loaded[0];
       if (newest) {
         await showConversation(newest);
@@ -701,6 +767,7 @@ export default function App() {
       await logout();
       const nextPrincipal = await getPrincipal();
       setPrincipal(nextPrincipal);
+      setNotifications([]);
       const loaded = await loadConversationList();
       const newest = loaded[0];
       if (newest) {
@@ -734,6 +801,72 @@ export default function App() {
         ...current,
         { kind: "error", label: "Workspace action failed" },
       ]);
+    }
+  }
+
+  async function handleTAQuestionAction(
+    action: "send" | "cancel",
+    reporterVisibility: "named" | "anonymous",
+  ): Promise<void> {
+    if (!selectedConversationId || !taQuestion || taQuestion.status === "submitting") return;
+    setTAQuestion((current) => (current ? { ...current, status: "submitting" } : null));
+    try {
+      const event = await confirmTAQuestion(
+        selectedConversationId,
+        taQuestion.id,
+        action,
+        reporterVisibility,
+      );
+      setTAQuestion((current) => applyTAQuestionEvent(current, event));
+      await runAgentContinuation(selectedConversationId, event.id);
+      try {
+        await loadConversationList();
+      } catch {
+        // The confirmed action remains authoritative if navigation refresh fails.
+      }
+    } catch {
+      setTAQuestion((current) => (current ? { ...current, status: "error" } : null));
+    }
+  }
+
+  async function runAgentContinuation(
+    conversationId: string,
+    triggerEventId: string,
+  ): Promise<void> {
+    setLatestResponse("");
+    setIsRunning(true);
+    setCurrentAction("Continuing conversation");
+    setActivities([]);
+    try {
+      const continuation = await continueAgentAfterEvent(conversationId, triggerEventId);
+      setLatestResponse(continuation.output_text);
+      setActivities([{ kind: "complete", label: "Agent run complete" }]);
+      try {
+        const detail = await getConversation(conversationId);
+        setWorkspaceState(workspaceFromEvents(detail.events));
+        setTAQuestion(projectTAQuestionEvents(detail.events));
+      } catch {
+        // The generated continuation remains usable if projection refresh fails.
+      }
+    } catch {
+      setTAQuestion(null);
+      setLatestResponse(CONNECTION_ERROR);
+      setActivities([{ kind: "error", label: "Agent run failed" }]);
+    } finally {
+      setIsRunning(false);
+      setCurrentAction(null);
+      requestAnimationFrame(() => composerRef.current?.focus());
+    }
+  }
+
+  async function handleNotificationRead(notificationId: string): Promise<void> {
+    try {
+      await markNotificationRead(notificationId);
+      setNotifications((current) =>
+        current.filter((notification) => notification.id !== notificationId),
+      );
+    } catch {
+      // Keep the unread update visible when acknowledgement could not be saved.
     }
   }
 
@@ -892,7 +1025,6 @@ export default function App() {
 
   const isWelcomePresentationActive =
     !isOpening && latestResponse === WELCOME_MESSAGE && isPresentingWelcome;
-
   return (
     <div
       className="course-agent"
@@ -939,7 +1071,9 @@ export default function App() {
             {HEADER_PROMPTS.map((prompt) => (
               <Button
                 className="header-prompt"
-                disabled={isInitializing || isRunning || isUploading}
+                disabled={
+                  isInitializing || isRunning || isUploading || awaitingTAQuestionAction
+                }
                 key={prompt.label}
                 onClick={() =>
                   prompt.label === "Apply"
@@ -980,7 +1114,11 @@ export default function App() {
         />
       ) : (
         <>
-      <main className="workspace-shell" data-testid="workspace-shell">
+          <CourseNotifications
+            notifications={notifications}
+            onRead={(notificationId) => void handleNotificationRead(notificationId)}
+          />
+          <main className="workspace-shell" data-testid="workspace-shell">
         <section aria-atomic="false" aria-live="polite" className="response-stage">
           <MorphingLineFigure
             active={
@@ -1010,6 +1148,14 @@ export default function App() {
               text={latestResponse}
             />
           ) : null}
+          {taQuestion ? (
+            <TAQuestionConfirmation
+              confirmation={taQuestion}
+              onAction={(action, reporterVisibility) =>
+                void handleTAQuestionAction(action, reporterVisibility)
+              }
+            />
+          ) : null}
         </section>
         {workspaceState.panels.length > 0 ? (
           <Workspace
@@ -1024,9 +1170,9 @@ export default function App() {
             state={workspaceState}
           />
         ) : null}
-      </main>
+          </main>
 
-      <form
+          <form
         aria-label="Message Course Agent"
         className="composer"
         onSubmit={(event) => {
@@ -1104,7 +1250,7 @@ export default function App() {
               autoComplete="off"
               autoFocus={!isOpening}
               className="composer-text"
-              disabled={isInitializing || isRunning || isUploading}
+              disabled={isInitializing || isRunning || isUploading || awaitingTAQuestionAction}
               enterKeyHint="send"
               onChange={(event) => setMessage(event.target.value)}
               onKeyDown={handleComposerKeyDown}
@@ -1122,7 +1268,9 @@ export default function App() {
               <button
                 aria-label="Attach files"
                 className="attachment-button"
-                disabled={isInitializing || isRunning || isUploading}
+                disabled={
+                  isInitializing || isRunning || isUploading || awaitingTAQuestionAction
+                }
                 onClick={() => fileInputRef.current?.click()}
                 type="button"
               >
@@ -1137,7 +1285,7 @@ export default function App() {
         <button aria-hidden="true" className="visually-hidden" tabIndex={-1} type="submit">
           Send
         </button>
-      </form>
+          </form>
         </>
       )}
 
@@ -1212,7 +1360,7 @@ export default function App() {
                   <p className="drawer-label">Course login</p>
                   <TextInput
                     autoComplete="username"
-                    label="Username"
+                    label="Email or username"
                     onChange={(event) => setUsername(event.target.value)}
                     required
                     value={username}

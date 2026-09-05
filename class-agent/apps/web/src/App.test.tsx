@@ -7,14 +7,18 @@ import * as api from "./api.js";
 vi.mock("./api.js", () => ({
   applyWorkspacePanelAction: vi.fn(),
   clickBrowserSession: vi.fn(),
+  confirmTAQuestion: vi.fn(),
+  continueAgentAfterEvent: vi.fn(),
   createConversation: vi.fn(),
   ensureApplicationDraft: vi.fn(),
   getCourseResourceContent: vi.fn(),
   getConversation: vi.fn(),
   getPrincipal: vi.fn(),
   listConversations: vi.fn(),
+  listNotifications: vi.fn(),
   login: vi.fn(),
   logout: vi.fn(),
+  markNotificationRead: vi.fn(),
   recordWorkspaceInteraction: vi.fn(),
   resizeBrowserSession: vi.fn(),
   scrollBrowserSession: vi.fn(),
@@ -70,6 +74,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(api.getPrincipal).mockResolvedValue(publicPrincipal);
   vi.mocked(api.listConversations).mockResolvedValue([conversation]);
+  vi.mocked(api.listNotifications).mockResolvedValue([]);
+  vi.mocked(api.markNotificationRead).mockResolvedValue();
+  vi.mocked(api.continueAgentAfterEvent).mockResolvedValue({
+    output_text: "Course staff now have that question. What else should we work on?",
+    event_ids: [],
+  });
   vi.mocked(api.getConversation).mockResolvedValue({
     conversation,
     events: [previousEvent],
@@ -218,6 +228,208 @@ describe("Course Agent interface", () => {
     expect(screen.getByTestId("workspace-shell")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
     expect(screen.getByRole("button", { name: /Week one/ })).toBeInTheDocument();
+  });
+
+  it("requires the student to confirm question details without exposing email metadata", async () => {
+    const studentConversation = {
+      ...conversation,
+      user_id: studentPrincipal.user_id,
+      anonymous_session_id: null,
+    };
+    vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
+    vi.mocked(api.listConversations).mockResolvedValue([]);
+    vi.mocked(api.createConversation).mockResolvedValue(studentConversation);
+    vi.mocked(api.streamAgentRun).mockImplementation(
+      async (_conversationId, _text, onEvent) => {
+        onEvent({
+          kind: "ta_question_confirmation",
+          confirmation: {
+            id: "50000000-0000-4000-8000-000000000001",
+            code: "Q-2026-00001",
+            subject: "Assignment model",
+            question: "May I use a local model?",
+            context: "The assignment page does not specify deployment.",
+            status: "pending_confirmation",
+          },
+        });
+        onEvent({
+          kind: "text_final",
+          text: (
+            "The course materials do not answer this, so I can ask the teaching " +
+            "team for a definitive answer."
+          ),
+        });
+        onEvent({ kind: "done" });
+      },
+    );
+    vi.mocked(api.confirmTAQuestion).mockResolvedValue({
+      ...previousEvent,
+      type: "email.ta_question.queued",
+      principal_user_id: studentPrincipal.user_id,
+      anonymous_session_id: null,
+      conversation_id: studentConversation.id,
+      payload: {
+        question_id: "50000000-0000-4000-8000-000000000001",
+        question_code: "Q-2026-00001",
+        status: "queued",
+      },
+    });
+
+    render(<App />);
+    await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
+    const composer = screen.getByRole("textbox", { name: "Message" });
+    fireEvent.change(composer, { target: { value: "Ask course staff" } });
+    fireEvent.keyDown(composer, { key: "Enter" });
+
+    expect(
+      await screen.findByRole("region", {
+        name: "Course staff question confirmation",
+      }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("heading", { name: "Ask course staff?" }),
+    ).not.toBeInTheDocument();
+    expect(document.querySelector(".latest-response")).toHaveTextContent(
+      "The course materials do not answer this, so I can ask the teaching team for a definitive answer.",
+    );
+    expect(
+      screen.queryByText("I can ask course staff about this."),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("May I use a local model?")).toBeVisible();
+    expect(
+      screen.queryByText("The assignment page does not specify deployment."),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Q-2026-00001")).not.toBeInTheDocument();
+    expect(screen.queryByText("Assignment model")).not.toBeInTheDocument();
+    expect(screen.queryByText("Subject")).not.toBeInTheDocument();
+    expect(screen.queryByText("Question")).not.toBeInTheDocument();
+    expect(composer).toBeDisabled();
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: "Hide my name from course staff" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() =>
+      expect(api.confirmTAQuestion).toHaveBeenCalledWith(
+        studentConversation.id,
+        "50000000-0000-4000-8000-000000000001",
+        "send",
+        "anonymous",
+      ),
+    );
+    await waitFor(() =>
+      expect(api.continueAgentAfterEvent).toHaveBeenCalledWith(
+        studentConversation.id,
+        previousEvent.id,
+      ),
+    );
+    expect(
+      await screen.findByText(
+        "Course staff now have that question. What else should we work on?",
+      ),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("region", {
+        name: "Course staff question confirmation",
+      }),
+    ).not.toBeInTheDocument();
+    expect(composer).toBeEnabled();
+    fireEvent.change(composer, { target: { value: "I have another question" } });
+    expect(composer).toHaveValue("I have another question");
+  });
+
+  it("restores the agent-generated continuation without reopening the confirmation", async () => {
+    const studentConversation = {
+      ...conversation,
+      user_id: studentPrincipal.user_id,
+      anonymous_session_id: null,
+    };
+    const questionId = "50000000-0000-4000-8000-000000000001";
+    vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
+    vi.mocked(api.listConversations).mockResolvedValue([studentConversation]);
+    vi.mocked(api.getConversation).mockResolvedValue({
+      conversation: studentConversation,
+      events: [
+        previousEvent,
+        {
+          ...previousEvent,
+          id: "50000000-0000-4000-8000-000000000002",
+          type: "email.ta_question.confirmation_requested",
+          payload: {
+            question_id: questionId,
+            question_code: "Q-2026-00001",
+            subject: "Assignment model",
+            question: "May I use a local model?",
+          },
+        },
+        {
+          ...previousEvent,
+          id: "50000000-0000-4000-8000-000000000003",
+          type: "email.ta_question.queued",
+          payload: { question_id: questionId, status: "queued" },
+        },
+        {
+          ...previousEvent,
+          id: "50000000-0000-4000-8000-000000000004",
+          type: "agent.message",
+          payload: {
+            text: "The question is with course staff. Let's continue with your other topic.",
+            input_id: "50000000-0000-4000-8000-000000000005",
+          },
+          metadata: {
+            trigger_event_id: "50000000-0000-4000-8000-000000000003",
+          },
+        },
+      ],
+    });
+
+    render(<App />);
+    await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
+    fireEvent.click(screen.getByRole("button", { name: /Week one/ }));
+
+    expect(
+      await screen.findByText(
+        "The question is with course staff. Let's continue with your other topic.",
+      ),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("region", {
+        name: "Course staff question confirmation",
+      }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Message" })).toBeEnabled();
+  });
+
+  it("shows unread course knowledge to a student and saves acknowledgement", async () => {
+    vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
+    vi.mocked(api.listConversations).mockResolvedValue([]);
+    vi.mocked(api.listNotifications).mockResolvedValue([
+      {
+        id: "60000000-0000-4000-8000-000000000001",
+        faq_entry_id: "70000000-0000-4000-8000-000000000001",
+        question: "Which assignments use groups?",
+        answer: "Assignments 2 and 4 use groups.",
+        published_at: "2026-09-05T12:00:00Z",
+      },
+    ]);
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("complementary", { name: "Course updates" }),
+    ).toBeVisible();
+    expect(screen.getByText("Which assignments use groups?")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Mark read" }));
+
+    await waitFor(() =>
+      expect(api.markNotificationRead).toHaveBeenCalledWith(
+        "60000000-0000-4000-8000-000000000001",
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole("complementary", { name: "Course updates" })).toBeNull(),
+    );
   });
 
   it.each(["MIT", "MIT Media Lab"])(
@@ -571,7 +783,7 @@ describe("Course Agent interface", () => {
 
     expect(screen.getByRole("dialog", { name: "Chat history" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Week one/ })).toBeInTheDocument();
-    expect(screen.getByLabelText("Username")).toBeInTheDocument();
+    expect(screen.getByLabelText("Email or username")).toBeInTheDocument();
     expect(screen.getByLabelText("Access code")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Hide chat history" }));
     expect(screen.queryByRole("dialog", { name: "Chat history" })).not.toBeInTheDocument();
@@ -934,7 +1146,9 @@ describe("Course Agent interface", () => {
     fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
     expect(screen.getByText("Course login")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "alice" } });
+    fireEvent.change(screen.getByLabelText("Email or username"), {
+      target: { value: "alice" },
+    });
     fireEvent.change(screen.getByLabelText("Access code"), {
       target: { value: "long-secret-code" },
     });

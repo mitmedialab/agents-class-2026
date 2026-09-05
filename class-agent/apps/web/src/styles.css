@@ -688,6 +688,149 @@ textarea {
   text-align: left;
 }
 
+.ta-question-confirmation {
+  border-bottom: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-border);
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+  max-width: 42rem;
+  padding: var(--space-6) 0;
+  position: relative;
+  text-align: left;
+  width: 100%;
+  z-index: 1;
+}
+
+.ta-question-content,
+.ta-question-content p,
+.ta-question-status {
+  margin: 0;
+}
+
+.ta-question-status {
+  color: var(--color-text-muted);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ta-question-content p {
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.ta-question-identity {
+  align-items: center;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: flex;
+  font-size: 0.8125rem;
+  gap: var(--space-2);
+}
+
+.ta-question-identity input {
+  accent-color: var(--color-text);
+}
+
+.ta-question-actions {
+  align-items: center;
+  display: flex;
+  gap: var(--space-4);
+}
+
+.ta-question-actions .ca-button {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ta-question-actions .ca-button:first-child {
+  background: var(--color-text);
+  border-color: var(--color-text);
+  color: var(--color-background);
+  min-width: 7rem;
+}
+
+.ta-question-actions .ca-button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.response-stage:has(.ta-question-confirmation) .morphing-line-figure {
+  margin-bottom: var(--space-6);
+  width: clamp(5rem, 8vw, 7rem);
+}
+
+.course-notifications {
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  max-height: calc(100dvh - 7rem);
+  overflow: auto;
+  padding: var(--space-4);
+  position: fixed;
+  right: calc(var(--space-6) + 24px);
+  top: 5rem;
+  width: min(30rem, calc(100vw - 3rem));
+  z-index: 9;
+}
+
+.course-agent[data-workspace-open="true"] .course-notifications {
+  right: calc(60vw + var(--space-6));
+}
+
+.course-notifications-label {
+  color: var(--color-text-muted);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  margin: 0 0 var(--space-4);
+  text-transform: uppercase;
+}
+
+.course-notifications ol {
+  display: grid;
+  gap: var(--space-4);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.course-notifications li {
+  align-items: end;
+  border-top: 1px solid var(--color-border);
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding-top: var(--space-4);
+}
+
+.course-notifications h2,
+.course-notifications li p {
+  margin: 0;
+}
+
+.course-notifications h2 {
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.course-notifications li p {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  margin-top: var(--space-2);
+  white-space: pre-wrap;
+}
+
+.course-notifications .ca-button {
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .latest-response[data-streaming="true"] > :last-child::after {
   animation: response-cursor 750ms steps(2, end) infinite;
   background: currentColor;
@@ -1521,6 +1664,19 @@ textarea {
   .agent-header {
     height: 4rem;
     padding-inline: 1rem;
+  }
+
+  .course-notifications,
+  .course-agent[data-workspace-open="true"] .course-notifications {
+    left: 1rem;
+    right: 1rem;
+    top: 4rem;
+    width: auto;
+  }
+
+  .course-notifications li {
+    align-items: start;
+    grid-template-columns: 1fr;
   }
 
   .header-actions {

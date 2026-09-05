@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  recordWorkspaceInteraction,
+  continueAgentAfterEvent,
   getCourseResourceContent,
+  recordWorkspaceInteraction,
   streamAgentRun,
   uploadFile,
   type AgentStreamEvent,
@@ -41,6 +42,39 @@ describe("API errors", () => {
   });
 });
 
+describe("trusted agent continuation", () => {
+  it("sends only the server-issued trigger event ID", async () => {
+    const result = {
+      output_text: "Generated continuation",
+      event_ids: ["60000000-0000-4000-8000-000000000001"],
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue(result),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      continueAgentAfterEvent(
+        "20000000-0000-4000-8000-000000000001",
+        "50000000-0000-4000-8000-000000000001",
+      ),
+    ).resolves.toEqual(result);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/conversations/20000000-0000-4000-8000-000000000001/continue",
+      expect.objectContaining({
+        body: JSON.stringify({
+          trigger_event_id: "50000000-0000-4000-8000-000000000001",
+        }),
+        credentials: "include",
+        method: "POST",
+      }),
+    );
+    vi.unstubAllGlobals();
+  });
+});
+
 describe("agent event stream", () => {
   it("parses split CRLF events into process and text updates", async () => {
     const encoder = new TextEncoder();
@@ -70,6 +104,11 @@ describe("agent event stream", () => {
         controller.enqueue(
           encoder.encode(
             '\nevent: platform\ndata: {"type":"workspace.panel.opened","event":{"payload":{"command":{"type":"open","panel":{"id":"40000000-0000-4000-8000-000000000001","component_id":"calendar","resource_uri":"course://schedule","props":{"view":"agenda"},"state":{}}}}}}\n\n',
+          ),
+        );
+        controller.enqueue(
+          encoder.encode(
+            '\nevent: platform\ndata: {"type":"email.ta_question.confirmation_requested","event":{"payload":{"question_id":"50000000-0000-4000-8000-000000000001","question_code":"Q-2026-00001","subject":"Assignment model","question":"May I use a local model?","status":"pending_confirmation"}}}\n\n',
           ),
         );
         controller.enqueue(
@@ -147,6 +186,16 @@ describe("agent event stream", () => {
             props: { view: "agenda" },
             state: {},
           },
+        },
+      },
+      {
+        kind: "ta_question_confirmation",
+        confirmation: {
+          id: "50000000-0000-4000-8000-000000000001",
+          code: "Q-2026-00001",
+          subject: "Assignment model",
+          question: "May I use a local model?",
+          status: "pending_confirmation",
         },
       },
       { kind: "text", text: "Hello" },

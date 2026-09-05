@@ -1,5 +1,9 @@
 import type { Conversation, Event, PrincipalContext, Uuid } from "@class-agent/protocol";
 import type { JsonValue } from "@class-agent/workspace";
+import {
+  confirmationFromPayload,
+  type TAQuestionConfirmation,
+} from "./taQuestions.js";
 
 const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL as string | undefined;
 const API_BASE_URL = (configuredBaseUrl ?? "/api/v1").replace(/\/$/, "");
@@ -39,6 +43,19 @@ export interface CourseResourceContent {
   data: Uint8Array;
 }
 
+export interface CourseNotification {
+  id: Uuid;
+  faq_entry_id: Uuid;
+  question: string;
+  answer: string;
+  published_at: string;
+}
+
+export interface AgentRunResult {
+  output_text: string;
+  event_ids: Uuid[];
+}
+
 export type AgentActivityKind =
   | "status"
   | "run"
@@ -61,6 +78,7 @@ export type AgentStreamEvent =
   | { kind: "activity"; activity: AgentActivity }
   | { kind: "workspace"; command: unknown }
   | { kind: "application_submitted" }
+  | { kind: "ta_question_confirmation"; confirmation: TAQuestionConfirmation }
   | { kind: "done" }
   | { kind: "error" };
 
@@ -151,6 +169,45 @@ export function createConversation(title: string): Promise<Conversation> {
 
 export function getConversation(conversationId: Uuid): Promise<ConversationDetail> {
   return requestJson<ConversationDetail>(`/conversations/${conversationId}`);
+}
+
+export function confirmTAQuestion(
+  conversationId: Uuid,
+  questionId: string,
+  action: "send" | "cancel",
+  reporterVisibility: "named" | "anonymous" = "named",
+): Promise<Event> {
+  return requestJson<Event>(
+    `/conversations/${conversationId}/ta-questions/${questionId}/confirmation`,
+    {
+      method: "POST",
+      body: JSON.stringify({ action, reporter_visibility: reporterVisibility }),
+    },
+  );
+}
+
+export function continueAgentAfterEvent(
+  conversationId: Uuid,
+  triggerEventId: Uuid,
+): Promise<AgentRunResult> {
+  return requestJson<AgentRunResult>(`/conversations/${conversationId}/continue`, {
+    method: "POST",
+    body: JSON.stringify({ trigger_event_id: triggerEventId }),
+  });
+}
+
+export function listNotifications(): Promise<CourseNotification[]> {
+  return requestJson<CourseNotification[]>("/notifications");
+}
+
+export async function markNotificationRead(notificationId: Uuid): Promise<void> {
+  const response = await fetch(
+    `${API_BASE_URL}/notifications/${encodeURIComponent(notificationId)}/read`,
+    { method: "POST", credentials: "include" },
+  );
+  if (!response.ok) {
+    throw await responseError(response);
+  }
 }
 
 export async function getCourseResourceContent(
@@ -482,6 +539,13 @@ function emitSseEvent(
     const payload = platformEvent && isRecord(platformEvent.payload) ? platformEvent.payload : null;
     if (type.startsWith("workspace.panel.") && payload?.command !== undefined) {
       onEvent({ kind: "workspace", command: payload.command });
+      return;
+    }
+    if (type === "email.ta_question.confirmation_requested" && payload) {
+      const confirmation = confirmationFromPayload(payload);
+      if (confirmation) {
+        onEvent({ kind: "ta_question_confirmation", confirmation });
+      }
       return;
     }
     if (
