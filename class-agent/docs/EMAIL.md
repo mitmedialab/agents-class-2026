@@ -12,9 +12,9 @@ separate process.
 It sends queued questions to the staff list, polls the configured sender mailbox for replies,
 matches replies by `In-Reply-To`/`References` before falling back to the stable question code,
 stores the answer privately, emails the student's current account address, and appends
-`email.ta_answer.received` to the owned conversation. The first nonblank line of that staff reply
-must be `PUBLISH` or `PRIVATE`; the remaining text is the student-facing answer. `PUBLISH` also
-places a student-independent, identity-redacted FAQ candidate in the durable publication outbox.
+`email.ta_answer.received` to the owned conversation. That staff reply must place `PUBLISH` or
+`PRIVATE` on a standalone line immediately before or after the student-facing answer. `PUBLISH`
+also places a student-independent, identity-redacted FAQ candidate in the durable publication outbox.
 
 The worker has a provider-neutral boundary. Set `MAIL_PROVIDER=google_gmail` for Gmail or
 `MAIL_PROVIDER=microsoft_graph` for Microsoft 365. A cloned deployment owns its mailbox,
@@ -158,8 +158,8 @@ portable identifier and does not need to contain `@`.
 
 ## Email answer and FAQ decision
 
-The original course-staff email contains the complete moderation instructions. Reply with the
-decision on the first nonblank line and the answer beneath it:
+The original course-staff email contains the complete moderation instructions. Put the decision
+on its own line immediately before or after the answer:
 
 ```text
 PUBLISH
@@ -173,10 +173,18 @@ PRIVATE
 This exception applies only to the student who asked.
 ```
 
+The command may instead follow the answer:
+
+```text
+Assignments 2 and 4 are completed in groups.
+PUBLISH
+```
+
 Both decisions send the answer privately to the student. `PUBLISH` additionally approves the
 redacted original question and answer as shared course knowledge; `PRIVATE` does not. Only
-configured reply senders or active `ta`, `instructor`, and `admin` accounts can decide. Missing or
-invalid commands are recorded and leave the question open for a corrected reply. A published entry
+configured reply senders or active `ta`, `instructor`, and `admin` accounts can decide. Missing,
+conflicting, or mid-answer commands are recorded and leave the question open for a corrected
+reply. A published entry
 is stored in PostgreSQL, appears immediately in `course://faq` reads and search, and creates an
 unread course notification for each student account. Publishing is idempotent per source question.
 The worker also atomically adds the public question and answer to the local JSON file configured by

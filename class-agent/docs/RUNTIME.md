@@ -200,8 +200,8 @@ model decides whether and how to acknowledge it and may continue any other unfin
 without a prewritten browser response, duplicated question text, or a fabricated `user.message`.
 The staff-question tool is withheld only for that continuation turn to prevent recursive
 confirmation loops. A private staff reply event is included among recent supporting events so the
-agent can discuss the answer on the student's next turn. The first nonblank line of the authorized
-staff reply is the bounded `PUBLISH` or `PRIVATE` decision and the remaining text is the answer.
+agent can discuss the answer on the student's next turn. The authorized staff reply places the
+bounded `PUBLISH` or `PRIVATE` decision on a standalone line immediately before or after the answer.
 After notifying the student, `PUBLISH` advances a durable publication outbox into `faq_entries`;
 `PRIVATE` creates no shared knowledge. The coordinated publisher adds approved public fields to
 the local FAQ JSON; `course://faq` reads and lexical search use that file without restarting the

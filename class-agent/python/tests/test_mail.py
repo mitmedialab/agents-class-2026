@@ -451,7 +451,7 @@ def test_worker_uses_one_staff_reply_to_answer_and_publish(tmp_path: Path) -> No
         assert "Can Alice use a local model?" not in mail.sent[0].text
         assert "PUBLISH —" in mail.sent[0].text
         assert "PRIVATE —" in mail.sent[0].text
-        assert "first nonblank line" in mail.sent[0].text
+        assert "either before or after your answer" in mail.sent[0].text
         opened = await questions.get_question(question.id)
         assert opened is not None
         assert opened.status == "open"
@@ -483,7 +483,7 @@ def test_worker_uses_one_staff_reply_to_answer_and_publish(tmp_path: Path) -> No
                 internet_message_id="<reply-1@example.edu>",
                 sender=instructor.email,
                 subject=f"Re: [Course Agent {question.public_question_code}] Assignment model",
-                text="PUBLISH\nYes. Include setup instructions in your submission.",
+                text="Yes. Include setup instructions in your submission.\nPUBLISH",
                 received_at=clock.current,
                 headers={"in-reply-to": "<sent-1@course.example>"},
             )
@@ -540,18 +540,24 @@ def test_faq_review_language_is_explicit_and_bounded() -> None:
     assert parse_faq_review_reply("PUBLISH\nPlease fix this") is None
 
 
-def test_first_staff_reply_requires_decision_and_answer() -> None:
+def test_staff_reply_accepts_decision_before_or_after_answer() -> None:
     published = parse_staff_answer_reply("PUBLISH\nAssignments 2 and 4 use groups.")
     private = parse_staff_answer_reply("  PRIVATE  \nOnly the final project uses groups.")
+    trailing_publish = parse_staff_answer_reply("Assignments 2 and 4 use groups.\n  PUBLISH  ")
+    trailing_private = parse_staff_answer_reply("Only the final project uses groups.\nPRIVATE")
 
     assert published is not None
     assert published.action == "publish"
     assert published.answer == "Assignments 2 and 4 use groups."
     assert private is not None
     assert private.action == "private"
+    assert trailing_publish == published
+    assert trailing_private == private
     assert parse_staff_answer_reply("Assignments 2 and 4 use groups.") is None
     assert parse_staff_answer_reply("PUBLISH") is None
     assert parse_staff_answer_reply("PRIVATE\n") is None
+    assert parse_staff_answer_reply("Answer first.\nPUBLISH\nEmail signature") is None
+    assert parse_staff_answer_reply("PUBLISH\nConflicting commands.\nPRIVATE") is None
 
 
 def test_private_staff_answer_never_enters_publication_outbox() -> None:

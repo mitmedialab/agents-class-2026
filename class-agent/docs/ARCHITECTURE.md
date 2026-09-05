@@ -259,10 +259,10 @@ trusted event without manufacturing a user chat message. Generated continuation 
 trigger event ID, making browser retries idempotent; response wording remains model-owned.
 
 The first authorized staff reply contains both the bounded moderation command and answer:
-`PUBLISH` or `PRIVATE` on its first nonblank line, followed by the answer. The answer is stored in
-the student's conversation and sent to the account email. `PUBLISH` also places the redacted
-question and answer in a durable publication outbox; `PRIVATE` closes that path without shared
-knowledge. Prompt text and model output cannot make this trust decision. PostgreSQL holds answer,
+`PUBLISH` or `PRIVATE` on a standalone line immediately before or after the answer. The answer is
+stored in the student's conversation and sent to the account email. `PUBLISH` also places the
+redacted question and answer in a durable publication outbox; `PRIVATE` closes that path without
+shared knowledge. Prompt text and model output cannot make this trust decision. PostgreSQL holds answer,
 decision, publication-outbox, FAQ, and per-user notification-read state.
 
 `PublishedFaqResourceCatalog` composes the registered file catalog with active email-published FAQ

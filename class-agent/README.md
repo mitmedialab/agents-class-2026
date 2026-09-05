@@ -99,11 +99,11 @@ Authenticated students can optionally escalate a question that the maintained si
 appropriate research cannot answer. The agent prepares the exact email, but platform code
 requires the student to choose **Send** before the separate worker contacts course staff.
 Staff replies are matched to the question, stored privately, emailed to the account address,
-and added to that student's conversation. The first nonblank line of the staff reply must be
-`PUBLISH` or `PRIVATE`; the answer follows below it. `PUBLISH` also adds the redacted question and
-answer to searchable `course://faq` knowledge and generates an unread login notification for
-students, while `PRIVATE` keeps it student-specific. Configure each cloned deployment with its own
-dedicated Gmail or Outlook mailbox, staff list, and provider credentials; see
+and added to that student's conversation. The staff reply must place `PUBLISH` or `PRIVATE` on a
+standalone line immediately before or after the answer. `PUBLISH` also adds the redacted question
+and answer to searchable `course://faq` knowledge and generates an unread login notification for
+students, while `PRIVATE` keeps it student-specific. Configure each cloned deployment with its
+own dedicated Gmail or Outlook mailbox, staff list, and provider credentials; see
 [docs/EMAIL.md](docs/EMAIL.md).
 
 Staff-published FAQ knowledge is kept separately from maintained course files in one local,

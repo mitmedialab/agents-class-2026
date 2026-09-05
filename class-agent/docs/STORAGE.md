@@ -32,7 +32,7 @@ conversation; they do not store access codes, provider tokens, client secrets, o
 the student's email address. `faq_entries` remains the canonical shared knowledge store, while
 `course_notification_reads` records only per-account acknowledgement.
 Migration `0007_single_reply_faq_decision` adds the `pending_publication` outbox state and explicit
-receipt dispositions for `PUBLISH`, `PRIVATE`, and malformed first replies. Historical
+receipt dispositions for `PUBLISH`, `PRIVATE`, and malformed replies. Historical
 `pending_delivery` and `pending_review` states remain readable so an upgrade can finish work created
 by the former two-reply flow.
 Migration `0008_faq_archives` is retained because it was already applied during development.

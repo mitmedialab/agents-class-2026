@@ -582,11 +582,21 @@ def parse_staff_answer_reply(text: str) -> StaffAnswerDecision | None:
     """Parse one staff reply containing both the privacy decision and answer."""
 
     normalized = sanitize_reply_text(text)
-    first_line, separator, remainder = normalized.partition("\n")
-    command = first_line.strip().casefold()
-    if command not in {"publish", "private"} or not separator:
+    lines = normalized.splitlines()
+    if len(lines) < 2:
         return None
-    answer = remainder.strip()
+
+    first_command = lines[0].strip().casefold()
+    last_command = lines[-1].strip().casefold()
+    commands = {"publish", "private"}
+    if first_command in commands and last_command not in commands:
+        command = first_command
+        answer = "\n".join(lines[1:]).strip()
+    elif last_command in commands and first_command not in commands:
+        command = last_command
+        answer = "\n".join(lines[:-1]).strip()
+    else:
+        return None
     if not answer or len(answer) > 10_000:
         return None
     action: PublicationDecision = "publish" if command == "publish" else "private"
@@ -640,11 +650,11 @@ def _staff_question_body(question: TAQuestion, *, display_name: str, email: str)
         f"Student:\n{reporter}\n\n"
         f"Question:\n{question_text}\n"
         f"{context}\n"
-        "Reply with one of these commands on the first nonblank line:\n"
+        "Reply with one of these commands on its own line, either before or after your answer:\n"
         "PUBLISH — send the answer to the student and add the redacted question and answer "
         "to shared Course Agent knowledge.\n"
         "PRIVATE — send the answer only to the student.\n\n"
-        "Write the answer below that command.\n\n"
+        "Do not place the command in the middle of your answer.\n\n"
         f"Reference: {question.public_question_code}."
     )
 

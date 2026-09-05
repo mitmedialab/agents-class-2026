@@ -1924,7 +1924,7 @@ Can we use a locally fine-tuned model for Assignment 3?
 Conversation context:
 [small relevant context if explicitly selected]
 
-Put PUBLISH or PRIVATE on the first nonblank line, then write the answer below it.
+Put PUBLISH or PRIVATE on its own line immediately before or after the answer.
 ```
 
 Avoid sending entire conversations unless necessary.
@@ -1983,23 +1983,22 @@ Default:
 visibility = private
 ```
 
-Use the first authorized staff reply as both the answer and the moderation decision. The first
-nonblank line must be one of:
+Use the first authorized staff reply as both the answer and the moderation decision. A standalone
+line immediately before or after the answer must be one of:
 
 ```text
 PUBLISH
 PRIVATE
 ```
 
-The answer follows on subsequent lines. `PUBLISH` sends the answer to the student and approves the
-redacted question and answer for shared course knowledge. `PRIVATE` sends the answer only to the
-student.
+`PUBLISH` sends the answer to the student and approves the redacted question and answer for shared
+course knowledge. `PRIVATE` sends the answer only to the student.
 
 The platform:
 
 1. derives the candidate from the exact question and staff answer;
 2. excludes private conversation context and redacts the known student name and email;
-3. requires the decision as the first nonblank line of the answer;
+3. requires the decision on a standalone line immediately before or after the answer;
 4. requires a reply from an authorized TA, instructor, or admin;
 5. inserts only a `PUBLISH` answer into the public FAQ.
 
@@ -3484,7 +3483,7 @@ Expected:
 5. private answer attached to student's conversation;
 6. email sent to student;
 7. answer not public by default;
-8. TA includes `PUBLISH` or `PRIVATE` in the first answer;
+8. TA includes `PUBLISH` or `PRIVATE` on a standalone boundary line in the first answer;
 9. after `PUBLISH`, the next public query can retrieve the FAQ.
 
 ---
