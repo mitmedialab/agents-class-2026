@@ -222,14 +222,16 @@ def index_resources(
                 """,
                 (entry.id, entry.question, entry.answer, now, now),
             )
-        existing_faq_rows = connection.execute("SELECT id FROM faq_entries").fetchall()
+        existing_faq_rows = connection.execute(
+            "SELECT id FROM faq_entries WHERE source_question_id IS NULL"
+        ).fetchall()
         for (existing_id,) in existing_faq_rows:
             if existing_id not in active_faq_ids:
                 connection.execute(
                     """
                     UPDATE faq_entries
                     SET active = false, updated_at = %s
-                    WHERE id = %s
+                    WHERE id = %s AND source_question_id IS NULL
                     """,
                     (now, existing_id),
                 )

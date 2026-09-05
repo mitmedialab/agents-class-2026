@@ -5,13 +5,103 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, SecretStr, model_validator
+
+DEFAULT_PUBLISHED_FAQ_PATH = (
+    Path(__file__).resolve().parents[2] / "var/course-knowledge/published-faq.json"
+)
 
 
 class ConfigurationError(RuntimeError):
     """Required runtime configuration is absent or unsupported."""
+
+
+class MailSettings(BaseModel):
+    """Deployment-owned configuration for one supported course mailbox."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    provider: Literal["microsoft_graph", "google_gmail"] = "microsoft_graph"
+    tenant_id: str | None = Field(default=None, min_length=1)
+    client_id: str = Field(min_length=1)
+    client_secret: SecretStr = Field(repr=False)
+    refresh_token: SecretStr | None = Field(default=None, repr=False)
+    mailbox_address: EmailStr
+    staff_recipient_address: EmailStr
+    authorized_reply_senders: tuple[EmailStr, ...] = ()
+    poll_interval_seconds: int = Field(default=60, ge=15, le=3_600)
+    published_faq_path: Path = DEFAULT_PUBLISHED_FAQ_PATH
+
+    @model_validator(mode="after")
+    def validate_provider_configuration(self) -> Self:
+        if self.provider == "microsoft_graph" and self.tenant_id is None:
+            raise ValueError("tenant_id is required for Microsoft Graph")
+        if self.provider == "google_gmail" and self.refresh_token is None:
+            raise ValueError("refresh_token is required for Google Gmail")
+        return self
+
+    @classmethod
+    def optional_from_environment(
+        cls,
+        values: Mapping[str, str],
+    ) -> MailSettings | None:
+        raw_enabled = values.get("MAIL_ENABLED", "false").strip().casefold()
+        if raw_enabled not in {"true", "false", "1", "0", "yes", "no"}:
+            raise ConfigurationError("MAIL_ENABLED must be true or false")
+        if raw_enabled not in {"true", "1", "yes"}:
+            return None
+        provider = values.get("MAIL_PROVIDER", "microsoft_graph").strip().casefold()
+        if provider not in {"microsoft_graph", "google_gmail"}:
+            raise ConfigurationError(f"unsupported MAIL_PROVIDER: {provider}")
+        required: dict[str, str] = {}
+        required_names = (
+            ["MAIL_TENANT_ID"] if provider == "microsoft_graph" else ["MAIL_REFRESH_TOKEN"]
+        )
+        required_names.extend(
+            [
+                "MAIL_CLIENT_ID",
+                "MAIL_CLIENT_SECRET",
+                "MAILBOX_ADDRESS",
+                "MAIL_STAFF_RECIPIENT_ADDRESS",
+            ]
+        )
+        for name in required_names:
+            raw_value = values.get(name)
+            value = raw_value.strip() if raw_value else ""
+            if not value:
+                raise ConfigurationError(f"{name} is required when MAIL_ENABLED=true")
+            if "\n" in value or "\r" in value or r"\n" in value or r"\r" in value:
+                raise ConfigurationError(f"{name} must be a non-empty single line")
+            required[name] = value
+        reply_senders = tuple(
+            sender.strip()
+            for sender in values.get("MAIL_AUTHORIZED_REPLY_SENDERS", "").split(",")
+            if sender.strip()
+        )
+        raw_published_faq_path = values.get("PUBLISHED_FAQ_PATH")
+        published_faq_path = (
+            Path(raw_published_faq_path.strip()).expanduser()
+            if raw_published_faq_path and raw_published_faq_path.strip()
+            else DEFAULT_PUBLISHED_FAQ_PATH
+        )
+        return cls(
+            provider=provider,
+            tenant_id=required.get("MAIL_TENANT_ID"),
+            client_id=required["MAIL_CLIENT_ID"],
+            client_secret=SecretStr(required["MAIL_CLIENT_SECRET"]),
+            refresh_token=(
+                SecretStr(required["MAIL_REFRESH_TOKEN"])
+                if "MAIL_REFRESH_TOKEN" in required
+                else None
+            ),
+            mailbox_address=required["MAILBOX_ADDRESS"],
+            staff_recipient_address=required["MAIL_STAFF_RECIPIENT_ADDRESS"],
+            authorized_reply_senders=reply_senders,
+            poll_interval_seconds=int(values.get("MAIL_POLL_INTERVAL_SECONDS", "60")),
+            published_faq_path=published_faq_path,
+        )
 
 
 class AgentSettings(BaseModel):
@@ -32,6 +122,7 @@ class AgentSettings(BaseModel):
     skills_path: Path = Path(__file__).resolve().parents[2] / "skills"
     applicant_data_path: Path = Path(__file__).resolve().parents[2] / "var/applicants"
     upload_data_path: Path = Path(__file__).resolve().parents[2] / "var/uploads"
+    published_faq_path: Path = DEFAULT_PUBLISHED_FAQ_PATH
     browser_enabled: bool = True
     browser_max_sessions: int = Field(default=20, ge=1, le=100)
     browser_max_sessions_per_principal: int = Field(default=2, ge=1, le=10)
@@ -43,6 +134,7 @@ class AgentSettings(BaseModel):
     anonymous_max_uploads: int = Field(default=5, ge=1, le=50)
     anonymous_max_upload_bytes: int = Field(default=20 * 1024 * 1024, ge=1, le=100 * 1024 * 1024)
     workspace_strict_visual_policy: bool = True
+    mail_enabled: bool = False
 
     @classmethod
     def from_environment(
@@ -117,6 +209,12 @@ class AgentSettings(BaseModel):
             if raw_upload_path and raw_upload_path.strip()
             else Path(__file__).resolve().parents[2] / "var/uploads"
         )
+        raw_published_faq_path = values.get("PUBLISHED_FAQ_PATH")
+        published_faq_path = (
+            Path(raw_published_faq_path.strip()).expanduser()
+            if raw_published_faq_path and raw_published_faq_path.strip()
+            else DEFAULT_PUBLISHED_FAQ_PATH
+        )
         raw_browser_executable = values.get("BROWSER_EXECUTABLE_PATH")
         browser_executable_path = (
             Path(raw_browser_executable.strip()).expanduser()
@@ -134,6 +232,9 @@ class AgentSettings(BaseModel):
         )
         if strict_visual_policy not in {"true", "false", "1", "0", "yes", "no"}:
             raise ConfigurationError("WORKSPACE_STRICT_VISUAL_POLICY must be true or false")
+        mail_enabled = values.get("MAIL_ENABLED", "false").strip().casefold()
+        if mail_enabled not in {"true", "false", "1", "0", "yes", "no"}:
+            raise ConfigurationError("MAIL_ENABLED must be true or false")
 
         return cls(
             model_provider="openai",
@@ -146,6 +247,7 @@ class AgentSettings(BaseModel):
             skills_path=skills_path,
             applicant_data_path=applicant_data_path,
             upload_data_path=upload_data_path,
+            published_faq_path=published_faq_path,
             browser_enabled=browser_enabled in {"true", "1", "yes"},
             browser_max_sessions=int(values.get("BROWSER_MAX_SESSIONS", "20")),
             browser_max_sessions_per_principal=int(
@@ -161,4 +263,5 @@ class AgentSettings(BaseModel):
                 values.get("ANONYMOUS_MAX_UPLOAD_BYTES", str(20 * 1024 * 1024))
             ),
             workspace_strict_visual_policy=strict_visual_policy in {"true", "1", "yes"},
+            mail_enabled=mail_enabled in {"true", "1", "yes"},
         )

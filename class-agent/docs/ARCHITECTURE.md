@@ -245,3 +245,36 @@ skill or one registered reference on demand and repeat the authorization check a
 This uses the existing `AgentContext` metadata without changing a stable contract. Full
 instructions remain transient model context and are summarized,
 not copied, in canonical tool events. No database migration is required.
+
+## Authorized Phase 10 email workflow
+
+`course.ask_ta` prepares an authenticated student's question but cannot send it. The owned HTTP
+confirmation queues a durable outbox row, and a separate worker is the only process holding Gmail
+or Microsoft Graph credentials. Provider IDs and RFC message IDs join incoming replies to the
+question without subject-only matching.
+
+The confirmation event carries the exact student-approved question back into the portable
+conversation. A narrow allowlisted continuation endpoint lets the Course Agent react to that
+trusted event without manufacturing a user chat message. Generated continuation events retain the
+trigger event ID, making browser retries idempotent; response wording remains model-owned.
+
+The first authorized staff reply contains both the bounded moderation command and answer:
+`PUBLISH` or `PRIVATE` on its first nonblank line, followed by the answer. The answer is stored in
+the student's conversation and sent to the account email. `PUBLISH` also places the redacted
+question and answer in a durable publication outbox; `PRIVATE` closes that path without shared
+knowledge. Prompt text and model output cannot make this trust decision. PostgreSQL holds answer,
+decision, publication-outbox, FAQ, and per-user notification-read state.
+
+`PublishedFaqResourceCatalog` composes the registered file catalog with active email-published FAQ
+records read from `var/course-knowledge/published-faq.json`. Seed files remain repository-owned;
+approved semester knowledge is local runtime data and is not folded into maintained static content.
+Migrations `0006_email_faq_review` and
+`0007_single_reply_faq_decision` add this workflow without changing a stable schema-v1 wire
+contract.
+
+`LocalFaqKnowledgeStore` validates and atomically replaces that one versioned JSON document. A
+coordinated publisher completes PostgreSQL workflow and notification bookkeeping before updating
+the local file; a failed file write leaves the durable publication outbox pending for retry. The
+agent-facing catalog reads only the local public records and never the private workflow tables.
+Migration `0008_faq_archives` is retained as immutable applied development history, while migration
+`0009_local_faq_knowledge` removes its superseded archive-import columns.

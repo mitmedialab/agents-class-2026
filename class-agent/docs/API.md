@@ -13,6 +13,9 @@ POST /api/v1/auth/login
 POST /api/v1/auth/logout
 GET  /api/v1/auth/me
 
+GET  /api/v1/notifications
+POST /api/v1/notifications/{notification_id}/read
+
 GET  /api/v1/course/resources
 GET  /api/v1/course/resources/content?uri={resource_uri}
 GET  /api/v1/course/resources/asset?uri={resource_uri}&asset_id={asset_id}
@@ -24,11 +27,35 @@ POST /api/v1/conversations
 GET  /api/v1/conversations/{conversation_id}
 POST /api/v1/conversations/{conversation_id}/workspace/actions
 POST /api/v1/conversations/{conversation_id}/workspace/interactions
+POST /api/v1/conversations/{conversation_id}/ta-questions/{question_id}/confirmation
+POST /api/v1/conversations/{conversation_id}/continue
 
 POST /api/v1/conversations/{conversation_id}/run
 POST /api/v1/conversations/{conversation_id}/run/stream
 POST /api/v1/agent/run
 ```
+
+The TA-question confirmation route accepts only `send` or `cancel`, plus a bounded
+`reporter_visibility` of `named` or `anonymous`. It requires an authenticated
+student who owns both the conversation and the pending question. `send` queues work for the
+separate mail worker; the HTTP request never contacts the email provider. Missing, foreign, and non-student
+questions fail closed. Repeating the same decision is idempotent; trying the opposite decision
+after the question has advanced returns `409`.
+
+The continuation route accepts only a server-issued `trigger_event_id` from the owned
+conversation. Platform code permits the Course Agent to continue only from explicitly allowlisted
+trusted action events, currently TA-question Send and Cancel. It does not append a fabricated
+`user.message`; the agent receives a neutral description of the completed action as its current
+input, while the exact question remains available in trusted event context. The continuation does
+not prescribe or prewrite the agent's response. The staff-question tool is withheld for that continuation turn to prevent a completed
+action from recursively opening another confirmation, while every other authorized capability
+remains available. Repeating the same continuation returns its existing agent response instead of
+running the model twice.
+
+The notification routes require the exact active `student` role. The list contains unread
+staff-approved FAQ publications; acknowledgement is idempotent and scoped to the authenticated
+user. Neither route accepts a user ID, and marking an item read does not deactivate shared FAQ
+knowledge.
 
 `GET /api/v1/course/resources` returns path-free metadata for resources authorized to the
 current principal. Anonymous visitors receive the six public resources. Students also

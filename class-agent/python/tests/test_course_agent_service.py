@@ -9,6 +9,7 @@ import pytest
 
 from agent_core import AgentContext, AgentInput, AgentResult, Event, PrincipalContext
 from course_server.agent import (
+    ASK_TA_TOOL_ID,
     COURSE_APPLICATION_URI,
     COURSE_FAQ_URI,
     COURSE_INSTRUCTORS_URI,
@@ -68,6 +69,7 @@ def authenticated_principal(
 class RecordingRuntime:
     def __init__(self) -> None:
         self.contexts: list[AgentContext] = []
+        self.inputs: list[AgentInput] = []
 
     async def run(
         self,
@@ -76,6 +78,7 @@ class RecordingRuntime:
         input: AgentInput,
     ) -> AgentResult:
         self.contexts.append(context)
+        self.inputs.append(input)
         return AgentResult(
             input_id=input.id,
             conversation_id=context.conversation_id,
@@ -173,6 +176,18 @@ def test_course_policy_filters_role_scoped_resources_and_instructor_tools(
     assert INSTRUCTOR_READ_APPLICATION_TOOL_ID in instructor.tool_ids
     assert INSTRUCTOR_INSPECT_APPLICATION_IMAGES_TOOL_ID in instructor.tool_ids
     assert LIST_PRIVATE_RESOURCES_TOOL_ID not in ta.tool_ids
+
+
+def test_staff_email_tool_requires_enabled_mail_and_exact_student_role() -> None:
+    disabled = CourseCapabilityPolicy()
+    enabled = CourseCapabilityPolicy(mail_enabled=True)
+
+    assert ASK_TA_TOOL_ID not in disabled.authorize(authenticated_principal("student")).tool_ids
+    assert ASK_TA_TOOL_ID in enabled.authorize(authenticated_principal("student")).tool_ids
+    assert ASK_TA_TOOL_ID not in enabled.authorize(public_principal()).tool_ids
+    assert ASK_TA_TOOL_ID not in enabled.authorize(authenticated_principal("ta")).tool_ids
+    assert ASK_TA_TOOL_ID not in enabled.authorize(authenticated_principal("instructor")).tool_ids
+    assert ASK_TA_TOOL_ID not in enabled.authorize(authenticated_principal("admin")).tool_ids
 
 
 def test_course_agent_discloses_only_login_authorized_skill_metadata() -> None:
@@ -373,6 +388,68 @@ def test_course_agent_reports_result_events_for_unobserved_runtime_adapters() ->
         )
 
         assert [event.type for event in observed] == ["agent.message"]
+
+    asyncio.run(scenario())
+
+
+def test_course_agent_continues_from_a_trusted_action_without_a_fake_user_message() -> None:
+    async def scenario() -> None:
+        runtime = RecordingRuntime()
+        store = InMemoryConversationStore()
+        service = CourseAgentService(runtime=runtime, conversations=store)
+        principal = authenticated_principal("student")
+        conversation = await service.create_conversation(principal)
+        question_id = uuid4()
+        prepared = Event(
+            type="email.ta_question.confirmation_requested",
+            actor="course-agent",
+            principal_user_id=principal.user_id,
+            conversation_id=conversation.id,
+            payload={
+                "question_id": str(question_id),
+                "question_code": "Q-2026-00001",
+                "question": "Which assignments are group work?",
+                "status": "pending_confirmation",
+            },
+            metadata={"visibility": "private"},
+        )
+        trigger = Event(
+            type="email.ta_question.queued",
+            actor="user",
+            principal_user_id=principal.user_id,
+            conversation_id=conversation.id,
+            payload={
+                "question_id": str(question_id),
+                "question_code": "Q-2026-00001",
+                "status": "queued",
+            },
+            metadata={"visibility": "private"},
+        )
+        await store.append_events(conversation.id, [prepared, trigger])
+
+        first = await service.continue_after_event(
+            principal=principal,
+            conversation_id=conversation.id,
+            trigger_event_id=trigger.id,
+        )
+        second = await service.continue_after_event(
+            principal=principal,
+            conversation_id=conversation.id,
+            trigger_event_id=trigger.id,
+        )
+
+        assert first.output_text == second.output_text == "Hello from Class Agent."
+        assert len(runtime.inputs) == 1
+        assert runtime.inputs[0].text == (
+            "The student approved sending the prepared question to course staff."
+        )
+        assert "Which assignments are group work?" not in runtime.inputs[0].text
+        assert runtime.contexts[0].recent_events == [prepared, trigger]
+        assert ASK_TA_TOOL_ID not in runtime.contexts[0].permitted_tool_ids
+        events = await store.list_events(conversation.id)
+        assert all(event.type != "user.message" for event in events)
+        continuation = next(event for event in events if event.type == "agent.message")
+        assert continuation.metadata["trigger_event_id"] == str(trigger.id)
 
     asyncio.run(scenario())
 

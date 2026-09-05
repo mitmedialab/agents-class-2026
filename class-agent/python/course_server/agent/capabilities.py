@@ -58,6 +58,7 @@ SHOW_PUBLIC_FILES_TOOL_ID = "course.show_public_files"
 SEARCH_FAQ_TOOL_ID = "course.search_faq"
 SEARCH_COURSE_TOOL_ID = "course.search"
 SUBMIT_APPLICATION_TOOL_ID = "course.submit_application"
+ASK_TA_TOOL_ID = "course.ask_ta"
 READ_UPLOAD_TOOL_ID = "upload.read"
 LIST_PRIVATE_RESOURCES_TOOL_ID = "course.list_private_resources"
 READ_PRIVATE_RESOURCE_TOOL_ID = "course.read_private_resource"
@@ -2503,9 +2504,11 @@ class CourseCapabilityPolicy:
         resources: CourseResourceCatalog | None = None,
         *,
         browser_enabled: bool = False,
+        mail_enabled: bool = False,
     ) -> None:
         self._resources = resources
         self._browser_enabled = browser_enabled
+        self._mail_enabled = mail_enabled
 
     def authorize(self, principal: PrincipalContext) -> AuthorizedCapabilities:
         if self._resources is None:
@@ -2564,6 +2567,13 @@ class CourseCapabilityPolicy:
                 ),
                 *instructor_tools,
                 *(BROWSER_TOOL_IDS if self._browser_enabled else ()),
+                *(
+                    (ASK_TA_TOOL_ID,)
+                    if self._mail_enabled
+                    and principal.authenticated
+                    and "student" in principal.roles
+                    else ()
+                ),
             ),
             resource_uris=resource_uris,
             resource_index=tuple(

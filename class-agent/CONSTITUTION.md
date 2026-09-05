@@ -1924,7 +1924,7 @@ Can we use a locally fine-tuned model for Assignment 3?
 Conversation context:
 [small relevant context if explicitly selected]
 
-Reply normally to answer this question.
+Put PUBLISH or PRIVATE on the first nonblank line, then write the answer below it.
 ```
 
 Avoid sending entire conversations unless necessary.
@@ -1983,22 +1983,28 @@ Default:
 visibility = private
 ```
 
-Provide a small TA moderation UI.
-
-The TA can click:
+Use the first authorized staff reply as both the answer and the moderation decision. The first
+nonblank line must be one of:
 
 ```text
-[Publish as course FAQ]
+PUBLISH
+PRIVATE
 ```
 
-When clicked:
+The answer follows on subsequent lines. `PUBLISH` sends the answer to the student and approves the
+redacted question and answer for shared course knowledge. `PRIVATE` sends the answer only to the
+student.
 
-1. generate candidate generic question;
-2. generate candidate generic answer;
-3. remove student name/personal details;
-4. show preview;
-5. require TA confirmation;
-6. insert approved entry into public FAQ.
+The platform:
+
+1. derives the candidate from the exact question and staff answer;
+2. excludes private conversation context and redacts the known student name and email;
+3. requires the decision as the first nonblank line of the answer;
+4. requires a reply from an authorized TA, instructor, or admin;
+5. inserts only a `PUBLISH` answer into the public FAQ.
+
+Email receipt and decision state must be durable and idempotent. A missing or unrecognized decision
+leaves the question open for a corrected staff reply. No model output may publish directly.
 
 ---
 
@@ -2033,6 +2039,16 @@ course.search
 ```
 
 This allows the Course Agent to become more useful throughout the semester.
+
+Publishing also creates an unread course notification for every authenticated student. Read state
+is per user; the published FAQ remains global course knowledge after notifications are dismissed.
+
+Keep staff-approved evolving FAQ knowledge in one versioned local JSON file at
+`var/course-knowledge/published-faq.json`. An authorized `PUBLISH` decision updates this file
+automatically and atomically. The Course Agent reads it only through `course://faq`; model-controlled
+input never receives or selects the backing path. The file contains no student identity, private
+context, staff identity, provider metadata, or notification-read state. PostgreSQL retains the
+workflow, idempotency, and notification bookkeeping needed to complete publication safely.
 
 ---
 
@@ -3468,8 +3484,8 @@ Expected:
 5. private answer attached to student's conversation;
 6. email sent to student;
 7. answer not public by default;
-8. TA publishes approved generic FAQ;
-9. next public query can retrieve FAQ.
+8. TA includes `PUBLISH` or `PRIVATE` in the first answer;
+9. after `PUBLISH`, the next public query can retrieve the FAQ.
 
 ---
 

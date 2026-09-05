@@ -6,7 +6,7 @@ import re
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Protocol, cast
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from agent_core import (
     AgentContext,
@@ -25,7 +25,7 @@ from course_server.workspace import (
     project_workspace_events,
 )
 
-from .capabilities import CourseCapabilityPolicy
+from .capabilities import ASK_TA_TOOL_ID, CourseCapabilityPolicy
 from .skills import (
     READ_SKILL_REFERENCE_TOOL_ID,
     READ_SKILL_TOOL_ID,
@@ -36,7 +36,24 @@ from .store import ConversationAccessDenied, ConversationStore, principal_owns_c
 RECENT_DIALOGUE_EVENT_LIMIT = 24
 RECENT_SUPPORTING_EVENT_LIMIT = 16
 _DIALOGUE_EVENT_TYPES = frozenset({"user.message", "agent.message"})
-_SUPPORTING_EVENT_TYPES = frozenset({"agent.tool.completed", "workspace.interaction"})
+_SUPPORTING_EVENT_TYPES = frozenset(
+    {
+        "agent.tool.completed",
+        "workspace.interaction",
+        "email.ta_question.cancelled",
+        "email.ta_question.confirmation_requested",
+        "email.ta_question.queued",
+        "email.ta_answer.received",
+    }
+)
+_CONTINUATION_EVENT_TYPES = frozenset(
+    {
+        "email.ta_question.cancelled",
+        "email.ta_question.queued",
+    }
+)
+_CONTINUATION_EVENT_METADATA_KEY = "trigger_event_id"
+_CONTINUATION_BLOCKED_TOOL_IDS = frozenset({ASK_TA_TOOL_ID})
 EventObserver = Callable[[Event], None]
 TextDeltaObserver = Callable[[str], None]
 _UPLOAD_REFERENCE = re.compile(
@@ -78,6 +95,14 @@ def _recent_context_events(events: list[Event]) -> list[Event]:
         ]
     }
     return [event for event in events if event.id in retained_ids]
+
+
+def _question_action_input(trigger: Event) -> str:
+    """Describe a trusted action without prescribing or duplicating the agent's response."""
+
+    if trigger.type == "email.ta_question.queued":
+        return "The student approved sending the prepared question to course staff."
+    return "The student cancelled the prepared course-staff question."
 
 
 class CourseAgentService:
@@ -155,13 +180,7 @@ class CourseAgentService:
         event_observer: EventObserver | None = None,
         text_delta_observer: TextDeltaObserver | None = None,
     ) -> AgentResult:
-        conversation = await self._conversations.get_conversation(conversation_id)
-        if conversation is None or not principal_owns_conversation(principal, conversation):
-            raise ConversationAccessDenied("conversation not found")
-        if conversation.archived_at is not None:
-            raise ConversationAccessDenied("conversation is archived")
-
-        previous_events = await self._conversations.list_events(conversation_id)
+        previous_events = await self._owned_conversation_events(principal, conversation_id)
         agent_input = AgentInput(conversation_id=conversation_id, text=text)
         user_event = Event(
             type="user.message",
@@ -172,15 +191,103 @@ class CourseAgentService:
         )
         await self._conversations.append_events(conversation_id, [user_event])
 
+        return await self._execute(
+            principal=principal,
+            conversation_id=conversation_id,
+            agent_input=agent_input,
+            previous_events=previous_events,
+            event_observer=event_observer,
+            text_delta_observer=text_delta_observer,
+        )
+
+    async def continue_after_event(
+        self,
+        *,
+        principal: PrincipalContext,
+        conversation_id: UUID,
+        trigger_event_id: UUID,
+        event_observer: EventObserver | None = None,
+        text_delta_observer: TextDeltaObserver | None = None,
+    ) -> AgentResult:
+        """Let the agent react to one trusted action without inventing a user message."""
+
+        previous_events = await self._owned_conversation_events(principal, conversation_id)
+        trigger = next(
+            (event for event in previous_events if event.id == trigger_event_id),
+            None,
+        )
+        if trigger is None or trigger.type not in _CONTINUATION_EVENT_TYPES:
+            raise ConversationAccessDenied("continuation event not found")
+
+        trigger_key = str(trigger_event_id)
+        for event in reversed(previous_events):
+            if (
+                event.type == "agent.message"
+                and event.metadata.get(_CONTINUATION_EVENT_METADATA_KEY) == trigger_key
+                and isinstance((output_text := event.payload.get("text")), str)
+            ):
+                raw_input_id = event.payload.get("input_id")
+                input_id = UUID(raw_input_id) if isinstance(raw_input_id, str) else uuid4()
+                return AgentResult(
+                    input_id=input_id,
+                    conversation_id=conversation_id,
+                    output_text=output_text,
+                )
+
+        agent_input = AgentInput(
+            conversation_id=conversation_id,
+            text=_question_action_input(trigger),
+            metadata={_CONTINUATION_EVENT_METADATA_KEY: trigger_key},
+        )
+        return await self._execute(
+            principal=principal,
+            conversation_id=conversation_id,
+            agent_input=agent_input,
+            previous_events=previous_events,
+            trigger_event_id=trigger_event_id,
+            blocked_tool_ids=_CONTINUATION_BLOCKED_TOOL_IDS,
+            event_observer=event_observer,
+            text_delta_observer=text_delta_observer,
+        )
+
+    async def _owned_conversation_events(
+        self,
+        principal: PrincipalContext,
+        conversation_id: UUID,
+    ) -> list[Event]:
+        conversation = await self._conversations.get_conversation(conversation_id)
+        if conversation is None or not principal_owns_conversation(principal, conversation):
+            raise ConversationAccessDenied("conversation not found")
+        if conversation.archived_at is not None:
+            raise ConversationAccessDenied("conversation is archived")
+        return await self._conversations.list_events(conversation_id)
+
+    async def _execute(
+        self,
+        *,
+        principal: PrincipalContext,
+        conversation_id: UUID,
+        agent_input: AgentInput,
+        previous_events: list[Event],
+        trigger_event_id: UUID | None = None,
+        blocked_tool_ids: frozenset[str] = frozenset(),
+        event_observer: EventObserver | None = None,
+        text_delta_observer: TextDeltaObserver | None = None,
+    ) -> AgentResult:
+
         authorized = self._capability_policy.authorize(principal)
         authorized_skills = self._skills.authorized_metadata(principal) if self._skills else ()
         skill_tool_ids = (
             (READ_SKILL_TOOL_ID, READ_SKILL_REFERENCE_TOOL_ID) if authorized_skills else ()
         )
-        permitted_tool_ids = (*authorized.tool_ids, *skill_tool_ids)
+        permitted_tool_ids = tuple(
+            tool_id
+            for tool_id in (*authorized.tool_ids, *skill_tool_ids)
+            if tool_id not in blocked_tool_ids
+        )
         authorized_uploads = await self._authorized_upload_uris(
             principal=principal,
-            current_text=text,
+            current_text=agent_input.text,
             previous_events=previous_events,
         )
         workspace_state = project_workspace_events(
@@ -226,5 +333,21 @@ class CourseAgentService:
                     event_observer(event)
         if result.input_id != agent_input.id or result.conversation_id != conversation_id:
             raise ValueError("runtime returned a result for a different input or conversation")
+        if trigger_event_id is not None:
+            trigger_key = str(trigger_event_id)
+            tagged_events = [
+                event.model_copy(
+                    update={
+                        "metadata": {
+                            **event.metadata,
+                            _CONTINUATION_EVENT_METADATA_KEY: trigger_key,
+                        }
+                    }
+                )
+                if event.type in {"agent.run.started", "agent.message", "agent.run.completed"}
+                else event
+                for event in result.events
+            ]
+            result = result.model_copy(update={"events": tagged_events})
         await self._conversations.append_events(conversation_id, result.events)
         return result

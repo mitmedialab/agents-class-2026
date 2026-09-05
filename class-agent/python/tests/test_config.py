@@ -2,7 +2,7 @@ import pytest
 from pydantic import SecretStr
 from smolagents import OpenAIModel
 
-from course_server.config import AgentSettings, ConfigurationError
+from course_server.config import AgentSettings, ConfigurationError, MailSettings
 from runtime_smolagents import OpenAIModelProvider
 
 
@@ -23,6 +23,7 @@ def test_settings_accept_standard_openai_environment_without_exposing_secret() -
     assert settings.skills_path.name == "skills"
     assert settings.applicant_data_path.name == "applicants"
     assert settings.upload_data_path.name == "uploads"
+    assert settings.published_faq_path.name == "published-faq.json"
     assert settings.browser_enabled is True
     assert settings.browser_max_sessions == 20
     assert settings.browser_max_sessions_per_principal == 2
@@ -41,6 +42,7 @@ def test_settings_accept_private_applicant_storage_path() -> None:
             "SKILLS_PATH": "/srv/class-agent/skills",
             "APPLICANT_DATA_PATH": "/srv/class-agent/applicants",
             "UPLOAD_DATA_PATH": "/srv/class-agent/uploads",
+            "PUBLISHED_FAQ_PATH": "/srv/class-agent/course-knowledge/published-faq.json",
         }
     )
 
@@ -48,6 +50,9 @@ def test_settings_accept_private_applicant_storage_path() -> None:
     assert str(settings.skills_path) == "/srv/class-agent/skills"
     assert str(settings.applicant_data_path) == "/srv/class-agent/applicants"
     assert str(settings.upload_data_path) == "/srv/class-agent/uploads"
+    assert str(settings.published_faq_path) == (
+        "/srv/class-agent/course-knowledge/published-faq.json"
+    )
 
 
 def test_settings_can_disable_and_bound_the_remote_browser() -> None:
@@ -95,6 +100,81 @@ def test_settings_can_disable_anonymous_quotas_for_local_development() -> None:
     )
 
     assert settings.anonymous_quotas_enabled is False
+
+
+def test_settings_load_optional_deployment_owned_outlook_configuration() -> None:
+    environment = {
+        "DATABASE_URL": "postgresql://example",
+        "OPENAI_API_KEY": "test-secret-value",
+        "BRAVE_API_KEY": "test-brave-value",
+        "MAIL_ENABLED": "true",
+        "MAIL_TENANT_ID": "tenant-id",
+        "MAIL_CLIENT_ID": "client-id",
+        "MAIL_CLIENT_SECRET": "mail-secret",
+        "MAILBOX_ADDRESS": "course-agent@example.edu",
+        "MAIL_STAFF_RECIPIENT_ADDRESS": "course-staff@example.edu",
+        "MAIL_AUTHORIZED_REPLY_SENDERS": ("instructor@example.edu, teaching-assistant@example.edu"),
+        "MAIL_POLL_INTERVAL_SECONDS": "45",
+        "PUBLISHED_FAQ_PATH": "/srv/class-agent/course-knowledge/published-faq.json",
+    }
+    settings = AgentSettings.from_environment(environment)
+    mail = MailSettings.optional_from_environment(environment)
+
+    assert settings.mail_enabled
+    assert mail is not None
+    assert mail.provider == "microsoft_graph"
+    assert str(mail.mailbox_address) == "course-agent@example.edu"
+    assert str(mail.staff_recipient_address) == "course-staff@example.edu"
+    assert mail.poll_interval_seconds == 45
+    assert str(mail.published_faq_path) == ("/srv/class-agent/course-knowledge/published-faq.json")
+    assert [str(value) for value in mail.authorized_reply_senders] == [
+        "instructor@example.edu",
+        "teaching-assistant@example.edu",
+    ]
+    assert "mail-secret" not in repr(mail)
+
+
+def test_settings_load_optional_deployment_owned_gmail_configuration() -> None:
+    environment = {
+        "MAIL_ENABLED": "true",
+        "MAIL_PROVIDER": "google_gmail",
+        "MAIL_CLIENT_ID": "google-client-id",
+        "MAIL_CLIENT_SECRET": "google-client-secret",
+        "MAIL_REFRESH_TOKEN": "google-refresh-token",
+        "MAILBOX_ADDRESS": "course-agent@example.edu",
+        "MAIL_STAFF_RECIPIENT_ADDRESS": "course-staff@example.edu",
+    }
+
+    mail = MailSettings.optional_from_environment(environment)
+
+    assert mail is not None
+    assert mail.provider == "google_gmail"
+    assert mail.tenant_id is None
+    assert mail.refresh_token is not None
+    assert mail.refresh_token.get_secret_value() == "google-refresh-token"
+    assert "google-client-secret" not in repr(mail)
+    assert "google-refresh-token" not in repr(mail)
+
+
+def test_settings_require_complete_mail_configuration_only_when_enabled() -> None:
+    with pytest.raises(ConfigurationError, match="MAIL_TENANT_ID"):
+        MailSettings.optional_from_environment(
+            {
+                "MAIL_ENABLED": "true",
+            }
+        )
+
+    with pytest.raises(ConfigurationError, match="MAIL_REFRESH_TOKEN"):
+        MailSettings.optional_from_environment(
+            {
+                "MAIL_ENABLED": "true",
+                "MAIL_PROVIDER": "google_gmail",
+                "MAIL_CLIENT_ID": "client-id",
+                "MAIL_CLIENT_SECRET": "client-secret",
+                "MAILBOX_ADDRESS": "course-agent@example.edu",
+                "MAIL_STAFF_RECIPIENT_ADDRESS": "course-staff@example.edu",
+            }
+        )
 
 
 def test_openai_provider_creates_transient_smolagents_model_without_network_call() -> None:

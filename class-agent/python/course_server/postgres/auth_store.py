@@ -66,6 +66,20 @@ class PostgresAuthStore:
             row = await cursor.fetchone()
         return self._stored_user(row)
 
+    async def get_user_by_email(self, email: str) -> StoredUser | None:
+        async with self._pool.connection() as connection:
+            cursor = await connection.execute(
+                """
+                SELECT id, username, display_name, email, role, access_code_hash,
+                       active, created_at, updated_at
+                FROM users
+                WHERE lower(email) = lower(%s)
+                """,
+                (email,),
+            )
+            row = await cursor.fetchone()
+        return self._stored_user(row)
+
     async def get_user_by_id(self, user_id: UUID) -> StoredUser | None:
         async with self._pool.connection() as connection:
             cursor = await connection.execute(

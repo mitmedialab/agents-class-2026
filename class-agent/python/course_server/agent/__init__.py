@@ -3,6 +3,7 @@
 from course_server.course_application import CourseApplication
 
 from .capabilities import (
+    ASK_TA_TOOL_ID,
     COURSE_APPLICATION_URI,
     COURSE_FAQ_URI,
     COURSE_INSTRUCTORS_URI,
@@ -76,9 +77,15 @@ from .skills import (
     SkillCatalogError,
     SkillMetadata,
 )
-from .store import ConversationAccessDenied, ConversationStore, InMemoryConversationStore
+from .store import (
+    ConversationAccessDenied,
+    ConversationStore,
+    EventAlreadyExists,
+    InMemoryConversationStore,
+)
 
 __all__ = [
+    "ASK_TA_TOOL_ID",
     "COURSE_APPLICATION_URI",
     "COURSE_FAQ_URI",
     "COURSE_INSTRUCTORS_URI",
@@ -124,6 +131,7 @@ __all__ = [
     "CourseSearchTool",
     "CourseShowPublicFilesTool",
     "CourseSubmitApplicationTool",
+    "EventAlreadyExists",
     "FileApplicantStore",
     "FileResourceProvider",
     "InMemoryConversationStore",

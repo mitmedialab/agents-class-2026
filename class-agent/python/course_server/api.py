@@ -73,7 +73,21 @@ from course_server.browser import (
 )
 from course_server.browser.tools import browser_page_props
 from course_server.config import AgentSettings
+from course_server.faq import (
+    CourseNotification,
+    LocalFaqKnowledgeStore,
+    NotificationAccessDenied,
+    PostgresFaqStore,
+    PublishedFaqResourceCatalog,
+    StudentNotificationService,
+)
 from course_server.index_resources import index_resources
+from course_server.mail import (
+    PostgresTAQuestionStore,
+    TAQuestionAccessDenied,
+    TAQuestionService,
+    TAQuestionStateError,
+)
 from course_server.migrations import apply_migrations
 from course_server.postgres.auth_store import PostgresAuthStore, create_auth_pool
 from course_server.postgres.conversation_store import PostgresConversationStore
@@ -153,6 +167,15 @@ class WorkspaceInteractionRequest(ApiModel):
     value: JsonValue
 
 
+class TAQuestionConfirmationRequest(ApiModel):
+    action: Literal["send", "cancel"]
+    reporter_visibility: Literal["named", "anonymous"] = "named"
+
+
+class AgentContinuationRequest(ApiModel):
+    trigger_event_id: UUID
+
+
 class BrowserScrollRequest(ApiModel):
     panel_id: UUID
     delta_y: int = Field(ge=-1_600, le=1_600)
@@ -213,6 +236,8 @@ class AppServices:
     uploads: TemporaryUploadStore | None = None
     workspace_registry: ComponentRegistry | None = None
     browser: BrowserSessionService | None = None
+    ta_questions: TAQuestionService | None = None
+    notifications: StudentNotificationService | None = None
     anonymous_quotas: AnonymousQuotaStore = dataclass_field(
         default_factory=InMemoryAnonymousQuotaStore
     )
@@ -550,6 +575,30 @@ async def _run_agent(
         ) from error
 
 
+async def _continue_agent_after_event(
+    *,
+    state: AppState,
+    principal: PrincipalContext,
+    conversation_id: UUID,
+    trigger_event_id: UUID,
+) -> AgentResult:
+    assert state.services is not None
+    try:
+        return await state.services.agent.continue_after_event(
+            principal=principal,
+            conversation_id=conversation_id,
+            trigger_event_id=trigger_event_id,
+        )
+    except ConversationAccessDenied as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from error
+    except Exception as error:
+        logger.exception("agent continuation failed")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="agent temporarily unavailable",
+        ) from error
+
+
 def _sse(*, event: str, data: dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(data, separators=(',', ':'))}\n\n"
 
@@ -627,6 +676,7 @@ async def _stream_agent_run(
             "workspace.panel.opened",
             "workspace.panel.updated",
             "workspace.panel.closed",
+            "email.ta_question.confirmation_requested",
         }:
             yield _sse(
                 event="platform",
@@ -684,9 +734,22 @@ def create_app(
         resources.pool = pool
         auth_store = PostgresAuthStore(pool)
         conversation_store = PostgresConversationStore(pool)
+        faq_store = PostgresFaqStore(pool)
+        faq_knowledge = LocalFaqKnowledgeStore(resolved_settings.published_faq_path)
+        ta_question_service = (
+            TAQuestionService(
+                questions=PostgresTAQuestionStore(pool),
+                auth=auth_store,
+            )
+            if resolved_settings.mail_enabled
+            else None
+        )
         applicant_store = FileApplicantStore(resolved_settings.applicant_data_path)
-        course_resources = FileResourceProvider.from_registry(
-            protected_data_path=resolved_settings.course_data_path
+        course_resources = PublishedFaqResourceCatalog(
+            FileResourceProvider.from_registry(
+                protected_data_path=resolved_settings.course_data_path
+            ),
+            faq_knowledge,
         )
         skills = SkillCatalog.from_registry(resolved_settings.skills_path)
         upload_store = FileTemporaryUploadStore(resolved_settings.upload_data_path)
@@ -717,11 +780,13 @@ def create_app(
                     components=component_registry,
                     browser=browser_service,
                     skills=skills,
+                    ta_questions=ta_question_service,
                 ),
                 conversations=conversation_store,
                 capability_policy=CourseCapabilityPolicy(
                     course_resources,
                     browser_enabled=browser_service is not None,
+                    mail_enabled=ta_question_service is not None,
                 ),
                 skills=skills,
                 workspace_registry=component_registry,
@@ -733,6 +798,8 @@ def create_app(
             uploads=upload_store,
             workspace_registry=component_registry,
             browser=browser_service,
+            ta_questions=ta_question_service,
+            notifications=StudentNotificationService(faqs=faq_store, auth=auth_store),
             anonymous_quotas=PostgresAnonymousQuotaStore(pool),
             anonymous_quota_policy=AnonymousQuotaPolicy(
                 enabled=resolved_settings.anonymous_quotas_enabled,
@@ -818,6 +885,49 @@ def create_app(
         principal: Annotated[PrincipalContext, Depends(_require_principal)],
     ) -> PrincipalResponse:
         return PrincipalResponse.from_principal(principal)
+
+    @router.get("/notifications", response_model=list[CourseNotification])
+    async def list_notifications(
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> list[CourseNotification]:
+        state = _get_app_state(request)
+        assert state.services is not None
+        service = state.services.notifications
+        if service is None:
+            return []
+        try:
+            return await service.list_unread(principal)
+        except NotificationAccessDenied as error:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="student login required",
+            ) from error
+
+    @router.post(
+        "/notifications/{notification_id}/read",
+        status_code=status.HTTP_204_NO_CONTENT,
+    )
+    async def mark_notification_read(
+        notification_id: UUID,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> Response:
+        state = _get_app_state(request)
+        assert state.services is not None
+        service = state.services.notifications
+        if service is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+        try:
+            marked = await service.mark_read(principal, notification_id)
+        except NotificationAccessDenied as error:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="student login required",
+            ) from error
+        if not marked:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     @router.get("/course/resources", response_model=list[ResourceSummary])
     async def list_course_resources(
@@ -1159,6 +1269,100 @@ def create_app(
                         session_id=UUID(raw_session_id),
                     )
         return event
+
+    @router.post(
+        "/conversations/{conversation_id}/ta-questions/{question_id}/confirmation",
+        response_model=Event,
+    )
+    async def confirm_ta_question(
+        conversation_id: UUID,
+        question_id: UUID,
+        payload: TAQuestionConfirmationRequest,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> Event:
+        state = _get_app_state(request)
+        await _require_owned_conversation(
+            state=state,
+            principal=principal,
+            conversation_id=conversation_id,
+        )
+        assert state.services is not None
+        service = state.services.ta_questions
+        if service is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="course staff email is unavailable",
+            )
+        try:
+            question = (
+                await service.confirm(
+                    principal=principal,
+                    conversation_id=conversation_id,
+                    question_id=question_id,
+                    reporter_visibility=payload.reporter_visibility,
+                )
+                if payload.action == "send"
+                else await service.cancel(
+                    principal=principal,
+                    conversation_id=conversation_id,
+                    question_id=question_id,
+                )
+            )
+        except TAQuestionAccessDenied as error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="not found",
+            ) from error
+        except TAQuestionStateError as error:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="question is no longer awaiting confirmation",
+            ) from error
+        event = Event(
+            type=(
+                "email.ta_question.queued"
+                if payload.action == "send"
+                else "email.ta_question.cancelled"
+            ),
+            actor="user",
+            principal_user_id=principal.user_id,
+            conversation_id=conversation_id,
+            payload={
+                "question_id": str(question.id),
+                "question_code": question.public_question_code,
+                "question": question.question_text,
+                **({"context": question.context_text} if question.context_text else {}),
+                "status": question.status,
+            },
+            metadata={"visibility": "private"},
+        )
+        await state.services.conversations.append_events(conversation_id, [event])
+        return event
+
+    @router.post(
+        "/conversations/{conversation_id}/continue",
+        response_model=RunResponse,
+    )
+    async def continue_conversation(
+        conversation_id: UUID,
+        payload: AgentContinuationRequest,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> RunResponse:
+        state = _get_app_state(request)
+        await _require_owned_conversation(
+            state=state,
+            principal=principal,
+            conversation_id=conversation_id,
+        )
+        result = await _continue_agent_after_event(
+            state=state,
+            principal=principal,
+            conversation_id=conversation_id,
+            trigger_event_id=payload.trigger_event_id,
+        )
+        return RunResponse.from_result(result)
 
     @router.post(
         "/conversations/{conversation_id}/workspace/interactions",

@@ -17,6 +17,8 @@ class AuthStore(Protocol):
 
     async def get_user_by_username(self, username: str) -> StoredUser | None: ...
 
+    async def get_user_by_email(self, email: str) -> StoredUser | None: ...
+
     async def get_user_by_id(self, user_id: UUID) -> StoredUser | None: ...
 
     async def list_users(self) -> list[StoredUser]: ...
@@ -92,6 +94,13 @@ class InMemoryAuthStore:
 
     async def get_user_by_username(self, username: str) -> StoredUser | None:
         return next((user for user in self.users.values() if user.username == username), None)
+
+    async def get_user_by_email(self, email: str) -> StoredUser | None:
+        normalized = email.strip().casefold()
+        return next(
+            (user for user in self.users.values() if str(user.email).casefold() == normalized),
+            None,
+        )
 
     async def get_user_by_id(self, user_id: UUID) -> StoredUser | None:
         return self.users.get(user_id)

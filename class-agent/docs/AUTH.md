@@ -6,9 +6,17 @@ Phase 2 implements authentication without an HTTP-framework dependency. `Authent
 
 Access codes are generated from 20 cryptographically random bytes (160 bits) and displayed as grouped Base32 text. PostgreSQL stores only an Argon2id encoded hash using explicit time, memory, parallelism, salt, and output-length parameters. Hash parameters can be upgraded opportunistically after a successful login.
 
-Usernames are normalized to lowercase and restricted to a small portable character set. Login failures always return the same invalid-credentials error for an unknown username, inactive user, or incorrect code. A dummy Argon2id hash prevents the unknown-user path from skipping password work.
+Usernames are normalized to lowercase and restricted to a small portable character set. The login
+identifier may be either that username or the account's case-insensitive email address, so course
+deployments can present email as the student's login name without changing the stable username
+contract. Login failures always return the same invalid-credentials error for an unknown identifier,
+inactive user, or incorrect code. A dummy Argon2id hash prevents either unknown-user path from
+skipping password work.
 
-The default rate limit permits five failed attempts for a normalized username in fifteen minutes. PostgreSQL stores only a hash of the rate-limit key. A successful login clears failures. The future HTTP layer may add a separate network-origin limit without changing this service.
+The default rate limit permits five failed attempts per known account in fifteen minutes, shared
+between its username and email identifiers. Unknown identifiers receive their own normalized
+limit. PostgreSQL stores only a hash of the rate-limit key. A successful login clears failures.
+The future HTTP layer may add a separate network-origin limit without changing this service.
 
 ## Sessions
 
@@ -40,6 +48,18 @@ principal, authenticated skills only after login, student skills to students and
 and instructor skills only to instructors. TA and admin do not inherit student or instructor
 skills. Skill and reference tools re-resolve access from the trusted `PrincipalContext`; a
 model-provided skill ID or role claim cannot grant access.
+
+When email escalation is configured, `course.ask_ta` is narrower than the normal student-resource
+audience: it is exposed only to the exact active `student` role. TA, instructor, admin, and
+anonymous principals do not receive it. The recipient address is the stored user email loaded by
+platform code; it is never a tool or browser parameter.
+
+The student may hide their name in the staff-facing question. Platform code substitutes an
+anonymous label and redacts the account's known name and email from the outgoing question/context,
+but this is presentation privacy, not anonymous platform ownership: the stored authenticated user
+remains the only reply recipient.
+Published FAQ notifications likewise resolve the current active student from the session and never
+accept a client-provided user ID.
 
 The API resolves an authenticated cookie first and otherwise resolves or creates an anonymous session. Invalid, revoked, inactive-user, and expired authenticated sessions all become public anonymous requests; the unusable cookie is cleared. Logout revokes the presented authenticated token and clears its cookie.
 

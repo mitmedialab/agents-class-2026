@@ -12,11 +12,32 @@ PostgreSQL stores durable server-side identity and canonical conversation histor
 - `conversations`: one explicitly user- or anonymous-session-owned conversation;
 - `events`: canonical JSON event envelopes with JSONB payload and metadata;
 - `course_resources`: normalized public resource text and PostgreSQL full-text index;
-- `faq_entries`: individually addressable active and inactive FAQ records.
+- `faq_entries`: individually addressable active and inactive FAQ records;
+- `ta_questions`: private student escalation, explicit confirmation, delivery, and resolution state;
+- `ta_answers`: one private matched staff answer plus event and student-notification outbox state;
+- `mail_inbound_receipts`: provider-message deduplication and rejected/unmatched dispositions;
+- `mail_sync_state`: per-mailbox polling checkpoint with an overlap window;
+- `faq_review_candidates`: durable staff decision and FAQ-publication outbox state;
+- `course_notifications`: one global notification for each email-published FAQ entry;
+- `course_notification_reads`: per-student acknowledgement state.
 
 Conversation messages are represented by `user.message` and `agent.message` events. The database does not store a smolagents agent, memory object, pickle, or provider-specific conversation object.
 
 Later-phase tables from the constitution are added only when their owning application feature is implemented.
+
+Migration `0005_ta_email` introduces the private-email slice of Phase 10. Migration
+`0006_email_faq_review` adds explicit staff email moderation, FAQ publication, login notifications,
+and the student's named/anonymous presentation choice. Mail rows reference the canonical user and
+conversation; they do not store access codes, provider tokens, client secrets, or a second copy of
+the student's email address. `faq_entries` remains the canonical shared knowledge store, while
+`course_notification_reads` records only per-account acknowledgement.
+Migration `0007_single_reply_faq_decision` adds the `pending_publication` outbox state and explicit
+receipt dispositions for `PUBLISH`, `PRIVATE`, and malformed first replies. Historical
+`pending_delivery` and `pending_review` states remain readable so an upgrade can finish work created
+by the former two-reply flow.
+Migration `0008_faq_archives` is retained because it was already applied during development.
+Migration `0009_local_faq_knowledge` immediately removes those superseded archive-import columns;
+new deployments apply both in order and end with no archive-import state.
 
 ## Temporary chat uploads
 
@@ -84,6 +105,25 @@ pg_restore --dbname=class_agent_restored class-agent.dump
 Production backups must cover PostgreSQL, shared course storage, and the private
 applicant directory. Temporary uploads normally remain outside backups. Periodically
 test restoration rather than assuming a backup file is usable.
+
+## Local published FAQ knowledge
+
+The agent-facing staff-approved FAQ is one versioned JSON document. Its default location is:
+
+```text
+var/course-knowledge/published-faq.json
+```
+
+Set `PUBLISHED_FAQ_PATH` to use another local path. The dedicated mail worker creates and atomically
+replaces the file after an authorized `PUBLISH` reply; the API and Course Agent CLI read the same
+path through `course://faq`. The file is ignored by Git and contains only FAQ ID, question, answer,
+timestamps, and active state. Student identity, private context, responder identity, mailbox data,
+and notification-read state remain outside it.
+
+The file is intentionally local runtime state. It survives ordinary process restarts as long as
+the local file remains, but this repository does not require a second export, remote mount, or
+automatic backup. Deleting it removes the agent's learned FAQ overlay; maintained static FAQ
+content under `shared/course/faq/` is unaffected.
 
 ## PostgreSQL integration tests
 

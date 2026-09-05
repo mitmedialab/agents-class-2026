@@ -1,5 +1,6 @@
 .DS_Store
 .env
+.env.mail
 .venv/
 .pytest_cache/
 .mypy_cache/
@@ -13,6 +14,7 @@ coverage/
 playwright-report/
 test-results/
 var/applicants/
+var/course-knowledge/
 var/uploads/
 data/students/*
 !data/students/.gitkeep

@@ -56,8 +56,12 @@ visible to a running process. PostgreSQL keeps a normalized full-text copy for
 server-side inspection and later gateway-backed search. Run the index command after
 editing resources when an immediate database refresh is needed without a restart.
 
-Indexing upserts current resources and FAQ entries, removes stale resource rows, and
-marks removed seeded FAQ entries inactive. It does not use embeddings.
+Indexing upserts current resources and seeded FAQ entries, removes stale resource rows, and
+marks removed seeded FAQ entries inactive. Staff-approved database FAQ entries have a
+`source_question_id` and remain available for workflow and notification bookkeeping. The
+agent-facing `course://faq` overlay and lexical search read staff-approved updates from the separate
+local `PUBLISHED_FAQ_PATH` JSON file. Resource indexing never edits or imports that file. It does
+not use embeddings.
 
 ## Role-scoped resources
 

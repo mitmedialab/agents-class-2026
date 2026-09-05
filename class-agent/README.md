@@ -2,7 +2,7 @@
 
 Class Agent is the extensible Course Agent platform described in [CONSTITUTION.md](CONSTITUTION.md). It is designed for an MIT Media Lab course and favors explicit, portable contracts that students can inspect and extend.
 
-The repository is currently at **Phase 7**: validated native workspace components over the Phase 6 Course Agent. It contains stable core and workspace contracts, access-code and anonymous authentication, portable PostgreSQL conversation/event history, a `ToolCallingAgent` adapter, public course resources and search, private course applications, typed workspace tools, an event-derived panel workspace, visual compositions, a specific-artifact DocumentViewer, and a month/agenda Calendar. It intentionally does not yet contain MCP Apps, Agent Bridge, or a browser extension. It loads standard `SKILL.md` bundles progressively: the model initially sees only login-authorized skill metadata and reads full instructions or references on demand.
+The repository is currently at **Phase 7**, plus the explicitly authorized course-email workflow from Phase 10: validated native workspace components over the Phase 6 Course Agent, with an optional Gmail or Microsoft 365 mailbox worker for unanswered student questions and email-moderated FAQ publication. It contains stable core and workspace contracts, access-code and anonymous authentication, portable PostgreSQL conversation/event history, a `ToolCallingAgent` adapter, public course resources and search, private course applications, typed workspace tools, an event-derived panel workspace, visual compositions, a specific-artifact DocumentViewer, and a month/agenda Calendar. It intentionally does not yet contain MCP Apps, Agent Bridge, or a browser extension. It loads standard `SKILL.md` bundles progressively: the model initially sees only login-authorized skill metadata and reads full instructions or references on demand.
 
 ## Requirements
 
@@ -95,6 +95,23 @@ resources are available to logged-in students and instructors, while instructor 
 are available only to instructors. Their contents are ignored by Git and are never added to
 the public registry or PostgreSQL public search index.
 
+Authenticated students can optionally escalate a question that the maintained site and
+appropriate research cannot answer. The agent prepares the exact email, but platform code
+requires the student to choose **Send** before the separate worker contacts course staff.
+Staff replies are matched to the question, stored privately, emailed to the account address,
+and added to that student's conversation. The first nonblank line of the staff reply must be
+`PUBLISH` or `PRIVATE`; the answer follows below it. `PUBLISH` also adds the redacted question and
+answer to searchable `course://faq` knowledge and generates an unread login notification for
+students, while `PRIVATE` keeps it student-specific. Configure each cloned deployment with its own
+dedicated Gmail or Outlook mailbox, staff list, and provider credentials; see
+[docs/EMAIL.md](docs/EMAIL.md).
+
+Staff-published FAQ knowledge is kept separately from maintained course files in one local,
+versioned JSON file at `var/course-knowledge/published-faq.json`. The mail worker updates it
+automatically after an authorized `PUBLISH` reply, and the Course Agent reads it through
+`course://faq`. It contains public FAQ fields only and is ignored by Git. Override its location with
+`PUBLISHED_FAQ_PATH`; see [docs/STORAGE.md](docs/STORAGE.md).
+
 Run the real PostgreSQL integration test with:
 
 ```bash
@@ -124,6 +141,7 @@ pnpm typecheck
 ```text
 python/agent_core/       framework-independent Python contracts
 python/course_server/    auth, orchestration, FastAPI/CLI, and PostgreSQL adapters
+python/course_server/mail/ provider-neutral mail workflow and Gmail/Graph adapters
 python/runtime_smolagents/ replaceable ToolCallingAgent/OpenAI adapters
 skills/                  standard Agent Skills plus audience authorization registry
 python/tests/            Python serialization and contract tests
@@ -136,6 +154,7 @@ database/migrations/     permanent checksummed PostgreSQL migrations
 shared/course/            public course content and per-resource manifests
 shared/registry/          public resource and trusted component registries
 data/                     untracked role-scoped student and instructor resources
+var/course-knowledge/     local generated public FAQ knowledge
 docs/                    architecture and versioning decisions
 ```
 

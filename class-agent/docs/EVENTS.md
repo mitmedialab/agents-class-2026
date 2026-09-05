@@ -35,3 +35,24 @@ Each payload has exactly one `command` object conforming to
 these events in order. The durable representation contains component IDs, resource
 URIs, validated JSON props/state, and layout hints—never React elements, JavaScript,
 or PDF.js objects.
+
+## Private email payloads
+
+- `email.ta_question.confirmation_requested`: private question ID/code, subject, exact question,
+  optional explicitly selected context, and `pending_confirmation` status;
+- `email.ta_question.queued` / `email.ta_question.cancelled`: question ID/code, exact question,
+  optional context, and new status from the student's explicit UI action;
+- `email.ta_question.created`: question ID/code, subject, and `open` status after the provider accepts
+  the staff message;
+- `email.ta_answer.received`: question ID/code, subject, sanitized answer, and
+  `visibility: private`.
+
+These events belong to the student's owned conversation and user principal. They never contain
+mailbox credentials, the student's address, Graph payloads, or arbitrary quoted email history.
+An agent continuation produced from one of these trusted actions marks its run lifecycle and
+`agent.message` metadata with `trigger_event_id`; this makes retries idempotent without inventing a
+user-authored chat message.
+Staff email decisions and pending FAQ publications are durable workflow rows rather than private
+conversation events. Publication creates a global `faq_entries` record and a
+`course_notifications` record; it does not copy the originating student's identity into the public
+FAQ.

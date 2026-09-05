@@ -55,7 +55,9 @@ from course_server.browser.tools import (
     BrowserScrollTool,
 )
 from course_server.config import AgentSettings, ConfigurationError
+from course_server.faq import LocalFaqKnowledgeStore, PublishedFaqResourceCatalog
 from course_server.index_resources import index_resources
+from course_server.mail import CourseAskTATool, TAQuestionService
 from course_server.migrations import apply_migrations
 from course_server.postgres.auth_store import PostgresAuthStore, create_auth_pool
 from course_server.postgres.conversation_store import PostgresConversationStore
@@ -122,6 +124,7 @@ def build_runtime(
     components: ComponentRegistry | None = None,
     browser: BrowserSessionService | None = None,
     skills: SkillCatalog | None = None,
+    ta_questions: TAQuestionService | None = None,
 ) -> SmolagentsRuntime:
     course_resources = (
         resources
@@ -201,6 +204,8 @@ def build_runtime(
         )
     if skills is not None:
         executable_tools.extend([ReadSkillTool(skills), ReadSkillReferenceTool(skills)])
+    if ta_questions is not None:
+        executable_tools.append(CourseAskTATool(ta_questions))
     tools = ToolCatalog(executable_tools)
     provider = OpenAIModelProvider(
         model_id=settings.model_id,
@@ -226,8 +231,9 @@ async def _run_postgres_turn(
     await pool.open()
     await pool.wait()
     try:
-        course_resources = FileResourceProvider.from_registry(
-            protected_data_path=settings.course_data_path
+        course_resources = PublishedFaqResourceCatalog(
+            FileResourceProvider.from_registry(protected_data_path=settings.course_data_path),
+            LocalFaqKnowledgeStore(settings.published_faq_path),
         )
         skills = SkillCatalog.from_registry(settings.skills_path)
         return await run_cli_turn(

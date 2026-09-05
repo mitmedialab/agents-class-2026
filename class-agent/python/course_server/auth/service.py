@@ -6,7 +6,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from pydantic import SecretStr, TypeAdapter, ValidationError
+from pydantic import EmailStr, SecretStr, TypeAdapter, ValidationError
 
 from agent_core import PrincipalContext
 
@@ -39,6 +39,7 @@ from .store import AuthStore
 
 Clock = Callable[[], datetime]
 _USERNAME_ADAPTER = TypeAdapter(Username)
+_EMAIL_ADAPTER = TypeAdapter(EmailStr)
 
 
 def _system_clock() -> datetime:
@@ -272,8 +273,20 @@ class AuthenticationService:
         )
 
     async def _lookup_login_user(self, username: str) -> tuple[str, StoredUser | None]:
+        identifier = username.strip().casefold()
+        if "@" in identifier:
+            try:
+                normalized_email = str(_EMAIL_ADAPTER.validate_python(identifier)).casefold()
+            except ValidationError:
+                return "__invalid_email__", None
+            user = await self._store.get_user_by_email(normalized_email)
+            return (
+                f"user:{user.id}" if user is not None else f"email:{normalized_email}",
+                user,
+            )
         try:
-            normalized = _normalize_username(username)
+            normalized = _normalize_username(identifier)
         except ValidationError:
             return "__invalid_username__", None
-        return normalized, await self._store.get_user_by_username(normalized)
+        user = await self._store.get_user_by_username(normalized)
+        return (f"user:{user.id}" if user is not None else f"username:{normalized}", user)

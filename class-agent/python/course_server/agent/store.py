@@ -12,6 +12,10 @@ class ConversationAccessDenied(RuntimeError):
     """A conversation does not exist for the current principal."""
 
 
+class EventAlreadyExists(ValueError):
+    """A canonical event with this stable ID was already persisted."""
+
+
 def principal_owns_conversation(
     principal: PrincipalContext,
     conversation: Conversation,
@@ -68,7 +72,7 @@ class InMemoryConversationStore:
             raise ValueError("every persisted event must reference its conversation")
         existing_ids = {event.id for event in self.events[conversation_id]}
         if any(event.id in existing_ids for event in events):
-            raise ValueError("event already exists")
+            raise EventAlreadyExists("event already exists")
         self.events[conversation_id].extend(events)
         if events:
             latest_timestamp = max(event.timestamp for event in events)

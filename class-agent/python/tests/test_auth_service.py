@@ -79,6 +79,28 @@ def test_create_login_and_resolve_student_without_storing_secrets() -> None:
     asyncio.run(scenario())
 
 
+def test_student_can_use_account_email_as_login_identifier() -> None:
+    async def scenario() -> None:
+        _, _, admin, auth = services()
+        issued = await admin.create_user(
+            username="alice",
+            display_name="Alice Example",
+            email="Alice@Example.edu",
+            role="student",
+        )
+
+        credential = await auth.login(
+            username=" alice@example.edu ",
+            access_code=issued.access_code,
+        )
+        principal = await auth.resolve_authenticated(credential.token)
+
+        assert principal.username == "alice"
+        assert principal.roles == ["public", "student"]
+
+    asyncio.run(scenario())
+
+
 def test_create_login_and_resolve_instructor_role() -> None:
     async def scenario() -> None:
         _, _, admin, auth = services()
@@ -139,6 +161,26 @@ def test_failed_login_rate_limit_is_enforced_and_cleared_by_success() -> None:
         store.login_failures.clear()
         await auth.login(username="alice", access_code=issued.access_code)
         assert store.login_failures == {}
+
+    asyncio.run(scenario())
+
+
+def test_username_and_email_share_one_failed_login_limit() -> None:
+    async def scenario() -> None:
+        policy = SessionPolicy(maximum_failed_logins=3)
+        _, _, admin, auth = services(policy=policy)
+        issued = await admin.create_user(
+            username="alice",
+            display_name="Alice Example",
+            email="alice@mit.edu",
+            role="student",
+        )
+
+        for identifier in ("alice", "alice@mit.edu", "ALICE"):
+            with pytest.raises(InvalidCredentials):
+                await auth.login(username=identifier, access_code="incorrect")
+        with pytest.raises(LoginRateLimited):
+            await auth.login(username="ALICE@MIT.EDU", access_code=issued.access_code)
 
     asyncio.run(scenario())
 

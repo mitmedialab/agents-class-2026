@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from agent_core import AgentContext, AgentInput, AgentResult, Event, PrincipalContext
 from course_server.agent import (
+    ASK_TA_TOOL_ID,
     INSTRUCTOR_LIST_APPLICATIONS_TOOL_ID,
     CourseAgentService,
     CourseCapabilityPolicy,
@@ -31,12 +32,15 @@ from course_server.browser import (
     BrowserSessionService,
     BrowserSnapshot,
 )
+from course_server.faq import FaqStore, InMemoryFaqStore, StudentNotificationService
+from course_server.mail import InMemoryTAQuestionStore, TAQuestionService, TAQuestionStore
 from course_server.uploads import FileTemporaryUploadStore, TemporaryUploadStore
 
 
 class RecordingRuntime:
     def __init__(self) -> None:
         self.contexts: list[AgentContext] = []
+        self.inputs: list[AgentInput] = []
 
     async def run(
         self,
@@ -45,6 +49,7 @@ class RecordingRuntime:
         input: AgentInput,
     ) -> AgentResult:
         self.contexts.append(context)
+        self.inputs.append(input)
         output = f"Echo: {input.text}"
         events = [
             Event(
@@ -282,6 +287,8 @@ def _build_client(
     upload_store: TemporaryUploadStore | None = None,
     browser: BrowserSessionService | None = None,
     anonymous_quota_policy: AnonymousQuotaPolicy | None = None,
+    ta_question_store: TAQuestionStore | None = None,
+    faq_store: FaqStore | None = None,
 ) -> tuple[TestClient, str, RecordingRuntime]:
     auth_store = InMemoryAuthStore()
     conversations = InMemoryConversationStore()
@@ -306,6 +313,16 @@ def _build_client(
         conversations=conversations,
         uploads=upload_store,
         browser=browser,
+        ta_questions=(
+            TAQuestionService(questions=ta_question_store, auth=auth_store)
+            if ta_question_store is not None
+            else None
+        ),
+        notifications=(
+            StudentNotificationService(faqs=faq_store, auth=auth_store)
+            if faq_store is not None
+            else None
+        ),
         anonymous_quota_policy=anonymous_quota_policy or AnonymousQuotaPolicy(),
     )
     return (
@@ -1648,6 +1665,121 @@ def test_blank_messages_and_unknown_fields_are_rejected() -> None:
 
     assert blank.status_code == 422
     assert extra.status_code == 422
+
+
+def test_student_confirmation_can_resume_the_agent_without_a_fake_user_message() -> None:
+    questions = InMemoryTAQuestionStore()
+    client, access_code, runtime = _build_client(ta_question_store=questions)
+    _login(client, access_code, prefix=API_PREFIX)
+    conversation_id = _create_conversation(client, prefix=API_PREFIX)
+    conversation = client.get(f"{API_PREFIX}/conversations/{conversation_id}").json()[
+        "conversation"
+    ]
+    question = asyncio.run(
+        questions.create_question(
+            student_user_id=UUID(conversation["user_id"]),
+            conversation_id=UUID(conversation_id),
+            subject="Assignment model",
+            question_text="May I use a local model?",
+            context_text=None,
+            created_at=datetime.now(UTC),
+        )
+    )
+
+    response = client.post(
+        f"{API_PREFIX}/conversations/{conversation_id}/ta-questions/{question.id}/confirmation",
+        json={"action": "send", "reporter_visibility": "anonymous"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["type"] == "email.ta_question.queued"
+    assert response.json()["payload"]["question"] == "May I use a local model?"
+    stored = asyncio.run(questions.get_question(question.id))
+    assert stored is not None
+    assert stored.status == "queued"
+    assert stored.reporter_visibility == "anonymous"
+
+    continuation = client.post(
+        f"{API_PREFIX}/conversations/{conversation_id}/continue",
+        json={"trigger_event_id": response.json()["id"]},
+    )
+
+    assert continuation.status_code == 200
+    output_text = continuation.json()["output_text"]
+    assert output_text == (
+        "Echo: The student approved sending the prepared question to course staff."
+    )
+    assert "May I use a local model?" not in output_text
+    assert runtime.contexts[-1].recent_events[-1].payload["question"] == (
+        "May I use a local model?"
+    )
+    assert runtime.inputs[-1].text == (
+        "The student approved sending the prepared question to course staff."
+    )
+    assert "May I use a local model?" not in runtime.inputs[-1].text
+    assert ASK_TA_TOOL_ID not in runtime.contexts[-1].permitted_tool_ids
+    detail = client.get(f"{API_PREFIX}/conversations/{conversation_id}").json()
+    assert [event["type"] for event in detail["events"]] == [
+        "email.ta_question.queued",
+        "agent.message",
+    ]
+
+    run_count = len(runtime.contexts)
+    repeated_continuation = client.post(
+        f"{API_PREFIX}/conversations/{conversation_id}/continue",
+        json={"trigger_event_id": response.json()["id"]},
+    )
+    assert repeated_continuation.status_code == 200
+    assert len(runtime.contexts) == run_count
+
+    repeated = client.post(
+        f"{API_PREFIX}/conversations/{conversation_id}/ta-questions/{question.id}/confirmation",
+        json={"action": "send"},
+    )
+    assert repeated.status_code == 200
+
+    client.post(f"{API_PREFIX}/auth/logout")
+    foreign = client.post(
+        f"{API_PREFIX}/conversations/{conversation_id}/ta-questions/{question.id}/confirmation",
+        json={"action": "cancel"},
+    )
+    assert foreign.status_code == 404
+
+
+def test_students_receive_and_acknowledge_published_faq_notifications() -> None:
+    faqs = InMemoryFaqStore()
+    now = datetime.now(UTC)
+    entry = asyncio.run(
+        faqs.publish(
+            source_question_id=uuid4(),
+            question="Which assignments use groups?",
+            answer="Assignments 2 and 4 use groups.",
+            published_by_user_id=None,
+            published_at=now,
+        )
+    )
+    client, access_code, _ = _build_client(faq_store=faqs)
+
+    anonymous = client.get(f"{API_PREFIX}/notifications")
+    assert anonymous.status_code == 403
+
+    _login(client, access_code, prefix=API_PREFIX)
+    unread = client.get(f"{API_PREFIX}/notifications")
+    assert unread.status_code == 200
+    assert unread.json() == [
+        {
+            "id": str(next(iter(faqs.notifications))),
+            "faq_entry_id": str(entry.id),
+            "question": "Which assignments use groups?",
+            "answer": "Assignments 2 and 4 use groups.",
+            "published_at": now.isoformat().replace("+00:00", "Z"),
+        }
+    ]
+
+    notification_id = unread.json()[0]["id"]
+    marked = client.post(f"{API_PREFIX}/notifications/{notification_id}/read")
+    assert marked.status_code == 204
+    assert client.get(f"{API_PREFIX}/notifications").json() == []
 
 
 def test_openapi_documents_only_versioned_routes() -> None:
