@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 from uuid import uuid4
 
 from smolagents import ChatMessage, ChatMessageStreamDelta, ChatMessageToolCall, Model
@@ -32,16 +32,83 @@ from course_server.agent import (
     ReadSkillTool,
     SkillCatalog,
     ToolCatalog,
+    ToolExecutionResult,
 )
+from course_server.agent.capabilities import ToolEmittedEvent
 from course_server.workspace import load_component_registry
 from course_server.workspace.constants import OPEN_COMPONENT_TOOL_ID
 from course_server.workspace.tools import WorkspaceOpenComponentTool
 from runtime_smolagents import SmolagentsRuntime
-from runtime_smolagents.runtime import _smolagents_inputs
+from runtime_smolagents.runtime import (
+    _conversation_history,
+    _render_tool_result,
+    _smolagents_inputs,
+)
 
 
 class HiddenCourseTool(CourseReadSyllabusTool):
     id = "ta.list_questions"
+
+
+class ConfirmationTool:
+    id = "course.ask_ta"
+    description = "Prepare a question for course staff."
+    input_schema: ClassVar[dict[str, Any]] = {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": False,
+    }
+
+    async def execute(self, arguments: Any, context: Any) -> ToolExecutionResult:
+        del arguments, context
+        return ToolExecutionResult(
+            content={"confirmation_required": True},
+            summary="Prepared a staff question awaiting student confirmation.",
+            storage_policy="server_summary",
+            emitted_events=[
+                ToolEmittedEvent(
+                    type="email.ta_question.confirmation_requested",
+                    payload={
+                        "question_id": str(uuid4()),
+                        "question": (
+                            "Are students permitted to use fog machines as part of weekly builds? "
+                            "If so, are there any course-specific safety requirements or approvals "
+                            "required?"
+                        ),
+                    },
+                )
+            ],
+        )
+
+
+def test_runtime_presents_the_exact_confirmed_question_as_trusted_context() -> None:
+    principal = PrincipalContext(
+        authenticated=True,
+        user_id=uuid4(),
+        username="student",
+        roles=["public", "student"],
+        session_id=uuid4(),
+    )
+    context = AgentContext(
+        principal=principal,
+        conversation_id=uuid4(),
+        recent_events=[
+            Event(
+                type="email.ta_question.queued",
+                actor="user",
+                principal_user_id=principal.user_id,
+                payload={
+                    "question": "Which assignments are group work?",
+                    "status": "queued",
+                },
+            )
+        ],
+    )
+
+    history = _conversation_history(context)
+
+    assert "submitted to course staff" in history
+    assert "Which assignments are group work?" in history
 
 
 def test_runtime_preserves_application_tool_constraints() -> None:
@@ -63,6 +130,26 @@ def test_runtime_preserves_application_tool_constraints() -> None:
     assert inputs["github_id"]["pattern"].startswith("^[A-Za-z0-9]")
     assert inputs["degree_start_year"]["pattern"] == "^\\d{4}$"
     assert inputs["email"]["format"] == "email"
+
+
+def test_runtime_marks_every_presented_tool_result_as_primary_ui_content() -> None:
+    for event_type in (
+        "email.ta_question.confirmation_requested",
+        "workspace.panel.opened",
+        "workspace.panel.updated",
+    ):
+        rendered = _render_tool_result(
+            ToolExecutionResult(
+                content={"status": "displayed"},
+                emitted_events=[ToolEmittedEvent(type=event_type)],
+            )
+        )
+
+        assert "platform UI now presents" in rendered
+        assert "do not repeat or quote information that UI already shows" in rendered
+
+    ordinary_result = _render_tool_result(ToolExecutionResult(content={"status": "complete"}))
+    assert "platform UI now presents" not in ordinary_result
 
 
 class ScriptedToolCallingModel(Model):  # type: ignore[misc]
@@ -169,6 +256,53 @@ class ScriptedStreamingToolCallingModel(ScriptedToolCallingModel):
                     )
                 ]
             )
+
+
+class ScriptedStreamingTAConfirmationModel(ScriptedToolCallingModel):
+    def generate_stream(
+        self,
+        messages: list[ChatMessage],
+        stop_sequences: list[str] | None = None,
+        response_format: dict[str, str] | None = None,
+        tools_to_call_from: list[Any] | None = None,
+        **kwargs: Any,
+    ) -> Iterator[ChatMessageStreamDelta]:
+        self.message_text = "\n".join(str(message.content or "") for message in messages)
+        del stop_sequences, response_format, kwargs
+        self.available_tool_names = [tool.name for tool in tools_to_call_from or []]
+        self.calls += 1
+        if self.calls == 1:
+            yield ChatMessageStreamDelta(content="I'll prepare the staff question now.")
+            yield ChatMessageStreamDelta(
+                tool_calls=[
+                    ChatMessageToolCallStreamDelta(
+                        index=0,
+                        id="ask-course-staff",
+                        type="function",
+                        function=ChatMessageToolCallFunction(
+                            name="course_ask_ta",
+                            arguments="{}",
+                        ),
+                    )
+                ]
+            )
+            return
+        yield ChatMessageStreamDelta(
+            tool_calls=[
+                ChatMessageToolCallStreamDelta(
+                    index=0,
+                    id="final-answer",
+                    type="function",
+                    function=ChatMessageToolCallFunction(
+                        name="final_answer",
+                        arguments=(
+                            '{"answer":"I could not find a documented answer. Please use Send if '
+                            'you want the prepared question delivered."}'
+                        ),
+                    ),
+                )
+            ]
+        )
 
 
 class ScriptedWorkspaceModel(ScriptedToolCallingModel):
@@ -302,13 +436,26 @@ class ScriptedVisualWorkspaceModel(ScriptedToolCallingModel):
                     "component_id": "visual-composition",
                     "title": "Research overview",
                     "props": {
-                        "root_id": "overview",
+                        "root_id": "root",
                         "elements": [
+                            {
+                                "id": "root",
+                                "type": "group",
+                                "children": ["overview", "detail"],
+                            },
                             {
                                 "id": "overview",
                                 "type": "heading",
                                 "text": "Research overview",
-                            }
+                            },
+                            {
+                                "id": "detail",
+                                "type": "text",
+                                "text": (
+                                    "Wearable systems, memory tools, software agents, and "
+                                    "immersive interfaces are the four main research areas."
+                                ),
+                            },
                         ],
                     },
                 },
@@ -319,8 +466,9 @@ class ScriptedVisualWorkspaceModel(ScriptedToolCallingModel):
                 name="final_answer",
                 arguments={
                     "answer": (
-                        "The research overview covers wearable systems, memory tools, "
-                        "software agents, and immersive interfaces in extensive detail."
+                        "I've organized the findings in the workspace. Wearable systems, memory "
+                        "tools, software agents, and immersive interfaces are the four main "
+                        "research areas."
                     )
                 },
             )
@@ -727,13 +875,13 @@ def test_agent_owned_application_start_opens_canonical_draft_once() -> None:
     asyncio.run(scenario())
 
 
-def test_visual_workspace_carries_the_detail_without_a_duplicate_chat_answer() -> None:
+def test_visual_workspace_preserves_model_authored_response_without_rewriting() -> None:
     async def scenario() -> None:
         model = ScriptedVisualWorkspaceModel()
         registry = load_component_registry()
         runtime = SmolagentsRuntime(
             model_provider=ScriptedProvider(model),
-            tools=ToolCatalog([WorkspaceOpenComponentTool(registry)]),
+            tools=ToolCatalog([WorkspaceOpenComponentTool(registry, strict_visual_policy=False)]),
         )
         conversation_id = uuid4()
         result = await runtime.run(
@@ -745,9 +893,13 @@ def test_visual_workspace_carries_the_detail_without_a_duplicate_chat_answer() -
             input=AgentInput(conversation_id=conversation_id, text="Show the research."),
         )
 
-        assert result.output_text == "I've organized the answer into a visual workspace."
+        expected = (
+            "I've organized the findings in the workspace. Wearable systems, memory tools, "
+            "software agents, and immersive interfaces are the four main research areas."
+        )
+        assert result.output_text == expected
         assert result.events[-2].payload["text"] == result.output_text
-        assert "wearable systems" not in result.output_text
+        assert "do not repeat or quote information that UI already shows" in model.message_text
 
     asyncio.run(scenario())
 
@@ -838,5 +990,49 @@ def test_toolcalling_adapter_discards_nonfinal_text_and_streams_final_answer() -
             "agent.message",
             "agent.run.completed",
         ]
+
+    asyncio.run(scenario())
+
+
+def test_staff_confirmation_preserves_the_model_authored_final_response() -> None:
+    async def scenario() -> None:
+        model = ScriptedStreamingTAConfirmationModel()
+        runtime = SmolagentsRuntime(
+            model_provider=ScriptedProvider(model),
+            tools=ToolCatalog([ConfirmationTool()]),
+        )
+        conversation_id = uuid4()
+        observed_events: list[Event] = []
+        text_deltas: list[str] = []
+
+        result = await runtime.run_observed(
+            context=AgentContext(
+                principal=public_principal(),
+                conversation_id=conversation_id,
+                permitted_tool_ids=[ConfirmationTool.id],
+            ),
+            input=AgentInput(
+                conversation_id=conversation_id,
+                text="Can I use a local model?",
+            ),
+            event_observer=observed_events.append,
+            text_delta_observer=text_deltas.append,
+        )
+
+        expected = (
+            "I could not find a documented answer. Please use Send if you want the prepared "
+            "question delivered."
+        )
+        assert any(
+            event.type == "email.ta_question.confirmation_requested" for event in observed_events
+        )
+        assert "".join(text_deltas) == expected
+        assert result.output_text == expected
+        assert result.events[-2].payload["text"] == expected
+        assert "I can ask course staff about this." not in result.output_text
+        assert "do not repeat or quote information that UI already shows" in model.message_text
+        assert "Put each piece of substantive information in either the UI or chat" in (
+            model.message_text
+        )
 
     asyncio.run(scenario())

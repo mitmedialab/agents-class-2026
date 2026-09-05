@@ -48,6 +48,7 @@ course.show_public_files
 course.search_faq
 course.search
 course.submit_application
+course.ask_ta (configured, exact student role only)
 web.search
 web.search_images
 web.visit
@@ -177,6 +178,37 @@ the exact private artifact. The agent does not replace an available upload with 
 web copy.
 
 smolagents requires Python-identifier tool names, so the adapter maps `course.read_syllabus` to `course_read_syllabus` only inside the transient runtime. Events and persistent state always retain the canonical dotted ID.
+
+When a successful tool emits a trusted presentation event—opening or updating a workspace panel,
+or requesting an external-effect confirmation—the adapter appends a transient presentation
+instruction to that tool result. The final-answer prompt reinforces the same general contract: UI
+is the primary carrier of its visible content, while chat supplies only complementary context, a
+brief handoff, or the next question. Text-only tool results do not receive this additional
+instruction. The same rule is part of the Course Agent's core runtime instructions, independently
+of which optional skill is loaded. Final text remains the model's output and streams normally; the
+runtime does not inspect, remove, or substitute response prose.
+
+`course.ask_ta` is an external-effect workflow with deterministic separation between permission
+and confirmation. The agent can prepare a question only when mail is configured and the trusted
+principal is a student. The tool writes a pending record and opens the platform confirmation
+surface; it cannot queue or send the email. Only the owned confirmation API can queue it, and only
+the separate `course_server.mail_worker` talks to the configured Gmail or Microsoft Graph API.
+After Send or Cancel, an allowlisted trusted action event—not client-authored prose—triggers a
+single idempotent agent continuation. The completed action and exact question become the trusted
+runtime context. The current input is only a neutral description of the completed action; the
+model decides whether and how to acknowledge it and may continue any other unfinished work
+without a prewritten browser response, duplicated question text, or a fabricated `user.message`.
+The staff-question tool is withheld only for that continuation turn to prevent recursive
+confirmation loops. A private staff reply event is included among recent supporting events so the
+agent can discuss the answer on the student's next turn. The first nonblank line of the authorized
+staff reply is the bounded `PUBLISH` or `PRIVATE` decision and the remaining text is the answer.
+After notifying the student, `PUBLISH` advances a durable publication outbox into `faq_entries`;
+`PRIVATE` creates no shared knowledge. The coordinated publisher adds approved public fields to
+the local FAQ JSON; `course://faq` reads and lexical search use that file without restarting the
+runtime. The course-help skill directs the agent to check these later staff-approved clarifications
+before relying on broader static course materials. If the answer remains undocumented and the
+current student has the staff-question capability, the same skill directs the agent to offer that
+capability rather than merely telling the student to contact staff independently.
 
 ## CLI-first flow
 

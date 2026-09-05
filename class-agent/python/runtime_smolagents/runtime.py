@@ -32,6 +32,18 @@ from course_server.agent.capabilities import (
 _JSON_OBJECT = TypeAdapter(dict[str, JsonValue])
 _TOOL_NAME_CHARACTER = re.compile(r"[^A-Za-z0-9_]")
 _FINAL_ANSWER_START = re.compile(r'"answer"\s*:\s*"')
+_PRESENTATION_EVENT_TYPES = frozenset(
+    {
+        "email.ta_question.confirmation_requested",
+        "workspace.panel.opened",
+        "workspace.panel.updated",
+    }
+)
+_PRESENTATION_INSTRUCTION = (
+    "The platform UI now presents the structured content from this tool result. In "
+    "final_answer, do not repeat or quote information that UI already shows. Add only "
+    "complementary context, a brief handoff, or the next question the user needs to answer."
+)
 
 _TOOL_CALLING_PROMPT_TEMPLATES = PromptTemplates(
     system_prompt=(
@@ -51,7 +63,9 @@ _TOOL_CALLING_PROMPT_TEMPLATES = PromptTemplates(
     final_answer={
         "pre_messages": "Use only the conversation and verified tool results.",
         "post_messages": (
-            "Return the best final answer to the original task. Clearly state any limitation."
+            "Return the best final answer to the original task. Clearly state any limitation. "
+            "When platform UI is visible, treat it as the primary presentation: do not repeat "
+            "or quote information it already shows."
         ),
     },
 )
@@ -87,6 +101,12 @@ def _agent_instructions(
             "Call non-final tools directly without narrating private reasoning. Use final_answer "
             "only when ready to respond to the user. Never claim an action succeeded unless its "
             "tool result confirms it."
+        ),
+        (
+            "Treat trusted platform UI opened or updated by tools as part of your response. Do not "
+            "repeat, quote, restate, or summarize content that the UI already displays. Put each "
+            "piece of substantive information in either the UI or chat, not both; use chat only "
+            "for complementary context, a brief handoff, or the next useful question."
         ),
     ]
 
@@ -193,14 +213,16 @@ def _render_tool_result(result: ToolExecutionResult) -> str:
         rendered = result.content
     else:
         rendered = json.dumps(result.content, ensure_ascii=False, sort_keys=True)
-    if not result.resource_uris:
-        return rendered
-    references = "\n".join(f"- {uri}" for uri in result.resource_uris)
-    return (
-        f"{rendered}\n\n"
-        "Trusted platform metadata for follow-up workspace calls only. Do not expose "
-        f"these internal identifiers to the user:\n{references}"
-    )
+    sections = [rendered]
+    if result.resource_uris:
+        references = "\n".join(f"- {uri}" for uri in result.resource_uris)
+        sections.append(
+            "Trusted platform metadata for follow-up workspace calls only. Do not expose "
+            f"these internal identifiers to the user:\n{references}"
+        )
+    if any(event.type in _PRESENTATION_EVENT_TYPES for event in result.emitted_events):
+        sections.append(_PRESENTATION_INSTRUCTION)
+    return "\n\n".join(sections)
 
 
 def _partial_json_answer(arguments: str) -> str | None:
@@ -333,44 +355,6 @@ class _EventCollector:
             return list(self._events)
 
 
-def _presented_visual_composition(
-    events: Iterable[Event], workspace_state: Mapping[str, JsonValue]
-) -> bool:
-    panels = workspace_state.get("panels")
-    focused_panel_id = workspace_state.get("focused_panel_id")
-    if not isinstance(panels, list) or not isinstance(focused_panel_id, str):
-        return False
-    focused_panel = next(
-        (
-            panel
-            for panel in panels
-            if isinstance(panel, dict) and panel.get("id") == focused_panel_id
-        ),
-        None,
-    )
-    if (
-        not isinstance(focused_panel, dict)
-        or focused_panel.get("component_id") != "visual-composition"
-    ):
-        return False
-    for event in events:
-        if event.type not in {"workspace.panel.opened", "workspace.panel.updated"}:
-            continue
-        command = event.payload.get("command")
-        if not isinstance(command, dict):
-            continue
-        if command.get("type") == "update" and command.get("panel_id") == focused_panel_id:
-            return True
-        panel = command.get("panel")
-        if (
-            command.get("type") == "open"
-            and isinstance(panel, dict)
-            and panel.get("id") == focused_panel_id
-        ):
-            return True
-    return False
-
-
 class _SmolagentsToolAdapter(Tool):  # type: ignore[misc]
     skip_forward_signature_validation = True
 
@@ -460,6 +444,32 @@ class _SmolagentsToolAdapter(Tool):  # type: ignore[misc]
 def _conversation_history(context: AgentContext) -> str:
     lines: list[str] = []
     for event in context.recent_events:
+        if event.type == "email.ta_question.confirmation_requested":
+            question = event.payload.get("question")
+            if isinstance(question, str):
+                lines.append(f"Course-staff question prepared for confirmation:\n{question}")
+            continue
+        if event.type in {"email.ta_question.queued", "email.ta_question.cancelled"}:
+            question = event.payload.get("question")
+            question_action = (
+                "submitted to course staff" if event.type.endswith("queued") else "cancelled"
+            )
+            if isinstance(question, str):
+                lines.append(
+                    f"Trusted student action — course-staff question {question_action}:\n{question}"
+                )
+            else:
+                lines.append(
+                    f"Trusted student action — prepared course-staff question {question_action}."
+                )
+            continue
+        if event.type == "email.ta_answer.received":
+            code = event.payload.get("question_code")
+            subject = event.payload.get("subject")
+            answer = event.payload.get("answer")
+            if isinstance(code, str) and isinstance(subject, str) and isinstance(answer, str):
+                lines.append(f"Private course staff reply ({code}, {subject}):\n{answer}")
+            continue
         if event.type == "workspace.interaction":
             action = event.payload.get("action")
             value = event.payload.get("value")
@@ -626,25 +636,14 @@ class SmolagentsRuntime:
         if text_delta_observer is None:
             output = await asyncio.to_thread(agent.run, input.text, reset=False)
         else:
-
-            def observe_final_text(text_delta: str) -> None:
-                if _presented_visual_composition(
-                    collector.snapshot(), execution_context.workspace_state
-                ):
-                    return
-                if text_delta_observer is not None:
-                    text_delta_observer(text_delta)
-
             output = await asyncio.to_thread(
                 _run_streaming_agent,
                 agent,
                 input.text,
-                observe_final_text,
+                text_delta_observer,
             )
         collected_events = collector.snapshot()
         output_text = str(output)
-        if _presented_visual_composition(collected_events, execution_context.workspace_state):
-            output_text = "I've organized the answer into a visual workspace."
         agent_message = Event(
             type="agent.message",
             payload={"text": output_text, "input_id": str(input.id)},

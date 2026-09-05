@@ -36,6 +36,34 @@ with the agent. An attachment control uploads supported files before sending; re
 filename chips show which principal-scoped temporary upload receipts will accompany the
 next message.
 
+When an authenticated student asks something the maintained site and appropriate research cannot
+answer, the agent may prepare a course-staff email. A platform-owned confirmation appears beneath
+a model-authored response and shows only the content-only question. The runtime preserves the
+agent's final wording instead of substituting a platform-authored handoff. Optional context needed
+by staff remains part of the prepared request but is not rendered as a second explanation in the
+student interface.
+Internal tracking codes, subject lines, greetings, sign-offs, and transport formatting stay out of
+the student interface. The composer pauses
+until the student chooses **Send** or **Cancel**. The Course Agent is instructed not to repeat the
+detailed question already visible in the confirmation. Send only queues the dedicated mail worker;
+the UI closes the confirmation and asks the Course Agent to continue from the trusted action event.
+The agent receives the completed action and exact submitted question and decides what to say next,
+including whether to acknowledge the send or continue other unfinished work. The browser contains
+no prewritten success response. The composer reopens when that continuation finishes.
+The confirmation also offers **Hide my name from course staff**. This substitutes an anonymous
+staff-facing label and redacts the account's known name and email from the question/context;
+platform code retains the authenticated owner for private reply delivery. Staff FAQ review
+has no web dashboard: it stays in the original email thread. When staff publishes an answer,
+authenticated students see a restrained **New course knowledge** notice on their next login and
+can mark each item read.
+
+This non-duplication rule applies to every trusted platform presentation, not only email
+confirmations. When a tool opens or updates UI, that UI is the primary carrier of its visible
+content. The rule is part of the Course Agent's core instructions and the runtime repeats a
+contextual reminder with UI-presenting tool results. Chat should therefore add only complementary
+context, a brief handoff, or the next question. Application code does not inspect or rewrite the
+agent's response text.
+
 Final-answer text originates incrementally from native model-provider deltas and is
 projected as soon as each fragment arrives. A small block cursor marks the active edge,
 and newly arrived characters use a short opacity fade while stable characters retain

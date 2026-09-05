@@ -154,6 +154,25 @@ def test_skill_body_is_read_when_invoked_instead_of_cached_at_startup(tmp_path: 
     assert "Initial instructions" not in str(result.content)
 
 
+def test_course_help_skill_prioritizes_faq_and_offers_authorized_escalation() -> None:
+    async def scenario() -> None:
+        skills = SkillCatalog.from_registry(SKILLS_ROOT)
+        result = await ReadSkillTool(skills).execute(
+            {"skill_id": "course-help"},
+            execution_context(public_principal()),
+        )
+
+        instructions = str(result.content)
+        assert "published course FAQ" in instructions
+        assert "before relying on broader course materials" in instructions
+        assert "staff-approved answers" in instructions
+        assert "take precedence" in instructions
+        assert "offer to contact course staff on the student's behalf" in instructions
+        assert "do not merely tell the student to contact staff themselves" in instructions
+
+    asyncio.run(scenario())
+
+
 def test_skill_tools_load_full_content_and_references_only_on_demand() -> None:
     async def scenario() -> None:
         skills = SkillCatalog.from_registry(SKILLS_ROOT)
