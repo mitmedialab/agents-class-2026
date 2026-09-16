@@ -304,8 +304,12 @@ def _enforce_private_application_images(
     )
     if not private_image_uris and not candidates:
         return
-    if not context.principal.authenticated or "instructor" not in context.principal.roles:
-        raise PermissionError("Instructor access is required for application images.")
+    if not context.principal.authenticated or not {"instructor", "student"}.intersection(
+        context.principal.roles
+    ):
+        raise PermissionError(
+            "Instructor access or student access is required for application images."
+        )
     if not image_urls or not set(image_urls).issubset(candidates):
         raise ToolValidationError(
             "Call instructor.inspect_application_images in this turn and use only the exact "

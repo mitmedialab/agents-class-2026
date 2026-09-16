@@ -29,8 +29,46 @@ def test_settings_accept_standard_openai_environment_without_exposing_secret() -
     assert settings.browser_max_sessions == 20
     assert settings.browser_max_sessions_per_principal == 2
     assert settings.anonymous_quotas_enabled is True
+    assert settings.github_student_projects_enabled is False
+    assert settings.github_roster_cache_ttl_seconds == 300
+    assert settings.github_token is None
     assert "test-secret-value" not in repr(settings)
     assert "test-brave-value" not in repr(settings)
+
+
+def test_settings_load_read_only_github_student_project_scope_without_exposing_token() -> None:
+    settings = AgentSettings.from_environment(
+        {
+            "DATABASE_URL": "postgresql://example",
+            "OPENAI_API_KEY": "test-secret-value",
+            "BRAVE_API_KEY": "test-brave-value",
+            "GITHUB_STUDENT_PROJECTS_ENABLED": "true",
+            "GITHUB_TOKEN": "github-secret",
+            "GITHUB_ORGANIZATION": "mitmedialab",
+            "GITHUB_REPOSITORY_PREFIX": "agents2026-",
+            "GITHUB_EXCLUDED_REPOSITORIES": "agents2026-test,agents2026-demo",
+            "GITHUB_ROSTER_CACHE_TTL_SECONDS": "120",
+        }
+    )
+
+    assert settings.github_student_projects_enabled
+    assert settings.github_token is not None
+    assert settings.github_token.get_secret_value() == "github-secret"
+    assert settings.github_excluded_repositories == ("agents2026-test", "agents2026-demo")
+    assert settings.github_roster_cache_ttl_seconds == 120
+    assert "github-secret" not in repr(settings)
+
+
+def test_settings_require_github_token_only_when_student_projects_are_enabled() -> None:
+    with pytest.raises(ConfigurationError, match="GITHUB_TOKEN"):
+        AgentSettings.from_environment(
+            {
+                "DATABASE_URL": "postgresql://example",
+                "OPENAI_API_KEY": "test-secret-value",
+                "BRAVE_API_KEY": "test-brave-value",
+                "GITHUB_STUDENT_PROJECTS_ENABLED": "true",
+            }
+        )
 
 
 def test_settings_accept_private_applicant_storage_path() -> None:

@@ -1,5 +1,6 @@
 .DS_Store
 .env
+.env.github
 .env.mail
 .venv/
 .pytest_cache/
@@ -21,3 +22,6 @@ data/students/*
 !data/students/.gitkeep
 data/instructors/*
 !data/instructors/.gitkeep
+
+# Private accepted-student roster, regardless of its local location.
+accepted-applicants.json

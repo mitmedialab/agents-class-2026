@@ -47,6 +47,10 @@ from course_server.agent import (
 from course_server.agent_cli import _safe_failure_message, run_cli_turn
 from course_server.auth import InMemoryAuthStore
 from course_server.browser import BROWSER_TOOL_IDS
+from course_server.student_projects import (
+    INSPECT_STUDENT_REPOSITORY_TOOL_ID,
+    STUDENT_PROJECT_TOOL_IDS,
+)
 from course_server.uploads import FileTemporaryUploadStore
 from course_server.workspace.constants import REVIEW_PRESENTATION_TOOL_ID
 
@@ -191,9 +195,15 @@ def test_course_policy_filters_role_scoped_resources_and_instructor_tools(
     assert ta.resource_uris == admin.resource_uris == ("course://public",)
     assert LIST_PRIVATE_RESOURCES_TOOL_ID in student.tool_ids
     assert READ_PRIVATE_RESOURCE_TOOL_ID in student.tool_ids
-    assert INSTRUCTOR_LIST_APPLICATIONS_TOOL_ID not in student.tool_ids
-    assert INSTRUCTOR_READ_APPLICATION_TOOL_ID not in student.tool_ids
-    assert INSTRUCTOR_INSPECT_APPLICATION_IMAGES_TOOL_ID not in student.tool_ids
+    assert INSTRUCTOR_LIST_APPLICATIONS_TOOL_ID in student.tool_ids
+    for denied in (public, ta, admin):
+        assert INSTRUCTOR_LIST_APPLICATIONS_TOOL_ID not in denied.tool_ids
+    assert INSTRUCTOR_READ_APPLICATION_TOOL_ID in student.tool_ids
+    for denied in (public, ta, admin):
+        assert INSTRUCTOR_READ_APPLICATION_TOOL_ID not in denied.tool_ids
+    assert INSTRUCTOR_INSPECT_APPLICATION_IMAGES_TOOL_ID in student.tool_ids
+    for denied in (public, ta, admin):
+        assert INSTRUCTOR_INSPECT_APPLICATION_IMAGES_TOOL_ID not in denied.tool_ids
     assert INSTRUCTOR_LIST_APPLICATIONS_TOOL_ID in instructor.tool_ids
     assert INSTRUCTOR_READ_APPLICATION_TOOL_ID in instructor.tool_ids
     assert INSTRUCTOR_INSPECT_APPLICATION_IMAGES_TOOL_ID in instructor.tool_ids
@@ -285,6 +295,26 @@ def test_public_faq_update_tools_require_the_configured_knowledge_store() -> Non
         assert READ_FAQ_UPDATE_TOOL_ID in enabled.authorize(principal).tool_ids
         assert LIST_FAQ_UPDATES_TOOL_ID not in disabled.authorize(principal).tool_ids
         assert READ_FAQ_UPDATE_TOOL_ID not in disabled.authorize(principal).tool_ids
+
+
+def test_student_project_tools_grant_sites_to_members_and_repositories_to_staff() -> None:
+    policy = CourseCapabilityPolicy(student_projects_enabled=True)
+
+    public = policy.authorize(public_principal())
+    student = policy.authorize(authenticated_principal("student"))
+    instructor = policy.authorize(authenticated_principal("instructor"))
+    ta = policy.authorize(authenticated_principal("ta"))
+    admin = policy.authorize(authenticated_principal("admin"))
+
+    assert not set(STUDENT_PROJECT_TOOL_IDS) & set(public.tool_ids)
+    assert set(STUDENT_PROJECT_TOOL_IDS) <= set(student.tool_ids)
+    assert INSPECT_STUDENT_REPOSITORY_TOOL_ID not in student.tool_ids
+    assert set(STUDENT_PROJECT_TOOL_IDS) <= set(instructor.tool_ids)
+    assert INSPECT_STUDENT_REPOSITORY_TOOL_ID in instructor.tool_ids
+    assert set(STUDENT_PROJECT_TOOL_IDS) <= set(ta.tool_ids)
+    assert INSPECT_STUDENT_REPOSITORY_TOOL_ID in ta.tool_ids
+    assert set(STUDENT_PROJECT_TOOL_IDS) <= set(admin.tool_ids)
+    assert INSPECT_STUDENT_REPOSITORY_TOOL_ID in admin.tool_ids
 
 
 def test_course_agent_discloses_only_login_authorized_skill_metadata() -> None:

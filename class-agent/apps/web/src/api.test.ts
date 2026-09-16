@@ -176,12 +176,32 @@ describe("agent event stream", () => {
         );
         controller.enqueue(
           encoder.encode(
+            '\nevent: platform\ndata: {"type":"agent.tool.requested","event":{"payload":{"tool_id":"course.list_student_projects","arguments":{}}}}\n\n',
+          ),
+        );
+        controller.enqueue(
+          encoder.encode(
             '\nevent: platform\ndata: {"type":"agent.tool.failed","event":{"payload":{"tool_id":"workspace.open_component","category":"invalid_request","reason_code":"component_not_registered"}}}\n\n',
           ),
         );
         controller.enqueue(
           encoder.encode(
+            '\nevent: platform\ndata: {"type":"agent.tool.completed","event":{"payload":{"tool_id":"course.list_student_projects"}}}\n\n',
+          ),
+        );
+        controller.enqueue(
+          encoder.encode(
             '\nevent: platform\ndata: {"type":"agent.tool.failed","event":{"payload":{"tool_id":"workspace.review_presentation","category":"invalid_request","reason_code":"presentation_review_invalid"}}}\n\n',
+          ),
+        );
+        controller.enqueue(
+          encoder.encode(
+            '\nevent: platform\ndata: {"type":"agent.tool.requested","event":{"payload":{"tool_id":"course.inspect_student_site","arguments":{"project_id":"agents2026-ada"}}}}\n\n',
+          ),
+        );
+        controller.enqueue(
+          encoder.encode(
+            '\nevent: platform\ndata: {"type":"agent.tool.requested","event":{"payload":{"tool_id":"staff.inspect_student_repository","arguments":{"project_id":"agents2026-ada","view":"summary"}}}}\n\n',
           ),
         );
         controller.enqueue(
@@ -274,6 +294,13 @@ describe("agent event stream", () => {
       {
         kind: "activity",
         activity: {
+          kind: "tool",
+          label: "Listing student projects",
+        },
+      },
+      {
+        kind: "activity",
+        activity: {
           kind: "error",
           label: "Workspace view unsupported — choose an available view",
         },
@@ -281,8 +308,32 @@ describe("agent event stream", () => {
       {
         kind: "activity",
         activity: {
+          kind: "complete",
+          label: "Listing student projects complete",
+        },
+      },
+      {
+        kind: "activity",
+        activity: {
           kind: "error",
           label: "Workspace presentation changed — reviewing it again before answering",
+        },
+      },
+      {
+        kind: "activity",
+        activity: {
+          kind: "tool",
+          label: "Inspecting deployed student website",
+          detail: '{\n  "project_id": "agents2026-ada"\n}',
+        },
+      },
+      {
+        kind: "activity",
+        activity: {
+          kind: "tool",
+          label: "Inspecting student repository",
+          detail:
+            '{\n  "project_id": "agents2026-ada",\n  "view": "summary"\n}',
         },
       },
       {

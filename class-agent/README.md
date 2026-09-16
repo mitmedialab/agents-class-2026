@@ -103,6 +103,13 @@ resolved recipients, shows the exact subject, message, and audience, and require
 or Cancel action before delivery. Confirmed messages remain in each recipient's Communications
 stack and authorized agent context until the student marks them read.
 
+Students can use the application-review tools for accepted applicants explicitly shared by
+UUID in the private `APPLICANT_DATA_PATH/student-access.json` registry. On server startup, a private
+`APPLICANT_DATA_PATH/accepted-applicants.json` roster is resolved against existing applications
+and frozen to UUIDs. Install this file directly on the server; it is ignored by Git.
+Without a local roster or an existing UUID allowlist, student application access stays closed.
+Missing or ambiguous matches stay blocked; existing access registries are preserved. See [docs/STORAGE.md](docs/STORAGE.md) for provisioning.
+
 Role-scoped course resources live under `COURSE_DATA_PATH` (default `data/`): student
 resources are available to logged-in students and instructors, while instructor resources
 are available only to instructors. Their contents are ignored by Git and are never added to
@@ -138,6 +145,13 @@ authorized items. It gives a compact agent-authored list separating new changes 
 communications and assignments, or suggests something useful when the projection is empty. A
 successful welcome acknowledges the Updates visible for that opening so they are absent next time;
 ongoing Communications and Upcoming items remain until their own state changes.
+
+An optional read-only GitHub integration connects the agent directly to the real
+`mitmedialab/agents2026-*` course repositories. All authenticated course roles can inspect every
+deployed student website; TAs, instructors, and admins also receive repository source and
+development metadata tools. The credential remains server-side and the configured organization,
+prefix, and exclusions are enforced in platform code. See
+[docs/STUDENT_PROJECTS.md](docs/STUDENT_PROJECTS.md).
 
 Staff-published FAQ knowledge is kept separately from maintained course files in one local,
 versioned JSON file at `var/course-knowledge/published-faq.json`. The mail worker updates it
@@ -192,7 +206,7 @@ var/assignments/          local validated assignment JSON records
 docs/                    architecture and versioning decisions
 ```
 
-See [docs/API.md](docs/API.md), [docs/WORKSPACE.md](docs/WORKSPACE.md), [docs/RUNTIME.md](docs/RUNTIME.md), [docs/AUTH.md](docs/AUTH.md), and [docs/STORAGE.md](docs/STORAGE.md) for behavior and operational guidance. The default tests use a scripted model and do not spend OpenAI credits.
+See [docs/API.md](docs/API.md), [docs/WORKSPACE.md](docs/WORKSPACE.md), [docs/RUNTIME.md](docs/RUNTIME.md), [docs/AUTH.md](docs/AUTH.md), [docs/STUDENT_PROJECTS.md](docs/STUDENT_PROJECTS.md), and [docs/STORAGE.md](docs/STORAGE.md) for behavior and operational guidance. The default tests use a scripted model and do not spend OpenAI credits.
 
 ## Production hardening
 

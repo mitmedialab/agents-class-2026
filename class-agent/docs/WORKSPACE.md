@@ -99,9 +99,11 @@ component version does not require a workspace schema version or persisted-data
 migration.
 
 Visual Composition `1.2.0` adds a second backward-compatible trusted image reference:
-`applicant://{application_id}/photo`. Only the instructor image-inspection tool may authorize
+`applicant://{application_id}/photo`. Only the authorized application image-inspection tool
+may authorize
 these references for a workspace open in the current turn. The browser resolves them to the
-authenticated instructor photo endpoint; public and student sessions cannot fetch the bytes.
+authenticated photo endpoint; students can fetch only explicitly shared application UUIDs,
+and public sessions cannot fetch the bytes.
 Existing HTTPS and registered-asset panels remain valid, so this minor component version also
 requires no workspace schema version or persisted-data migration.
 
@@ -114,7 +116,7 @@ content endpoint and supplies it to the trusted renderer:
 ```text
 course://schedule → Calendar
 course://instructors + registered portrait asset → VisualComposition
-applicant://{application_id}/photo → VisualComposition (instructor only)
+applicant://{application_id}/photo → VisualComposition (instructor or authorized student)
 specific paper or file → DocumentViewer
 knowledge from one or more sources → VisualComposition
 specific website → WebpageViewer or BrowserViewer
@@ -217,3 +219,8 @@ their MCP-compatible contracts can be published by the capability gateway withou
 changing persisted events or UI state. MCP Apps, arbitrary external interfaces, and
 workspace database snapshots are intentionally deferred. Canonical events already
 provide sufficient persistence for the current class scale.
+
+Application sharing update: authenticated students may use the existing application-review
+tools and photo route only for accepted application UUIDs explicitly shared in the private
+`student-access.json` registry. Instructor access remains unrestricted. See
+[STORAGE.md](STORAGE.md) for authorization, provisioning, and revocation details.

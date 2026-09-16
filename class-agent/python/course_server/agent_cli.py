@@ -42,6 +42,8 @@ from course_server.agent import (
 )
 from course_server.agent.capabilities import ExecutableTool
 from course_server.agent.store import ConversationStore
+from course_server.application_access import ApplicationAccessPolicy
+from course_server.application_roster import initialize_student_application_access
 from course_server.assignments import (
     AssignmentStore,
     CourseGetAssignmentTool,
@@ -81,6 +83,13 @@ from course_server.student_communications import (
     CourseListMyCommunicationsTool,
     CourseReadMyCommunicationTool,
     StudentCommunicationService,
+)
+from course_server.student_projects import (
+    GitHubStudentProjectCatalog,
+    InspectStudentRepositoryTool,
+    InspectStudentSiteTool,
+    ListStudentProjectsTool,
+    StudentProjectCatalog,
 )
 from course_server.uploads import (
     FileTemporaryUploadStore,
@@ -151,6 +160,7 @@ def build_runtime(
     instructor_messages: InstructorMessageService | None = None,
     student_communications: StudentCommunicationService | None = None,
     faq_updates: FaqKnowledgeStore | None = None,
+    student_projects: StudentProjectCatalog | None = None,
 ) -> SmolagentsRuntime:
     course_resources = (
         resources
@@ -169,6 +179,20 @@ def build_runtime(
         else FileAssignmentStore(settings.assignment_data_path)
     )
     component_registry = components or load_component_registry()
+    project_catalog = student_projects
+    if project_catalog is None and settings.github_student_projects_enabled:
+        if settings.github_token is None:
+            raise ConfigurationError("GitHub student projects are enabled without a token")
+        project_catalog = GitHubStudentProjectCatalog(
+            settings.github_token.get_secret_value(),
+            organization=settings.github_organization,
+            repository_prefix=settings.github_repository_prefix,
+            excluded_repositories=settings.github_excluded_repositories,
+            roster_cache_ttl_seconds=settings.github_roster_cache_ttl_seconds,
+        )
+    application_access = ApplicationAccessPolicy(
+        settings.applicant_data_path / "student-access.json"
+    )
     executable_tools: list[ExecutableTool] = [
         CourseReadSyllabusTool(course_resources),
         CourseReadPublicFileTool(course_resources),
@@ -183,8 +207,8 @@ def build_runtime(
         CourseGetAssignmentTool(assignment_store),
         ReadTemporaryUploadTool(upload_store),
         CourseSubmitApplicationTool(applicant_store, upload_store),
-        InstructorListApplicationsTool(applicant_store),
-        InstructorReadApplicationTool(applicant_store),
+        InstructorListApplicationsTool(applicant_store, application_access),
+        InstructorReadApplicationTool(applicant_store, application_access),
         InstructorInspectApplicationImagesTool(
             applicant_store,
             lambda photos, prompt: inspect_private_images_with_openai(
@@ -193,6 +217,7 @@ def build_runtime(
                 model_id=settings.model_id,
                 api_key=settings.model_api_key.get_secret_value(),
             ),
+            application_access,
         ),
         PublicWebSearchTool(
             BraveWebSearchClient(
@@ -253,6 +278,14 @@ def build_runtime(
         executable_tools.extend(
             [CourseListFaqUpdatesTool(faq_updates), CourseReadFaqUpdateTool(faq_updates)]
         )
+    if project_catalog is not None:
+        executable_tools.extend(
+            [
+                ListStudentProjectsTool(project_catalog),
+                InspectStudentSiteTool(project_catalog, fetch_public_webpage),
+                InspectStudentRepositoryTool(project_catalog),
+            ]
+        )
     tools = ToolCatalog(executable_tools)
     provider = OpenAIModelProvider(
         model_id=settings.model_id,
@@ -279,6 +312,8 @@ async def _run_postgres_turn(
     await pool.wait()
     try:
         faq_knowledge = LocalFaqKnowledgeStore(settings.published_faq_path)
+        applicant_store = FileApplicantStore(settings.applicant_data_path)
+        await initialize_student_application_access(applicant_store, settings.applicant_data_path)
         course_resources = PublishedFaqResourceCatalog(
             FileResourceProvider.from_registry(protected_data_path=settings.course_data_path),
             faq_knowledge,
@@ -291,12 +326,14 @@ async def _run_postgres_turn(
                 resources=course_resources,
                 skills=skills,
                 faq_updates=faq_knowledge,
+                applicants=applicant_store,
             ),
             auth_store=PostgresAuthStore(pool),
             conversation_store=PostgresConversationStore(pool),
             capability_policy=CourseCapabilityPolicy(
                 course_resources,
                 faq_updates_enabled=True,
+                student_projects_enabled=settings.github_student_projects_enabled,
             ),
             skills=skills,
         )

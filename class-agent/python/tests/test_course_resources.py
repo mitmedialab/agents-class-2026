@@ -50,6 +50,7 @@ from course_server.agent import (
     load_protected_resource_definitions,
     load_resource_definitions,
 )
+from course_server.application_access import ApplicationAccessPolicy
 from course_server.faq import (
     CourseListFaqUpdatesTool,
     CourseReadFaqUpdateTool,
@@ -1090,6 +1091,45 @@ def test_application_tool_stores_private_json_with_server_generated_name(
         ]
         assert b"photo-data" not in str(inspected.content).encode()
 
+        student_context = execution_context(principal=authenticated_principal("student"))
+        access_path = tmp_path / "student-access.json"
+        access = ApplicationAccessPolicy(access_path)
+        student_list = InstructorListApplicationsTool(applicant_store, access)
+        student_read = InstructorReadApplicationTool(applicant_store, access)
+        student_images = InstructorInspectApplicationImagesTool(
+            applicant_store, inspect_application_images, access
+        )
+        assert (await student_list.execute({}, student_context)).content == []
+        with pytest.raises(PermissionError):
+            await student_read.execute({"application_id": application_id}, student_context)
+        access_path.write_text(
+            json.dumps({"schema_version": 1, "application_ids": [application_id]})
+        )
+        listed_shared = (await student_list.execute({}, student_context)).content
+        assert isinstance(listed_shared, list)
+        assert len(listed_shared) == 1
+        shared = await student_read.execute({"application_id": application_id}, student_context)
+        assert isinstance(shared.content, dict)
+        assert "principal" not in shared.content
+        assert "photo_filename" not in shared.content
+        shared_fields = shared.content["application"]
+        assert isinstance(shared_fields, dict)
+        assert "photo_upload_id" not in shared_fields
+        result = await student_images.execute(
+            {"application_ids": [application_id], "prompt": "Describe the visible composition."},
+            student_context,
+        )
+        assert result.resource_uris == [f"applicant://{application_id}/photo"]
+        with pytest.raises(PermissionError):
+            await student_images.execute(
+                {"application_ids": [application_id, str(uuid4())], "prompt": "Describe it."},
+                student_context,
+            )
+        access_path.write_text('{"schema_version": 1, "application_ids": []}')
+        with pytest.raises(PermissionError):
+            await student_read.execute({"application_id": application_id}, student_context)
+        assert len(inspected_inputs) == 2
+
         photo_file.write_bytes(b"not-an-image")
         with pytest.raises(ToolValidationError, match="not a valid image"):
             await image_tool.execute(
@@ -1099,9 +1139,9 @@ def test_application_tool_stores_private_json_with_server_generated_name(
                 },
                 instructor_context,
             )
-        assert len(inspected_inputs) == 1
+        assert len(inspected_inputs) == 2
 
-        for role in ("student", "ta", "admin"):
+        for role in ("ta", "admin"):
             unauthorized = execution_context(principal=authenticated_principal(role))
             with pytest.raises(PermissionError, match="Instructor access"):
                 await InstructorListApplicationsTool(applicant_store).execute({}, unauthorized)

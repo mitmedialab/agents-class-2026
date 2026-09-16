@@ -23,6 +23,7 @@ from course_server.agent import (
 )
 from course_server.anonymous_quotas import AnonymousQuotaPolicy
 from course_server.api import API_PREFIX, AppServices, create_app
+from course_server.application_access import ApplicationAccessPolicy
 from course_server.assignments import AssignmentDraft, AssignmentStore, FileAssignmentStore
 from course_server.auth import AuthenticationService, InMemoryAuthStore, UserAdminService
 from course_server.browser import (
@@ -574,6 +575,7 @@ def test_role_scoped_resource_routes_and_agent_context_fail_closed(tmp_path: Pat
             ),
             conversations=conversations,
             applicants=applicants,
+            application_access=ApplicationAccessPolicy(tmp_path / "student-access.json"),
             course_resources=resources,
         )
     )
@@ -628,6 +630,16 @@ def test_role_scoped_resource_routes_and_agent_context_fail_closed(tmp_path: Pat
     photo_path = f"/instructor/applications/{application_id}/photo"
     assert anonymous_client.get(photo_path).status_code == 404
     assert student_client.get(photo_path).status_code == 404
+    access_path = tmp_path / "student-access.json"
+    access_path.write_text(
+        json.dumps({"schema_version": 1, "application_ids": [str(application_id)]})
+    )
+    assert student_client.get(photo_path).status_code == 200
+    assert anonymous_client.get(photo_path).status_code == 404
+    access_path.write_text('{"schema_version": 1, "application_ids": []}')
+    assert student_client.get(photo_path).status_code == 404
+    access_path.write_text("invalid registry")
+    assert student_client.get(photo_path).status_code == 404
     photo = instructor_client.get(photo_path)
     assert photo.status_code == 200
     assert photo.content == photo_bytes
@@ -645,7 +657,7 @@ def test_role_scoped_resource_routes_and_agent_context_fail_closed(tmp_path: Pat
     )
     assert "course://students/cohort" in runtime.contexts[-1].permitted_resource_uris
     assert "course://instructors/planning" not in runtime.contexts[-1].permitted_resource_uris
-    assert INSTRUCTOR_LIST_APPLICATIONS_TOOL_ID not in runtime.contexts[-1].permitted_tool_ids
+    assert INSTRUCTOR_LIST_APPLICATIONS_TOOL_ID in runtime.contexts[-1].permitted_tool_ids
 
     instructor_conversation = _create_conversation(instructor_client)
     assert (

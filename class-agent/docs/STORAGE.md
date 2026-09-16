@@ -105,21 +105,96 @@ Existing version 1 files remain immutable historical records and require no data
 filesystem migration; any staff-side reader must branch on `schema_version` rather than
 reinterpret the former combined fields.
 
-Authenticated instructors receive dedicated read-only tools to list applications and read
-one structured `application.json` by its server-issued application UUID. Students, TAs,
-admins, and anonymous visitors never receive those tools, and the tools also recheck the
-trusted principal at execution. Full records are available transiently to the instructor's
-agent run but only a summary is stored in canonical tool events. Representative photos are
-reported as protected metadata during ordinary record reads. If an instructor explicitly
-requests visual inspection, a separate instructor-only tool may send one to four selected
-photos to the configured multimodal model as in-memory data URLs with provider-side storage
-disabled. Photo bytes and raw inspection output are not copied into canonical tool events;
-the instructor-visible final answer remains ordinary conversation history. The inspection
-adapter forbids identification, sensitive-trait inference, and admission judgments from
-appearance. For display, the tool returns an opaque `applicant://{application_id}/photo`
-reference rather than a path or public URL. The trusted browser maps that reference to an
-authenticated instructor-only endpoint; anonymous, student, TA, and admin requests receive
-the same `404`, and successful responses use `Cache-Control: private, no-store`.
+Authenticated instructors receive read-only tools to list and read all applications.
+Both `instructor.list_applications` and `instructor.read_application` accept an optional
+boolean `accepted_only` (default false). With true, instructors use the same private UUID
+allowlist as students. Accepted-only reads reject IDs outside that allowlist before reading
+any record. Students remain restricted regardless of the flag. Missing or empty allowlists
+produce empty accepted-only listings; malformed allowlists deny the filtered operation.
+Unfiltered instructor access continues to work even if the allowlist is unavailable.
+The list response remains an array; its event summary distinguishes accepted-only results.
+This optional argument is additive: existing calls and persisted application schemas remain
+valid, with no core contract version change or migration required.
+
+Authenticated students receive the same three `instructor.*` tool IDs for compatibility,
+but platform code restricts their access to explicitly shared accepted application UUIDs.
+Anonymous, TA, and admin principals cannot use these tools. Authorization is checked before
+catalog disclosure and again at execution, including every ID in an image batch before
+any photo is loaded or sent to the model.
+
+The deployment-owned `APPLICANT_DATA_PATH/student-access.json` is the sharing authority:
+
+```json
+{"schema_version": 1, "application_ids": []}
+```
+
+The server-local `APPLICANT_DATA_PATH/accepted-applicants.json` is the instructor-approved
+roster used for initial server provisioning. It contains private student information: never
+commit it or register it as a public course resource. The filename is ignored by Git in any
+directory. Install it directly on the server with mode `0600`, separately from Git deployment.
+At API or CLI startup, before accepting submissions, the server resolves that
+roster against the existing applications in `APPLICANT_DATA_PATH` (default `var/applicants/`).
+It writes the matching UUIDs once to `student-access.json`, plus a private
+`student-access-resolution.json` report for every roster entry. Both files have mode `0600`
+and are ignored by Git. The code and tests contain no real roster; tests use fictional fixtures.
+If the local roster is absent, startup skips initialization and student access remains closed
+unless an existing UUID allowlist already grants access. No empty snapshot is written merely
+because the roster is missing, so installing it and restarting can initialize access later.
+
+Matching normalizes Unicode, case, whitespace, parentheses, and name order. A roster entry can
+explicitly provide alternative names in its `aliases` list. Each person must match exactly one existing
+application; duplicates are blocked rather than choosing the latest submission. When the record
+has a School field, it must agree with the roster institution (MIT Media Lab counts as MIT).
+Historical records without School can match by name. Department labels are retained as roster
+context, not fuzzy authorization criteria. Missing, ambiguous, or conflicting entries stay
+blocked and appear in the resolution report; uniquely matched people remain available.
+
+This bootstrap deliberately trusts the instructor's assertion that the existing server corpus
+contains the accepted people. Submitted names alone cannot establish identity. Inspect the
+private report after deployment; uncertain matches require instructor verification. Once an
+access file exists, startup **never replaces or expands it**, including an empty or malformed
+file. Subsequent submissions with an accepted name cannot grant access, and explicit revocations
+survive restarts. The initial resolution report is a snapshot, not a live view of later edits.
+
+Deployment: pull the code on the real server, verify `APPLICANT_DATA_PATH` points to its
+existing application directory, install the private roster there, and restart the API.
+Git pulls cannot supply the roster. Its format is shown below with fictional data:
+
+```json
+{
+  "schema_version": 1,
+  "applicants": [
+    {"name": "Ada Example", "institution": "MIT", "department": "Example", "aliases": []}
+  ]
+}
+```
+
+Review the startup matched/unresolved counts
+and the private resolution report. No UUID transcription is needed for unambiguous matches.
+A development server with only test applications generates an empty local snapshot; do not copy
+that ignored file to production. If a prior `student-access.json` already exists, it remains the
+authority. To resolve an unresolved entry, verify its application UUID and explicitly add it to
+that file. Do not delete the snapshot to rerun name matching against later unreviewed submissions.
+
+At tool/photo execution, authorization uses only the UUID snapshot, never name matching.
+Changes are read on each request, so removing an ID revokes future tool reads and photo requests
+without restarting. Previously returned content in conversation history is not erased by
+revocation. Back up the private roster, UUID allowlist, and resolution report with applicant records. Malformed access files deny
+student access; missing files outside the startup flow share nothing.
+
+Student record reads return submitted application fields and photo metadata, but omit internal
+principal, upload-ID, and storage metadata. Instructors retain their existing complete-record
+view. Tool events store only summaries; user-visible answers remain ordinary conversation history.
+Photos require an explicit visual-inspection request and keep the existing provider-side
+no-storage and image-analysis restrictions. Only tool-issued `applicant://{application_id}/photo`
+references may be displayed in that turn. The existing `/instructor/applications/{id}/photo`
+route now checks the same sharing policy for students; denied requests return `404` and successful
+responses use `Cache-Control: private, no-store`.
+
+This is an explicitly requested extension of application visibility to students. No persisted
+application schema, core interface, tool argument schema, or URI version changes, and no
+application/database migration is needed. The authorized startup bootstrap creates a new private
+sharing snapshot without modifying existing applications. An empty snapshot intentionally exposes no applications.
 
 ## Migrations
 

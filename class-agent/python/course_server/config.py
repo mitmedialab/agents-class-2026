@@ -136,6 +136,12 @@ class AgentSettings(BaseModel):
     anonymous_max_upload_bytes: int = Field(default=20 * 1024 * 1024, ge=1, le=100 * 1024 * 1024)
     workspace_strict_visual_policy: bool = True
     mail_enabled: bool = False
+    github_student_projects_enabled: bool = False
+    github_token: SecretStr | None = Field(default=None, repr=False)
+    github_organization: str = Field(default="mitmedialab", pattern=r"^[A-Za-z0-9_.-]{1,100}$")
+    github_repository_prefix: str = Field(default="agents2026-", pattern=r"^[A-Za-z0-9_.-]{1,100}$")
+    github_excluded_repositories: tuple[str, ...] = ("agents2026-test",)
+    github_roster_cache_ttl_seconds: int = Field(default=300, ge=0, le=3_600)
 
     @classmethod
     def from_environment(
@@ -242,6 +248,31 @@ class AgentSettings(BaseModel):
         mail_enabled = values.get("MAIL_ENABLED", "false").strip().casefold()
         if mail_enabled not in {"true", "false", "1", "0", "yes", "no"}:
             raise ConfigurationError("MAIL_ENABLED must be true or false")
+        github_projects_enabled = (
+            values.get("GITHUB_STUDENT_PROJECTS_ENABLED", "false").strip().casefold()
+        )
+        if github_projects_enabled not in {"true", "false", "1", "0", "yes", "no"}:
+            raise ConfigurationError("GITHUB_STUDENT_PROJECTS_ENABLED must be true or false")
+        raw_github_token = values.get("GITHUB_TOKEN")
+        github_token = raw_github_token.strip() if raw_github_token else ""
+        if github_token and (
+            "\n" in github_token
+            or "\r" in github_token
+            or r"\n" in github_token
+            or r"\r" in github_token
+        ):
+            raise ConfigurationError("GITHUB_TOKEN must be a non-empty single line")
+        if github_projects_enabled in {"true", "1", "yes"} and not github_token:
+            raise ConfigurationError(
+                "GITHUB_TOKEN is required when GITHUB_STUDENT_PROJECTS_ENABLED=true"
+            )
+        github_organization = values.get("GITHUB_ORGANIZATION", "mitmedialab").strip()
+        github_repository_prefix = values.get("GITHUB_REPOSITORY_PREFIX", "agents2026-").strip()
+        github_excluded_repositories = tuple(
+            name.strip()
+            for name in values.get("GITHUB_EXCLUDED_REPOSITORIES", "agents2026-test").split(",")
+            if name.strip()
+        )
 
         return cls(
             model_provider="openai",
@@ -272,4 +303,12 @@ class AgentSettings(BaseModel):
             ),
             workspace_strict_visual_policy=strict_visual_policy in {"true", "1", "yes"},
             mail_enabled=mail_enabled in {"true", "1", "yes"},
+            github_student_projects_enabled=github_projects_enabled in {"true", "1", "yes"},
+            github_token=SecretStr(github_token) if github_token else None,
+            github_organization=github_organization,
+            github_repository_prefix=github_repository_prefix,
+            github_excluded_repositories=github_excluded_repositories,
+            github_roster_cache_ttl_seconds=int(
+                values.get("GITHUB_ROSTER_CACHE_TTL_SECONDS", "300")
+            ),
         )

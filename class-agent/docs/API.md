@@ -133,7 +133,8 @@ or unauthorized URI returns the same `404` response so the route does not disclo
 resource existence.
 
 `GET /api/v1/instructor/applications/{application_id}/photo` resolves only a server-issued
-application UUID through the private applicant store. It requires an authenticated instructor,
+application UUID through the private applicant store. It requires an authenticated instructor
+or a student with that UUID explicitly shared,
 returns `404` to every other role, and serves validated image bytes with private no-store caching.
 It never accepts or exposes a filesystem path. The browser reaches this route only after resolving
 an `applicant://{application_id}/photo` URI issued by the instructor image-inspection tool.
@@ -216,3 +217,8 @@ validate and reduce the enclosed command; they must not interpret it as arbitrar
 code.
 
 Unexpected runtime failures return a generic `503` for JSON requests or a structured `system.error` SSE event. Provider exception messages, request data, credentials, and tracebacks are not sent to clients.
+
+Application sharing update: authenticated students may use the existing application-review
+tools and photo route only for accepted application UUIDs explicitly shared in the private
+`student-access.json` registry. Instructor access remains unrestricted. See
+[STORAGE.md](STORAGE.md) for authorization, provisioning, and revocation details.

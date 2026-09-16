@@ -198,3 +198,8 @@ provider with provider storage disabled; ordinary application reads expose metad
 For an instructor-visible gallery, the tool returns opaque applicant image URIs that the trusted
 web client resolves through an authenticated no-store endpoint. The private directory itself is
 never mounted or exposed as static content.
+
+Application sharing update: authenticated students may use the existing application-review
+tools and photo route only for accepted application UUIDs explicitly shared in the private
+`student-access.json` registry. Instructor access remains unrestricted. See
+[STORAGE.md](STORAGE.md) for authorization, provisioning, and revocation details.

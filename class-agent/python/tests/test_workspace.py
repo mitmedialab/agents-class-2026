@@ -553,6 +553,19 @@ def test_private_application_images_require_instructor_and_inspector_provenance(
         )
         assert isinstance(opened.content, dict)
         assert opened.content["status"] == "opened"
+        student_context = execution_context(
+            instructor_principal().model_copy(update={"roles": ["public", "student"]})
+        )
+        with pytest.raises(ToolValidationError, match="inspect_application_images"):
+            await tool.execute(
+                {"component_id": "visual-composition", "props": props}, student_context
+            )
+        student_context.transient_state["private_application_image_candidates"] = [image_uri]
+        shared = await tool.execute(
+            {"component_id": "visual-composition", "props": props}, student_context
+        )
+        assert isinstance(shared.content, dict)
+        assert shared.content["status"] == "opened"
 
     asyncio.run(scenario())
 
