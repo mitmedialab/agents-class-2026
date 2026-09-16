@@ -1,7 +1,15 @@
-import type { CSSProperties, ReactNode } from "react";
+import {
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 
 const MIN_CONTENT_LOAD = 40;
 const MAX_CONTENT_LOAD = 900;
+const RESPONSE_FIT_ITERATIONS = 9;
+const RESPONSE_FIT_TOLERANCE_PX = 1;
 export const RESPONSE_CHARACTER_STAGGER_MS = 14;
 
 export function responseScale(text: string): number {
@@ -19,8 +27,7 @@ function interpolate(small: number, large: number, scale: number): number {
   return small + (large - small) * scale;
 }
 
-function responseStyle(text: string): CSSProperties {
-  const scale = responseScale(text);
+function responseStyle(scale: number): CSSProperties {
   return {
     "--response-font-min": `${interpolate(1.05, 1.75, scale).toFixed(3)}rem`,
     "--response-font-fluid": `${interpolate(1.55, 3.5, scale).toFixed(3)}vw`,
@@ -34,6 +41,56 @@ function responseStyle(text: string): CSSProperties {
     "--response-padding-inline": `${interpolate(1.5, 0.25, scale).toFixed(3)}rem`,
     "--response-padding-bottom": `${interpolate(2, 0.25, scale).toFixed(3)}rem`,
   } as CSSProperties;
+}
+
+interface ResponseFit {
+  fits: boolean | null;
+  measured: boolean;
+  scale: number;
+  text: string;
+}
+
+function applyResponseScale(element: HTMLElement, scale: number): void {
+  for (const [property, value] of Object.entries(responseStyle(scale))) {
+    element.style.setProperty(property, String(value));
+  }
+}
+
+function fitResponseElement(
+  element: HTMLElement,
+): Pick<ResponseFit, "fits" | "scale"> | null {
+  const previousStyle = element.getAttribute("style");
+  element.style.transition = "none";
+
+  try {
+    const fitsAtScale = (scale: number): boolean => {
+      applyResponseScale(element, scale);
+      return element.scrollHeight <= element.clientHeight + RESPONSE_FIT_TOLERANCE_PX;
+    };
+
+    applyResponseScale(element, 1);
+    if (element.clientHeight <= 0) return null;
+    if (fitsAtScale(1)) return { fits: true, scale: 1 };
+    if (!fitsAtScale(0)) return { fits: false, scale: 0 };
+
+    let fittingScale = 0;
+    let overflowingScale = 1;
+    for (let index = 0; index < RESPONSE_FIT_ITERATIONS; index += 1) {
+      const candidate = (fittingScale + overflowingScale) / 2;
+      if (fitsAtScale(candidate)) {
+        fittingScale = candidate;
+      } else {
+        overflowingScale = candidate;
+      }
+    }
+    return { fits: true, scale: fittingScale };
+  } finally {
+    if (previousStyle === null) {
+      element.removeAttribute("style");
+    } else {
+      element.setAttribute("style", previousStyle);
+    }
+  }
 }
 
 function characterNodes(
@@ -240,15 +297,69 @@ export function AgentResponse({
   streaming = false,
   text,
 }: AgentResponseProps) {
-  const scale = responseScale(text);
+  const responseRef = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState<ResponseFit>(() => ({
+    fits: null,
+    measured: false,
+    scale: responseScale(text),
+    text,
+  }));
+  const currentFit =
+    fit.text === text
+      ? fit
+      : { fits: null, measured: false, scale: responseScale(text), text };
+
+  useLayoutEffect(() => {
+    const element = responseRef.current;
+    if (!element) return;
+    let animationFrame = 0;
+
+    const measure = () => {
+      const result = fitResponseElement(element);
+      if (!result) return;
+      setFit((existing) => {
+        if (
+          existing.text === text &&
+          existing.measured &&
+          existing.fits === result.fits &&
+          Math.abs(existing.scale - result.scale) < 0.001
+        ) {
+          return existing;
+        }
+        return { ...result, measured: true, text };
+      });
+    };
+    const scheduleMeasure = () => {
+      window.cancelAnimationFrame(animationFrame);
+      animationFrame = window.requestAnimationFrame(measure);
+    };
+
+    measure();
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(scheduleMeasure);
+    if (element.parentElement) observer?.observe(element.parentElement);
+    window.addEventListener("resize", scheduleMeasure);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      window.removeEventListener("resize", scheduleMeasure);
+      observer?.disconnect();
+    };
+  }, [text]);
+
   return (
     <div
+      ref={responseRef}
       className="latest-response"
       data-character-delay={initialCharacterDelayMs}
-      data-response-scale={scale.toFixed(3)}
+      data-response-fit={currentFit.measured ? "measured" : "estimated"}
+      data-response-overflow={currentFit.fits === false}
+      data-response-scale={currentFit.scale.toFixed(3)}
       data-staggered={staggerCharacters}
       data-streaming={streaming}
-      style={responseStyle(text)}
+      style={responseStyle(currentFit.scale)}
     >
       {responseBlocks(
         text,
