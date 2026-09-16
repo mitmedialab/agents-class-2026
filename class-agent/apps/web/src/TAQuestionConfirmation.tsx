@@ -1,12 +1,17 @@
 import { Button } from "@class-agent/ui";
-import type { TAQuestionConfirmation as Confirmation } from "./taQuestions.js";
 import { useState } from "react";
+
+import type {
+  TAQuestionConfirmation as Confirmation,
+  TAQuestionEdit,
+} from "./taQuestions.js";
 
 interface TAQuestionConfirmationProps {
   confirmation: Confirmation;
   onAction: (
     action: "send" | "cancel",
     reporterVisibility: "named" | "anonymous",
+    edit?: TAQuestionEdit,
   ) => void;
 }
 
@@ -15,7 +20,9 @@ export function TAQuestionConfirmation({
   onAction,
 }: TAQuestionConfirmationProps) {
   const [anonymous, setAnonymous] = useState(false);
+  const [question, setQuestion] = useState(confirmation.question);
   const busy = confirmation.status === "submitting";
+  const sendDisabled = busy || !question.trim();
   const resolved =
     confirmation.status === "queued" ||
     confirmation.status === "sent" ||
@@ -33,7 +40,16 @@ export function TAQuestionConfirmation({
       className="ta-question-confirmation"
     >
       <div className="ta-question-content">
-        <p>{confirmation.question}</p>
+        <textarea
+          aria-label="Question"
+          className="message-confirmation-inline message-confirmation-body"
+          disabled={busy}
+          maxLength={5_000}
+          onChange={(event) => setQuestion(event.target.value)}
+          required
+          rows={1}
+          value={question}
+        />
       </div>
       {status ? (
         <p aria-live="polite" className="ta-question-status" role="status">
@@ -52,8 +68,12 @@ export function TAQuestionConfirmation({
       <div className="ta-question-actions">
         <Button
           autoFocus
-          disabled={busy}
-          onClick={() => onAction("send", anonymous ? "anonymous" : "named")}
+          disabled={sendDisabled}
+          onClick={() =>
+            onAction("send", anonymous ? "anonymous" : "named", {
+              question,
+            })
+          }
           variant="outline"
         >
           {busy ? "Saving…" : "Send"}

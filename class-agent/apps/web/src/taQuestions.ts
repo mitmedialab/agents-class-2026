@@ -18,6 +18,10 @@ export interface TAQuestionConfirmation {
   status: TAQuestionStatus;
 }
 
+export interface TAQuestionEdit {
+  question: string;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }

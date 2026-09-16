@@ -3,7 +3,13 @@ import type { JsonValue } from "@class-agent/workspace";
 import {
   confirmationFromPayload,
   type TAQuestionConfirmation,
+  type TAQuestionEdit,
 } from "./taQuestions.js";
+import {
+  instructorMessageFromPayload,
+  type InstructorMessageConfirmation,
+  type InstructorMessageEdit,
+} from "./instructorMessages.js";
 
 const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL as string | undefined;
 const API_BASE_URL = (configuredBaseUrl ?? "/api/v1").replace(/\/$/, "");
@@ -51,6 +57,48 @@ export interface CourseNotification {
   published_at: string;
 }
 
+export type NotificationCenterSection =
+  | "notifications"
+  | "communications"
+  | "upcoming";
+
+export type NotificationCenterItemKind =
+  | "course_update"
+  | "instructor_message"
+  | "pending_message"
+  | "staff_reply"
+  | "pending_student_question"
+  | "assignment_deadline";
+
+export interface NotificationSender {
+  first_name: string;
+  resource_uri: string | null;
+  image_asset_id: string | null;
+}
+
+export interface NotificationCenterItem {
+  id: Uuid;
+  section: NotificationCenterSection;
+  kind: NotificationCenterItemKind;
+  state: "unread" | "read" | "pending" | "responded" | "upcoming" | "past";
+  title: string;
+  detail: string;
+  timestamp: string | null;
+  due_at: string | null;
+  action_label: string;
+  action_prompt: string;
+  unread: boolean;
+  dismissible: boolean;
+  sender: NotificationSender | null;
+}
+
+export interface NotificationCenterData {
+  generated_at: string;
+  unread_count: number;
+  items: NotificationCenterItem[];
+  history_items?: NotificationCenterItem[];
+}
+
 export interface AgentRunResult {
   output_text: string;
   event_ids: Uuid[];
@@ -79,6 +127,10 @@ export type AgentStreamEvent =
   | { kind: "workspace"; command: unknown }
   | { kind: "application_submitted" }
   | { kind: "ta_question_confirmation"; confirmation: TAQuestionConfirmation }
+  | {
+      kind: "instructor_message_confirmation";
+      confirmation: InstructorMessageConfirmation;
+    }
   | { kind: "done" }
   | { kind: "error" };
 
@@ -176,12 +228,43 @@ export function confirmTAQuestion(
   questionId: string,
   action: "send" | "cancel",
   reporterVisibility: "named" | "anonymous" = "named",
+  edit?: TAQuestionEdit,
 ): Promise<Event> {
   return requestJson<Event>(
     `/conversations/${conversationId}/ta-questions/${questionId}/confirmation`,
     {
       method: "POST",
-      body: JSON.stringify({ action, reporter_visibility: reporterVisibility }),
+      body: JSON.stringify({
+        action,
+        reporter_visibility: reporterVisibility,
+        ...(action === "send" && edit ? edit : {}),
+      }),
+    },
+  );
+}
+
+export function confirmInstructorMessage(
+  conversationId: Uuid,
+  messageId: string,
+  action: "send" | "cancel",
+  edit?: InstructorMessageEdit,
+): Promise<Event> {
+  return requestJson<Event>(
+    `/conversations/${conversationId}/instructor-messages/${messageId}/confirmation`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        action,
+        ...(action === "send" && edit
+          ? {
+              subject: edit.subject,
+              message: edit.message,
+              ...(edit.publicationDecision
+                ? { publication_decision: edit.publicationDecision }
+                : {}),
+            }
+          : {}),
+      }),
     },
   );
 }
@@ -196,6 +279,16 @@ export function continueAgentAfterEvent(
   });
 }
 
+export function generatePageGreeting(
+  conversationId: Uuid,
+  signal?: AbortSignal,
+): Promise<AgentRunResult> {
+  return requestJson<AgentRunResult>(`/conversations/${conversationId}/greeting`, {
+    method: "POST",
+    ...(signal ? { signal } : {}),
+  });
+}
+
 export function listNotifications(): Promise<CourseNotification[]> {
   return requestJson<CourseNotification[]>("/notifications");
 }
@@ -203,6 +296,20 @@ export function listNotifications(): Promise<CourseNotification[]> {
 export async function markNotificationRead(notificationId: Uuid): Promise<void> {
   const response = await fetch(
     `${API_BASE_URL}/notifications/${encodeURIComponent(notificationId)}/read`,
+    { method: "POST", credentials: "include" },
+  );
+  if (!response.ok) {
+    throw await responseError(response);
+  }
+}
+
+export function getNotificationCenter(): Promise<NotificationCenterData> {
+  return requestJson<NotificationCenterData>("/notification-center");
+}
+
+export async function markNotificationCenterItemRead(itemId: Uuid): Promise<void> {
+  const response = await fetch(
+    `${API_BASE_URL}/notification-center/${encodeURIComponent(itemId)}/read`,
     { method: "POST", credentials: "include" },
   );
   if (!response.ok) {
@@ -403,7 +510,9 @@ const RESOURCE_ACTIVITY_LABELS: Record<string, string> = {
 
 const TOOL_ACTIVITY_LABELS: Record<string, string> = {
   "course.get_application": "Reading application information",
+  "course.get_assignment": "Reading assignment",
   "course.get_schedule": "Reading course schedule",
+  "course.list_assignments": "Listing assignments",
   "course.list_private_resources": "Checking private course resources",
   "course.read_private_resource": "Reading private course information",
   "course.read_public_file": "Reading course information",
@@ -414,6 +523,7 @@ const TOOL_ACTIVITY_LABELS: Record<string, string> = {
   "course.submit_application": "Submitting application",
   "instructor.inspect_application_images": "Inspecting application images",
   "instructor.list_applications": "Listing course applications",
+  "instructor.message_students": "Preparing student message",
   "instructor.read_application": "Reading course application",
   "web.search": "Searching the public web",
   "web.search_images": "Searching public images",
@@ -427,6 +537,7 @@ const TOOL_ACTIVITY_LABELS: Record<string, string> = {
   "workspace.focus_component": "Focusing workspace panel",
   "workspace.list_components": "Checking workspace components",
   "workspace.open_component": "Opening workspace panel",
+  "workspace.review_presentation": "Reviewing workspace presentation",
   "workspace.update_component": "Updating workspace panel",
 };
 
@@ -434,6 +545,40 @@ function toolActivityLabel(toolId: string | null): string {
   return toolId
     ? (TOOL_ACTIVITY_LABELS[toolId] ?? "Using course information")
     : "Using course information";
+}
+
+function toolFailureLabel(
+  toolId: string | null,
+  payload: Record<string, unknown> | null,
+): string {
+  const reasonCode =
+    payload && typeof payload.reason_code === "string"
+      ? payload.reason_code
+      : payload && typeof payload.category === "string"
+        ? payload.category
+        : "";
+  if (reasonCode === "resource_not_authorized_for_run") {
+    return "Workspace source unavailable — reopen the source and try again";
+  }
+  if (reasonCode === "component_not_registered") {
+    return "Workspace view unsupported — choose an available view";
+  }
+  if (reasonCode === "presentation_review_invalid") {
+    return "Workspace presentation changed — reviewing it again before answering";
+  }
+  if (reasonCode === "permission_denied") {
+    return `Permission denied while ${toolActivityLabel(toolId).toLowerCase()}`;
+  }
+  if (reasonCode === "invalid_request") {
+    return `${toolActivityLabel(toolId)} used unsupported settings`;
+  }
+  if (reasonCode === "resource_not_found") {
+    return "The requested source was not found";
+  }
+  if (reasonCode === "temporary_failure") {
+    return `${toolActivityLabel(toolId)} is temporarily unavailable`;
+  }
+  return `${toolActivityLabel(toolId)} failed`;
 }
 
 function platformActivity(data: Record<string, unknown>): AgentActivity | null {
@@ -476,11 +621,7 @@ function platformActivity(data: Record<string, unknown>): AgentActivity | null {
     return activity("complete", `${toolActivityLabel(toolId)} complete`);
   }
   if (type === "agent.tool.failed") {
-    return activity(
-      "error",
-      `${toolActivityLabel(toolId)} failed`,
-      jsonDetail(payload?.error),
-    );
+    return activity("error", toolFailureLabel(toolId, payload));
   }
   return null;
 }
@@ -545,6 +686,13 @@ function emitSseEvent(
       const confirmation = confirmationFromPayload(payload);
       if (confirmation) {
         onEvent({ kind: "ta_question_confirmation", confirmation });
+      }
+      return;
+    }
+    if (type === "instructor.message.confirmation_requested" && payload) {
+      const confirmation = instructorMessageFromPayload(payload);
+      if (confirmation) {
+        onEvent({ kind: "instructor_message_confirmation", confirmation });
       }
       return;
     }

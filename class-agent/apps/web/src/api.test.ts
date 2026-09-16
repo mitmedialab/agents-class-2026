@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  confirmInstructorMessage,
+  confirmTAQuestion,
   continueAgentAfterEvent,
   getCourseResourceContent,
   recordWorkspaceInteraction,
@@ -7,6 +9,72 @@ import {
   uploadFile,
   type AgentStreamEvent,
 } from "./api.js";
+
+describe("message confirmation", () => {
+  it("submits edited student question content only with Send", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({ type: "email.ta_question.queued" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await confirmTAQuestion(
+      "20000000-0000-4000-8000-000000000001",
+      "50000000-0000-4000-8000-000000000001",
+      "send",
+      "anonymous",
+      {
+        question: "Updated question?",
+      },
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/conversations/20000000-0000-4000-8000-000000000001/ta-questions/50000000-0000-4000-8000-000000000001/confirmation",
+      expect.objectContaining({
+        body: JSON.stringify({
+          action: "send",
+          reporter_visibility: "anonymous",
+          question: "Updated question?",
+        }),
+      }),
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it("submits edited instructor message content without recipient data", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({ type: "instructor.message.sent" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await confirmInstructorMessage(
+      "20000000-0000-4000-8000-000000000001",
+      "50000000-0000-4000-8000-000000000002",
+      "send",
+      {
+        subject: "Updated reminder",
+        message: "Bring the revised prototype.",
+        publicationDecision: "publish",
+      },
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/conversations/20000000-0000-4000-8000-000000000001/instructor-messages/50000000-0000-4000-8000-000000000002/confirmation",
+      expect.objectContaining({
+        body: JSON.stringify({
+          action: "send",
+          subject: "Updated reminder",
+          message: "Bring the revised prototype.",
+          publication_decision: "publish",
+        }),
+      }),
+    );
+    vi.unstubAllGlobals();
+  });
+});
 
 describe("API errors", () => {
   it("preserves structured field validation details", async () => {
@@ -103,12 +171,32 @@ describe("agent event stream", () => {
         );
         controller.enqueue(
           encoder.encode(
+            '\nevent: platform\ndata: {"type":"agent.tool.requested","event":{"payload":{"tool_id":"workspace.review_presentation","arguments":{"decision":"workspace_ready"}}}}\n\n',
+          ),
+        );
+        controller.enqueue(
+          encoder.encode(
+            '\nevent: platform\ndata: {"type":"agent.tool.failed","event":{"payload":{"tool_id":"workspace.open_component","category":"invalid_request","reason_code":"component_not_registered"}}}\n\n',
+          ),
+        );
+        controller.enqueue(
+          encoder.encode(
+            '\nevent: platform\ndata: {"type":"agent.tool.failed","event":{"payload":{"tool_id":"workspace.review_presentation","category":"invalid_request","reason_code":"presentation_review_invalid"}}}\n\n',
+          ),
+        );
+        controller.enqueue(
+          encoder.encode(
             '\nevent: platform\ndata: {"type":"workspace.panel.opened","event":{"payload":{"command":{"type":"open","panel":{"id":"40000000-0000-4000-8000-000000000001","component_id":"calendar","resource_uri":"course://schedule","props":{"view":"agenda"},"state":{}}}}}}\n\n',
           ),
         );
         controller.enqueue(
           encoder.encode(
             '\nevent: platform\ndata: {"type":"email.ta_question.confirmation_requested","event":{"payload":{"question_id":"50000000-0000-4000-8000-000000000001","question_code":"Q-2026-00001","subject":"Assignment model","question":"May I use a local model?","status":"pending_confirmation"}}}\n\n',
+          ),
+        );
+        controller.enqueue(
+          encoder.encode(
+            '\nevent: platform\ndata: {"type":"instructor.message.confirmation_requested","event":{"payload":{"message_id":"50000000-0000-4000-8000-000000000002","audience":"specific_students","recipients":[{"username":"alice","display_name":"Alice Example"}],"recipient_count":1,"subject":"Studio reminder","message":"Bring your prototype.","status":"pending_confirmation"}}}\n\n',
           ),
         );
         controller.enqueue(
@@ -176,6 +264,28 @@ describe("agent event stream", () => {
         },
       },
       {
+        kind: "activity",
+        activity: {
+          kind: "tool",
+          label: "Reviewing workspace presentation",
+          detail: '{\n  "decision": "workspace_ready"\n}',
+        },
+      },
+      {
+        kind: "activity",
+        activity: {
+          kind: "error",
+          label: "Workspace view unsupported — choose an available view",
+        },
+      },
+      {
+        kind: "activity",
+        activity: {
+          kind: "error",
+          label: "Workspace presentation changed — reviewing it again before answering",
+        },
+      },
+      {
         kind: "workspace",
         command: {
           type: "open",
@@ -195,6 +305,18 @@ describe("agent event stream", () => {
           code: "Q-2026-00001",
           subject: "Assignment model",
           question: "May I use a local model?",
+          status: "pending_confirmation",
+        },
+      },
+      {
+        kind: "instructor_message_confirmation",
+        confirmation: {
+          id: "50000000-0000-4000-8000-000000000002",
+          audience: "specific_students",
+          recipients: [{ username: "alice", display_name: "Alice Example" }],
+          recipientCount: 1,
+          subject: "Studio reminder",
+          message: "Bring your prototype.",
           status: "pending_confirmation",
         },
       },
@@ -288,6 +410,28 @@ describe("temporary uploads", () => {
     });
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/v1/uploads/40000000-0000-4000-8000-000000000001/content",
+      { credentials: "include" },
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it("reads a registered slide PDF from the course resource route", async () => {
+    const bytes = new Uint8Array([37, 80, 68, 70]);
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "application/pdf" }),
+      arrayBuffer: vi.fn().mockResolvedValue(bytes.buffer),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getCourseResourceContent("course://slides/week-01")).resolves.toEqual({
+      uri: "course://slides/week-01",
+      mediaType: "application/pdf",
+      data: bytes,
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/course/resources/content?uri=course%3A%2F%2Fslides%2Fweek-01",
       { credentials: "include" },
     );
     vi.unstubAllGlobals();
