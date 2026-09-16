@@ -17,7 +17,7 @@ import {
   type TextHighlightAnchor,
 } from "@class-agent/ui";
 import type { JsonObject, JsonValue, WorkspacePanel, WorkspaceState } from "@class-agent/workspace";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   applicantPhotoUrl,
@@ -236,6 +236,7 @@ function ResourcePanel({
 }) {
   const [resource, setResource] = useState<CourseResourceContent | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const pendingDraftCommit = useRef<Promise<void> | null>(null);
   const resourceUri = panel.resourceUri ?? DEFAULT_COMPONENT_RESOURCES[panel.componentId];
   const webpageUrl = stringProp(panel.props, "url");
   const webpageMode = stringProp(panel.props, "mode");
@@ -255,6 +256,30 @@ function ResourcePanel({
     : null;
   const applicationComplete =
     applicationProgress !== null && applicationProgress === applicationFields?.length;
+  const commitDraftChange = (fieldId: string, value: string): Promise<void> => {
+    const request = onInteraction(panel.id, "draft.change", {
+      field_id: fieldId,
+      value,
+    });
+    pendingDraftCommit.current = request;
+    void request.then(
+      () => {
+        if (pendingDraftCommit.current === request) pendingDraftCommit.current = null;
+      },
+      () => {
+        if (pendingDraftCommit.current === request) pendingDraftCommit.current = null;
+      },
+    );
+    return request;
+  };
+  const submitAfterDraftCommit = (submit: () => void): void => {
+    const pending = pendingDraftCommit.current;
+    if (pending === null) {
+      submit();
+      return;
+    }
+    void pending.then(submit, () => undefined);
+  };
 
   useEffect(() => {
     let disposed = false;
@@ -407,12 +432,7 @@ function ResourcePanel({
           description={stringProp(panel.props, "description")}
           content={draftContent}
           fields={draftFields}
-          onChange={(fieldId, value) =>
-            onInteraction(panel.id, "draft.change", {
-              field_id: fieldId,
-              value,
-            })
-          }
+          onChange={commitDraftChange}
           status={
             status === "ready" || status === "final" || status === "submitted"
               ? (status as DraftDocumentStatus)
@@ -431,7 +451,7 @@ function ResourcePanel({
             >
               <button
                 disabled={!applicationComplete}
-                onClick={onSubmitApplication}
+                onClick={() => submitAfterDraftCommit(onSubmitApplication)}
                 type="button"
               >
                 Submit application

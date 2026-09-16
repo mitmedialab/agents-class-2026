@@ -1,9 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { Workspace } from "./Workspace.js";
 
-describe("Workspace registered course assets", () => {
+describe("Workspace", () => {
   it("resolves a registered image ID through the guarded course asset route", () => {
     render(
       <Workspace
@@ -87,5 +87,66 @@ describe("Workspace registered course assets", () => {
       "src",
       "/api/v1/instructor/applications/50000000-0000-4000-8000-000000000002/photo",
     );
+  });
+
+  it("waits for the latest draft edit before submitting an application", async () => {
+    let finishSave = () => {};
+    const onInteraction = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishSave = resolve;
+        }),
+    );
+    const onSubmitApplication = vi.fn();
+
+    render(
+      <Workspace
+        conversationId="20000000-0000-4000-8000-000000000001"
+        onBrowserActivate={vi.fn(async () => undefined)}
+        onBrowserResize={vi.fn(async () => undefined)}
+        onBrowserScroll={vi.fn(async () => undefined)}
+        onCloseWorkspace={vi.fn(async () => undefined)}
+        onInteraction={onInteraction}
+        onPanelAction={vi.fn(async () => undefined)}
+        onSubmitApplication={onSubmitApplication}
+        state={{
+          focusedPanelId: "40000000-0000-4000-8000-000000000003",
+          panels: [
+            {
+              id: "40000000-0000-4000-8000-000000000003",
+              componentId: "draft-document",
+              resourceUri: "course://application",
+              props: {
+                title: "Course Application Draft",
+                fields: [
+                  {
+                    id: "name",
+                    label: "Name",
+                    status: "confirmed",
+                    value: "Ada Example",
+                  },
+                ],
+              },
+              state: {},
+            },
+          ],
+        }}
+      />,
+    );
+
+    const name = screen.getByRole("textbox", { name: "Name" });
+    fireEvent.change(name, { target: { value: "Ada Lovelace" } });
+    fireEvent.blur(name);
+    fireEvent.click(screen.getByRole("button", { name: "Submit application" }));
+
+    expect(onInteraction).toHaveBeenCalledWith(
+      "40000000-0000-4000-8000-000000000003",
+      "draft.change",
+      { field_id: "name", value: "Ada Lovelace" },
+    );
+    expect(onSubmitApplication).not.toHaveBeenCalled();
+
+    finishSave();
+    await waitFor(() => expect(onSubmitApplication).toHaveBeenCalledOnce());
   });
 });
