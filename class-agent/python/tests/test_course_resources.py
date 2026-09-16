@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import stat
+from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import Literal
@@ -41,11 +42,18 @@ from course_server.agent import (
     PublicVisitWebpageTool,
     PublicWebSearchTool,
     ReadTemporaryUploadTool,
+    ResourceDefinition,
+    ResourceNotFound,
     ToolExecutionContext,
     ToolProviderError,
     ToolValidationError,
     load_protected_resource_definitions,
     load_resource_definitions,
+)
+from course_server.faq import (
+    CourseListFaqUpdatesTool,
+    CourseReadFaqUpdateTool,
+    InMemoryFaqStore,
 )
 from course_server.uploads import FileTemporaryUploadStore
 
@@ -84,6 +92,33 @@ def execution_context(
     )
 
 
+def _pdf_with_text(text: str) -> bytes:
+    pdf = BytesIO()
+    writer = PdfWriter()
+    page = writer.add_blank_page(width=612, height=792)
+    page[NameObject("/Resources")] = DictionaryObject(
+        {
+            NameObject("/Font"): DictionaryObject(
+                {
+                    NameObject("/F1"): DictionaryObject(
+                        {
+                            NameObject("/Type"): NameObject("/Font"),
+                            NameObject("/Subtype"): NameObject("/Type1"),
+                            NameObject("/BaseFont"): NameObject("/Helvetica"),
+                        }
+                    )
+                }
+            )
+        }
+    )
+    stream = DecodedStreamObject()
+    escaped_text = text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+    stream.set_data(f"BT /F1 12 Tf 72 720 Td ({escaped_text}) Tj ET".encode())
+    page[NameObject("/Contents")] = stream
+    writer.write(pdf)
+    return pdf.getvalue()
+
+
 def test_temporary_upload_tool_reads_the_owned_artifact_without_substitution(
     tmp_path: Path,
 ) -> None:
@@ -114,28 +149,7 @@ def test_temporary_upload_tool_reads_the_owned_artifact_without_substitution(
 
 
 def test_temporary_upload_tool_extracts_text_from_the_uploaded_pdf(tmp_path: Path) -> None:
-    pdf = BytesIO()
-    writer = PdfWriter()
-    page = writer.add_blank_page(width=612, height=792)
-    page[NameObject("/Resources")] = DictionaryObject(
-        {
-            NameObject("/Font"): DictionaryObject(
-                {
-                    NameObject("/F1"): DictionaryObject(
-                        {
-                            NameObject("/Type"): NameObject("/Font"),
-                            NameObject("/Subtype"): NameObject("/Type1"),
-                            NameObject("/BaseFont"): NameObject("/Helvetica"),
-                        }
-                    )
-                }
-            )
-        }
-    )
-    stream = DecodedStreamObject()
-    stream.set_data(b"BT /F1 12 Tf 72 720 Td (Thirty-four participants completed the study.) Tj ET")
-    page[NameObject("/Contents")] = stream
-    writer.write(pdf)
+    pdf = _pdf_with_text("Thirty-four participants completed the study.")
 
     async def scenario() -> None:
         principal = public_principal()
@@ -143,7 +157,7 @@ def test_temporary_upload_tool_extracts_text_from_the_uploaded_pdf(tmp_path: Pat
         receipt = await uploads.store(
             filename="study.pdf",
             media_type="application/pdf",
-            content=pdf.getvalue(),
+            content=pdf,
             principal=principal,
         )
         resource_uri = f"upload://{receipt.id}"
@@ -163,6 +177,50 @@ def test_temporary_upload_tool_extracts_text_from_the_uploaded_pdf(tmp_path: Pat
     asyncio.run(scenario())
 
 
+def test_registered_pdf_is_readable_and_preserves_raw_bytes_for_the_workspace(
+    tmp_path: Path,
+) -> None:
+    pdf = _pdf_with_text("Week one introduces persistent course agents.")
+    pdf_path = tmp_path / "week-01-slides.pdf"
+    pdf_path.write_bytes(pdf)
+    resources = FileResourceProvider(
+        [
+            ResourceDefinition(
+                uri="course://slides/week-01",
+                title="Week 1 Slides",
+                media_type="application/pdf",
+                path=pdf_path,
+            )
+        ]
+    )
+
+    contents = asyncio.run(resources.read("course://slides/week-01"))
+    resource_file = asyncio.run(resources.read_file("course://slides/week-01"))
+
+    assert contents.media_type == "application/pdf"
+    assert "--- Page 1 ---" in contents.text
+    assert "persistent course agents" in contents.text
+    assert resource_file.data == pdf
+
+
+def test_registered_invalid_pdf_fails_as_an_unreadable_resource(tmp_path: Path) -> None:
+    pdf_path = tmp_path / "broken.pdf"
+    pdf_path.write_bytes(b"not a PDF")
+    resources = FileResourceProvider(
+        [
+            ResourceDefinition(
+                uri="course://slides/broken",
+                title="Broken Slides",
+                media_type="application/pdf",
+                path=pdf_path,
+            )
+        ]
+    )
+
+    with pytest.raises(ResourceNotFound, match="not a readable course resource"):
+        asyncio.run(resources.read("course://slides/broken"))
+
+
 def test_public_resource_registry_includes_provisional_schedule() -> None:
     resources = FileResourceProvider.from_registry()
 
@@ -175,6 +233,7 @@ def test_public_resource_registry_includes_provisional_schedule() -> None:
         "course://faq",
         "course://instructors",
         "course://application",
+        "course://slides/week-01",
     ]
     instructors = next(summary for summary in summaries if summary.uri == COURSE_INSTRUCTORS_URI)
     assert instructors.title == "Course Staff"
@@ -460,6 +519,58 @@ def test_faq_search_is_scoped_to_public_faq() -> None:
         assert all(
             item["uri"] == COURSE_FAQ_URI for item in result.content if isinstance(item, dict)
         )
+        assert "public course Q&A" in CourseSearchFaqTool.description
+        assert "private student-staff communication history" in CourseSearchFaqTool.description
+
+    asyncio.run(scenario())
+
+
+def test_public_faq_updates_can_be_listed_without_a_topic_and_read_by_id() -> None:
+    async def scenario() -> None:
+        now = datetime(2026, 9, 15, 14, tzinfo=UTC)
+        faqs = InMemoryFaqStore()
+        older = await faqs.publish(
+            source_question_id=uuid4(),
+            question="Can projects use local models?",
+            answer="Yes, if the runtime is documented.",
+            published_by_user_id=None,
+            published_at=now - timedelta(days=1),
+        )
+        newer = await faqs.publish(
+            source_question_id=uuid4(),
+            question="Should we bring prototypes to studio?",
+            answer="Yes, bring the current prototype.",
+            published_by_user_id=None,
+            published_at=now,
+        )
+
+        listed = await CourseListFaqUpdatesTool(faqs).execute(
+            {"limit": 1},
+            execution_context(COURSE_FAQ_URI),
+        )
+        assert listed.resource_uris == [COURSE_FAQ_URI]
+        assert isinstance(listed.content, dict)
+        entries = listed.content["entries"]
+        assert isinstance(entries, list)
+        latest = entries[0]
+        assert isinstance(latest, dict)
+        assert latest["faq_entry_id"] == str(newer.id)
+        assert listed.content["total"] == 2
+        assert listed.content["next_offset"] == 1
+
+        read = await CourseReadFaqUpdateTool(faqs).execute(
+            {"faq_entry_id": str(older.id)},
+            execution_context(COURSE_FAQ_URI),
+        )
+        assert isinstance(read.content, dict)
+        assert read.content["question"] == "Can projects use local models?"
+        assert read.content["answer"] == "Yes, if the runtime is documented."
+
+        with pytest.raises(PermissionError, match="not authorized"):
+            await CourseListFaqUpdatesTool(faqs).execute(
+                {},
+                execution_context(COURSE_SYLLABUS_URI),
+            )
 
     asyncio.run(scenario())
 

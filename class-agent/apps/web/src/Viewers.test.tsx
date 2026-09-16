@@ -13,6 +13,7 @@ import {
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { fitPdfPageToArea } from "../../../packages/ui/src/DocumentViewer.js";
 import publishedSchedule from "../../../shared/course/schedule/schedule.md?raw";
 
 describe("DocumentViewer", () => {
@@ -64,9 +65,71 @@ describe("DocumentViewer", () => {
     expect(onFind).toHaveBeenCalledWith("agent");
     expect(screen.getByText("1 / 2")).toBeInTheDocument();
   });
+
+  it("renders common assignment Markdown without injecting HTML", () => {
+    render(
+      <DocumentViewer
+        resource={{
+          uri: "course://assignment/week-one",
+          title: "Week one",
+          mediaType: "text/markdown",
+          data: new TextEncoder().encode(
+            "# **Week 1**\n\nRead the [tutorial](https://example.edu/tutorial).\n\n" +
+              "1. **Build** an agent.\n2. Document what happened.\n\nBe creative\\!",
+          ),
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "Week 1" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "tutorial" })).toHaveAttribute(
+      "href",
+      "https://example.edu/tutorial",
+    );
+    expect(screen.getByRole("list")).toHaveTextContent("Build an agent");
+    expect(screen.getByText("Be creative!")).toBeInTheDocument();
+  });
+
+  it("contain-fits PDF pages in width- and height-constrained workspaces", () => {
+    expect(fitPdfPageToArea(1920, 1080, 960, 600)).toEqual({
+      scale: 0.5,
+      width: 960,
+      height: 540,
+    });
+    expect(fitPdfPageToArea(1920, 1080, 800, 300)).toEqual({
+      scale: 300 / 1080,
+      width: 533,
+      height: 300,
+    });
+    expect(fitPdfPageToArea(1920, 1080, 0, 600)).toBeNull();
+  });
 });
 
 describe("DraftDocument", () => {
+  it("uses one title and readable metadata for a finished assignment", () => {
+    render(
+      <DraftDocument
+        content={
+          "# Agent observation\n\nObserve one agent interaction.\n\n## Submission\n\nShare a link."
+        }
+        description="Due Friday, September 18, 2026 · 3:00 PM -04:00"
+        status="final"
+        title="Agent observation"
+      />,
+    );
+
+    expect(screen.getByRole("heading", { level: 1, name: "Agent observation" })).toBeVisible();
+    const deadline = screen.getByText("Due Friday, September 18, 2026 · 3:00 PM");
+    expect(deadline.tagName).toBe("P");
+    expect(deadline).not.toHaveTextContent("-04:00");
+    expect(screen.getByRole("heading", { name: "Submission" })).toBeVisible();
+    expect(screen.queryByText("final")).not.toBeInTheDocument();
+    expect(screen.getByRole("article", { name: "Agent observation" })).toHaveAttribute(
+      "data-content-only",
+      "true",
+    );
+  });
+
   it("uses semantic field controls and renders validation guidance inline", () => {
     render(
       <DraftDocument
@@ -156,6 +219,7 @@ describe("DraftDocument", () => {
     );
     expect(name).toHaveValue("Ada Example");
   });
+
 });
 
 describe("Calendar", () => {

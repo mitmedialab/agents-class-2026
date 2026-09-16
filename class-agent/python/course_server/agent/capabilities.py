@@ -24,6 +24,7 @@ from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
 from pydantic import (
+    AwareDatetime,
     BaseModel,
     ConfigDict,
     Field,
@@ -41,6 +42,7 @@ from course_server.course_application import (
     SCHOOL_OPTIONS,
     CourseApplication,
 )
+from course_server.resource_text import ResourceTextExtractionError, extract_resource_text
 from course_server.uploads import (
     APPLICATION_PHOTO_MEDIA_TYPES,
     MAX_UPLOAD_BYTES,
@@ -53,10 +55,16 @@ from course_server.workspace.constants import WORKSPACE_TOOL_IDS
 READ_SYLLABUS_TOOL_ID = "course.read_syllabus"
 READ_PUBLIC_FILE_TOOL_ID = "course.read_public_file"
 GET_SCHEDULE_TOOL_ID = "course.get_schedule"
+COURSE_LIST_ASSIGNMENTS_TOOL_ID = "course.list_assignments"
+COURSE_GET_ASSIGNMENT_TOOL_ID = "course.get_assignment"
 GET_APPLICATION_TOOL_ID = "course.get_application"
 SHOW_PUBLIC_FILES_TOOL_ID = "course.show_public_files"
 SEARCH_FAQ_TOOL_ID = "course.search_faq"
+LIST_FAQ_UPDATES_TOOL_ID = "course.list_faq_updates"
+READ_FAQ_UPDATE_TOOL_ID = "course.read_faq_update"
 SEARCH_COURSE_TOOL_ID = "course.search"
+LIST_MY_COMMUNICATIONS_TOOL_ID = "course.list_my_communications"
+READ_MY_COMMUNICATION_TOOL_ID = "course.read_my_communication"
 SUBMIT_APPLICATION_TOOL_ID = "course.submit_application"
 ASK_TA_TOOL_ID = "course.ask_ta"
 READ_UPLOAD_TOOL_ID = "upload.read"
@@ -65,6 +73,7 @@ READ_PRIVATE_RESOURCE_TOOL_ID = "course.read_private_resource"
 INSTRUCTOR_LIST_APPLICATIONS_TOOL_ID = "instructor.list_applications"
 INSTRUCTOR_READ_APPLICATION_TOOL_ID = "instructor.read_application"
 INSTRUCTOR_INSPECT_APPLICATION_IMAGES_TOOL_ID = "instructor.inspect_application_images"
+INSTRUCTOR_MESSAGE_STUDENTS_TOOL_ID = "instructor.message_students"
 WEB_SEARCH_TOOL_ID = "web.search"
 WEB_IMAGE_SEARCH_TOOL_ID = "web.search_images"
 WEB_IMAGE_INSPECT_TOOL_ID = "web.inspect_images"
@@ -95,6 +104,36 @@ _MAX_APPLICATION_RECORD_BYTES = 256 * 1024
 StoragePolicy = Literal["server_full", "server_summary", "local_only", "ephemeral"]
 ResourceVisibility = Literal["public", "students", "instructors"]
 ResourceStatus = Literal["published", "provisional"]
+
+
+class ResourceAnnouncement(BaseModel):
+    """Explicit, maintained release note for a registered course resource."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    revision: str = Field(min_length=1, max_length=120, pattern=r"^[A-Za-z0-9._-]+$")
+    published_at: AwareDatetime
+    summary: str = Field(min_length=1, max_length=500)
+
+
+class ResourceDeadline(BaseModel):
+    """Optional upcoming assignment metadata kept beside its source resource."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: Literal["assignment"] = "assignment"
+    due_at: AwareDatetime
+
+
+class ResourceFeedMetadata(BaseModel):
+    """Path-free resource metadata used by trusted notification projections."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    uri: str
+    title: str
+    announcement: ResourceAnnouncement | None = None
+    deadline: ResourceDeadline | None = None
 
 
 class CapabilityCatalogError(RuntimeError):
@@ -822,7 +861,7 @@ class PublicVisitWebpageTool:
 
 @dataclass(frozen=True)
 class ResourceDefinition:
-    """Registered text resource backed by a repository-owned file."""
+    """Registered course resource backed by a repository-owned file."""
 
     uri: str
     title: str
@@ -832,6 +871,8 @@ class ResourceDefinition:
     visibility: ResourceVisibility = "public"
     status: ResourceStatus = "published"
     assets: dict[str, Path] = field(default_factory=dict)
+    announcement: ResourceAnnouncement | None = None
+    deadline: ResourceDeadline | None = None
 
 
 class ResourceRegistryEntry(BaseModel):
@@ -847,6 +888,8 @@ class ResourceRegistryEntry(BaseModel):
     assets: dict[str, str] = Field(default_factory=dict)
     visibility: Literal["public"] = "public"
     status: ResourceStatus = "published"
+    announcement: ResourceAnnouncement | None = None
+    deadline: ResourceDeadline | None = None
 
 
 class ResourceRegistry(BaseModel):
@@ -869,6 +912,8 @@ class ProtectedResourceManifestEntry(BaseModel):
     assets: dict[str, str] = Field(default_factory=dict)
     visibility: Literal["students", "instructors"]
     status: ResourceStatus = "published"
+    announcement: ResourceAnnouncement | None = None
+    deadline: ResourceDeadline | None = None
 
 
 class ProtectedResourceManifest(BaseModel):
@@ -933,6 +978,8 @@ class CourseResourceCatalog(ResourceProvider, Protocol):
 
     def authorized_resource_uris(self, principal: PrincipalContext) -> tuple[str, ...]: ...
 
+    def list_feed_metadata(self, principal: PrincipalContext) -> list[ResourceFeedMetadata]: ...
+
     def is_public(self, uri: str) -> bool: ...
 
     def asset_ids(self, uri: str) -> tuple[str, ...]: ...
@@ -963,9 +1010,9 @@ class FileResourceProvider:
         resource_file = await self.read_file(uri)
         resource = self._resources[uri]
         try:
-            text = resource_file.data.decode("utf-8")
-        except UnicodeDecodeError as error:
-            raise ResourceNotFound(f"{uri} is not a UTF-8 text resource") from error
+            text = extract_resource_text(resource_file.data, resource_file.media_type)
+        except ResourceTextExtractionError as error:
+            raise ResourceNotFound(f"{uri} is not a readable course resource") from error
         return ResourceContents(
             uri=resource_file.uri,
             title=resource_file.title,
@@ -1044,6 +1091,19 @@ class FileResourceProvider:
 
     def authorized_resource_uris(self, principal: PrincipalContext) -> tuple[str, ...]:
         return tuple(resource.uri for resource in self.list_authorized(principal))
+
+    def list_feed_metadata(self, principal: PrincipalContext) -> list[ResourceFeedMetadata]:
+        return [
+            ResourceFeedMetadata(
+                uri=resource.uri,
+                title=resource.title,
+                announcement=resource.announcement,
+                deadline=resource.deadline,
+            )
+            for resource in self._resources.values()
+            if _resource_visible_to_principal(resource.visibility, principal)
+            and (resource.announcement is not None or resource.deadline is not None)
+        ]
 
     def is_public(self, uri: str) -> bool:
         resource = self._resources.get(uri)
@@ -1161,6 +1221,8 @@ def load_resource_definitions(
                 visibility=entry.visibility,
                 status=entry.status,
                 assets=assets,
+                announcement=entry.announcement,
+                deadline=entry.deadline,
             )
         )
     return resources
@@ -1244,6 +1306,8 @@ def load_protected_resource_definitions(data_path: Path) -> list[ResourceDefinit
                     visibility=entry.visibility,
                     status=entry.status,
                     assets=assets,
+                    announcement=entry.announcement,
+                    deadline=entry.deadline,
                 )
             )
     return resources
@@ -1761,7 +1825,10 @@ class CourseSearchFaqTool:
     """Search only the published public FAQ resource."""
 
     id = SEARCH_FAQ_TOOL_ID
-    description = "Search published answers in the public course FAQ."
+    description = (
+        "Search staff-approved public course Q&A: published FAQ questions and answers. "
+        "Use this for shared Q&A, not private student-staff communication history."
+    )
     input_schema = CourseSearchTool.input_schema
 
     def __init__(self, resources: CourseResourceCatalog) -> None:
@@ -2505,10 +2572,18 @@ class CourseCapabilityPolicy:
         *,
         browser_enabled: bool = False,
         mail_enabled: bool = False,
+        assignments_enabled: bool = False,
+        instructor_messaging_enabled: bool = False,
+        student_communications_enabled: bool = False,
+        faq_updates_enabled: bool = False,
     ) -> None:
         self._resources = resources
         self._browser_enabled = browser_enabled
         self._mail_enabled = mail_enabled
+        self._assignments_enabled = assignments_enabled
+        self._instructor_messaging_enabled = instructor_messaging_enabled
+        self._student_communications_enabled = student_communications_enabled
+        self._faq_updates_enabled = faq_updates_enabled
 
     def authorize(self, principal: PrincipalContext) -> AuthorizedCapabilities:
         if self._resources is None:
@@ -2533,8 +2608,8 @@ class CourseCapabilityPolicy:
         else:
             visible_resources = self._resources.list_authorized(principal)
             public_uris = {resource.uri for resource in self._resources.list_public()}
-        resource_uris = tuple(resource.uri for resource in visible_resources)
-        has_private_resources = any(uri not in public_uris for uri in resource_uris)
+        visible_resource_uris = tuple(resource.uri for resource in visible_resources)
+        has_private_resources = any(uri not in public_uris for uri in visible_resource_uris)
         instructor_tools = (
             (
                 INSTRUCTOR_LIST_APPLICATIONS_TOOL_ID,
@@ -2542,6 +2617,16 @@ class CourseCapabilityPolicy:
                 INSTRUCTOR_INSPECT_APPLICATION_IMAGES_TOOL_ID,
             )
             if principal.authenticated and "instructor" in principal.roles
+            else ()
+        )
+        assignment_tools = (
+            (
+                COURSE_LIST_ASSIGNMENTS_TOOL_ID,
+                COURSE_GET_ASSIGNMENT_TOOL_ID,
+            )
+            if self._assignments_enabled
+            and principal.authenticated
+            and {"student", "ta", "instructor"}.intersection(principal.roles)
             else ()
         )
         return AuthorizedCapabilities(
@@ -2552,6 +2637,11 @@ class CourseCapabilityPolicy:
                 GET_APPLICATION_TOOL_ID,
                 SHOW_PUBLIC_FILES_TOOL_ID,
                 SEARCH_FAQ_TOOL_ID,
+                *(
+                    (LIST_FAQ_UPDATES_TOOL_ID, READ_FAQ_UPDATE_TOOL_ID)
+                    if self._faq_updates_enabled
+                    else ()
+                ),
                 SEARCH_COURSE_TOOL_ID,
                 READ_UPLOAD_TOOL_ID,
                 SUBMIT_APPLICATION_TOOL_ID,
@@ -2566,6 +2656,21 @@ class CourseCapabilityPolicy:
                     else ()
                 ),
                 *instructor_tools,
+                *assignment_tools,
+                *(
+                    (LIST_MY_COMMUNICATIONS_TOOL_ID, READ_MY_COMMUNICATION_TOOL_ID)
+                    if self._student_communications_enabled
+                    and principal.authenticated
+                    and "student" in principal.roles
+                    else ()
+                ),
+                *(
+                    (INSTRUCTOR_MESSAGE_STUDENTS_TOOL_ID,)
+                    if self._instructor_messaging_enabled
+                    and principal.authenticated
+                    and "instructor" in principal.roles
+                    else ()
+                ),
                 *(BROWSER_TOOL_IDS if self._browser_enabled else ()),
                 *(
                     (ASK_TA_TOOL_ID,)
@@ -2575,10 +2680,12 @@ class CourseCapabilityPolicy:
                     else ()
                 ),
             ),
-            resource_uris=resource_uris,
-            resource_index=tuple(
-                resource.title + (f" — {resource.description}" if resource.description else "")
-                for resource in visible_resources
+            resource_uris=visible_resource_uris,
+            resource_index=(
+                *(
+                    resource.title + (f" — {resource.description}" if resource.description else "")
+                    for resource in visible_resources
+                ),
             ),
         )
 

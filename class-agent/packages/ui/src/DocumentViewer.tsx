@@ -36,7 +36,39 @@ interface TextRange {
   end: number;
 }
 
+interface PdfPageFit {
+  scale: number;
+  width: number;
+  height: number;
+}
+
 const decoder = new TextDecoder();
+
+export function fitPdfPageToArea(
+  pageWidth: number,
+  pageHeight: number,
+  areaWidth: number,
+  areaHeight: number,
+): PdfPageFit | null {
+  if (
+    !Number.isFinite(pageWidth) ||
+    !Number.isFinite(pageHeight) ||
+    !Number.isFinite(areaWidth) ||
+    !Number.isFinite(areaHeight) ||
+    pageWidth <= 0 ||
+    pageHeight <= 0 ||
+    areaWidth <= 0 ||
+    areaHeight <= 0
+  ) {
+    return null;
+  }
+  const scale = Math.min(areaWidth / pageWidth, areaHeight / pageHeight);
+  return {
+    scale,
+    width: Math.max(1, Math.min(areaWidth, Math.floor(pageWidth * scale))),
+    height: Math.max(1, Math.min(areaHeight, Math.floor(pageHeight * scale))),
+  };
+}
 
 function occurrences(content: string, query: string): TextRange[] {
   const needle = query.trim().toLocaleLowerCase();
@@ -88,33 +120,177 @@ function markedText(text: string, offset: number, activeRange: TextRange | null)
   );
 }
 
+function plainMarkdown(text: string): string {
+  return text.replaceAll(/\\([\\`*{}\[\]()#+\-.!_>])/g, "$1");
+}
+
+function safeMarkdownHref(value: string): string | null {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.href : null;
+  } catch {
+    return null;
+  }
+}
+
+function inlineMarkdown(
+  text: string,
+  offset: number,
+  range: TextRange | null,
+  keyPrefix: string,
+): ReactNode[] {
+  const pattern = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[[^\]]+\]\([^)]+\))/g;
+  const nodes: ReactNode[] = [];
+  let cursor = 0;
+  let partIndex = 0;
+
+  for (const match of text.matchAll(pattern)) {
+    const start = match.index;
+    if (start > cursor) {
+      const plain = text.slice(cursor, start);
+      nodes.push(
+        <span key={`${keyPrefix}-${partIndex++}`}>
+          {markedText(plainMarkdown(plain), offset + cursor, range)}
+        </span>,
+      );
+    }
+    const raw = match[0];
+    const key = `${keyPrefix}-${partIndex++}`;
+    if (raw.startsWith("**") && raw.endsWith("**")) {
+      const value = plainMarkdown(raw.slice(2, -2));
+      nodes.push(<strong key={key}>{markedText(value, offset + start + 2, range)}</strong>);
+    } else if (raw.startsWith("*") && raw.endsWith("*")) {
+      const value = plainMarkdown(raw.slice(1, -1));
+      nodes.push(<em key={key}>{markedText(value, offset + start + 1, range)}</em>);
+    } else if (raw.startsWith("`") && raw.endsWith("`")) {
+      const value = raw.slice(1, -1);
+      nodes.push(<code key={key}>{markedText(value, offset + start + 1, range)}</code>);
+    } else {
+      const link = /^\[([^\]]+)]\(([^)]+)\)$/.exec(raw);
+      const label = plainMarkdown(link?.[1] ?? raw);
+      const href = link?.[2] ? safeMarkdownHref(link[2]) : null;
+      nodes.push(
+        href ? (
+          <a href={href} key={key} rel="noreferrer" target="_blank">
+            {markedText(label, offset + start + 1, range)}
+          </a>
+        ) : (
+          <span key={key}>{markedText(label, offset + start, range)}</span>
+        ),
+      );
+    }
+    cursor = start + raw.length;
+  }
+  if (cursor < text.length) {
+    const plain = text.slice(cursor);
+    nodes.push(
+      <span key={`${keyPrefix}-${partIndex}`}>
+        {markedText(plainMarkdown(plain), offset + cursor, range)}
+      </span>,
+    );
+  }
+  return nodes;
+}
+
 function MarkdownDocument({ content, range }: { content: string; range: TextRange | null }) {
+  const lines = content.split("\n");
+  const offsets: number[] = [];
   let offset = 0;
-  return (
-    <div className="ca-document-markdown">
-      {content.split("\n").map((line, index) => {
-        const lineOffset = offset;
-        offset += line.length + 1;
-        const body = line.replace(/^#{1,3}\s+/, "");
-        const bodyOffset = lineOffset + line.length - body.length;
-        const value = markedText(body, bodyOffset, range);
-        if (/^#\s+/.test(line)) return <h1 key={index}>{value}</h1>;
-        if (/^##\s+/.test(line)) return <h2 key={index}>{value}</h2>;
-        if (/^###\s+/.test(line)) return <h3 key={index}>{value}</h3>;
-        if (/^[-*]\s+/.test(line)) {
-          const item = line.replace(/^[-*]\s+/, "");
-          return (
-            <div className="ca-document-list-item" key={index}>
-              <span aria-hidden="true">•</span>
-              <span>{markedText(item, lineOffset + line.length - item.length, range)}</span>
-            </div>
-          );
-        }
-        if (!line.trim()) return <div className="ca-document-break" key={index} />;
-        return <p key={index}>{value}</p>;
-      })}
-    </div>
-  );
+  for (const line of lines) {
+    offsets.push(offset);
+    offset += line.length + 1;
+  }
+  const blocks: ReactNode[] = [];
+  let index = 0;
+  while (index < lines.length) {
+    const line = lines[index] ?? "";
+    const trimmed = line.trim();
+    if (!trimmed) {
+      index += 1;
+      continue;
+    }
+    const lineOffset = (offsets[index] ?? 0) + line.indexOf(trimmed);
+    const heading = /^(#{1,3})\s+(.+)$/.exec(trimmed);
+    if (heading?.[2]) {
+      const level = heading[1]?.length ?? 2;
+      const bodyOffset = lineOffset + level + 1;
+      const value = inlineMarkdown(heading[2], bodyOffset, range, `heading-${index}`);
+      blocks.push(
+        level === 1 ? (
+          <h1 key={`heading-${index}`}>{value}</h1>
+        ) : level === 2 ? (
+          <h2 key={`heading-${index}`}>{value}</h2>
+        ) : (
+          <h3 key={`heading-${index}`}>{value}</h3>
+        ),
+      );
+      index += 1;
+      continue;
+    }
+    if (/^[-*]\s+/.test(trimmed)) {
+      const items: ReactNode[] = [];
+      while (index < lines.length) {
+        const candidate = lines[index] ?? "";
+        const candidateTrimmed = candidate.trim();
+        const item = /^[-*]\s+(.+)$/.exec(candidateTrimmed);
+        if (!item?.[1]) break;
+        const candidateOffset =
+          (offsets[index] ?? 0) + candidate.indexOf(candidateTrimmed) + 2;
+        items.push(
+          <li key={`bullet-${index}`}>
+            {inlineMarkdown(item[1], candidateOffset, range, `bullet-${index}`)}
+          </li>,
+        );
+        index += 1;
+      }
+      blocks.push(<ul key={`bullets-${index}`}>{items}</ul>);
+      continue;
+    }
+    if (/^\d+[.)]\s+/.test(trimmed)) {
+      const items: ReactNode[] = [];
+      while (index < lines.length) {
+        const candidate = lines[index] ?? "";
+        const candidateTrimmed = candidate.trim();
+        const item = /^(\d+[.)]\s+)(.+)$/.exec(candidateTrimmed);
+        if (!item?.[2]) break;
+        const candidateOffset =
+          (offsets[index] ?? 0) + candidate.indexOf(candidateTrimmed) + (item[1]?.length ?? 0);
+        items.push(
+          <li key={`number-${index}`}>
+            {inlineMarkdown(item[2], candidateOffset, range, `number-${index}`)}
+          </li>,
+        );
+        index += 1;
+      }
+      blocks.push(<ol key={`numbers-${index}`}>{items}</ol>);
+      continue;
+    }
+    const paragraph: ReactNode[] = [];
+    while (index < lines.length) {
+      const candidate = lines[index] ?? "";
+      const candidateTrimmed = candidate.trim();
+      if (
+        !candidateTrimmed ||
+        /^#{1,3}\s+/.test(candidateTrimmed) ||
+        /^[-*]\s+/.test(candidateTrimmed) ||
+        /^\d+[.)]\s+/.test(candidateTrimmed)
+      ) {
+        break;
+      }
+      if (paragraph.length) paragraph.push(" ");
+      paragraph.push(
+        ...inlineMarkdown(
+          candidateTrimmed,
+          (offsets[index] ?? 0) + candidate.indexOf(candidateTrimmed),
+          range,
+          `paragraph-${index}`,
+        ),
+      );
+      index += 1;
+    }
+    blocks.push(<p key={`paragraph-${index}`}>{paragraph}</p>);
+  }
+  return <div className="ca-document-markdown">{blocks}</div>;
 }
 
 function SearchBar({
@@ -177,12 +353,48 @@ function PdfDocument({
   onPageChange: ((page: number) => void) | undefined;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const pageAreaRef = useRef<HTMLDivElement>(null);
   const [document, setDocument] = useState<import("pdfjs-dist").PDFDocumentProxy | null>(null);
   const [page, setPage] = useState(initialPage);
   const [pageText, setPageText] = useState("");
+  const [pageArea, setPageArea] = useState({ width: 0, height: 0 });
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => setPage(initialPage), [initialPage]);
+  useEffect(() => {
+    const element = pageAreaRef.current;
+    if (!element) return;
+    const observedElement = element;
+
+    function updateSize(width: number, height: number) {
+      const next = {
+        width: Math.floor(width),
+        height: Math.floor(height),
+      };
+      if (next.width < 1 || next.height < 1) return;
+      setPageArea((current) =>
+        current.width === next.width && current.height === next.height ? current : next,
+      );
+    }
+
+    function measure() {
+      updateSize(observedElement.clientWidth, observedElement.clientHeight);
+    }
+
+    measure();
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(([entry]) => {
+            if (entry) updateSize(entry.contentRect.width, entry.contentRect.height);
+          });
+    observer?.observe(observedElement);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
   useEffect(() => {
     let disposed = false;
     let loaded: import("pdfjs-dist").PDFDocumentProxy | null = null;
@@ -208,9 +420,10 @@ function PdfDocument({
   }, [resource]);
 
   useEffect(() => {
-    if (!document) return;
+    if (!document || pageArea.width < 1 || pageArea.height < 1) return;
     const pdfDocument = document;
     let cancelled = false;
+    let renderTask: import("pdfjs-dist").RenderTask | null = null;
     async function renderPage() {
       const safePage = Math.min(Math.max(page, 1), pdfDocument.numPages);
       if (safePage !== page) {
@@ -218,21 +431,30 @@ function PdfDocument({
         return;
       }
       const pdfPage = await pdfDocument.getPage(safePage);
-      const viewport = pdfPage.getViewport({ scale: 1.35 });
+      const unscaledViewport = pdfPage.getViewport({ scale: 1 });
+      const fit = fitPdfPageToArea(
+        unscaledViewport.width,
+        unscaledViewport.height,
+        pageArea.width,
+        pageArea.height,
+      );
+      if (!fit || cancelled) return;
+      const viewport = pdfPage.getViewport({ scale: fit.scale });
       const canvas = canvasRef.current;
       const context = canvas?.getContext("2d");
       if (!canvas || !context || cancelled) return;
       const ratio = window.devicePixelRatio || 1;
-      canvas.width = Math.floor(viewport.width * ratio);
-      canvas.height = Math.floor(viewport.height * ratio);
-      canvas.style.width = `${viewport.width}px`;
-      canvas.style.height = `${viewport.height}px`;
-      await pdfPage.render({
+      canvas.width = Math.max(1, Math.floor(viewport.width * ratio));
+      canvas.height = Math.max(1, Math.floor(viewport.height * ratio));
+      canvas.style.width = `${fit.width}px`;
+      canvas.style.height = `${fit.height}px`;
+      renderTask = pdfPage.render({
         canvas,
         canvasContext: context,
         viewport,
         transform: ratio === 1 ? undefined : [ratio, 0, 0, ratio, 0, 0],
-      }).promise;
+      });
+      await renderTask.promise;
       const text = await pdfPage.getTextContent();
       if (!cancelled) {
         setPageText(
@@ -243,11 +465,19 @@ function PdfDocument({
         );
       }
     }
-    void renderPage().catch(() => setError("This PDF page could not be rendered."));
+    void renderPage().catch((cause: unknown) => {
+      if (
+        !cancelled &&
+        (!(cause instanceof Error) || cause.name !== "RenderingCancelledException")
+      ) {
+        setError("This PDF page could not be rendered.");
+      }
+    });
     return () => {
       cancelled = true;
+      renderTask?.cancel();
     };
-  }, [document, page]);
+  }, [document, page, pageArea]);
 
   const activeRange = useMemo(() => {
     if (query.trim()) return occurrences(pageText, query)[0] ?? null;
@@ -285,8 +515,10 @@ function PdfDocument({
           Next
         </button>
       </div>
-      <div className="ca-pdf-page">
-        <canvas aria-label={`PDF page ${page}`} ref={canvasRef} />
+      <div className="ca-pdf-stage" ref={pageAreaRef}>
+        <div className="ca-pdf-page">
+          <canvas aria-label={`PDF page ${page}`} ref={canvasRef} />
+        </div>
       </div>
       {pageText ? (
         <details className="ca-pdf-text" open={Boolean(activeRange)}>
@@ -357,7 +589,11 @@ export function DocumentViewer({
           onSubmit={submitSearch}
         />
       </header>
-      <div className="ca-document-content" ref={contentRef}>
+      <div
+        className="ca-document-content"
+        data-media-type={resource.mediaType}
+        ref={contentRef}
+      >
         {resource.mediaType === "application/pdf" ? (
           <PdfDocument
             highlight={highlight}

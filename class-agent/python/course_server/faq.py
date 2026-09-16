@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any, Literal, Protocol
+from typing import Annotated, Any, ClassVar, Literal, Protocol
 from uuid import UUID, uuid4
 
 from psycopg_pool import AsyncConnectionPool
@@ -13,6 +14,7 @@ from pydantic import (
     AwareDatetime,
     BaseModel,
     ConfigDict,
+    JsonValue,
     StringConstraints,
     ValidationError,
     model_validator,
@@ -21,11 +23,16 @@ from pydantic import (
 from agent_core import PrincipalContext
 from course_server.agent.capabilities import (
     COURSE_FAQ_URI,
+    LIST_FAQ_UPDATES_TOOL_ID,
+    READ_FAQ_UPDATE_TOOL_ID,
     CourseResourceCatalog,
     CourseSearchResult,
     ResourceContents,
+    ResourceFeedMetadata,
     ResourceFile,
     ResourceSummary,
+    ToolExecutionContext,
+    ToolExecutionResult,
 )
 from course_server.auth.store import AuthStore
 
@@ -74,6 +81,8 @@ class FaqKnowledgeStore(Protocol):
 
 
 class FaqNotificationStore(Protocol):
+    async def list_all(self) -> list[CourseNotification]: ...
+
     async def list_unread(self, user_id: UUID) -> list[CourseNotification]: ...
 
     async def mark_read(
@@ -142,6 +151,17 @@ class InMemoryFaqStore:
             key=lambda entry: entry.created_at,
         )
 
+    async def list_all(self) -> list[CourseNotification]:
+        return sorted(
+            (
+                notification
+                for notification in self.notifications.values()
+                if self.entries[notification.faq_entry_id].active
+            ),
+            key=lambda notification: (notification.published_at, notification.id),
+            reverse=True,
+        )
+
     async def list_unread(self, user_id: UUID) -> list[CourseNotification]:
         return sorted(
             (
@@ -198,6 +218,10 @@ class LocalFaqDocument(FaqModel):
 
 class FaqKnowledgeError(RuntimeError):
     """The local public FAQ file is malformed or conflicts with publication state."""
+
+
+class FaqUpdateNotFound(LookupError):
+    """No active public FAQ entry has the requested opaque identifier."""
 
 
 class LocalFaqKnowledgeStore:
@@ -267,6 +291,155 @@ class LocalFaqKnowledgeStore:
         except OSError as error:
             temporary_path.unlink(missing_ok=True)
             raise FaqKnowledgeError(f"cannot write local FAQ knowledge: {self._path}") from error
+
+
+class CourseListFaqUpdatesTool:
+    """List recent staff-approved public Q&A without requiring a topical query."""
+
+    id = LIST_FAQ_UPDATES_TOOL_ID
+    description = (
+        "List recent staff-approved public course Q&A/FAQ additions. Use this when the user asks "
+        "what Q&A is new or available without naming a topic; use course.search_faq for a "
+        "topic-specific question."
+    )
+    input_schema: ClassVar[dict[str, JsonValue]] = {
+        "type": "object",
+        "properties": {
+            "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 25,
+                "description": "Maximum number of newest public Q&A entries to return.",
+            },
+            "offset": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10_000,
+                "description": "Number of newer entries to skip for pagination.",
+            },
+        },
+        "additionalProperties": False,
+    }
+
+    def __init__(self, faqs: FaqKnowledgeStore) -> None:
+        self._faqs = faqs
+
+    async def execute(
+        self,
+        arguments: Mapping[str, JsonValue],
+        context: ToolExecutionContext,
+    ) -> ToolExecutionResult:
+        if set(arguments) - {"limit", "offset"}:
+            raise ValueError("unexpected tool arguments")
+        if COURSE_FAQ_URI not in context.permitted_resource_uris:
+            raise PermissionError("public course Q&A is not authorized for this run")
+        limit = _bounded_integer(arguments.get("limit", 10), name="limit", minimum=1, maximum=25)
+        offset = _bounded_integer(
+            arguments.get("offset", 0),
+            name="offset",
+            minimum=0,
+            maximum=10_000,
+        )
+        entries = sorted(
+            await self._faqs.list_active(),
+            key=lambda entry: (entry.created_at, str(entry.id)),
+            reverse=True,
+        )
+        selected = entries[offset : offset + limit]
+        next_offset = offset + len(selected)
+        return ToolExecutionResult(
+            content={
+                "entries": [
+                    {
+                        "faq_entry_id": str(entry.id),
+                        "question": entry.question,
+                        "answer_preview": _preview(entry.answer),
+                        "published_at": entry.created_at.isoformat(),
+                    }
+                    for entry in selected
+                ],
+                "total": len(entries),
+                "next_offset": next_offset if next_offset < len(entries) else None,
+            },
+            summary=f"Listed {len(selected)} staff-approved public Q&A updates.",
+            storage_policy="server_full",
+            resource_uris=[COURSE_FAQ_URI],
+        )
+
+
+class CourseReadFaqUpdateTool:
+    """Read one complete staff-approved public Q&A entry."""
+
+    id = READ_FAQ_UPDATE_TOOL_ID
+    description = (
+        "Read one complete staff-approved public course Q&A/FAQ entry using an ID returned by "
+        "course.list_faq_updates."
+    )
+    input_schema: ClassVar[dict[str, JsonValue]] = {
+        "type": "object",
+        "properties": {
+            "faq_entry_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Opaque public FAQ entry ID from course.list_faq_updates.",
+            }
+        },
+        "required": ["faq_entry_id"],
+        "additionalProperties": False,
+    }
+
+    def __init__(self, faqs: FaqKnowledgeStore) -> None:
+        self._faqs = faqs
+
+    async def execute(
+        self,
+        arguments: Mapping[str, JsonValue],
+        context: ToolExecutionContext,
+    ) -> ToolExecutionResult:
+        if set(arguments) != {"faq_entry_id"}:
+            raise ValueError("faq_entry_id is required")
+        if COURSE_FAQ_URI not in context.permitted_resource_uris:
+            raise PermissionError("public course Q&A is not authorized for this run")
+        raw_id = arguments.get("faq_entry_id")
+        if not isinstance(raw_id, str):
+            raise ValueError("faq_entry_id must be a UUID")
+        try:
+            entry_id = UUID(raw_id)
+        except ValueError as error:
+            raise ValueError("faq_entry_id must be a UUID") from error
+        entry = next(
+            (entry for entry in await self._faqs.list_active() if entry.id == entry_id),
+            None,
+        )
+        if entry is None:
+            raise FaqUpdateNotFound("public Q&A entry not found")
+        return ToolExecutionResult(
+            content={
+                "faq_entry_id": str(entry.id),
+                "question": entry.question,
+                "answer": entry.answer,
+                "published_at": entry.created_at.isoformat(),
+            },
+            summary="Read one staff-approved public Q&A update.",
+            storage_policy="server_full",
+            resource_uris=[COURSE_FAQ_URI],
+        )
+
+
+def _bounded_integer(
+    value: object,
+    *,
+    name: str,
+    minimum: int,
+    maximum: int,
+) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or not minimum <= value <= maximum:
+        raise ValueError(f"{name} must be between {minimum} and {maximum}")
+    return value
+
+
+def _preview(text: str, limit: int = 500) -> str:
+    return text if len(text) <= limit else text[: limit - 3] + "..."
 
 
 class CoordinatedFaqPublisher:
@@ -367,6 +540,20 @@ class PostgresFaqStore:
                 )
             ).fetchall()
         return [PublishedFaqEntry.model_validate(row) for row in rows]
+
+    async def list_all(self) -> list[CourseNotification]:
+        async with self._pool.connection() as connection:
+            rows = await (
+                await connection.execute(
+                    """
+                    SELECT n.id, n.faq_entry_id, f.question, f.answer, n.published_at
+                    FROM course_notifications AS n
+                    JOIN faq_entries AS f ON f.id = n.faq_entry_id AND f.active
+                    ORDER BY n.published_at DESC, n.id
+                    """
+                )
+            ).fetchall()
+        return [CourseNotification.model_validate(row) for row in rows]
 
     async def list_unread(self, user_id: UUID) -> list[CourseNotification]:
         async with self._pool.connection() as connection:
@@ -470,6 +657,9 @@ class PublishedFaqResourceCatalog:
 
     def authorized_resource_uris(self, principal: PrincipalContext) -> tuple[str, ...]:
         return self._base.authorized_resource_uris(principal)
+
+    def list_feed_metadata(self, principal: PrincipalContext) -> list[ResourceFeedMetadata]:
+        return self._base.list_feed_metadata(principal)
 
     def is_public(self, uri: str) -> bool:
         return self._base.is_public(uri)

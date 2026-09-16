@@ -30,8 +30,8 @@
     },
     {
       "uri": "course://faq",
-      "title": "Course Information Index",
-      "description": "Pointers to canonical course resources by topic.",
+      "title": "Course Q&A and Information Index",
+      "description": "Staff-approved public Q&A plus pointers to canonical course resources by topic.",
       "media_type": "text/markdown",
       "path": "course/faq/faq.md",
       "visibility": "public",
@@ -60,6 +60,15 @@
       "description": "Capacity, deadlines, weekly build expectations, required fields, and submission requirements.",
       "media_type": "text/markdown",
       "path": "course/application/application.md",
+      "visibility": "public",
+      "status": "published"
+    },
+    {
+      "uri": "course://slides/week-01",
+      "title": "Week 1 Slides",
+      "description": "Slides for the first course meeting.",
+      "media_type": "application/pdf",
+      "path": "course/slides/week-01/week-01-slides.pdf",
       "visibility": "public",
       "status": "published"
     }

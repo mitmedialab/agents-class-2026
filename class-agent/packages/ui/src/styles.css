@@ -6,6 +6,11 @@
   --color-text-muted: #8b8b86;
   --color-border: #2a2a28;
   --color-accent: #f5f5f2;
+  --color-notification-update: #2375f5;
+  --color-notification-message: #d9842b;
+  --color-notification-reply: #2d9d68;
+  --color-notification-question: #8761cc;
+  --color-notification-deadline: #d94b46;
   --radius-sm: 0.45rem;
   --radius-md: 0.8rem;
   --radius-lg: 1.2rem;
@@ -1204,6 +1209,7 @@
   text-transform: uppercase;
 }
 
+.ca-draft-document-header h1,
 .ca-draft-document-header h2 {
   font-size: clamp(1.45rem, 3vw, 2.4rem);
   font-weight: 500;
@@ -1226,6 +1232,25 @@
   color: var(--color-text);
   flex: none;
   padding: var(--space-2) var(--space-3);
+}
+
+.ca-draft-document[data-content-only="true"] .ca-draft-document-header {
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: var(--space-8);
+  padding-bottom: var(--space-6);
+}
+
+.ca-draft-document[data-content-only="true"] .ca-draft-document-header p {
+  color: color-mix(in srgb, var(--color-text) 74%, var(--color-text-muted));
+  font-variant-numeric: tabular-nums;
+}
+
+.ca-draft-document[data-content-only="true"]
+  .ca-draft-document-header
+  p.ca-draft-document-deadline {
+  color: color-mix(in srgb, var(--color-notification-deadline) 76%, var(--color-text));
+  font-weight: 500;
+  letter-spacing: -0.01em;
 }
 
 .ca-draft-fields {
@@ -1631,6 +1656,7 @@
 }
 
 .ca-document-content {
+  box-sizing: border-box;
   flex: 1;
   min-height: 0;
   overflow: auto;
@@ -1678,14 +1704,33 @@
   margin: 0;
 }
 
-.ca-document-list-item {
-  display: grid;
-  gap: var(--space-2);
-  grid-template-columns: 0.75rem minmax(0, 1fr);
+.ca-document-markdown p + p,
+.ca-document-markdown p + ul,
+.ca-document-markdown p + ol,
+.ca-document-markdown ul + p,
+.ca-document-markdown ol + p {
+  margin-top: 0.9rem;
 }
 
-.ca-document-break {
-  height: 0.9rem;
+.ca-document-markdown ul,
+.ca-document-markdown ol {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0.9rem 0;
+  padding-left: 1.5rem;
+}
+
+.ca-document-markdown a {
+  color: inherit;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+.ca-document-markdown code {
+  background: var(--color-surface-raised);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.88em;
+  padding: 0.08em 0.25em;
 }
 
 .ca-document-content mark,
@@ -1696,9 +1741,16 @@
 }
 
 .ca-pdf-viewer {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: var(--space-4);
-  justify-items: center;
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+}
+
+.ca-document-content[data-media-type="application/pdf"] {
+  overflow: hidden;
 }
 
 .ca-pdf-pagination {
@@ -1706,23 +1758,39 @@
   display: flex;
   font-size: 0.75rem;
   gap: var(--space-4);
+  justify-content: center;
+}
+
+.ca-pdf-stage {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  width: 100%;
 }
 
 .ca-pdf-page {
   background: #ffffff;
   box-shadow: 0 0 0 1px var(--color-border);
+  flex: none;
+  max-height: 100%;
   max-width: 100%;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .ca-pdf-page canvas {
   display: block;
-  max-width: none;
 }
 
 .ca-pdf-text {
   border-top: 1px solid var(--color-border);
+  flex: none;
+  max-height: 40%;
   max-width: 48rem;
+  overflow: auto;
   padding-top: var(--space-3);
   width: 100%;
 }

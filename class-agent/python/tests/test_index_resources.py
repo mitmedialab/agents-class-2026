@@ -37,6 +37,15 @@ def test_resource_registry_is_generated_from_sidecar_manifests(tmp_path: Path) -
                     "assets": {"guide_portrait": "portrait.jpg"},
                     "visibility": "public",
                     "status": "published",
+                    "announcement": {
+                        "revision": "fall-2026-v1",
+                        "published_at": "2026-09-05T12:00:00Z",
+                        "summary": "The guide is now available.",
+                    },
+                    "deadline": {
+                        "kind": "assignment",
+                        "due_at": "2026-09-17T23:59:00-04:00",
+                    },
                 },
             }
         ),
@@ -48,3 +57,5 @@ def test_resource_registry_is_generated_from_sidecar_manifests(tmp_path: Path) -
     generated = json.loads(registry_path.read_text(encoding="utf-8"))
     assert generated["resources"][0]["path"] == "course/guide/guide.md"
     assert generated["resources"][0]["assets"] == {"guide_portrait": "course/guide/portrait.jpg"}
+    assert generated["resources"][0]["announcement"]["revision"] == "fall-2026-v1"
+    assert generated["resources"][0]["deadline"]["kind"] == "assignment"

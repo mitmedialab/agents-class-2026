@@ -40,6 +40,29 @@ const FIELD_STATUS_LABELS: Record<DraftFieldStatus, string> = {
   confirmed: "Confirmed",
 };
 
+function normalizedHeadingText(value: string): string {
+  return value
+    .replaceAll(/\[([^\]]+)]\([^)]+\)/g, "$1")
+    .replaceAll(/[*_`]+/g, "")
+    .replaceAll(/\\([\\`*{}\[\]()#+\-.!_>])/g, "$1")
+    .replaceAll(/\s+/g, " ")
+    .trim()
+    .toLocaleLowerCase();
+}
+
+function withoutRedundantTitleHeading(content: string, title: string): string {
+  const leadingHeading = /^(?:\uFEFF)?[ \t]*#[ \t]+([^\r\n]+)[ \t]*(?:\r?\n|$)/.exec(
+    content,
+  );
+  if (
+    !leadingHeading?.[1] ||
+    normalizedHeadingText(leadingHeading[1]) !== normalizedHeadingText(title)
+  ) {
+    return content;
+  }
+  return content.slice(leadingHeading[0].length).replace(/^(?:[ \t]*\r?\n)+/, "");
+}
+
 function resizeToContent(element: HTMLTextAreaElement): void {
   element.style.height = "0px";
   element.style.height = `${element.scrollHeight}px`;
@@ -183,36 +206,52 @@ export function DraftDocument({
     nextMissingIndex < 0 ? fields : fields.slice(0, nextMissingIndex + 1);
   const activeFieldId = nextMissingIndex < 0 ? null : fields[nextMissingIndex]?.id;
   const activeFieldRef = useRef<HTMLLIElement>(null);
+  const displayedContent = content
+    ? withoutRedundantTitleHeading(content, title)
+    : undefined;
+  const contentOnly = fields.length === 0 && Boolean(displayedContent?.trim());
+  const deadline =
+    contentOnly && description?.startsWith("Due ")
+      ? description
+          .slice("Due ".length)
+          .replace(/\s+(?:UTC)?[+-]\d{2}:\d{2}$/, "")
+      : null;
 
   useEffect(() => {
     activeFieldRef.current?.scrollIntoView?.({ block: "center", behavior: "auto" });
   }, [activeFieldId]);
 
   return (
-    <article aria-label={title} className="ca-draft-document">
+    <article
+      aria-label={title}
+      className="ca-draft-document"
+      data-content-only={contentOnly ? "true" : undefined}
+    >
       <header className="ca-draft-document-header">
         <div>
-          <span>{status}</span>
-          <h2>{title}</h2>
-          {description ? <p>{description}</p> : null}
+          {fields.length ? <span>{status}</span> : null}
+          {contentOnly ? <h1>{title}</h1> : <h2>{title}</h2>}
+          {deadline ? (
+            <p className="ca-draft-document-deadline">Due {deadline}</p>
+          ) : description ? (
+            <p>{description}</p>
+          ) : null}
         </div>
         {fields.length ? (
           <strong aria-label={`${populated} of ${fields.length} fields populated`}>
             {populated}/{fields.length}
           </strong>
-        ) : (
-          <strong>{status}</strong>
-        )}
+        ) : null}
       </header>
 
-      {content?.trim() ? (
+      {displayedContent?.trim() ? (
         <div className="ca-draft-content">
           <DocumentViewer
             resource={{
               uri: "draft://document",
               title,
               mediaType: "text/markdown",
-              data: new TextEncoder().encode(content),
+              data: new TextEncoder().encode(displayedContent),
             }}
           />
         </div>

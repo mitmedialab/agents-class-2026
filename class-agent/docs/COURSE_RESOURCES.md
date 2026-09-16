@@ -2,7 +2,7 @@
 
 ## Public catalog
 
-Phase 6 publishes six canonical resources:
+The maintained public catalog currently includes:
 
 ```text
 course://syllabus
@@ -11,6 +11,7 @@ course://repositories
 course://faq
 course://instructors
 course://application
+course://slides/week-01
 ```
 
 Each published file has a `resource.json` sidecar under `shared/course/`. The sidecars
@@ -27,11 +28,44 @@ revealing repository paths. The browser resolves those IDs through the authorize
 `/api/v1/course/resources/asset` endpoint; model-controlled input never selects a file
 path. For example, the staff resource exposes its portraits as registered image assets,
 so a profile composition can use them directly instead of searching the public web.
+Staff portrait asset IDs follow `<normalized_display_name>_portrait`. The notification center
+applies that convention to an authenticated reply sender and uses the portrait only when the
+resulting asset is present in `course://instructors`; otherwise it keeps the semantic type tile.
+This preserves a data-owned image catalog without maintaining a second person-to-file mapping in
+application code.
 
 To add a resource, create its public content and a sibling `resource.json`. The
 manifest's `file` path is relative to its own directory. URI and resolved file paths
 must be unique, and files must remain under `shared/`. Private or student-specific
 content must never receive a public manifest.
+
+For a public course slide deck, use one directory per deck:
+
+```text
+shared/course/slides/week-01/
+├── resource.json
+└── week-01-slides.pdf
+```
+
+```json
+{
+  "schema_version": 1,
+  "resource": {
+    "uri": "course://slides/week-01",
+    "title": "Week 1 Slides",
+    "description": "Slides for the first course meeting.",
+    "media_type": "application/pdf",
+    "file": "week-01-slides.pdf",
+    "visibility": "public",
+    "status": "published",
+    "order": 100
+  }
+}
+```
+
+PDF indexing extracts embedded text by page for Course Agent reads and search while retaining the
+original bytes for the workspace's `document-viewer`. Image-only or scanned slides still render,
+but require a separate OCR workflow before their contents are searchable.
 
 `course_server.index_resources` regenerates the catalog from every sidecar manifest,
 then synchronizes the searchable PostgreSQL copy. Production API and Course Agent CLI
@@ -49,6 +83,39 @@ do not require maintaining or regenerating a second schedule JSON file. The Cour
 and lexical search read that same Markdown through the authorized `course://schedule`
 resource.
 
+## Release notes and generic resource deadlines
+
+Any public or protected resource manifest may add optional notification metadata:
+
+```json
+{
+  "announcement": {
+    "revision": "assignment-1-v1",
+    "published_at": "2026-09-05T12:00:00-04:00",
+    "summary": "Assignment 1 is now available to enrolled students."
+  },
+  "deadline": {
+    "kind": "course_event",
+    "due_at": "2026-09-19T23:59:00-04:00"
+  }
+}
+```
+
+`revision` is a stable release identifier. Change it when a meaningful new release or course edit
+should create a fresh unread item; do not use filesystem modification time. The notification center
+derives a deterministic item ID from the registered URI and revision, and shows it only to
+principals already authorized for that resource. The optional deadline appears during the fourteen
+days before `due_at`. The resource remains the content source, while the manifest owns only
+release/deadline metadata; React and prompts contain neither maintained course content nor due dates.
+Public indexing copies these optional fields into the generated registry. Protected resources
+retain them only in their server-owned sidecars.
+
+Structured course assignments do not live in resource manifests. Their canonical records are one
+validated JSON file each under `ASSIGNMENT_DATA_PATH`, defaulting to `var/assignments/`. They have
+their own agent read/authoring tools and independently drive release and upcoming notifications. See
+[ASSIGNMENTS.md](ASSIGNMENTS.md). Manifest deadlines remain useful for non-assignment course events
+and for deployments that already maintain generic resource deadline metadata.
+
 ## Search refresh
 
 The runtime lexical search reads registered files directly, so content edits are
@@ -62,6 +129,11 @@ marks removed seeded FAQ entries inactive. Staff-approved database FAQ entries h
 agent-facing `course://faq` overlay and lexical search read staff-approved updates from the separate
 local `PUBLISHED_FAQ_PATH` JSON file. Resource indexing never edits or imports that file. It does
 not use embeddings.
+
+The public FAQ capability distinguishes browsing from search. The Course Agent can list recent
+staff-approved Q&A additions and read one by its opaque public entry ID without supplying a topic;
+`course.search_faq` remains available for topic-specific retrieval. Only active entries from the
+public knowledge file appear in either path.
 
 ## Role-scoped resources
 

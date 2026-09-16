@@ -16,7 +16,12 @@ import psycopg
 from pydantic import BaseModel, ConfigDict, Field
 
 from course_server.agent import load_resource_definitions
-from course_server.agent.capabilities import DEFAULT_RESOURCE_REGISTRY_PATH
+from course_server.agent.capabilities import (
+    DEFAULT_RESOURCE_REGISTRY_PATH,
+    ResourceAnnouncement,
+    ResourceDeadline,
+)
+from course_server.resource_text import extract_resource_text
 
 DEFAULT_FAQ_PATH = DEFAULT_RESOURCE_REGISTRY_PATH.parent.parent / "course/faq/faq.json"
 
@@ -48,6 +53,8 @@ class ManifestResource(BaseModel):
     visibility: Literal["public"] = "public"
     status: Literal["published", "provisional"] = "published"
     order: int = 1_000
+    announcement: ResourceAnnouncement | None = None
+    deadline: ResourceDeadline | None = None
 
 
 class ResourceManifest(BaseModel):
@@ -66,6 +73,8 @@ class GeneratedResourceEntry(TypedDict):
     assets: NotRequired[dict[str, str]]
     visibility: str
     status: str
+    announcement: NotRequired[dict[str, object]]
+    deadline: NotRequired[dict[str, object]]
 
 
 def normalize_resource_text(text: str) -> str:
@@ -124,6 +133,10 @@ def refresh_resource_registry(
         )
         if assets:
             entry["assets"] = assets
+        if resource.announcement is not None:
+            entry["announcement"] = resource.announcement.model_dump(mode="json")
+        if resource.deadline is not None:
+            entry["deadline"] = resource.deadline.model_dump(mode="json")
         ordered_entries.append((resource.order, entry))
     ordered_entries.sort(key=lambda item: (item[0], item[1]["uri"]))
     entries = [entry for _, entry in ordered_entries]
@@ -160,9 +173,10 @@ def index_resources(
 
     with psycopg.connect(database_url) as connection, connection.transaction():
         for resource in definitions:
-            text = resource.path.read_text(encoding="utf-8")
+            data = resource.path.read_bytes()
+            text = extract_resource_text(data, resource.media_type)
             normalized_text = normalize_resource_text(text)
-            content_sha256 = hashlib.sha256(text.encode()).hexdigest()
+            content_sha256 = hashlib.sha256(data).hexdigest()
             source_path = resource.path.relative_to(registry_path.parent.parent).as_posix()
             connection.execute(
                 """

@@ -1,4 +1,4 @@
-# Course Information Index
+# Course Q&A and Information Index
 
 | Topic | Canonical resource |
 | --- | --- |
