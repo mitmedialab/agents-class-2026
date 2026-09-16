@@ -73,6 +73,7 @@ READ_MY_COMMUNICATION_TOOL_ID = "course.read_my_communication"
 SUBMIT_APPLICATION_TOOL_ID = "course.submit_application"
 ASK_TA_TOOL_ID = "course.ask_ta"
 READ_UPLOAD_TOOL_ID = "upload.read"
+DOCUMENT_INSPECT_PAGE_TOOL_ID = "document.inspect_page"
 LIST_PRIVATE_RESOURCES_TOOL_ID = "course.list_private_resources"
 READ_PRIVATE_RESOURCE_TOOL_ID = "course.read_private_resource"
 INSTRUCTOR_LIST_APPLICATIONS_TOOL_ID = "instructor.list_applications"
@@ -2749,6 +2750,7 @@ class CourseCapabilityPolicy:
                 ),
                 SEARCH_COURSE_TOOL_ID,
                 READ_UPLOAD_TOOL_ID,
+                DOCUMENT_INSPECT_PAGE_TOOL_ID,
                 SUBMIT_APPLICATION_TOOL_ID,
                 WEB_SEARCH_TOOL_ID,
                 WEB_IMAGE_SEARCH_TOOL_ID,

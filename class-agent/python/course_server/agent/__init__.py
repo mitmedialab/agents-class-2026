@@ -12,6 +12,7 @@ from .capabilities import (
     COURSE_REPOSITORIES_URI,
     COURSE_SCHEDULE_URI,
     COURSE_SYLLABUS_URI,
+    DOCUMENT_INSPECT_PAGE_TOOL_ID,
     GET_APPLICATION_TOOL_ID,
     GET_SCHEDULE_TOOL_ID,
     INSTRUCTOR_INSPECT_APPLICATION_IMAGES_TOOL_ID,
@@ -77,6 +78,7 @@ from .capabilities import (
     load_protected_resource_definitions,
     load_resource_definitions,
 )
+from .document_inspection import DocumentInspectPageTool
 from .service import CourseAgentService
 from .skills import (
     READ_SKILL_REFERENCE_TOOL_ID,
@@ -104,6 +106,7 @@ __all__ = [
     "COURSE_REPOSITORIES_URI",
     "COURSE_SCHEDULE_URI",
     "COURSE_SYLLABUS_URI",
+    "DOCUMENT_INSPECT_PAGE_TOOL_ID",
     "GET_APPLICATION_TOOL_ID",
     "GET_SCHEDULE_TOOL_ID",
     "INSTRUCTOR_INSPECT_APPLICATION_IMAGES_TOOL_ID",
@@ -148,6 +151,7 @@ __all__ = [
     "CourseSearchTool",
     "CourseShowPublicFilesTool",
     "CourseSubmitApplicationTool",
+    "DocumentInspectPageTool",
     "EventAlreadyExists",
     "FileApplicantStore",
     "FileResourceProvider",

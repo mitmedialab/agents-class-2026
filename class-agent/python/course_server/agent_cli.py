@@ -25,6 +25,7 @@ from course_server.agent import (
     CourseSearchTool,
     CourseShowPublicFilesTool,
     CourseSubmitApplicationTool,
+    DocumentInspectPageTool,
     FileApplicantStore,
     FileResourceProvider,
     InstructorInspectApplicationImagesTool,
@@ -98,6 +99,7 @@ from course_server.uploads import (
 from course_server.web_search import (
     BraveWebSearchClient,
     fetch_public_webpage,
+    inspect_document_page_with_openai,
     inspect_images_with_openai,
     inspect_private_images_with_openai,
     probe_public_image_url,
@@ -206,6 +208,16 @@ def build_runtime(
         CourseListAssignmentsTool(assignment_store),
         CourseGetAssignmentTool(assignment_store),
         ReadTemporaryUploadTool(upload_store),
+        DocumentInspectPageTool(
+            course_resources,
+            upload_store,
+            lambda image, prompt: inspect_document_page_with_openai(
+                image,
+                prompt,
+                model_id=settings.model_id,
+                api_key=settings.model_api_key.get_secret_value(),
+            ),
+        ),
         CourseSubmitApplicationTool(applicant_store, upload_store),
         InstructorListApplicationsTool(applicant_store, application_access),
         InstructorReadApplicationTool(applicant_store, application_access),

@@ -68,6 +68,10 @@ uv run python -m course_server.api
 The runtime prompt, authorized tool catalog, and public resource index are constructed
 at API startup. Restart this process after changing Python runtime behavior or resource
 manifests. Public resource file contents themselves are read when a tool is called.
+For a PDF open in the workspace, the current page is canonical conversation state and the agent can
+inspect that single page visually when asked about "this slide." The server derives the document
+from the focused authorized panel, renders a bounded image, and keeps the image bytes out of durable
+history.
 
 In another terminal, run the web app:
 

@@ -18,6 +18,7 @@ from course_server.agent import (
     COURSE_REPOSITORIES_URI,
     COURSE_SCHEDULE_URI,
     COURSE_SYLLABUS_URI,
+    DOCUMENT_INSPECT_PAGE_TOOL_ID,
     GET_APPLICATION_TOOL_ID,
     INSTRUCTOR_INSPECT_APPLICATION_IMAGES_TOOL_ID,
     INSTRUCTOR_LIST_APPLICATIONS_TOOL_ID,
@@ -126,6 +127,7 @@ def test_public_policy_exposes_phase_six_course_capabilities() -> None:
     assert SEARCH_COURSE_TOOL_ID in authorized.tool_ids
     assert GET_APPLICATION_TOOL_ID in authorized.tool_ids
     assert READ_UPLOAD_TOOL_ID in authorized.tool_ids
+    assert DOCUMENT_INSPECT_PAGE_TOOL_ID in authorized.tool_ids
     assert WEB_SEARCH_TOOL_ID in authorized.tool_ids
     assert WEB_IMAGE_SEARCH_TOOL_ID in authorized.tool_ids
     assert VISIT_WEBPAGE_TOOL_ID in authorized.tool_ids

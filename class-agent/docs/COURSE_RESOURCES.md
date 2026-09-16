@@ -64,8 +64,11 @@ shared/course/slides/week-01/
 ```
 
 PDF indexing extracts embedded text by page for Course Agent reads and search while retaining the
-original bytes for the workspace's `document-viewer`. Image-only or scanned slides still render,
-but require a separate OCR workflow before their contents are searchable.
+original bytes for the workspace's `document-viewer`. Image-only or scanned slides still render
+and the agent can inspect the focused page visually on demand through the authorized
+`document.inspect_page` tool, but they require a separate OCR workflow before their contents are
+searchable. The renderer receives only registered course bytes or a principal-owned temporary
+upload; rendered PNG bytes are ephemeral and are not stored in conversation history.
 
 `course_server.index_resources` regenerates the catalog from every sidecar manifest,
 then synchronizes the searchable PostgreSQL copy. Production API and Course Agent CLI

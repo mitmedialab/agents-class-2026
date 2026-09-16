@@ -267,3 +267,45 @@ def test_private_image_inspection_uses_data_urls_without_provider_storage(
     assert isinstance(image, dict)
     assert str(image["image_url"]).startswith("data:image/png;base64,")
     assert "private-image" not in str(captured)
+
+
+def test_document_page_inspection_uses_data_url_without_provider_storage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeResponses:
+        def create(self, **kwargs: object) -> object:
+            captured.update(kwargs)
+            return type("Response", (), {"output_text": "Visible slide diagram."})()
+
+    class FakeOpenAI:
+        def __init__(self, *, api_key: str) -> None:
+            assert api_key == "test-openai-key"
+            self.responses = FakeResponses()
+
+    monkeypatch.setattr(web_search, "OpenAI", FakeOpenAI)
+
+    result = web_search.inspect_document_page_with_openai(
+        b"\x89PNG\r\n\x1a\nprivate-page",
+        "What is on this slide?",
+        model_id="test-vision-model",
+        api_key="test-openai-key",
+    )
+
+    assert result == "Visible slide diagram."
+    assert captured["model"] == "test-vision-model"
+    assert captured["store"] is False
+    raw_input = captured["input"]
+    assert isinstance(raw_input, list)
+    message = raw_input[0]
+    assert isinstance(message, dict)
+    content = message["content"]
+    assert isinstance(content, list)
+    policy_text = content[0]
+    assert isinstance(policy_text, dict)
+    assert "untrusted visual content" in str(policy_text["text"])
+    image = content[1]
+    assert isinstance(image, dict)
+    assert str(image["image_url"]).startswith("data:image/png;base64,")
+    assert "private-page" not in str(captured)

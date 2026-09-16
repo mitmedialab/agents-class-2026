@@ -194,6 +194,15 @@ the web client resolves them through the authenticated, no-store application-pho
 This lets the agent build a real private gallery without inventing filenames or making the
 applicant directory web-accessible.
 
+`document.inspect_page` provides the same ephemeral multimodal boundary for the focused PDF page.
+The platform, not the model, resolves the `course://` or principal-owned `upload://` URI from
+trusted workspace state and rechecks the run's resource grant. It renders one page to a bounded PNG,
+extracts that page's text, and sends the PNG to the configured multimodal model with provider
+storage disabled. The image bytes and model-facing data URL never enter `ToolExecutionResult` or
+canonical events; the current run receives the textual inspection and page metadata, while history
+keeps only a generic summary and resource provenance. Tool arguments are redacted from audit events.
+PDFium rendering is serialized inside the process because its rendering API is not thread-safe.
+
 Resource reads also return safe registered-asset IDs when a manifest declares them.
 The runtime tells the agent to prefer those official assets, attach them to a visual
 composition through the source resource URI and exact asset ID, and skip redundant web

@@ -141,6 +141,14 @@ wants to navigate, search, or discuss its particular content. PDF pages are cont
 the viewer's current usable width and height and rerender when that surface resizes. It is not used
 merely because a knowledge source is stored as a document.
 
+When a question depends on the visible content of the focused PDF page, the agent may call
+`document.inspect_page`. Platform code derives the resource from the focused panel, verifies the
+run's resource grant and upload ownership, and defaults to the panel's canonical page. It renders
+only that page to a bounded PNG and returns extracted page text plus the multimodal description.
+The PNG is transient provider input with provider storage disabled; canonical events retain only a
+generic completion summary and resource provenance. The tool accepts no resource URI or server path
+from the model. An optional page number can inspect another page only within the same focused PDF.
+
 `visual-composition` is the default presentation component for synthesized knowledge
 without a specialized view. The agent reads the source, selects the useful information,
 and builds the overview from registered semantic elements.
