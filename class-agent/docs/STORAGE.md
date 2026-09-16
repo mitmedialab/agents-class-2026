@@ -19,7 +19,16 @@ PostgreSQL stores durable server-side identity and canonical conversation histor
 - `mail_sync_state`: per-mailbox polling checkpoint with an overlap window;
 - `faq_review_candidates`: durable staff decision and FAQ-publication outbox state;
 - `course_notifications`: one global notification for each email-published FAQ entry;
-- `course_notification_reads`: per-student acknowledgement state.
+- `course_notification_reads`: per-student acknowledgement state;
+- `notification_item_reads`: per-user acknowledgement for deterministic resource releases and
+  private staff replies shown by the notification center. A successful authenticated app welcome
+  acknowledges its one-time Updates snapshot; Communications and Upcoming keep their independent
+  active-state lifecycle. Acknowledgement hides an item from the active projection but does not
+  delete its durable source record; the notification history derives read/resolved items from those
+  same records.
+- `instructor_messages`: instructor-owned pending, sent, or cancelled in-app message content and
+  confirmation state tied to the originating conversation;
+- `instructor_message_recipients`: the fixed active-student recipient snapshot for each message.
 
 Conversation messages are represented by `user.message` and `agent.message` events. The database does not store a smolagents agent, memory object, pickle, or provider-specific conversation object.
 
@@ -38,6 +47,37 @@ by the former two-reply flow.
 Migration `0008_faq_archives` is retained because it was already applied during development.
 Migration `0009_local_faq_knowledge` immediately removes those superseded archive-import columns;
 new deployments apply both in order and end with no archive-import state.
+Migration `0010_notification_center` adds generic per-user read receipts for derived center items.
+It is additive: existing FAQ notification rows and `course_notification_reads` remain valid, and no
+canonical event, workspace state, or course-resource content is migrated.
+Migration `0011_instructor_messages` adds private instructor message records and recipient
+snapshots. It does not backfill existing notifications or conversations. Delivery is a status
+transition after explicit confirmation; bounded subject/body edits are persisted in that same
+conditional transition while recipient rows remain fixed. The generic notification read table records each
+recipient's later acknowledgement.
+Migration `0012_online_question_answers` links an instructor confirmation draft to one pending
+question and marks the resulting `ta_answers` row as email- or online-originated. The nullable
+provider fields remain required for email answers, while online answers use the linked instructor
+message for idempotency. Both origins share the existing FAQ candidate and answer notification
+outboxes; question-reply message rows are excluded from direct-message projection.
+Migration `0013_online_answer_retention` makes question deletion clean up its linked confirmation
+draft while keeping the durable answer independent from later instructor-conversation retention.
+
+## Course assignments
+
+`ASSIGNMENT_DATA_PATH` defaults to `var/assignments/`. Each assignment is a separately validated
+`<assignment_id>.json` file; the ID must match its filename. The store creates the directory with
+mode `0700` and tool-created files with mode `0600`, rejects path indirection and unknown fields,
+and refuses to overwrite an existing ID. Validated updates require the reviewed current revision,
+atomically replace that one record, and preserve its original creator and creation time. Student
+and TA reads expose only released published records; instructor reads may also include drafts and scheduled records. See
+[ASSIGNMENTS.md](ASSIGNMENTS.md) for the complete schema and authoring workflow.
+
+Current writes use assignment schema version 3 and store the full student-facing document as
+Markdown. Platform code generates the assignment ID and derives a short notification summary. The
+store accepts exact legacy version-1 and version-2 shapes only for compatibility, projects their
+structured text into Markdown, and omits the former version-1 grading field. The next instructor-
+approved revision migrates either legacy file to version 3; reads alone do not mutate stored files.
 
 ## Temporary chat uploads
 
@@ -102,8 +142,8 @@ createdb class_agent_restored
 pg_restore --dbname=class_agent_restored class-agent.dump
 ```
 
-Production backups must cover PostgreSQL, shared course storage, and the private
-applicant directory. Temporary uploads normally remain outside backups. Periodically
+Production backups must cover PostgreSQL, shared course storage, the assignment directory, and the
+private applicant directory. Temporary uploads normally remain outside backups. Periodically
 test restoration rather than assuming a backup file is usable.
 
 ## Local published FAQ knowledge

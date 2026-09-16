@@ -17,8 +17,15 @@ Application logs and canonical events are separate. Ordinary logs must not becom
 - `agent.tool.requested`: canonical `tool_id` and validated JSON arguments;
 - `resource.read`: resource `uri`, never an arbitrary local path;
 - `agent.tool.completed`: canonical `tool_id`, `storage_policy`, referenced resources, and only the result permitted by that storage policy;
-- `agent.tool.failed`: canonical `tool_id` and a structured error category;
+- `agent.tool.failed`: canonical `tool_id`, a structured error category, and a user-safe
+  `reason_code`. The reason code is a bounded identifier such as
+  `component_not_registered`; raw exception text is not persisted or streamed;
 - `agent.message`: response `text` and portable `input_id`.
+
+`agent.greeting.requested` records an authenticated browser page-load trigger in a fresh owned
+conversation. It carries only the platform reason; current notifications remain derived context and
+are not copied into the event. The resulting `agent.message` references the trigger in metadata.
+There is deliberately no fabricated `user.message` for this operation.
 
 Phase 3's sample syllabus uses `server_full`. The tool adapter already honors `server_summary`, `local_only`, and `ephemeral` by omitting disallowed full results from durable event payloads.
 
@@ -44,8 +51,8 @@ or PDF.js objects.
   optional context, and new status from the student's explicit UI action;
 - `email.ta_question.created`: question ID/code, subject, and `open` status after the provider accepts
   the staff message;
-- `email.ta_answer.received`: question ID/code, subject, sanitized answer, and
-  `visibility: private`.
+- `email.ta_answer.received`: question ID/code, subject, sanitized answer, answer source
+  (`email` or `online`), and `visibility: private`.
 
 These events belong to the student's owned conversation and user principal. They never contain
 mailbox credentials, the student's address, Graph payloads, or arbitrary quoted email history.
@@ -56,3 +63,20 @@ Staff email decisions and pending FAQ publications are durable workflow rows rat
 conversation events. Publication creates a global `faq_entries` record and a
 `course_notifications` record; it does not copy the originating student's identity into the public
 FAQ.
+
+## Private instructor-message payloads
+
+- `instructor.message.confirmation_requested`: private message ID, fixed audience and resolved
+  recipient preview, recipient count, exact subject and message, and `pending_confirmation` status;
+- `instructor.message.sent` / `instructor.message.cancelled`: message ID, optional source-question
+  ID for an online resolution, subject, recipient count, and the new status from the instructor's
+  explicit UI action.
+
+These events belong only to the instructor's owned conversation. Generic tool-request events redact
+the message arguments. The authoritative cross-user delivery is the PostgreSQL message plus fixed
+recipient rows, not a copy placed into student conversation history. Each recipient instead receives
+an authorized notification-center and agent-attention projection until they mark the message read.
+When a message confirms a pending-question reply, the linked `TAAnswer` is authoritative and the
+message row is not separately projected to the student.
+An agent continuation from Send or Cancel carries the trusted trigger event ID and creates no fake
+`user.message`.

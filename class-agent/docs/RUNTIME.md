@@ -18,7 +18,31 @@ The runtime supplies tool definitions only through the provider's structured fun
 field. Its small application-owned Smolagents template does not render names, descriptions,
 schemas, or notional tool examples into the textual system prompt. The permanent prompt is
 limited to identity, provenance, trust boundaries, conversational continuity, authorized
-resource and skill metadata, and non-empty workspace state needed for follow-up actions.
+resource and skill metadata, a role-filtered notification-center attention snapshot, and non-empty
+workspace state needed for follow-up actions.
+
+For authenticated runs, `CourseAgentService` asks the notification-center projection for unread
+course updates and replies, assignment deadlines within fourteen days, and instructor/TA questions
+that still need a response. This data is placed in `AgentContext.metadata`; it does not change the
+stable `AgentContext` contract. The runtime asks the Course Agent to mention material items
+concisely, avoid repeating an item already discussed in recent dialogue, suggest a next action, and
+use authorized tools before adding details not present in the trusted snapshot. Anonymous runs
+receive no user-specific attention data.
+
+An authenticated page load uses `CourseAgentService.greet_on_page_load` in a fresh conversation.
+The method appends an inspectable `agent.greeting.requested` platform event and gives the runtime a
+neutral greeting task without appending a fake user message. All active projected items—including a
+student's pending staff communication—are included as authorized attention. The greeting is capped
+at approximately 70 words so it does not duplicate the notification center. When attention items
+exist, it uses a compact Markdown list that separates what is new since the last visit from ongoing
+communications, assignments, and other pending items. Its wording, prioritization, and any useful
+suggested action are chosen by the Course Agent rather than assembled from an application-authored
+response template. If the projection contains no `new_since_last_visit` category, the agent treats
+all supplied items as previously seen and summarizes only outstanding obligations or conversations
+with useful next actions; it does not re-announce them as updates. After a successful greeting, the server
+acknowledges the one-time Updates projection for that user; Communications and Upcoming items remain
+active according to their own lifecycle. The operation is idempotent per conversation. Anonymous
+page loads keep the static public welcome and do not consume model quota.
 
 ## Configuration and secrets
 
@@ -46,9 +70,16 @@ course.get_schedule
 course.get_application
 course.show_public_files
 course.search_faq
+course.list_faq_updates
+course.read_faq_update
 course.search
+course.list_my_communications (exact student role only)
+course.read_my_communication (exact student role only)
 course.submit_application
 course.ask_ta (configured, exact student role only)
+course.list_assignments (logged-in student, TA, or instructor)
+course.get_assignment (logged-in student, TA, or instructor)
+instructor.message_students (exact instructor role only)
 web.search
 web.search_images
 web.visit
@@ -69,6 +100,64 @@ trusted context names an unregistered tool. Read and search tools independently 
 work to authorized resource URIs during execution. Model-controlled input cannot select a
 filesystem path or applicant directory. The schedule tool identifies its source as
 provisional.
+
+`course.list_faq_updates` lists recent staff-approved Q&A without requiring a topical search term;
+`course.read_faq_update` reads the complete selected public entry. `course.search_faq` remains the
+topic-specific path. This distinction lets a request for “Q&A additions” inspect recent publication
+history instead of guessing a search query.
+
+`course.list_my_communications` and `course.read_my_communication` provide on-demand access to the
+active student's private question threads and confirmed instructor messages, including a question
+submitted anonymously to staff. Both tools derive student ownership from `PrincipalContext`,
+recheck the active account in application code, and retain only a generic tool summary in canonical
+history. They cannot enumerate or read another student's records. Public, staff-approved Q&A stays
+separate and is retrieved with the FAQ list/read/search tools; a `PRIVATE` answer never enters that
+resource.
+
+A successful trusted tool may issue resource URIs for a later tool call in the same runtime
+invocation. The smolagents adapter adds only those tool-returned URIs to a transient grant set
+bound to that run's existing principal and conversation. The set is discarded after the run;
+model-provided URIs are never added, and a later run reconstructs authorization from trusted
+platform state again.
+
+Production capability policy also grants `workspace.review_presentation`. The runtime requires a
+successful call immediately before accepting `final_answer`: the agent chooses whether to keep the
+prior panel, use a panel prepared in the current turn, or answer without a visual. The platform
+validates that bounded choice against trusted workspace events and in-run state, invalidates it on
+every subsequent tool call, and suppresses streamed text from a rejected premature final answer.
+One action step is reserved beyond `AGENT_MAX_STEPS` for the expected checkpoint. Isolated runtime
+tests or adapters that do not authorize the checkpoint retain their previous behavior.
+
+Assignment tools use a separate validated `AssignmentStore` boundary. Students and TAs can list
+and read only published assignments whose release time has passed. Instructors can additionally
+see drafts and scheduled records and receive create and update tools. Creation is form-backed: the
+instructor-only skill opens the canonical assignment `draft-document`, user edits become validated
+workspace events, and the create tool derives its complete Markdown input from trusted current
+workspace state after the instructor selects Save. It generates the internal assignment ID, writes
+one new server-chosen path, and refuses replacement. Update requires the complete proposed Markdown
+document plus the revision the instructor reviewed, increments that revision, and atomically
+replaces only the matching file. An authorized read emits a validated workspace panel containing
+the exact stored Markdown. See
+[ASSIGNMENTS.md](ASSIGNMENTS.md).
+
+`instructor.message_students` is available only when the PostgreSQL-backed messaging service is
+configured and the trusted principal has the exact instructor role. It resolves model-provided
+recipient labels only against active student accounts, or snapshots all current active students,
+then creates a private pending record. A pending-question notification may instead supply an opaque
+reply reference; platform code verifies that the referenced question is still open and resolves its
+stored student owner without asking the model to infer an identity. The tool cannot deliver the
+message. A separate owned HTTP
+confirmation may edit the subject and body while it atomically transitions that fixed snapshot to
+sent, or may cancel without changing content; sent records are projected into
+only their recipients' notification centers and attention context. The confirmation tool arguments
+are redacted from generic tool events, while the exact private preview remains in the instructor's
+owned conversation event. Anonymous question references retain an anonymous recipient label in that
+preview even though the platform keeps the actual account as the delivery target.
+For pending-question replies, the editable body carries the existing email workflow's `PRIVATE` or
+`PUBLISH` command. Confirmation records a real `TAAnswer`, closes the pending question, and reuses
+the answer-event and FAQ-publication outboxes; it does not create a second student communication.
+The mail worker mirrors an online resolution into the original staff email thread when that thread
+exists.
 
 Skills use standard `SKILL.md` directories with optional Markdown files under
 `references/`. The repository-owned `skills/registry.json` is a separate authorization
@@ -192,10 +281,13 @@ runtime does not inspect, remove, or substitute response prose.
 and confirmation. The agent can prepare a question only when mail is configured and the trusted
 principal is a student. The tool writes a pending record and opens the platform confirmation
 surface; it cannot queue or send the email. Only the owned confirmation API can queue it, and only
-the separate `course_server.mail_worker` talks to the configured Gmail or Microsoft Graph API.
+that Send transition can atomically replace the reviewed question while preserving its hidden
+subject and optional context.
+Only the separate `course_server.mail_worker` talks to the configured Gmail or Microsoft Graph API.
 After Send or Cancel, an allowlisted trusted action event—not client-authored prose—triggers a
 single idempotent agent continuation. The completed action and exact question become the trusted
-runtime context. The current input is only a neutral description of the completed action; the
+runtime context. The current input is only a neutral description of the completed action and makes
+clear that the platform has already finished the Send or Cancel transition; the
 model decides whether and how to acknowledge it and may continue any other unfinished work
 without a prewritten browser response, duplicated question text, or a fabricated `user.message`.
 The staff-question tool is withheld only for that continuation turn to prevent recursive

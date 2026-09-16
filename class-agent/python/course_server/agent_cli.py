@@ -42,6 +42,12 @@ from course_server.agent import (
 )
 from course_server.agent.capabilities import ExecutableTool
 from course_server.agent.store import ConversationStore
+from course_server.assignments import (
+    AssignmentStore,
+    CourseGetAssignmentTool,
+    CourseListAssignmentsTool,
+    FileAssignmentStore,
+)
 from course_server.auth import AuthenticationService
 from course_server.auth.store import AuthStore
 from course_server.browser import (
@@ -55,12 +61,27 @@ from course_server.browser.tools import (
     BrowserScrollTool,
 )
 from course_server.config import AgentSettings, ConfigurationError
-from course_server.faq import LocalFaqKnowledgeStore, PublishedFaqResourceCatalog
+from course_server.faq import (
+    CourseListFaqUpdatesTool,
+    CourseReadFaqUpdateTool,
+    FaqKnowledgeStore,
+    LocalFaqKnowledgeStore,
+    PublishedFaqResourceCatalog,
+)
 from course_server.index_resources import index_resources
+from course_server.instructor_messages import (
+    InstructorMessageService,
+    InstructorMessageStudentsTool,
+)
 from course_server.mail import CourseAskTATool, TAQuestionService
 from course_server.migrations import apply_migrations
 from course_server.postgres.auth_store import PostgresAuthStore, create_auth_pool
 from course_server.postgres.conversation_store import PostgresConversationStore
+from course_server.student_communications import (
+    CourseListMyCommunicationsTool,
+    CourseReadMyCommunicationTool,
+    StudentCommunicationService,
+)
 from course_server.uploads import (
     FileTemporaryUploadStore,
     TemporaryUploadStore,
@@ -79,6 +100,7 @@ from course_server.workspace.tools import (
     WorkspaceFocusComponentTool,
     WorkspaceListComponentsTool,
     WorkspaceOpenComponentTool,
+    WorkspaceReviewPresentationTool,
     WorkspaceUpdateComponentTool,
 )
 from runtime_smolagents import OpenAIModelProvider, SmolagentsRuntime
@@ -125,6 +147,10 @@ def build_runtime(
     browser: BrowserSessionService | None = None,
     skills: SkillCatalog | None = None,
     ta_questions: TAQuestionService | None = None,
+    assignments: AssignmentStore | None = None,
+    instructor_messages: InstructorMessageService | None = None,
+    student_communications: StudentCommunicationService | None = None,
+    faq_updates: FaqKnowledgeStore | None = None,
 ) -> SmolagentsRuntime:
     course_resources = (
         resources
@@ -137,6 +163,11 @@ def build_runtime(
     upload_store = (
         uploads if uploads is not None else FileTemporaryUploadStore(settings.upload_data_path)
     )
+    assignment_store = (
+        assignments
+        if assignments is not None
+        else FileAssignmentStore(settings.assignment_data_path)
+    )
     component_registry = components or load_component_registry()
     executable_tools: list[ExecutableTool] = [
         CourseReadSyllabusTool(course_resources),
@@ -148,6 +179,8 @@ def build_runtime(
         CourseListPrivateResourcesTool(course_resources),
         CourseSearchFaqTool(course_resources),
         CourseSearchTool(course_resources),
+        CourseListAssignmentsTool(assignment_store),
+        CourseGetAssignmentTool(assignment_store),
         ReadTemporaryUploadTool(upload_store),
         CourseSubmitApplicationTool(applicant_store, upload_store),
         InstructorListApplicationsTool(applicant_store),
@@ -191,6 +224,7 @@ def build_runtime(
         ),
         WorkspaceFocusComponentTool(component_registry),
         WorkspaceCloseComponentTool(component_registry),
+        WorkspaceReviewPresentationTool(),
     ]
     if browser is not None:
         executable_tools.extend(
@@ -206,6 +240,19 @@ def build_runtime(
         executable_tools.extend([ReadSkillTool(skills), ReadSkillReferenceTool(skills)])
     if ta_questions is not None:
         executable_tools.append(CourseAskTATool(ta_questions))
+    if instructor_messages is not None:
+        executable_tools.append(InstructorMessageStudentsTool(instructor_messages))
+    if student_communications is not None:
+        executable_tools.extend(
+            [
+                CourseListMyCommunicationsTool(student_communications),
+                CourseReadMyCommunicationTool(student_communications),
+            ]
+        )
+    if faq_updates is not None:
+        executable_tools.extend(
+            [CourseListFaqUpdatesTool(faq_updates), CourseReadFaqUpdateTool(faq_updates)]
+        )
     tools = ToolCatalog(executable_tools)
     provider = OpenAIModelProvider(
         model_id=settings.model_id,
@@ -231,17 +278,26 @@ async def _run_postgres_turn(
     await pool.open()
     await pool.wait()
     try:
+        faq_knowledge = LocalFaqKnowledgeStore(settings.published_faq_path)
         course_resources = PublishedFaqResourceCatalog(
             FileResourceProvider.from_registry(protected_data_path=settings.course_data_path),
-            LocalFaqKnowledgeStore(settings.published_faq_path),
+            faq_knowledge,
         )
         skills = SkillCatalog.from_registry(settings.skills_path)
         return await run_cli_turn(
             text,
-            runtime=build_runtime(settings, resources=course_resources, skills=skills),
+            runtime=build_runtime(
+                settings,
+                resources=course_resources,
+                skills=skills,
+                faq_updates=faq_knowledge,
+            ),
             auth_store=PostgresAuthStore(pool),
             conversation_store=PostgresConversationStore(pool),
-            capability_policy=CourseCapabilityPolicy(course_resources),
+            capability_policy=CourseCapabilityPolicy(
+                course_resources,
+                faq_updates_enabled=True,
+            ),
             skills=skills,
         )
     finally:

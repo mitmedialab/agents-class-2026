@@ -23,6 +23,7 @@ from course_server.agent import (
 )
 from course_server.anonymous_quotas import AnonymousQuotaPolicy
 from course_server.api import API_PREFIX, AppServices, create_app
+from course_server.assignments import AssignmentDraft, AssignmentStore, FileAssignmentStore
 from course_server.auth import AuthenticationService, InMemoryAuthStore, UserAdminService
 from course_server.browser import (
     BrowserPage,
@@ -33,7 +34,16 @@ from course_server.browser import (
     BrowserSnapshot,
 )
 from course_server.faq import FaqStore, InMemoryFaqStore, StudentNotificationService
+from course_server.instructor_messages import (
+    InMemoryInstructorMessageStore,
+    InstructorMessageDraft,
+    InstructorMessageService,
+)
 from course_server.mail import InMemoryTAQuestionStore, TAQuestionService, TAQuestionStore
+from course_server.notifications import (
+    InMemoryNotificationItemReadStore,
+    NotificationCenterService,
+)
 from course_server.uploads import FileTemporaryUploadStore, TemporaryUploadStore
 
 
@@ -289,6 +299,7 @@ def _build_client(
     anonymous_quota_policy: AnonymousQuotaPolicy | None = None,
     ta_question_store: TAQuestionStore | None = None,
     faq_store: FaqStore | None = None,
+    assignment_store: AssignmentStore | None = None,
 ) -> tuple[TestClient, str, RecordingRuntime]:
     auth_store = InMemoryAuthStore()
     conversations = InMemoryConversationStore()
@@ -303,12 +314,20 @@ def _build_client(
         )
     )
     runtime = RecordingRuntime()
+    notification_center = NotificationCenterService(
+        faqs=faq_store or InMemoryFaqStore(),
+        reads=InMemoryNotificationItemReadStore(),
+        auth=auth_store,
+        assignments=assignment_store,
+        questions=ta_question_store,
+    )
     services = AppServices(
         authentication=authentication,
         agent=CourseAgentService(
             runtime=runtime,
             conversations=conversations,
             uploads=upload_store,
+            attention=notification_center,
         ),
         conversations=conversations,
         uploads=upload_store,
@@ -323,6 +342,7 @@ def _build_client(
             if faq_store is not None
             else None
         ),
+        notification_center=notification_center,
         anonymous_quota_policy=anonymous_quota_policy or AnonymousQuotaPolicy(),
     )
     return (
@@ -466,6 +486,7 @@ def test_public_course_resource_catalog_marks_schedule_provisional() -> None:
         "course://faq",
         "course://instructors",
         "course://application",
+        "course://slides/week-01",
     ]
     schedule = next(
         resource for resource in response.json() if resource["uri"] == "course://schedule"
@@ -1667,6 +1688,111 @@ def test_blank_messages_and_unknown_fields_are_rejected() -> None:
     assert extra.status_code == 422
 
 
+def test_instructor_message_confirmation_delivers_only_after_send() -> None:
+    auth_store = InMemoryAuthStore()
+    admin = UserAdminService(auth_store)
+    instructor = asyncio.run(
+        admin.create_user(
+            username="prof",
+            display_name="Professor Example",
+            email="prof@mit.edu",
+            role="instructor",
+        )
+    )
+    student = asyncio.run(
+        admin.create_user(
+            username="alice",
+            display_name="Alice Example",
+            email="alice@mit.edu",
+            role="student",
+        )
+    )
+    conversations = InMemoryConversationStore()
+    messages = InMemoryInstructorMessageStore()
+    messaging = InstructorMessageService(messages=messages, auth=auth_store)
+    center = NotificationCenterService(
+        faqs=InMemoryFaqStore(),
+        reads=InMemoryNotificationItemReadStore(),
+        auth=auth_store,
+        instructor_messages=messages,
+    )
+    app = create_app(
+        services=AppServices(
+            authentication=AuthenticationService(auth_store),
+            agent=CourseAgentService(
+                runtime=RecordingRuntime(),
+                conversations=conversations,
+                attention=center,
+            ),
+            conversations=conversations,
+            instructor_messages=messaging,
+            notification_center=center,
+        )
+    )
+    instructor_client = TestClient(app, base_url="https://testserver")
+    student_client = TestClient(app, base_url="https://testserver")
+    login = instructor_client.post(
+        f"{API_PREFIX}/auth/login",
+        json={"username": "prof", "access_code": instructor.access_code},
+    )
+    assert login.status_code == 200
+    conversation_id = _create_conversation(instructor_client, prefix=API_PREFIX)
+    principal = PrincipalContext.model_validate(
+        instructor_client.get(f"{API_PREFIX}/auth/me").json()
+    )
+    prepared = asyncio.run(
+        messaging.prepare(
+            principal=principal,
+            conversation_id=UUID(conversation_id),
+            draft=InstructorMessageDraft(
+                audience="specific_students",
+                recipients=["alice"],
+                subject="Studio reminder",
+                message="Bring your prototype to class.",
+            ),
+        )
+    )
+    student_login = student_client.post(
+        f"{API_PREFIX}/auth/login",
+        json={"username": "alice", "access_code": student.access_code},
+    )
+    assert student_login.status_code == 200
+    assert student_client.get(f"{API_PREFIX}/notification-center").json()["items"] == []
+
+    incomplete = instructor_client.post(
+        f"{API_PREFIX}/conversations/{conversation_id}/instructor-messages/"
+        f"{prepared.message.id}/confirmation",
+        json={"action": "send", "subject": "Edited without a body"},
+    )
+    assert incomplete.status_code == 422
+
+    sent = instructor_client.post(
+        f"{API_PREFIX}/conversations/{conversation_id}/instructor-messages/"
+        f"{prepared.message.id}/confirmation",
+        json={
+            "action": "send",
+            "subject": "Updated studio reminder",
+            "message": "Bring your revised prototype to class.",
+        },
+    )
+
+    assert sent.status_code == 200
+    assert sent.json()["type"] == "instructor.message.sent"
+    assert sent.json()["payload"]["subject"] == "Updated studio reminder"
+    assert sent.json()["payload"]["message"] == "Bring your revised prototype to class."
+    items = student_client.get(f"{API_PREFIX}/notification-center").json()["items"]
+    assert len(items) == 1
+    assert items[0]["kind"] == "instructor_message"
+    assert items[0]["title"] == "Updated studio reminder"
+    assert items[0]["detail"] == "Bring your revised prototype to class."
+    foreign_confirmation = student_client.post(
+        f"{API_PREFIX}/conversations/{conversation_id}/instructor-messages/"
+        f"{prepared.message.id}/confirmation",
+        json={"action": "send"},
+    )
+    assert foreign_confirmation.status_code == 404
+
+
 def test_student_confirmation_can_resume_the_agent_without_a_fake_user_message() -> None:
     questions = InMemoryTAQuestionStore()
     client, access_code, runtime = _build_client(ta_question_store=questions)
@@ -1688,16 +1814,25 @@ def test_student_confirmation_can_resume_the_agent_without_a_fake_user_message()
 
     response = client.post(
         f"{API_PREFIX}/conversations/{conversation_id}/ta-questions/{question.id}/confirmation",
-        json={"action": "send", "reporter_visibility": "anonymous"},
+        json={
+            "action": "send",
+            "reporter_visibility": "anonymous",
+            "question": "May I use a local open-weight model?",
+        },
     )
 
     assert response.status_code == 200
     assert response.json()["type"] == "email.ta_question.queued"
-    assert response.json()["payload"]["question"] == "May I use a local model?"
+    assert response.json()["payload"]["subject"] == "Assignment model"
+    assert response.json()["payload"]["question"] == "May I use a local open-weight model?"
+    assert "context" not in response.json()["payload"]
     stored = asyncio.run(questions.get_question(question.id))
     assert stored is not None
     assert stored.status == "queued"
     assert stored.reporter_visibility == "anonymous"
+    assert stored.subject == "Assignment model"
+    assert stored.question_text == "May I use a local open-weight model?"
+    assert stored.context_text is None
 
     continuation = client.post(
         f"{API_PREFIX}/conversations/{conversation_id}/continue",
@@ -1707,16 +1842,20 @@ def test_student_confirmation_can_resume_the_agent_without_a_fake_user_message()
     assert continuation.status_code == 200
     output_text = continuation.json()["output_text"]
     assert output_text == (
-        "Echo: The student approved sending the prepared question to course staff."
+        "Echo: The platform has already completed the student's Send action: the prepared "
+        "question was successfully queued for delivery to course staff. No further submission "
+        "action is required."
     )
-    assert "May I use a local model?" not in output_text
+    assert "May I use a local open-weight model?" not in output_text
     assert runtime.contexts[-1].recent_events[-1].payload["question"] == (
-        "May I use a local model?"
+        "May I use a local open-weight model?"
     )
     assert runtime.inputs[-1].text == (
-        "The student approved sending the prepared question to course staff."
+        "The platform has already completed the student's Send action: the prepared question "
+        "was successfully queued for delivery to course staff. No further submission action "
+        "is required."
     )
-    assert "May I use a local model?" not in runtime.inputs[-1].text
+    assert "May I use a local open-weight model?" not in runtime.inputs[-1].text
     assert ASK_TA_TOOL_ID not in runtime.contexts[-1].permitted_tool_ids
     detail = client.get(f"{API_PREFIX}/conversations/{conversation_id}").json()
     assert [event["type"] for event in detail["events"]] == [
@@ -1782,10 +1921,105 @@ def test_students_receive_and_acknowledge_published_faq_notifications() -> None:
     assert client.get(f"{API_PREFIX}/notifications").json() == []
 
 
+def test_notification_center_is_login_scoped_and_supplies_agent_attention() -> None:
+    faqs = InMemoryFaqStore()
+    now = datetime.now(UTC)
+    asyncio.run(
+        faqs.publish(
+            source_question_id=uuid4(),
+            question="Which assignments use groups?",
+            answer="Assignments 2 and 4 use groups.",
+            published_by_user_id=None,
+            published_at=now,
+        )
+    )
+    client, access_code, runtime = _build_client(faq_store=faqs)
+
+    assert client.get(f"{API_PREFIX}/notification-center").status_code == 403
+    _login(client, access_code, prefix=API_PREFIX)
+    center = client.get(f"{API_PREFIX}/notification-center")
+
+    assert center.status_code == 200
+    assert center.json()["unread_count"] == 1
+    assert center.json()["items"][0]["kind"] == "course_update"
+    conversation_id = _create_conversation(client, prefix=API_PREFIX)
+    run = client.post(
+        f"{API_PREFIX}/agent/run",
+        json={"conversation_id": conversation_id, "text": "Hello"},
+    )
+    assert run.status_code == 200
+    attention = runtime.contexts[-1].metadata["attention_items"]
+    assert isinstance(attention, list)
+    assert isinstance(attention[0], dict)
+    assert attention[0]["category"] == "new_since_last_visit"
+    assert attention[0]["title"] == "Which assignments use groups?"
+
+    item_id = center.json()["items"][0]["id"]
+    marked = client.post(f"{API_PREFIX}/notification-center/{item_id}/read")
+    assert marked.status_code == 204
+    after_read = client.get(f"{API_PREFIX}/notification-center").json()
+    assert after_read["items"] == []
+    assert after_read["history_items"][0]["id"] == item_id
+    assert after_read["history_items"][0]["state"] == "read"
+
+
+def test_notification_center_projects_released_assignment_file(tmp_path: Path) -> None:
+    now = datetime.now(UTC)
+    assignments = FileAssignmentStore(tmp_path / "assignments", clock=lambda: now)
+    asyncio.run(
+        assignments.create(
+            AssignmentDraft(
+                title="Test assignment",
+                content_markdown=(
+                    "# Test assignment\n\nVerify the assignment notification flow.\n\n"
+                    "Review the assignment, make a short plan, and submit it."
+                ),
+                release_at=now - timedelta(hours=1),
+                due_at=now + timedelta(days=12),
+                publish=True,
+            ),
+            created_by_user_id=uuid4(),
+        )
+    )
+    client, access_code, _ = _build_client(assignment_store=assignments)
+
+    _login(client, access_code, prefix=API_PREFIX)
+    response = client.get(f"{API_PREFIX}/notification-center")
+
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert [(item["section"], item["title"]) for item in items] == [
+        ("notifications", "Test assignment is available"),
+        ("upcoming", "Test assignment"),
+    ]
+
+
+def test_authenticated_page_greeting_is_agent_generated_without_user_message() -> None:
+    client, access_code, runtime = _build_client()
+    anonymous_conversation = _create_conversation(client, prefix=API_PREFIX)
+
+    anonymous = client.post(f"{API_PREFIX}/conversations/{anonymous_conversation}/greeting")
+    assert anonymous.status_code == 403
+
+    _login(client, access_code, prefix=API_PREFIX)
+    conversation_id = _create_conversation(client, prefix=API_PREFIX)
+    greeting = client.post(f"{API_PREFIX}/conversations/{conversation_id}/greeting")
+
+    assert greeting.status_code == 200
+    assert "authenticated course website has just loaded" in greeting.json()["output_text"]
+    assert len(runtime.inputs) == 1
+    detail = client.get(f"{API_PREFIX}/conversations/{conversation_id}").json()
+    assert [event["type"] for event in detail["events"]] == [
+        "agent.greeting.requested",
+        "agent.message",
+    ]
+
+
 def test_openapi_documents_only_versioned_routes() -> None:
     client, _, _ = _build_client()
 
     paths = client.get("/openapi.json").json()["paths"]
 
     assert f"{API_PREFIX}/auth/login" in paths
+    assert f"{API_PREFIX}/conversations/{{conversation_id}}/greeting" in paths
     assert "/auth/login" not in paths

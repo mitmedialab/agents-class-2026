@@ -1,6 +1,6 @@
 # Architecture decisions through Phase 7
 
-The platform has one logical production agent, `course-agent`. A request combines that shared agent policy with a trusted principal, conversation context, authorized tools and resources, and available device capabilities. Phase 1 defines the portable contracts needed to express that boundary; Phase 2 resolves trusted principals from access-code and anonymous sessions; Phase 3 persists canonical conversation events and runs the first CLI-accessible adapter; Phase 4 exposes those services through FastAPI without moving transport concerns into the core; Phase 5 adds a static React client over those HTTP contracts; Phase 6 adds public course resources, search, and private application submission; Phase 7 adds the registered native workspace protocol and its first document/calendar renderers.
+The platform has one logical production agent, `course-agent`. A request combines that shared agent policy with a trusted principal, conversation context, authorized tools and resources, and available device capabilities. Phase 1 defines the portable contracts needed to express that boundary; Phase 2 resolves trusted principals from access-code and anonymous sessions; Phase 3 persists canonical conversation events and runs the first CLI-accessible adapter; Phase 4 exposes those services through FastAPI without moving transport concerns into the core; Phase 5 adds a static React client over those HTTP contracts; Phase 6 adds public course resources, search, and private application submission; Phase 7 adds the registered native workspace protocol and its first document/calendar renderers. The explicitly authorized Phase 10 slice now also includes a role-scoped notification center composed from resource release metadata, staff-question workflow state, and near assignment deadlines.
 
 ## Decisions
 
@@ -178,6 +178,11 @@ Public tools can list, read, and lexically search only the URIs placed in truste
 full-text copy for inspection and future gateway-backed search, without replacing the
 repository-owned files as the source of truth.
 
+The public FAQ overlay also exposes bounded list/read tools over its active staff-approved entries.
+This supports recent-Q&A requests that have no topical search query; the existing FAQ search remains
+the topic-specific path. The tools expose only the public question, answer, timestamp, and opaque
+entry ID.
+
 Private class applications are written through a separate applicant store using
 server-generated paths and are never registered or searched as public resources.
 Principal-scoped temporary uploads let the browser pass an opaque photo receipt to the
@@ -253,8 +258,10 @@ confirmation queues a durable outbox row, and a separate worker is the only proc
 or Microsoft Graph credentials. Provider IDs and RFC message IDs join incoming replies to the
 question without subject-only matching.
 
-The confirmation event carries the exact student-approved question back into the portable
-conversation. A narrow allowlisted continuation endpoint lets the Course Agent react to that
+The confirmation surface lets the student edit the prepared question inline while the hidden
+subject and optional context remain unchanged. The owned Send transition atomically stores that
+bounded edit while queuing the record. Its event carries the exact student-approved content back into the portable conversation.
+A narrow allowlisted continuation endpoint lets the Course Agent react to that
 trusted event without manufacturing a user chat message. Generated continuation events retain the
 trigger event ID, making browser retries idempotent; response wording remains model-owned.
 
@@ -278,3 +285,35 @@ the local file; a failed file write leaves the durable publication outbox pendin
 agent-facing catalog reads only the local public records and never the private workflow tables.
 Migration `0008_faq_archives` is retained as immutable applied development history, while migration
 `0009_local_faq_knowledge` removes its superseded archive-import columns.
+
+The notification center is product chrome, not an agent-generated workspace component. Platform
+code filters every projection by the active stored role and authorized resource catalog. Resource
+manifests own optional generic release/deadline metadata; a validated file-backed assignment store
+owns structured assignment records; PostgreSQL owns private communication state and per-user
+acknowledgement. `CourseAgentService` adds only the resulting authorized attention items
+to existing `AgentContext.metadata`, so no stable schema-v1 or workspace interface changes. The
+agent chooses how to mention and act on those items, while application code retains identity,
+visibility, read-state, and deadline-window decisions.
+
+The API returns active and historical projections separately. The agent attention context consumes
+only active items, while the browser can reveal read or resolved source records without promoting
+them back into a greeting or creating a client-owned history. Separate student-only list/read tools
+provide bounded, paginated access to that student's complete communication source records on
+demand; application code derives the owner from `PrincipalContext` and stores only a generic tool
+summary in events. Card actions carry a platform-authored neutral details request: retrieve
+available authorized context, do not solve or draft anything, and ask the user what to do next.
+
+Instructor-to-student messaging reuses that communication projection without using the email
+worker or inventing a client-side channel. An instructor-only tool resolves all or selected active
+student accounts through the trusted auth store and writes a pending message with a fixed recipient
+snapshot. A separate owned confirmation route accepts bounded edits to the subject and body while
+keeping that recipient snapshot read-only, then atomically performs the sent transition and content
+replacement. Only sent
+rows enter the named recipients' notification and agent contexts; message identity, role checks,
+recipient membership, and read state remain deterministic platform decisions.
+
+The authenticated landing greeting is an agent operation rather than browser-authored copy. A
+platform event triggers one idempotent run in a fresh owned conversation; the same authorized
+attention projection enters `AgentContext.metadata`. This preserves inspectability and avoids both a
+fake user message and client-side course-content logic. Anonymous reloads retain the static welcome
+so they cannot consume the limited anonymous run quota.

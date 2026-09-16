@@ -25,7 +25,11 @@ from course_server.workspace import (
     project_workspace_events,
 )
 
-from .capabilities import ASK_TA_TOOL_ID, CourseCapabilityPolicy
+from .capabilities import (
+    ASK_TA_TOOL_ID,
+    INSTRUCTOR_MESSAGE_STUDENTS_TOOL_ID,
+    CourseCapabilityPolicy,
+)
 from .skills import (
     READ_SKILL_REFERENCE_TOOL_ID,
     READ_SKILL_TOOL_ID,
@@ -44,16 +48,39 @@ _SUPPORTING_EVENT_TYPES = frozenset(
         "email.ta_question.confirmation_requested",
         "email.ta_question.queued",
         "email.ta_answer.received",
+        "instructor.message.confirmation_requested",
+        "instructor.message.sent",
+        "instructor.message.cancelled",
     }
 )
 _CONTINUATION_EVENT_TYPES = frozenset(
     {
         "email.ta_question.cancelled",
         "email.ta_question.queued",
+        "instructor.message.sent",
+        "instructor.message.cancelled",
     }
 )
 _CONTINUATION_EVENT_METADATA_KEY = "trigger_event_id"
-_CONTINUATION_BLOCKED_TOOL_IDS = frozenset({ASK_TA_TOOL_ID})
+_CONTINUATION_BLOCKED_TOOL_IDS = frozenset({ASK_TA_TOOL_ID, INSTRUCTOR_MESSAGE_STUDENTS_TOOL_ID})
+_PAGE_LOAD_GREETING_EVENT_TYPE = "agent.greeting.requested"
+_PAGE_LOAD_GREETING_MAX_WORDS = 70
+_PAGE_LOAD_GREETING_INPUT = (
+    "The authenticated course website has just loaded. Generate the entire welcome yourself as "
+    "natural Markdown; no application-authored copy or sentence template will be added. When "
+    "attention items are supplied, make the welcome easy to scan with a compact bullet list that "
+    "distinguishes what is new since the last visit from communications, assignments, or other "
+    "items that remain pending. State only the useful change, status, or deadline in each bullet, "
+    "and include a next action only when it adds value. Omit empty categories and low-value "
+    "detail. "
+    "If no item has the category new_since_last_visit, assume the person has seen every supplied "
+    "item before: do not announce any of them as new, and instead summarize only what remains "
+    "pending with useful next actions. "
+    f"Keep the whole response short, generally no more than {_PAGE_LOAD_GREETING_MAX_WORDS} words. "
+    "If no items are supplied, briefly welcome the person and choose a useful course-related "
+    "suggestion. Decide the wording and priorities yourself. Do not invent updates, deadlines, or "
+    "completed checks."
+)
 EventObserver = Callable[[Event], None]
 TextDeltaObserver = Callable[[str], None]
 _UPLOAD_REFERENCE = re.compile(
@@ -74,6 +101,14 @@ class ObservableAgentRuntime(Protocol):
         event_observer: EventObserver,
         text_delta_observer: TextDeltaObserver | None = None,
     ) -> AgentResult: ...
+
+
+class AgentAttentionProvider(Protocol):
+    """Supplies already-authorized, user-specific items that merit agent attention."""
+
+    async def agent_attention(self, principal: PrincipalContext) -> list[dict[str, object]]: ...
+
+    async def mark_updates_seen(self, principal: PrincipalContext) -> None: ...
 
 
 def _principal_references(principal: PrincipalContext) -> dict[str, UUID | None]:
@@ -97,12 +132,37 @@ def _recent_context_events(events: list[Event]) -> list[Event]:
     return [event for event in events if event.id in retained_ids]
 
 
-def _question_action_input(trigger: Event) -> str:
+def _trusted_action_input(trigger: Event) -> str:
     """Describe a trusted action without prescribing or duplicating the agent's response."""
 
+    if trigger.type == "instructor.message.sent":
+        if isinstance(trigger.payload.get("source_question_id"), str):
+            return (
+                "The platform has already completed the instructor's Send action: the pending "
+                "student question was resolved online with the confirmed answer. The mail worker "
+                "will mirror that resolution to the original staff email thread when one exists. "
+                "No further send action is required."
+            )
+        return (
+            "The platform has already completed the instructor's Send action: the prepared "
+            "in-app message was delivered to its fixed student recipients. No further send "
+            "action is required."
+        )
+    if trigger.type == "instructor.message.cancelled":
+        return (
+            "The platform has already completed the instructor's Cancel action for the prepared "
+            "in-app student message. It was not delivered, and no further action is required."
+        )
     if trigger.type == "email.ta_question.queued":
-        return "The student approved sending the prepared question to course staff."
-    return "The student cancelled the prepared course-staff question."
+        return (
+            "The platform has already completed the student's Send action: the prepared question "
+            "was successfully queued for delivery to course staff. No further submission action "
+            "is required."
+        )
+    return (
+        "The platform has already completed the student's Cancel action for the prepared "
+        "course-staff question. It was not queued, and no further action is required."
+    )
 
 
 class CourseAgentService:
@@ -117,6 +177,7 @@ class CourseAgentService:
         skills: SkillCatalog | None = None,
         workspace_registry: ComponentRegistry | None = None,
         uploads: TemporaryUploadStore | None = None,
+        attention: AgentAttentionProvider | None = None,
     ) -> None:
         self._runtime = runtime
         self._conversations = conversations
@@ -124,6 +185,7 @@ class CourseAgentService:
         self._skills = skills
         self._workspace_registry = workspace_registry or load_component_registry()
         self._uploads = uploads
+        self._attention = attention
 
     async def _authorized_upload_uris(
         self,
@@ -200,6 +262,76 @@ class CourseAgentService:
             text_delta_observer=text_delta_observer,
         )
 
+    async def greet_on_page_load(
+        self,
+        *,
+        principal: PrincipalContext,
+        conversation_id: UUID,
+        event_observer: EventObserver | None = None,
+        text_delta_observer: TextDeltaObserver | None = None,
+    ) -> AgentResult:
+        """Generate one authenticated landing greeting without inventing a user message."""
+
+        if not principal.authenticated:
+            raise ConversationAccessDenied("course login required")
+        previous_events = await self._owned_conversation_events(principal, conversation_id)
+        request = next(
+            (event for event in previous_events if event.type == _PAGE_LOAD_GREETING_EVENT_TYPE),
+            None,
+        )
+        if request is not None:
+            request_key = str(request.id)
+            for event in reversed(previous_events):
+                if (
+                    event.type == "agent.message"
+                    and event.metadata.get(_CONTINUATION_EVENT_METADATA_KEY) == request_key
+                    and isinstance((output_text := event.payload.get("text")), str)
+                ):
+                    raw_input_id = event.payload.get("input_id")
+                    input_id = UUID(raw_input_id) if isinstance(raw_input_id, str) else uuid4()
+                    result = AgentResult(
+                        input_id=input_id,
+                        conversation_id=conversation_id,
+                        output_text=output_text,
+                    )
+                    await self._mark_page_updates_seen(principal)
+                    return result
+            if any(event.id != request.id for event in previous_events):
+                raise ConversationAccessDenied("page greeting requires a new conversation")
+        elif previous_events:
+            raise ConversationAccessDenied("page greeting requires a new conversation")
+        else:
+            request = Event(
+                type=_PAGE_LOAD_GREETING_EVENT_TYPE,
+                actor="platform",
+                conversation_id=conversation_id,
+                payload={"reason": "authenticated_page_load"},
+                **_principal_references(principal),
+            )
+            await self._conversations.append_events(conversation_id, [request])
+            previous_events = [request]
+
+        agent_input = AgentInput(
+            conversation_id=conversation_id,
+            text=_PAGE_LOAD_GREETING_INPUT,
+            metadata={_CONTINUATION_EVENT_METADATA_KEY: str(request.id)},
+        )
+        result = await self._execute(
+            principal=principal,
+            conversation_id=conversation_id,
+            agent_input=agent_input,
+            previous_events=previous_events,
+            trigger_event_id=request.id,
+            event_observer=event_observer,
+            text_delta_observer=text_delta_observer,
+        )
+        await self._mark_page_updates_seen(principal)
+        return result
+
+    async def _mark_page_updates_seen(self, principal: PrincipalContext) -> None:
+        if self._attention is not None:
+            await self._attention.mark_updates_seen(principal)
+
     async def continue_after_event(
         self,
         *,
@@ -236,7 +368,7 @@ class CourseAgentService:
 
         agent_input = AgentInput(
             conversation_id=conversation_id,
-            text=_question_action_input(trigger),
+            text=_trusted_action_input(trigger),
             metadata={_CONTINUATION_EVENT_METADATA_KEY: trigger_key},
         )
         return await self._execute(
@@ -294,6 +426,11 @@ class CourseAgentService:
             previous_events,
             self._workspace_registry,
         )
+        attention_items = (
+            await self._attention.agent_attention(principal)
+            if self._attention is not None and principal.authenticated
+            else []
+        )
         context = AgentContext(
             principal=principal,
             conversation_id=conversation_id,
@@ -314,6 +451,7 @@ class CourseAgentService:
                     }
                     for skill in authorized_skills
                 ],
+                "attention_items": attention_items,
             },
         )
         observed_method = getattr(self._runtime, "run_observed", None)

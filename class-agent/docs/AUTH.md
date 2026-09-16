@@ -61,6 +61,21 @@ remains the only reply recipient.
 Published FAQ notifications likewise resolve the current active student from the session and never
 accept a client-provided user ID.
 
+Private communication-history tools use that same ownership rule and require the exact active
+`student` role. They expose no student-ID argument and include the owning student's anonymously
+submitted questions because anonymity changes only the staff-facing preview. Other students, staff,
+and anonymous visitors cannot list or read those records. A reply becomes shared Q&A only after an
+authorized staff member explicitly marks it for publication.
+
+Instructor assignment writes and in-app student messaging require the exact active `instructor`
+role; TA and admin accounts do not inherit them. The messaging tool derives the sender from the
+trusted principal. Its model-controlled audience choice may request all or name candidate
+recipients, but platform code resolves only active stored student accounts and fixes that snapshot
+before the separate instructor Send confirmation. For a pending question, trusted notification
+context supplies an opaque reply reference; the platform verifies the question is still open and
+uses its stored owner rather than accepting a guessed identity. An anonymous question remains
+anonymous in the confirmation preview. The browser cannot supply sender or recipient user IDs.
+
 The API resolves an authenticated cookie first and otherwise resolves or creates an anonymous session. Invalid, revoked, inactive-user, and expired authenticated sessions all become public anonymous requests; the unusable cookie is cleared. Logout revokes the presented authenticated token and clears its cookie.
 
 ## Admin CLI

@@ -12,15 +12,22 @@ from course_server.agent import (
     ASK_TA_TOOL_ID,
     COURSE_APPLICATION_URI,
     COURSE_FAQ_URI,
+    COURSE_GET_ASSIGNMENT_TOOL_ID,
     COURSE_INSTRUCTORS_URI,
+    COURSE_LIST_ASSIGNMENTS_TOOL_ID,
     COURSE_REPOSITORIES_URI,
     COURSE_SCHEDULE_URI,
     COURSE_SYLLABUS_URI,
     GET_APPLICATION_TOOL_ID,
     INSTRUCTOR_INSPECT_APPLICATION_IMAGES_TOOL_ID,
     INSTRUCTOR_LIST_APPLICATIONS_TOOL_ID,
+    INSTRUCTOR_MESSAGE_STUDENTS_TOOL_ID,
     INSTRUCTOR_READ_APPLICATION_TOOL_ID,
+    LIST_FAQ_UPDATES_TOOL_ID,
+    LIST_MY_COMMUNICATIONS_TOOL_ID,
     LIST_PRIVATE_RESOURCES_TOOL_ID,
+    READ_FAQ_UPDATE_TOOL_ID,
+    READ_MY_COMMUNICATION_TOOL_ID,
     READ_PRIVATE_RESOURCE_TOOL_ID,
     READ_SKILL_REFERENCE_TOOL_ID,
     READ_SKILL_TOOL_ID,
@@ -41,6 +48,7 @@ from course_server.agent_cli import _safe_failure_message, run_cli_turn
 from course_server.auth import InMemoryAuthStore
 from course_server.browser import BROWSER_TOOL_IDS
 from course_server.uploads import FileTemporaryUploadStore
+from course_server.workspace.constants import REVIEW_PRESENTATION_TOOL_ID
 
 
 def public_principal() -> PrincipalContext:
@@ -95,6 +103,19 @@ class RecordingRuntime:
         )
 
 
+class StaticAttentionProvider:
+    def __init__(self, items: list[dict[str, object]]) -> None:
+        self.items = items
+        self.seen_by: list[PrincipalContext] = []
+
+    async def agent_attention(self, principal: PrincipalContext) -> list[dict[str, object]]:
+        del principal
+        return self.items
+
+    async def mark_updates_seen(self, principal: PrincipalContext) -> None:
+        self.seen_by.append(principal)
+
+
 def test_public_policy_exposes_phase_six_course_capabilities() -> None:
     authorized = CourseCapabilityPolicy().authorize(public_principal())
 
@@ -104,6 +125,7 @@ def test_public_policy_exposes_phase_six_course_capabilities() -> None:
     assert WEB_SEARCH_TOOL_ID in authorized.tool_ids
     assert WEB_IMAGE_SEARCH_TOOL_ID in authorized.tool_ids
     assert VISIT_WEBPAGE_TOOL_ID in authorized.tool_ids
+    assert REVIEW_PRESENTATION_TOOL_ID in authorized.tool_ids
     assert not set(BROWSER_TOOL_IDS) & set(authorized.tool_ids)
     assert authorized.resource_uris == (
         COURSE_SYLLABUS_URI,
@@ -190,6 +212,81 @@ def test_staff_email_tool_requires_enabled_mail_and_exact_student_role() -> None
     assert ASK_TA_TOOL_ID not in enabled.authorize(authenticated_principal("admin")).tool_ids
 
 
+def test_assignment_tools_require_enabled_store_and_course_roles() -> None:
+    disabled = CourseCapabilityPolicy()
+    enabled = CourseCapabilityPolicy(assignments_enabled=True)
+
+    for role in ("student", "ta", "instructor"):
+        principal = authenticated_principal(role)
+        assert COURSE_LIST_ASSIGNMENTS_TOOL_ID not in disabled.authorize(principal).tool_ids
+        assert COURSE_LIST_ASSIGNMENTS_TOOL_ID in enabled.authorize(principal).tool_ids
+        assert COURSE_GET_ASSIGNMENT_TOOL_ID in enabled.authorize(principal).tool_ids
+
+    assert COURSE_LIST_ASSIGNMENTS_TOOL_ID not in enabled.authorize(public_principal()).tool_ids
+    assert (
+        COURSE_LIST_ASSIGNMENTS_TOOL_ID
+        not in enabled.authorize(authenticated_principal("admin")).tool_ids
+    )
+
+
+def test_instructor_messaging_tool_requires_enabled_service_and_exact_instructor_role() -> None:
+    disabled = CourseCapabilityPolicy()
+    enabled = CourseCapabilityPolicy(instructor_messaging_enabled=True)
+
+    assert (
+        INSTRUCTOR_MESSAGE_STUDENTS_TOOL_ID
+        in enabled.authorize(authenticated_principal("instructor")).tool_ids
+    )
+    for role in ("student", "ta", "admin"):
+        assert (
+            INSTRUCTOR_MESSAGE_STUDENTS_TOOL_ID
+            not in enabled.authorize(authenticated_principal(role)).tool_ids
+        )
+    assert INSTRUCTOR_MESSAGE_STUDENTS_TOOL_ID not in enabled.authorize(public_principal()).tool_ids
+    assert (
+        INSTRUCTOR_MESSAGE_STUDENTS_TOOL_ID
+        not in disabled.authorize(authenticated_principal("instructor")).tool_ids
+    )
+
+
+def test_private_communication_tools_require_enabled_service_and_exact_student_role() -> None:
+    disabled = CourseCapabilityPolicy()
+    enabled = CourseCapabilityPolicy(student_communications_enabled=True)
+
+    student_tools = enabled.authorize(authenticated_principal("student")).tool_ids
+    assert LIST_MY_COMMUNICATIONS_TOOL_ID in student_tools
+    assert READ_MY_COMMUNICATION_TOOL_ID in student_tools
+    assert (
+        LIST_MY_COMMUNICATIONS_TOOL_ID
+        not in disabled.authorize(authenticated_principal("student")).tool_ids
+    )
+    for principal in (
+        public_principal(),
+        authenticated_principal("ta"),
+        authenticated_principal("instructor"),
+        authenticated_principal("admin"),
+    ):
+        assert LIST_MY_COMMUNICATIONS_TOOL_ID not in enabled.authorize(principal).tool_ids
+        assert READ_MY_COMMUNICATION_TOOL_ID not in enabled.authorize(principal).tool_ids
+
+
+def test_public_faq_update_tools_require_the_configured_knowledge_store() -> None:
+    disabled = CourseCapabilityPolicy()
+    enabled = CourseCapabilityPolicy(faq_updates_enabled=True)
+
+    for principal in (
+        public_principal(),
+        authenticated_principal("student"),
+        authenticated_principal("ta"),
+        authenticated_principal("instructor"),
+        authenticated_principal("admin"),
+    ):
+        assert LIST_FAQ_UPDATES_TOOL_ID in enabled.authorize(principal).tool_ids
+        assert READ_FAQ_UPDATE_TOOL_ID in enabled.authorize(principal).tool_ids
+        assert LIST_FAQ_UPDATES_TOOL_ID not in disabled.authorize(principal).tool_ids
+        assert READ_FAQ_UPDATE_TOOL_ID not in disabled.authorize(principal).tool_ids
+
+
 def test_course_agent_discloses_only_login_authorized_skill_metadata() -> None:
     async def scenario() -> None:
         runtime = RecordingRuntime()
@@ -230,6 +327,7 @@ def test_course_agent_discloses_only_login_authorized_skill_metadata() -> None:
         assert "student-course-resources" not in public_skill_ids
         assert "instructor-application-review" not in public_skill_ids
         assert "student-course-resources" in instructor_skill_ids
+        assert "instructor-messaging" in instructor_skill_ids
         assert "instructor-application-review" in instructor_skill_ids
         assert READ_SKILL_TOOL_ID in public_context.permitted_tool_ids
         assert READ_SKILL_REFERENCE_TOOL_ID in public_context.permitted_tool_ids
@@ -441,7 +539,9 @@ def test_course_agent_continues_from_a_trusted_action_without_a_fake_user_messag
         assert first.output_text == second.output_text == "Hello from Class Agent."
         assert len(runtime.inputs) == 1
         assert runtime.inputs[0].text == (
-            "The student approved sending the prepared question to course staff."
+            "The platform has already completed the student's Send action: the prepared question "
+            "was successfully queued for delivery to course staff. No further submission action "
+            "is required."
         )
         assert "Which assignments are group work?" not in runtime.inputs[0].text
         assert runtime.contexts[0].recent_events == [prepared, trigger]
@@ -450,6 +550,179 @@ def test_course_agent_continues_from_a_trusted_action_without_a_fake_user_messag
         assert all(event.type != "user.message" for event in events)
         continuation = next(event for event in events if event.type == "agent.message")
         assert continuation.metadata["trigger_event_id"] == str(trigger.id)
+
+    asyncio.run(scenario())
+
+
+def test_course_agent_continues_from_confirmed_instructor_message_once() -> None:
+    async def scenario() -> None:
+        runtime = RecordingRuntime()
+        store = InMemoryConversationStore()
+        service = CourseAgentService(
+            runtime=runtime,
+            conversations=store,
+            capability_policy=CourseCapabilityPolicy(instructor_messaging_enabled=True),
+        )
+        principal = authenticated_principal("instructor")
+        conversation = await service.create_conversation(principal)
+        message_id = uuid4()
+        prepared = Event(
+            type="instructor.message.confirmation_requested",
+            actor="course-agent",
+            principal_user_id=principal.user_id,
+            conversation_id=conversation.id,
+            payload={
+                "message_id": str(message_id),
+                "subject": "Studio reminder",
+                "message": "Bring your prototype.",
+                "status": "pending_confirmation",
+            },
+            metadata={"visibility": "private"},
+        )
+        trigger = Event(
+            type="instructor.message.sent",
+            actor="user",
+            principal_user_id=principal.user_id,
+            conversation_id=conversation.id,
+            payload={
+                "message_id": str(message_id),
+                "subject": "Studio reminder",
+                "recipient_count": 20,
+                "status": "sent",
+            },
+            metadata={"visibility": "private"},
+        )
+        await store.append_events(conversation.id, [prepared, trigger])
+
+        first = await service.continue_after_event(
+            principal=principal,
+            conversation_id=conversation.id,
+            trigger_event_id=trigger.id,
+        )
+        second = await service.continue_after_event(
+            principal=principal,
+            conversation_id=conversation.id,
+            trigger_event_id=trigger.id,
+        )
+
+        assert first.output_text == second.output_text
+        assert len(runtime.inputs) == 1
+        assert runtime.inputs[0].text == (
+            "The platform has already completed the instructor's Send action: the prepared "
+            "in-app message was delivered to its fixed student recipients. No further send "
+            "action is required."
+        )
+        assert INSTRUCTOR_MESSAGE_STUDENTS_TOOL_ID not in runtime.contexts[0].permitted_tool_ids
+        events = await store.list_events(conversation.id)
+        assert all(event.type != "user.message" for event in events)
+        continuation = next(event for event in events if event.type == "agent.message")
+        assert continuation.metadata["trigger_event_id"] == str(trigger.id)
+
+    asyncio.run(scenario())
+
+
+def test_course_agent_continuation_distinguishes_online_question_resolution() -> None:
+    async def scenario() -> None:
+        runtime = RecordingRuntime()
+        store = InMemoryConversationStore()
+        service = CourseAgentService(
+            runtime=runtime,
+            conversations=store,
+            capability_policy=CourseCapabilityPolicy(instructor_messaging_enabled=True),
+        )
+        principal = authenticated_principal("instructor")
+        conversation = await service.create_conversation(principal)
+        trigger = Event(
+            type="instructor.message.sent",
+            actor="user",
+            principal_user_id=principal.user_id,
+            conversation_id=conversation.id,
+            payload={
+                "message_id": str(uuid4()),
+                "source_question_id": str(uuid4()),
+                "subject": "Re: Test message",
+                "recipient_count": 1,
+                "status": "sent",
+            },
+            metadata={"visibility": "private"},
+        )
+        await store.append_events(conversation.id, [trigger])
+
+        await service.continue_after_event(
+            principal=principal,
+            conversation_id=conversation.id,
+            trigger_event_id=trigger.id,
+        )
+
+        assert runtime.inputs[0].text == (
+            "The platform has already completed the instructor's Send action: the pending "
+            "student question was resolved online with the confirmed answer. The mail worker "
+            "will mirror that resolution to the original staff email thread when one exists. "
+            "No further send action is required."
+        )
+
+    asyncio.run(scenario())
+
+
+def test_course_agent_generates_one_page_greeting_without_a_fake_user_message() -> None:
+    async def scenario() -> None:
+        runtime = RecordingRuntime()
+        store = InMemoryConversationStore()
+        attention_items: list[dict[str, object]] = [
+            {
+                "category": "upcoming_assignment",
+                "kind": "assignment_deadline",
+                "title": "Test assignment",
+                "detail": "Due in twelve days.",
+                "suggested_action": "Make a plan.",
+            }
+        ]
+        attention = StaticAttentionProvider(attention_items)
+        service = CourseAgentService(
+            runtime=runtime,
+            conversations=store,
+            attention=attention,
+        )
+        principal = authenticated_principal("student")
+        conversation = await service.create_conversation(principal, title="Course Agent welcome")
+
+        first = await service.greet_on_page_load(
+            principal=principal,
+            conversation_id=conversation.id,
+        )
+        second = await service.greet_on_page_load(
+            principal=principal,
+            conversation_id=conversation.id,
+        )
+
+        assert first.output_text == second.output_text == "Hello from Class Agent."
+        assert len(runtime.inputs) == 1
+        assert "authenticated course website has just loaded" in runtime.inputs[0].text
+        assert "no more than 70 words" in runtime.inputs[0].text
+        assert "Generate the entire welcome yourself" in runtime.inputs[0].text
+        assert "no application-authored copy or sentence template" in runtime.inputs[0].text
+        assert "compact bullet list" in runtime.inputs[0].text
+        assert "what is new since the last visit" in runtime.inputs[0].text
+        assert "assume the person has seen every supplied item before" in runtime.inputs[0].text
+        assert "summarize only what remains pending" in runtime.inputs[0].text
+        assert "Decide the wording and priorities yourself" in runtime.inputs[0].text
+        assert runtime.contexts[0].metadata["attention_items"] == attention_items
+        assert attention.seen_by == [principal, principal]
+        events = await store.list_events(conversation.id)
+        assert [event.type for event in events] == [
+            "agent.greeting.requested",
+            "agent.message",
+        ]
+        assert all(event.type != "user.message" for event in events)
+        assert events[1].metadata["trigger_event_id"] == str(events[0].id)
+
+        anonymous = public_principal()
+        anonymous_conversation = await service.create_conversation(anonymous)
+        with pytest.raises(ConversationAccessDenied, match="course login required"):
+            await service.greet_on_page_load(
+                principal=anonymous,
+                conversation_id=anonymous_conversation.id,
+            )
 
     asyncio.run(scenario())
 

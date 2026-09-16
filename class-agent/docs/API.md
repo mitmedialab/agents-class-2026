@@ -15,6 +15,8 @@ GET  /api/v1/auth/me
 
 GET  /api/v1/notifications
 POST /api/v1/notifications/{notification_id}/read
+GET  /api/v1/notification-center
+POST /api/v1/notification-center/{item_id}/read
 
 GET  /api/v1/course/resources
 GET  /api/v1/course/resources/content?uri={resource_uri}
@@ -28,7 +30,9 @@ GET  /api/v1/conversations/{conversation_id}
 POST /api/v1/conversations/{conversation_id}/workspace/actions
 POST /api/v1/conversations/{conversation_id}/workspace/interactions
 POST /api/v1/conversations/{conversation_id}/ta-questions/{question_id}/confirmation
+POST /api/v1/conversations/{conversation_id}/instructor-messages/{message_id}/confirmation
 POST /api/v1/conversations/{conversation_id}/continue
+POST /api/v1/conversations/{conversation_id}/greeting
 
 POST /api/v1/conversations/{conversation_id}/run
 POST /api/v1/conversations/{conversation_id}/run/stream
@@ -36,26 +40,82 @@ POST /api/v1/agent/run
 ```
 
 The TA-question confirmation route accepts only `send` or `cancel`, plus a bounded
-`reporter_visibility` of `named` or `anonymous`. It requires an authenticated
-student who owns both the conversation and the pending question. `send` queues work for the
+`reporter_visibility` of `named` or `anonymous`. On `send`, the browser may submit the complete
+reviewed `question` shown in the confirmation; edits on `cancel` are rejected. The stored subject
+and optional context remain unchanged. It requires an authenticated student who owns both the conversation and the pending
+question. `send` queues work for the
 separate mail worker; the HTTP request never contacts the email provider. Missing, foreign, and non-student
 questions fail closed. Repeating the same decision is idempotent; trying the opposite decision
 after the question has advanced returns `409`.
 
+The instructor-message confirmation route accepts only `send` or `cancel`. On `send`, the browser
+may submit the complete reviewed `subject` and `message`; a pending-question reply also submits the
+separate bounded `publication_decision` of `private` or `publish`. Partial edits, a standalone
+visibility value, and edits on `cancel` are rejected. It requires the active instructor who owns
+both the conversation and pending message.
+Recipients were already resolved
+against active student accounts and snapshotted by the instructor tool; the browser cannot add or
+replace them. `send` makes an ordinary message visible in only those students' logged-in
+notification and agent contexts. When the draft is linked to a pending question, the editable body
+is command-free, confirmation records the separately selected visibility and answer against that
+question, and only the clean answer—not a moderation command or duplicate message—is projected to
+the student. Content
+edits for an ordinary message and its status transition are one conditional store operation; an
+online answer uses its linked message ID as an idempotency key before completing that transition;
+`cancel` creates no delivery. A missing, foreign, or previously resolved
+message fails closed.
+
 The continuation route accepts only a server-issued `trigger_event_id` from the owned
 conversation. Platform code permits the Course Agent to continue only from explicitly allowlisted
-trusted action events, currently TA-question Send and Cancel. It does not append a fabricated
+trusted action events, currently TA-question and instructor-message Send and Cancel. It does not append a fabricated
 `user.message`; the agent receives a neutral description of the completed action as its current
-input, while the exact question remains available in trusted event context. The continuation does
-not prescribe or prewrite the agent's response. The staff-question tool is withheld for that continuation turn to prevent a completed
-action from recursively opening another confirmation, while every other authorized capability
+input. That description explicitly says the platform transition has already succeeded so the agent
+does not mistake a completed Send for an unavailable future action, while the exact question remains
+available in trusted event context. The continuation does
+not prescribe or prewrite the agent's response. The tool that prepared the completed action is
+withheld for that continuation turn to prevent it from recursively opening another confirmation,
+while every other authorized capability
 remains available. Repeating the same continuation returns its existing agent response instead of
 running the model twice.
+
+The greeting route accepts no prose or user identity. It requires an authenticated principal who
+owns a new conversation and generates one idempotent Course Agent welcome from a platform-authored
+page-load trigger. The server supplies current role-filtered attention items through ordinary agent
+context. Repeating the route for that conversation returns the existing greeting; a conversation
+with unrelated prior events fails closed. No fabricated `user.message` is appended. Only after a
+successful result, the server acknowledges that user's current one-time Updates projection;
+Communications and Upcoming are not consumed by the greeting.
 
 The notification routes require the exact active `student` role. The list contains unread
 staff-approved FAQ publications; acknowledgement is idempotent and scoped to the authenticated
 user. Neither route accepts a user ID, and marking an item read does not deactivate shared FAQ
-knowledge.
+knowledge. These two routes remain as the narrow Phase 10 compatibility surface.
+
+The notification-center routes require an active authenticated course account and derive identity
+and role from the session. The response is a path-free projection with `notifications`,
+`communications`, and `upcoming` sections. Its `items` list contains the current active projection
+used by the page greeting. Its separate `history_items` list retains authorized read updates and
+messages, resolved question threads and replies, and past deadlines in newest-first category order.
+Students see their own sent question threads and
+confirmed instructor messages addressed to them; an answer replaces its pending question item. TAs and instructors see queued/open student questions; other roles do
+not. Course releases come from authorized resource metadata and released structured assignments;
+upcoming assignment deadlines come from the same role-filtered assignment store used by the agent.
+Only unread course updates, staff replies, and delivered instructor messages are dismissible.
+Historical items are derived from the same durable source records and acknowledgement state; the
+browser does not create a second canonical history. Mark-read first verifies that the
+item exists in the caller's current authorized projection; it never accepts a user ID or arbitrary
+resource path. Staff replies and instructor messages may include a `sender` object containing only
+the active staff account's first name. Its opaque `course://instructors` resource URI and registered
+portrait asset ID are included only when that portrait resolves. The response never exposes the
+responder's email, an arbitrary image URL, or a filesystem path; `sender` is `null` only when the
+staff account itself cannot be resolved and authorized.
+
+There is intentionally no general assignment filesystem route. Assignment records are available
+through the Course Agent's role-scoped `course.list_assignments` and `course.get_assignment` tools,
+while the notification-center route exposes only their bounded path-free projection. There is no
+assignment authoring route or tool. `course.get_assignment` emits a validated read-only workspace
+panel containing the exact authorized Markdown record. Stored assignment paths and private records
+remain outside the browser contract.
 
 `GET /api/v1/course/resources` returns path-free metadata for resources authorized to the
 current principal. Anonymous visitors receive the six public resources. Students also

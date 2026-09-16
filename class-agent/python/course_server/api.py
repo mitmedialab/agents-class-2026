@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
 from psycopg_pool import AsyncConnectionPool
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, StringConstraints, model_validator
 
 from agent_core import AgentResult, Conversation, Event, PrincipalContext
 from course_server.agent import (
@@ -53,6 +53,7 @@ from course_server.application_draft import (
     normalized_application_draft_props,
     updated_application_draft_from_user,
 )
+from course_server.assignments import FileAssignmentStore
 from course_server.auth import (
     AuthenticationService,
     InvalidCredentials,
@@ -82,6 +83,13 @@ from course_server.faq import (
     StudentNotificationService,
 )
 from course_server.index_resources import index_resources
+from course_server.instructor_messages import (
+    InstructorMessageAccessDenied,
+    InstructorMessageContent,
+    InstructorMessageService,
+    InstructorMessageStateError,
+    PostgresInstructorMessageStore,
+)
 from course_server.mail import (
     PostgresTAQuestionStore,
     TAQuestionAccessDenied,
@@ -89,8 +97,15 @@ from course_server.mail import (
     TAQuestionStateError,
 )
 from course_server.migrations import apply_migrations
+from course_server.notifications import (
+    NotificationCenter,
+    NotificationCenterAccessDenied,
+    NotificationCenterService,
+    PostgresNotificationItemReadStore,
+)
 from course_server.postgres.auth_store import PostgresAuthStore, create_auth_pool
 from course_server.postgres.conversation_store import PostgresConversationStore
+from course_server.student_communications import StudentCommunicationService
 from course_server.uploads import (
     MAX_UPLOAD_BYTES,
     FileTemporaryUploadStore,
@@ -124,6 +139,18 @@ PromptText = Annotated[
 CourseAssetId = Annotated[
     str,
     StringConstraints(strip_whitespace=True, pattern=r"^[a-z][a-z0-9_]*$", max_length=100),
+]
+ConfirmationSubject = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=200),
+]
+ConfirmationQuestion = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=5_000),
+]
+ConfirmationMessage = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=10_000),
 ]
 
 
@@ -170,6 +197,48 @@ class WorkspaceInteractionRequest(ApiModel):
 class TAQuestionConfirmationRequest(ApiModel):
     action: Literal["send", "cancel"]
     reporter_visibility: Literal["named", "anonymous"] = "named"
+    question: ConfirmationQuestion | None = None
+
+    @model_validator(mode="after")
+    def validate_edit(self) -> TAQuestionConfirmationRequest:
+        if "question" in self.model_fields_set and self.action != "send":
+            raise ValueError("message edits are accepted only when sending")
+        if "question" in self.model_fields_set and self.question is None:
+            raise ValueError("question cannot be null")
+        return self
+
+
+class InstructorMessageConfirmationRequest(ApiModel):
+    action: Literal["send", "cancel"]
+    subject: ConfirmationSubject | None = None
+    message: ConfirmationMessage | None = None
+    publication_decision: Literal["publish", "private"] | None = None
+
+    @model_validator(mode="after")
+    def validate_edit(self) -> InstructorMessageConfirmationRequest:
+        edit_fields = {"subject", "message"}
+        supplied_fields = edit_fields.intersection(self.model_fields_set)
+        if supplied_fields and self.action != "send":
+            raise ValueError("message edits are accepted only when sending")
+        if supplied_fields and supplied_fields != edit_fields:
+            raise ValueError("subject and message must be submitted together")
+        if "publication_decision" in self.model_fields_set:
+            if self.action != "send":
+                raise ValueError("visibility can be selected only when sending")
+            if supplied_fields != edit_fields:
+                raise ValueError("visibility must be submitted with subject and message")
+        return self
+
+    def content(self) -> InstructorMessageContent | None:
+        if "subject" not in self.model_fields_set:
+            return None
+        assert self.subject is not None
+        assert self.message is not None
+        return InstructorMessageContent(
+            subject=self.subject,
+            message=self.message,
+            publication_decision=self.publication_decision,
+        )
 
 
 class AgentContinuationRequest(ApiModel):
@@ -237,7 +306,9 @@ class AppServices:
     workspace_registry: ComponentRegistry | None = None
     browser: BrowserSessionService | None = None
     ta_questions: TAQuestionService | None = None
+    instructor_messages: InstructorMessageService | None = None
     notifications: StudentNotificationService | None = None
+    notification_center: NotificationCenterService | None = None
     anonymous_quotas: AnonymousQuotaStore = dataclass_field(
         default_factory=InMemoryAnonymousQuotaStore
     )
@@ -599,6 +670,28 @@ async def _continue_agent_after_event(
         ) from error
 
 
+async def _greet_agent_on_page_load(
+    *,
+    state: AppState,
+    principal: PrincipalContext,
+    conversation_id: UUID,
+) -> AgentResult:
+    assert state.services is not None
+    try:
+        return await state.services.agent.greet_on_page_load(
+            principal=principal,
+            conversation_id=conversation_id,
+        )
+    except ConversationAccessDenied as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from error
+    except Exception as error:
+        logger.exception("agent page-load greeting failed")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="agent temporarily unavailable",
+        ) from error
+
+
 def _sse(*, event: str, data: dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(data, separators=(',', ':'))}\n\n"
 
@@ -677,6 +770,7 @@ async def _stream_agent_run(
             "workspace.panel.updated",
             "workspace.panel.closed",
             "email.ta_question.confirmation_requested",
+            "instructor.message.confirmation_requested",
         }:
             yield _sse(
                 event="platform",
@@ -735,16 +829,29 @@ def create_app(
         auth_store = PostgresAuthStore(pool)
         conversation_store = PostgresConversationStore(pool)
         faq_store = PostgresFaqStore(pool)
+        question_store = PostgresTAQuestionStore(pool)
         faq_knowledge = LocalFaqKnowledgeStore(resolved_settings.published_faq_path)
         ta_question_service = (
             TAQuestionService(
-                questions=PostgresTAQuestionStore(pool),
+                questions=question_store,
                 auth=auth_store,
             )
             if resolved_settings.mail_enabled
             else None
         )
         applicant_store = FileApplicantStore(resolved_settings.applicant_data_path)
+        assignment_store = FileAssignmentStore(resolved_settings.assignment_data_path)
+        instructor_message_store = PostgresInstructorMessageStore(pool)
+        instructor_message_service = InstructorMessageService(
+            messages=instructor_message_store,
+            auth=auth_store,
+            questions=question_store,
+        )
+        student_communication_service = StudentCommunicationService(
+            auth=auth_store,
+            questions=question_store,
+            instructor_messages=instructor_message_store,
+        )
         course_resources = PublishedFaqResourceCatalog(
             FileResourceProvider.from_registry(
                 protected_data_path=resolved_settings.course_data_path
@@ -754,6 +861,15 @@ def create_app(
         skills = SkillCatalog.from_registry(resolved_settings.skills_path)
         upload_store = FileTemporaryUploadStore(resolved_settings.upload_data_path)
         component_registry = load_component_registry()
+        notification_center = NotificationCenterService(
+            faqs=faq_store,
+            reads=PostgresNotificationItemReadStore(pool),
+            auth=auth_store,
+            resources=course_resources,
+            assignments=assignment_store,
+            instructor_messages=instructor_message_store,
+            questions=question_store,
+        )
         browser_service: BrowserSessionService | None = None
         if resolved_settings.browser_enabled:
             playwright_browser = ThreadedPlaywrightBrowserSessionService(
@@ -781,16 +897,25 @@ def create_app(
                     browser=browser_service,
                     skills=skills,
                     ta_questions=ta_question_service,
+                    assignments=assignment_store,
+                    instructor_messages=instructor_message_service,
+                    student_communications=student_communication_service,
+                    faq_updates=faq_knowledge,
                 ),
                 conversations=conversation_store,
                 capability_policy=CourseCapabilityPolicy(
                     course_resources,
                     browser_enabled=browser_service is not None,
                     mail_enabled=ta_question_service is not None,
+                    assignments_enabled=True,
+                    instructor_messaging_enabled=True,
+                    student_communications_enabled=True,
+                    faq_updates_enabled=True,
                 ),
                 skills=skills,
                 workspace_registry=component_registry,
                 uploads=upload_store,
+                attention=notification_center,
             ),
             conversations=conversation_store,
             applicants=applicant_store,
@@ -799,7 +924,9 @@ def create_app(
             workspace_registry=component_registry,
             browser=browser_service,
             ta_questions=ta_question_service,
+            instructor_messages=instructor_message_service,
             notifications=StudentNotificationService(faqs=faq_store, auth=auth_store),
+            notification_center=notification_center,
             anonymous_quotas=PostgresAnonymousQuotaStore(pool),
             anonymous_quota_policy=AnonymousQuotaPolicy(
                 enabled=resolved_settings.anonymous_quotas_enabled,
@@ -821,7 +948,7 @@ def create_app(
 
     app = FastAPI(
         title="Class Agent API",
-        version="0.7.1",
+        version="0.7.2",
         lifespan=lifespan,
     )
     app.state.course_state = AppState(services=services, resources=resources)
@@ -924,6 +1051,49 @@ def create_app(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="student login required",
+            ) from error
+        if not marked:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    @router.get("/notification-center", response_model=NotificationCenter)
+    async def get_notification_center(
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> NotificationCenter:
+        state = _get_app_state(request)
+        assert state.services is not None
+        service = state.services.notification_center
+        if service is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+        try:
+            return await service.get(principal)
+        except NotificationCenterAccessDenied as error:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="course login required",
+            ) from error
+
+    @router.post(
+        "/notification-center/{item_id}/read",
+        status_code=status.HTTP_204_NO_CONTENT,
+    )
+    async def mark_notification_center_item_read(
+        item_id: UUID,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> Response:
+        state = _get_app_state(request)
+        assert state.services is not None
+        service = state.services.notification_center
+        if service is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+        try:
+            marked = await service.mark_read(principal, item_id)
+        except NotificationCenterAccessDenied as error:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="course login required",
             ) from error
         if not marked:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
@@ -1301,6 +1471,7 @@ def create_app(
                     conversation_id=conversation_id,
                     question_id=question_id,
                     reporter_visibility=payload.reporter_visibility,
+                    edited_question=payload.question,
                 )
                 if payload.action == "send"
                 else await service.cancel(
@@ -1331,9 +1502,83 @@ def create_app(
             payload={
                 "question_id": str(question.id),
                 "question_code": question.public_question_code,
+                "subject": question.subject,
                 "question": question.question_text,
                 **({"context": question.context_text} if question.context_text else {}),
                 "status": question.status,
+            },
+            metadata={"visibility": "private"},
+        )
+        await state.services.conversations.append_events(conversation_id, [event])
+        return event
+
+    @router.post(
+        "/conversations/{conversation_id}/instructor-messages/{message_id}/confirmation",
+        response_model=Event,
+    )
+    async def confirm_instructor_message(
+        conversation_id: UUID,
+        message_id: UUID,
+        payload: InstructorMessageConfirmationRequest,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> Event:
+        state = _get_app_state(request)
+        await _require_owned_conversation(
+            state=state,
+            principal=principal,
+            conversation_id=conversation_id,
+        )
+        assert state.services is not None
+        service = state.services.instructor_messages
+        if service is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+        try:
+            stored = (
+                await service.confirm(
+                    principal=principal,
+                    conversation_id=conversation_id,
+                    message_id=message_id,
+                    content=payload.content(),
+                )
+                if payload.action == "send"
+                else await service.cancel(
+                    principal=principal,
+                    conversation_id=conversation_id,
+                    message_id=message_id,
+                )
+            )
+        except InstructorMessageAccessDenied as error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="not found",
+            ) from error
+        except InstructorMessageStateError as error:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="message is no longer awaiting confirmation",
+            ) from error
+        message = stored.message
+        event = Event(
+            type=(
+                "instructor.message.sent"
+                if payload.action == "send"
+                else "instructor.message.cancelled"
+            ),
+            actor="user",
+            principal_user_id=principal.user_id,
+            conversation_id=conversation_id,
+            payload={
+                "message_id": str(message.id),
+                **(
+                    {"source_question_id": str(message.source_question_id)}
+                    if message.source_question_id is not None
+                    else {}
+                ),
+                "subject": message.subject,
+                "message": message.message,
+                "recipient_count": len(stored.recipient_user_ids),
+                "status": message.status,
             },
             metadata={"visibility": "private"},
         )
@@ -1361,6 +1606,33 @@ def create_app(
             principal=principal,
             conversation_id=conversation_id,
             trigger_event_id=payload.trigger_event_id,
+        )
+        return RunResponse.from_result(result)
+
+    @router.post(
+        "/conversations/{conversation_id}/greeting",
+        response_model=RunResponse,
+    )
+    async def greet_on_page_load(
+        conversation_id: UUID,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> RunResponse:
+        if not principal.authenticated:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="course login required",
+            )
+        state = _get_app_state(request)
+        await _require_owned_conversation(
+            state=state,
+            principal=principal,
+            conversation_id=conversation_id,
+        )
+        result = await _greet_agent_on_page_load(
+            state=state,
+            principal=principal,
+            conversation_id=conversation_id,
         )
         return RunResponse.from_result(result)
 
