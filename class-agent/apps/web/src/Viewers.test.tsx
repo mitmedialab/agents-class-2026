@@ -13,7 +13,10 @@ import {
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { fitPdfPageToArea } from "../../../packages/ui/src/DocumentViewer.js";
+import {
+  commitPdfCanvas,
+  fitPdfPageToArea,
+} from "../../../packages/ui/src/DocumentViewer.js";
 import publishedSchedule from "../../../shared/course/schedule/schedule.md?raw";
 
 describe("DocumentViewer", () => {
@@ -102,6 +105,30 @@ describe("DocumentViewer", () => {
       height: 300,
     });
     expect(fitPdfPageToArea(1920, 1080, 0, 600)).toBeNull();
+  });
+
+  it("commits a completed PDF render to the visible canvas in one synchronous swap", () => {
+    const drawImage = vi.fn();
+    const renderedCanvas = { width: 1920, height: 1080 } as HTMLCanvasElement;
+    const visibleCanvas = {
+      width: 960,
+      height: 540,
+      style: { width: "960px", height: "540px" },
+      getContext: vi.fn(() => ({ drawImage })),
+    } as unknown as HTMLCanvasElement;
+
+    expect(
+      commitPdfCanvas(renderedCanvas, visibleCanvas, {
+        scale: 0.5,
+        width: 960,
+        height: 540,
+      }),
+    ).toBe(true);
+    expect(visibleCanvas.width).toBe(1920);
+    expect(visibleCanvas.height).toBe(1080);
+    expect(visibleCanvas.style.width).toBe("960px");
+    expect(visibleCanvas.style.height).toBe("540px");
+    expect(drawImage).toHaveBeenCalledWith(renderedCanvas, 0, 0);
   });
 });
 

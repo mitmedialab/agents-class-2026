@@ -70,6 +70,22 @@ export function fitPdfPageToArea(
   };
 }
 
+/** Swap a completed PDF render into the visible canvas without exposing an empty frame. */
+export function commitPdfCanvas(
+  renderedCanvas: HTMLCanvasElement,
+  visibleCanvas: HTMLCanvasElement,
+  fit: PdfPageFit,
+): boolean {
+  const context = visibleCanvas.getContext("2d");
+  if (!context) return false;
+  visibleCanvas.width = renderedCanvas.width;
+  visibleCanvas.height = renderedCanvas.height;
+  visibleCanvas.style.width = `${fit.width}px`;
+  visibleCanvas.style.height = `${fit.height}px`;
+  context.drawImage(renderedCanvas, 0, 0);
+  return true;
+}
+
 function occurrences(content: string, query: string): TextRange[] {
   const needle = query.trim().toLocaleLowerCase();
   if (!needle) return [];
@@ -440,21 +456,23 @@ function PdfDocument({
       );
       if (!fit || cancelled) return;
       const viewport = pdfPage.getViewport({ scale: fit.scale });
-      const canvas = canvasRef.current;
-      const context = canvas?.getContext("2d");
-      if (!canvas || !context || cancelled) return;
+      const renderedCanvas = window.document.createElement("canvas");
+      const context = renderedCanvas.getContext("2d");
+      if (!context || cancelled) return;
       const ratio = window.devicePixelRatio || 1;
-      canvas.width = Math.max(1, Math.floor(viewport.width * ratio));
-      canvas.height = Math.max(1, Math.floor(viewport.height * ratio));
-      canvas.style.width = `${fit.width}px`;
-      canvas.style.height = `${fit.height}px`;
+      renderedCanvas.width = Math.max(1, Math.floor(viewport.width * ratio));
+      renderedCanvas.height = Math.max(1, Math.floor(viewport.height * ratio));
       renderTask = pdfPage.render({
-        canvas,
+        canvas: renderedCanvas,
         canvasContext: context,
         viewport,
         transform: ratio === 1 ? undefined : [ratio, 0, 0, ratio, 0, 0],
       });
       await renderTask.promise;
+      const visibleCanvas = canvasRef.current;
+      if (cancelled || !visibleCanvas || !commitPdfCanvas(renderedCanvas, visibleCanvas, fit)) {
+        return;
+      }
       const text = await pdfPage.getTextContent();
       if (!cancelled) {
         setPageText(
