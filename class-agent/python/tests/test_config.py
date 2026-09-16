@@ -22,6 +22,7 @@ def test_settings_accept_standard_openai_environment_without_exposing_secret() -
     assert settings.course_data_path.name == "data"
     assert settings.skills_path.name == "skills"
     assert settings.applicant_data_path.name == "applicants"
+    assert settings.assignment_data_path.name == "assignments"
     assert settings.upload_data_path.name == "uploads"
     assert settings.published_faq_path.name == "published-faq.json"
     assert settings.browser_enabled is True
@@ -41,6 +42,7 @@ def test_settings_accept_private_applicant_storage_path() -> None:
             "COURSE_DATA_PATH": "/srv/class-agent/data",
             "SKILLS_PATH": "/srv/class-agent/skills",
             "APPLICANT_DATA_PATH": "/srv/class-agent/applicants",
+            "ASSIGNMENT_DATA_PATH": "/srv/class-agent/assignments",
             "UPLOAD_DATA_PATH": "/srv/class-agent/uploads",
             "PUBLISHED_FAQ_PATH": "/srv/class-agent/course-knowledge/published-faq.json",
         }
@@ -49,6 +51,7 @@ def test_settings_accept_private_applicant_storage_path() -> None:
     assert str(settings.course_data_path) == "/srv/class-agent/data"
     assert str(settings.skills_path) == "/srv/class-agent/skills"
     assert str(settings.applicant_data_path) == "/srv/class-agent/applicants"
+    assert str(settings.assignment_data_path) == "/srv/class-agent/assignments"
     assert str(settings.upload_data_path) == "/srv/class-agent/uploads"
     assert str(settings.published_faq_path) == (
         "/srv/class-agent/course-knowledge/published-faq.json"
