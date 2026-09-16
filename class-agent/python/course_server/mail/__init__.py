@@ -11,6 +11,8 @@ from .models import (
     SentMail,
     TAAnswer,
     TAQuestion,
+    TAQuestionContent,
+    TAQuestionThread,
 )
 from .service import (
     MailWorker,
@@ -41,9 +43,11 @@ __all__ = [
     "TAAnswer",
     "TAQuestion",
     "TAQuestionAccessDenied",
+    "TAQuestionContent",
     "TAQuestionService",
     "TAQuestionStateError",
     "TAQuestionStore",
+    "TAQuestionThread",
     "parse_faq_review_reply",
     "parse_staff_answer_reply",
     "sanitize_reply_text",

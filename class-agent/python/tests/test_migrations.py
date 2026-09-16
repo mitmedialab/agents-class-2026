@@ -23,6 +23,10 @@ def test_migrations_are_discoverable_and_checksummed() -> None:
         "0007_single_reply_faq_decision",
         "0008_faq_archives",
         "0009_local_faq_knowledge",
+        "0010_notification_center",
+        "0011_instructor_messages",
+        "0012_online_question_answers",
+        "0013_online_answer_retention",
     ]
     assert all(len(migration.checksum) == 64 for migration in migrations)
 
@@ -119,6 +123,42 @@ def test_local_faq_migration_removes_superseded_archive_columns() -> None:
     assert "drop index faq_entries_import_origin_unique" in sql
     assert "drop column imported_from_faq_id" in sql
     assert "drop column imported_source_question_code" in sql
+
+
+def test_notification_center_migration_adds_generic_per_user_read_state() -> None:
+    sql = discover_migrations(MIGRATIONS_PATH)[9].sql.lower()
+
+    assert "create table notification_item_reads" in sql
+    assert "references users" in sql
+    assert "primary key (item_id, user_id)" in sql
+
+
+def test_instructor_message_migration_snapshots_recipients_and_confirmation_state() -> None:
+    sql = discover_migrations(MIGRATIONS_PATH)[10].sql.lower()
+
+    assert "create table instructor_messages" in sql
+    assert "create table instructor_message_recipients" in sql
+    assert "pending_confirmation" in sql
+    assert "one_pending_per_conversation" in sql
+    assert "primary key (message_id, student_user_id)" in sql
+
+
+def test_online_answer_migration_links_confirmed_replies_to_questions() -> None:
+    sql = discover_migrations(MIGRATIONS_PATH)[11].sql.lower()
+
+    assert "source_question_id" in sql
+    assert "one_active_reply_per_question" in sql
+    assert "online_instructor_message_id" in sql
+    assert "publication_decision" in sql
+    assert "ta_answers_source_fields" in sql
+
+
+def test_online_answer_retention_does_not_depend_on_instructor_conversation() -> None:
+    sql = discover_migrations(MIGRATIONS_PATH)[12].sql.lower()
+
+    assert "instructor_messages_source_question_id_fkey" in sql
+    assert "on delete cascade" in sql
+    assert "drop constraint ta_answers_online_instructor_message_id_fkey" in sql
 
 
 def test_invalid_migration_filename_is_rejected(tmp_path: Path) -> None:

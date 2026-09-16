@@ -13,7 +13,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
-from pydantic import SecretStr
+from pydantic import EmailStr, SecretStr
 
 from agent_core import Conversation, PrincipalContext
 from course_server.agent import (
@@ -58,6 +58,9 @@ class RecordingMailAdapter:
     incoming: list[InboundMail] = field(default_factory=list)
     sent: list[OutboundMail] = field(default_factory=list)
     replies: list[tuple[InboundMail, str, dict[str, str]]] = field(default_factory=list)
+    sent_replies: list[tuple[SentMail, tuple[EmailStr, ...], str, str, dict[str, str]]] = field(
+        default_factory=list
+    )
 
     async def send_message(self, message: OutboundMail) -> SentMail:
         self.sent.append(message)
@@ -82,6 +85,22 @@ class RecordingMailAdapter:
         return SentMail(
             provider_message_id=f"review-provider-{sequence}",
             internet_message_id=f"<review-{sequence}@course.example>",
+        )
+
+    async def reply_to_sent_message(
+        self,
+        original: SentMail,
+        *,
+        to: tuple[EmailStr, ...],
+        subject: str,
+        text: str,
+        headers: dict[str, str] | None = None,
+    ) -> SentMail:
+        self.sent_replies.append((original, to, subject, text, headers or {}))
+        sequence = len(self.sent_replies)
+        return SentMail(
+            provider_message_id=f"resolution-provider-{sequence}",
+            internet_message_id=f"<resolution-{sequence}@course.example>",
         )
 
 
@@ -205,9 +224,15 @@ def test_graph_adapter_uses_app_token_immutable_ids_and_unique_reply_body() -> N
                 )
             if request.method == "POST" and path.endswith("/messages/reply-id/createReply"):
                 return httpx.Response(201, json={"id": "reply-draft-id"})
+            if request.method == "POST" and path.endswith("/messages/draft-id/createReplyAll"):
+                return httpx.Response(201, json={"id": "online-reply-draft-id"})
             if request.method == "PATCH" and path.endswith("/messages/reply-draft-id"):
                 return httpx.Response(200)
+            if request.method == "PATCH" and path.endswith("/messages/online-reply-draft-id"):
+                return httpx.Response(200)
             if request.method == "POST" and path.endswith("/messages/reply-draft-id/send"):
+                return httpx.Response(202)
+            if request.method == "POST" and path.endswith("/messages/online-reply-draft-id/send"):
                 return httpx.Response(202)
             if request.method == "GET" and path.endswith("/messages/reply-draft-id"):
                 return httpx.Response(
@@ -215,6 +240,14 @@ def test_graph_adapter_uses_app_token_immutable_ids_and_unique_reply_body() -> N
                     json={
                         "id": "reply-draft-id",
                         "internetMessageId": "<faq-review@example.edu>",
+                    },
+                )
+            if request.method == "GET" and path.endswith("/messages/online-reply-draft-id"):
+                return httpx.Response(
+                    200,
+                    json={
+                        "id": "online-reply-draft-id",
+                        "internetMessageId": "<online-resolution@example.edu>",
                     },
                 )
             return httpx.Response(404)
@@ -244,12 +277,20 @@ def test_graph_adapter_uses_app_token_immutable_ids_and_unique_reply_body() -> N
             text="Publish this answer?",
             headers={"X-Course-Agent-FAQ-Review": "candidate-id"},
         )
+        resolution = await adapter.reply_to_sent_message(
+            sent,
+            to=("staff@example.edu",),
+            subject="Question",
+            text="Resolved online.",
+            headers={"X-Course-Agent-Resolution": "online"},
+        )
         await client.aclose()
 
         assert sent.internet_message_id == "<question@example.edu>"
         assert replies[0].text == "Approved."
         assert replies[0].headers["in-reply-to"] == "<question@example.edu>"
         assert review.internet_message_id == "<faq-review@example.edu>"
+        assert resolution.internet_message_id == "<online-resolution@example.edu>"
         graph_requests = [request for request in requests if request.url.host == "graph.test"]
         assert all(
             'IdType="ImmutableId"' in request.headers["Prefer"] for request in graph_requests
@@ -268,6 +309,15 @@ def test_graph_adapter_uses_app_token_immutable_ids_and_unique_reply_body() -> N
         assert update["internetMessageHeaders"] == [
             {"name": "X-Course-Agent-FAQ-Review", "value": "candidate-id"}
         ]
+        online_update_request = next(
+            request
+            for request in graph_requests
+            if request.method == "PATCH"
+            and request.url.path.endswith("/messages/online-reply-draft-id")
+        )
+        online_update = httpx.Response(200, content=online_update_request.read()).json()
+        assert online_update["body"]["content"] == "Resolved online."
+        assert online_update["toRecipients"] == [{"emailAddress": {"address": "staff@example.edu"}}]
 
     asyncio.run(scenario())
 
@@ -337,6 +387,11 @@ def test_gmail_adapter_refreshes_token_sends_mime_and_extracts_unique_reply() ->
                         },
                     },
                 )
+            if request.method == "GET" and path.endswith("/messages/sent-gmail-1"):
+                return httpx.Response(
+                    200,
+                    json={"id": "sent-gmail-1", "threadId": "question-thread"},
+                )
             return httpx.Response(404)
 
         client = httpx.AsyncClient(transport=httpx.MockTransport(respond))
@@ -364,6 +419,13 @@ def test_gmail_adapter_refreshes_token_sends_mime_and_extracts_unique_reply() ->
             text="Publish this answer?",
             headers={"X-Course-Agent-FAQ-Review": "candidate-id"},
         )
+        resolution = await adapter.reply_to_sent_message(
+            sent,
+            to=("staff@example.edu",),
+            subject="Question",
+            text="Resolved online.",
+            headers={"X-Course-Agent-Resolution": "online"},
+        )
         await client.aclose()
 
         parsed = BytesParser(policy=policy.default).parsebytes(sent_mime[0])
@@ -385,6 +447,12 @@ def test_gmail_adapter_refreshes_token_sends_mime_and_extracts_unique_reply() ->
         assert reply_mime["X-Course-Agent-FAQ-Review"] == "candidate-id"
         assert sent_payloads[1]["threadId"] == "thread-1"
         assert review.provider_message_id == "sent-gmail-2"
+        resolution_mime = BytesParser(policy=policy.default).parsebytes(sent_mime[2])
+        assert resolution_mime["To"] == "staff@example.edu"
+        assert resolution_mime["In-Reply-To"] == sent.internet_message_id
+        assert resolution_mime["X-Course-Agent-Resolution"] == "online"
+        assert sent_payloads[2]["threadId"] == "question-thread"
+        assert resolution.provider_message_id == "sent-gmail-3"
         assert len([request for request in requests if request.url.host == "oauth.test"]) == 1
 
     asyncio.run(scenario())
@@ -483,7 +551,7 @@ def test_worker_uses_one_staff_reply_to_answer_and_publish(tmp_path: Path) -> No
                 internet_message_id="<reply-1@example.edu>",
                 sender=instructor.email,
                 subject=f"Re: [Course Agent {question.public_question_code}] Assignment model",
-                text="Yes. Include setup instructions in your submission.\nPUBLISH",
+                text="PUBLIC\n\n\nYes. Include setup instructions in your submission.",
                 received_at=clock.current,
                 headers={"in-reply-to": "<sent-1@course.example>"},
             )
@@ -528,6 +596,93 @@ def test_worker_uses_one_staff_reply_to_answer_and_publish(tmp_path: Path) -> No
     asyncio.run(scenario())
 
 
+def test_worker_replies_to_original_staff_thread_after_online_resolution(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        clock = MutableClock(datetime(2026, 9, 15, 15, 0, tzinfo=UTC))
+        auth = InMemoryAuthStore()
+        student = _user(role="student", email="alice@example.edu", now=clock.current)
+        instructor = _user(
+            role="instructor",
+            email="instructor@example.edu",
+            now=clock.current,
+        )
+        await auth.create_user(student)
+        await auth.create_user(instructor)
+        conversations = InMemoryConversationStore()
+        conversation = Conversation(
+            user_id=student.id,
+            created_at=clock.current,
+            updated_at=clock.current,
+            title="Online answer",
+        )
+        await conversations.create_conversation(conversation)
+        questions = InMemoryTAQuestionStore()
+        service = TAQuestionService(questions=questions, auth=auth, clock=clock)
+        question = await service.prepare(
+            principal=_principal(student),
+            conversation_id=conversation.id,
+            subject="Test message",
+            question="Can you respond online?",
+            context=None,
+        )
+        await service.confirm(
+            principal=_principal(student),
+            conversation_id=conversation.id,
+            question_id=question.id,
+        )
+        mail = RecordingMailAdapter()
+        faq_store = InMemoryFaqStore()
+        faq_knowledge = LocalFaqKnowledgeStore(tmp_path / "published-faq.json")
+        worker = MailWorker(
+            mail=mail,
+            questions=questions,
+            auth=auth,
+            conversations=conversations,
+            faqs=CoordinatedFaqPublisher(faq_store, faq_knowledge),
+            mailbox_key="course-agent@example.edu",
+            staff_recipient="course-staff@example.edu",
+            clock=clock,
+        )
+        await worker.run_once()
+        opened = await questions.get_question(question.id)
+        assert opened is not None and opened.status == "open"
+
+        clock.current += timedelta(minutes=1)
+        answer = await questions.record_online_answer(
+            opened,
+            instructor_message_id=uuid4(),
+            responder_email=str(instructor.email),
+            answer_text="Resolved in the instructor interface.",
+            publication="publish",
+            processed_at=clock.current,
+        )
+        assert answer is not None
+
+        await worker.run_once()
+
+        assert len(mail.sent) == 1
+        assert len(mail.sent_replies) == 1
+        original, recipients, subject, body, headers = mail.sent_replies[0]
+        assert original.provider_message_id == "provider-1"
+        assert original.internet_message_id == "<sent-1@course.example>"
+        assert tuple(str(recipient) for recipient in recipients) == ("course-staff@example.edu",)
+        assert question.public_question_code in subject
+        assert "resolved in the Course Agent instructor interface" in body
+        assert "PUBLISH" in body
+        assert "Resolved in the instructor interface." in body
+        assert headers["X-Course-Agent-Resolution"] == "online"
+        stored_answer = await questions.get_answer(answer.id)
+        assert stored_answer is not None and stored_answer.notified_at == clock.current
+        published = await faq_knowledge.list_active()
+        assert [entry.answer for entry in published] == ["Resolved in the instructor interface."]
+        events = await conversations.list_events(conversation.id)
+        assert events[-1].payload["source"] == "online"
+
+    asyncio.run(scenario())
+
+
 def test_faq_review_language_is_explicit_and_bounded() -> None:
     assert parse_faq_review_reply("PRIVATE") is not None
     assert parse_faq_review_reply("PUBLISH") is not None
@@ -545,6 +700,7 @@ def test_staff_reply_accepts_decision_before_or_after_answer() -> None:
     private = parse_staff_answer_reply("  PRIVATE  \nOnly the final project uses groups.")
     trailing_publish = parse_staff_answer_reply("Assignments 2 and 4 use groups.\n  PUBLISH  ")
     trailing_private = parse_staff_answer_reply("Only the final project uses groups.\nPRIVATE")
+    public_alias = parse_staff_answer_reply("PUBLIC\n\n\nAssignments 2 and 4 use groups.")
 
     assert published is not None
     assert published.action == "publish"
@@ -553,6 +709,7 @@ def test_staff_reply_accepts_decision_before_or_after_answer() -> None:
     assert private.action == "private"
     assert trailing_publish == published
     assert trailing_private == private
+    assert public_alias == published
     assert parse_staff_answer_reply("Assignments 2 and 4 use groups.") is None
     assert parse_staff_answer_reply("PUBLISH") is None
     assert parse_staff_answer_reply("PRIVATE\n") is None

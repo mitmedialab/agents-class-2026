@@ -10,6 +10,7 @@ from email.utils import make_msgid, parseaddr
 from typing import Any
 
 import httpx
+from pydantic import EmailStr
 
 from .content import html_to_text, strip_quoted_reply
 from .models import InboundMail, OutboundMail, SentMail
@@ -209,6 +210,47 @@ class GoogleGmailMailAdapter:
             mime["In-Reply-To"] = original.internet_message_id
             references = original.headers.get("references", "").strip()
             mime["References"] = f"{references} {original.internet_message_id}".strip()
+        for name, value in (headers or {}).items():
+            if name.lower().startswith("x-") and name.isascii() and value.isascii():
+                mime[name] = value
+        mime.set_content(text)
+        return await self._send_mime(mime, thread_id=thread_id)
+
+    async def reply_to_sent_message(
+        self,
+        original: SentMail,
+        *,
+        to: tuple[EmailStr, ...],
+        subject: str,
+        text: str,
+        headers: dict[str, str] | None = None,
+    ) -> SentMail:
+        response = await self._request(
+            "GET",
+            f"/users/me/messages/{original.provider_message_id}",
+            params={"format": "metadata"},
+        )
+        try:
+            payload = response.json()
+            thread_id = payload["threadId"]
+        except (KeyError, TypeError, ValueError) as error:
+            raise GoogleGmailMailError("Gmail API returned no sent-message thread") from error
+        if not isinstance(thread_id, str) or not thread_id:
+            raise GoogleGmailMailError("Gmail API returned no sent-message thread")
+
+        mime = EmailMessage(policy=SMTP)
+        mime["From"] = self._mailbox_address
+        mime["To"] = ", ".join(str(recipient) for recipient in to)
+        normalized_subject = subject.strip()
+        mime["Subject"] = (
+            normalized_subject
+            if normalized_subject.casefold().startswith("re:")
+            else f"Re: {normalized_subject}"
+        )
+        domain = self._mailbox_address.rsplit("@", 1)[-1]
+        mime["Message-ID"] = make_msgid(domain=domain)
+        mime["In-Reply-To"] = original.internet_message_id
+        mime["References"] = original.internet_message_id
         for name, value in (headers or {}).items():
             if name.lower().startswith("x-") and name.isascii() and value.isascii():
                 mime[name] = value

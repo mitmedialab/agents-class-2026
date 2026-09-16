@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Annotated, Literal, Protocol
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints, model_validator
 
 from course_server.auth.models import AwareDatetime
 
@@ -26,11 +26,33 @@ FaqReviewStatus = Literal[
     "declined",
 ]
 PublicationDecision = Literal["publish", "private"]
+AnswerSource = Literal["email", "online"]
 NonBlank = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+QuestionSubject = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=200),
+]
+QuestionText = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=5_000),
+]
+QuestionContext = (
+    Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, min_length=1, max_length=5_000),
+    ]
+    | None
+)
 
 
 class MailModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+class TAQuestionContent(MailModel):
+    subject: QuestionSubject
+    question_text: QuestionText
+    context_text: QuestionContext = None
 
 
 class TAQuestion(MailModel):
@@ -41,18 +63,9 @@ class TAQuestion(MailModel):
     ]
     student_user_id: UUID
     conversation_id: UUID
-    subject: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
-    question_text: Annotated[
-        str,
-        StringConstraints(strip_whitespace=True, min_length=1, max_length=5_000),
-    ]
-    context_text: (
-        Annotated[
-            str,
-            StringConstraints(strip_whitespace=True, min_length=1, max_length=5_000),
-        ]
-        | None
-    ) = None
+    subject: QuestionSubject
+    question_text: QuestionText
+    context_text: QuestionContext = None
     reporter_visibility: ReporterVisibility = "named"
     status: QuestionStatus
     sent_event_id: UUID
@@ -69,8 +82,11 @@ class TAAnswer(MailModel):
     id: UUID
     question_id: UUID
     event_id: UUID
-    inbound_provider_message_id: NonBlank
+    source: AnswerSource = "email"
+    publication_decision: PublicationDecision = "private"
+    inbound_provider_message_id: NonBlank | None = None
     inbound_message_id: str | None = None
+    online_instructor_message_id: UUID | None = None
     responder_email: EmailStr
     answer_text: Annotated[
         str,
@@ -80,6 +96,24 @@ class TAAnswer(MailModel):
     event_recorded_at: AwareDatetime | None = None
     notification_provider_message_id: str | None = None
     notified_at: AwareDatetime | None = None
+
+    @model_validator(mode="after")
+    def validate_source(self) -> TAAnswer:
+        if self.source == "email":
+            if self.inbound_provider_message_id is None or self.online_instructor_message_id:
+                raise ValueError("email answers require only an inbound provider message")
+        elif self.inbound_provider_message_id is not None or self.inbound_message_id is not None:
+            raise ValueError("online answers cannot carry inbound provider messages")
+        elif self.online_instructor_message_id is None:
+            raise ValueError("online answers require an instructor message")
+        return self
+
+
+class TAQuestionThread(MailModel):
+    """One private question with the reply that replaces its pending state."""
+
+    question: TAQuestion
+    answer: TAAnswer | None = None
 
 
 class FaqReviewCandidate(MailModel):
@@ -136,6 +170,16 @@ class MailAdapter(Protocol):
         self,
         original: InboundMail,
         *,
+        text: str,
+        headers: dict[str, str] | None = None,
+    ) -> SentMail: ...
+
+    async def reply_to_sent_message(
+        self,
+        original: SentMail,
+        *,
+        to: tuple[EmailStr, ...],
+        subject: str,
         text: str,
         headers: dict[str, str] | None = None,
     ) -> SentMail: ...

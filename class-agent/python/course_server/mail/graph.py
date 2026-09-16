@@ -8,6 +8,7 @@ from typing import Any
 from urllib.parse import quote
 
 import httpx
+from pydantic import EmailStr
 
 from .content import html_to_text
 from .models import InboundMail, OutboundMail, SentMail
@@ -204,6 +205,47 @@ class MicrosoftGraphMailAdapter:
             if name.lower().startswith("x-") and name.isascii() and value.isascii()
         ]
         update: dict[str, Any] = {"body": {"contentType": "Text", "content": text}}
+        if custom_headers:
+            update["internetMessageHeaders"] = custom_headers
+        encoded_id = quote(provider_id, safe="")
+        await self._request("PATCH", self._messages_url(f"/{encoded_id}"), json=update)
+        return await self._send_draft(provider_id)
+
+    async def reply_to_sent_message(
+        self,
+        original: SentMail,
+        *,
+        to: tuple[EmailStr, ...],
+        subject: str,
+        text: str,
+        headers: dict[str, str] | None = None,
+    ) -> SentMail:
+        del subject
+        original_id = quote(original.provider_message_id, safe="")
+        draft = await self._request(
+            "POST",
+            self._messages_url(f"/{original_id}/createReplyAll"),
+        )
+        try:
+            draft_payload = draft.json()
+            provider_id = draft_payload["id"]
+        except (KeyError, TypeError, ValueError) as error:
+            raise MicrosoftGraphMailError(
+                "Microsoft Graph returned an invalid sent-message reply draft"
+            ) from error
+        if not isinstance(provider_id, str) or not provider_id:
+            raise MicrosoftGraphMailError(
+                "Microsoft Graph returned an invalid sent-message reply draft"
+            )
+        custom_headers = [
+            {"name": name, "value": value}
+            for name, value in (headers or {}).items()
+            if name.lower().startswith("x-") and name.isascii() and value.isascii()
+        ]
+        update: dict[str, Any] = {
+            "body": {"contentType": "Text", "content": text},
+            "toRecipients": [{"emailAddress": {"address": str(recipient)}} for recipient in to],
+        }
         if custom_headers:
             update["internetMessageHeaders"] = custom_headers
         encoded_id = quote(provider_id, safe="")

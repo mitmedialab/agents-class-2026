@@ -18,6 +18,8 @@ from .models import (
     SentMail,
     TAAnswer,
     TAQuestion,
+    TAQuestionContent,
+    TAQuestionThread,
 )
 
 InboundDisposition = Literal[
@@ -55,6 +57,17 @@ class TAQuestionStore(Protocol):
         conversation_id: UUID,
     ) -> TAQuestion | None: ...
 
+    async def list_student_threads(
+        self,
+        *,
+        student_user_id: UUID,
+        limit: int | None = 50,
+    ) -> list[TAQuestionThread]: ...
+
+    async def list_open_questions(self, *, limit: int = 50) -> list[TAQuestion]: ...
+
+    async def list_questions(self, *, limit: int | None = 50) -> list[TAQuestion]: ...
+
     async def transition_question(
         self,
         question_id: UUID,
@@ -63,6 +76,7 @@ class TAQuestionStore(Protocol):
         status: QuestionStatus,
         changed_at: datetime,
         reporter_visibility: ReporterVisibility | None = None,
+        content: TAQuestionContent | None = None,
     ) -> TAQuestion | None: ...
 
     async def list_queued_questions(self, *, limit: int = 20) -> list[TAQuestion]: ...
@@ -107,6 +121,17 @@ class TAQuestionStore(Protocol):
         question: TAQuestion,
         message: InboundMail,
         *,
+        answer_text: str,
+        publication: PublicationDecision,
+        processed_at: datetime,
+    ) -> TAAnswer | None: ...
+
+    async def record_online_answer(
+        self,
+        question: TAQuestion,
+        *,
+        instructor_message_id: UUID,
+        responder_email: str,
         answer_text: str,
         publication: PublicationDecision,
         processed_at: datetime,
@@ -238,6 +263,52 @@ class InMemoryTAQuestionStore:
             None,
         )
 
+    async def list_student_threads(
+        self,
+        *,
+        student_user_id: UUID,
+        limit: int | None = 50,
+    ) -> list[TAQuestionThread]:
+        questions = sorted(
+            (
+                question
+                for question in self.questions.values()
+                if question.student_user_id == student_user_id
+                and question.status in {"queued", "open", "answered"}
+            ),
+            key=lambda question: question.created_at,
+            reverse=True,
+        )
+        if limit is not None:
+            questions = questions[:limit]
+        answers = {answer.question_id: answer for answer in self.answers.values()}
+        return [
+            TAQuestionThread(question=question, answer=answers.get(question.id))
+            for question in questions
+        ]
+
+    async def list_open_questions(self, *, limit: int = 50) -> list[TAQuestion]:
+        return sorted(
+            (
+                question
+                for question in self.questions.values()
+                if question.status in {"queued", "open"}
+            ),
+            key=lambda question: question.created_at,
+        )[:limit]
+
+    async def list_questions(self, *, limit: int | None = 50) -> list[TAQuestion]:
+        questions = sorted(
+            (
+                question
+                for question in self.questions.values()
+                if question.status in {"queued", "open", "answered"}
+            ),
+            key=lambda question: question.created_at,
+            reverse=True,
+        )
+        return questions if limit is None else questions[:limit]
+
     async def transition_question(
         self,
         question_id: UUID,
@@ -246,6 +317,7 @@ class InMemoryTAQuestionStore:
         status: QuestionStatus,
         changed_at: datetime,
         reporter_visibility: ReporterVisibility | None = None,
+        content: TAQuestionContent | None = None,
     ) -> TAQuestion | None:
         question = self.questions.get(question_id)
         if question is None or question.status != expected:
@@ -257,6 +329,12 @@ class InMemoryTAQuestionStore:
                 updates["reporter_visibility"] = reporter_visibility
         if status == "closed":
             updates["resolved_at"] = changed_at
+        if content is not None:
+            updates.update(
+                subject=content.subject,
+                question_text=content.question_text,
+                context_text=content.context_text,
+            )
         updated = question.model_copy(update=updates)
         self.questions[question_id] = updated
         return updated
@@ -369,6 +447,7 @@ class InMemoryTAQuestionStore:
             event_id=uuid4(),
             inbound_provider_message_id=message.provider_message_id,
             inbound_message_id=message.internet_message_id,
+            publication_decision=publication,
             responder_email=message.sender,
             answer_text=answer_text,
             received_at=message.received_at,
@@ -396,6 +475,57 @@ class InMemoryTAQuestionStore:
         )
         return answer
 
+    async def record_online_answer(
+        self,
+        question: TAQuestion,
+        *,
+        instructor_message_id: UUID,
+        responder_email: str,
+        answer_text: str,
+        publication: PublicationDecision,
+        processed_at: datetime,
+    ) -> TAAnswer | None:
+        existing = next(
+            (
+                answer
+                for answer in self.answers.values()
+                if answer.online_instructor_message_id == instructor_message_id
+            ),
+            None,
+        )
+        if existing is not None:
+            return existing
+        current = self.questions.get(question.id)
+        if current is None or current.status not in {"queued", "open"}:
+            return None
+        answer = TAAnswer(
+            id=uuid4(),
+            question_id=question.id,
+            event_id=uuid4(),
+            source="online",
+            publication_decision=publication,
+            online_instructor_message_id=instructor_message_id,
+            responder_email=responder_email,
+            answer_text=answer_text,
+            received_at=processed_at,
+        )
+        self.answers[answer.id] = answer
+        publish = publication == "publish"
+        candidate = FaqReviewCandidate(
+            id=uuid4(),
+            question_id=question.id,
+            answer_id=answer.id,
+            suggested_question=question.question_text,
+            suggested_answer=answer_text,
+            status="pending_publication" if publish else "declined",
+            created_at=processed_at,
+        )
+        self.faq_candidates[candidate.id] = candidate
+        self.questions[question.id] = current.model_copy(
+            update={"status": "answered", "resolved_at": processed_at}
+        )
+        return answer
+
     async def get_answer(self, answer_id: UUID) -> TAAnswer | None:
         return self.answers.get(answer_id)
 
@@ -411,7 +541,15 @@ class InMemoryTAQuestionStore:
 
     async def list_answers_pending_notification(self, *, limit: int = 20) -> list[TAAnswer]:
         return sorted(
-            (answer for answer in self.answers.values() if answer.notified_at is None),
+            (
+                answer
+                for answer in self.answers.values()
+                if answer.notified_at is None
+                and (
+                    answer.source == "email"
+                    or self.questions[answer.question_id].provider_message_id is not None
+                )
+            ),
             key=lambda answer: answer.received_at,
         )[:limit]
 
@@ -438,7 +576,13 @@ class InMemoryTAQuestionStore:
                 candidate
                 for candidate in self.faq_candidates.values()
                 if candidate.status == "pending_publication"
-                and self.answers[candidate.answer_id].notified_at is not None
+                and (
+                    self.answers[candidate.answer_id].notified_at is not None
+                    or (
+                        self.answers[candidate.answer_id].source == "online"
+                        and self.questions[candidate.question_id].provider_message_id is None
+                    )
+                )
             ),
             key=lambda candidate: candidate.created_at,
         )[:limit]
@@ -635,6 +779,78 @@ class PostgresTAQuestionStore:
             ).fetchone()
         return TAQuestion.model_validate(row) if row is not None else None
 
+    async def list_student_threads(
+        self,
+        *,
+        student_user_id: UUID,
+        limit: int | None = 50,
+    ) -> list[TAQuestionThread]:
+        async with self._pool.connection() as connection:
+            question_rows = await (
+                await connection.execute(
+                    """
+                    SELECT * FROM ta_questions
+                    WHERE student_user_id = %s
+                      AND status IN ('queued', 'open', 'answered')
+                    ORDER BY created_at DESC
+                    LIMIT %s
+                    """,
+                    (student_user_id, limit),
+                )
+            ).fetchall()
+            question_ids = [row["id"] for row in question_rows]
+            answer_rows = (
+                await (
+                    await connection.execute(
+                        "SELECT * FROM ta_answers WHERE question_id = ANY(%s)",
+                        (question_ids,),
+                    )
+                ).fetchall()
+                if question_ids
+                else []
+            )
+        answers = {
+            answer.question_id: answer
+            for answer in (TAAnswer.model_validate(row) for row in answer_rows)
+        }
+        return [
+            TAQuestionThread(
+                question=TAQuestion.model_validate(row),
+                answer=answers.get(row["id"]),
+            )
+            for row in question_rows
+        ]
+
+    async def list_open_questions(self, *, limit: int = 50) -> list[TAQuestion]:
+        async with self._pool.connection() as connection:
+            rows = await (
+                await connection.execute(
+                    """
+                    SELECT * FROM ta_questions
+                    WHERE status IN ('queued', 'open')
+                    ORDER BY created_at
+                    LIMIT %s
+                    """,
+                    (limit,),
+                )
+            ).fetchall()
+        return [TAQuestion.model_validate(row) for row in rows]
+
+    async def list_questions(self, *, limit: int | None = 50) -> list[TAQuestion]:
+        async with self._pool.connection() as connection:
+            rows = await (
+                await connection.execute(
+                    """
+                    SELECT * FROM ta_questions
+                    WHERE status IN ('queued', 'open', 'answered')
+                    ORDER BY created_at DESC
+                    LIMIT %s
+                    """,
+                    (limit,),
+                )
+            ).fetchall()
+        return [TAQuestion.model_validate(row) for row in rows]
+
     async def transition_question(
         self,
         question_id: UUID,
@@ -643,6 +859,7 @@ class PostgresTAQuestionStore:
         status: QuestionStatus,
         changed_at: datetime,
         reporter_visibility: ReporterVisibility | None = None,
+        content: TAQuestionContent | None = None,
     ) -> TAQuestion | None:
         confirmed_at = changed_at if status == "queued" else None
         resolved_at = changed_at if status == "closed" else None
@@ -653,7 +870,10 @@ class PostgresTAQuestionStore:
                 SET status = %s,
                     confirmed_at = COALESCE(%s, confirmed_at),
                     resolved_at = COALESCE(%s, resolved_at),
-                    reporter_visibility = COALESCE(%s, reporter_visibility)
+                    reporter_visibility = COALESCE(%s, reporter_visibility),
+                    subject = CASE WHEN %s THEN %s ELSE subject END,
+                    question_text = CASE WHEN %s THEN %s ELSE question_text END,
+                    context_text = CASE WHEN %s THEN %s ELSE context_text END
                 WHERE id = %s AND status = %s
                 RETURNING *
                 """,
@@ -662,6 +882,12 @@ class PostgresTAQuestionStore:
                     confirmed_at,
                     resolved_at,
                     reporter_visibility,
+                    content is not None,
+                    content.subject if content is not None else None,
+                    content is not None,
+                    content.question_text if content is not None else None,
+                    content is not None,
+                    content.context_text if content is not None else None,
                     question_id,
                     expected,
                 ),
@@ -834,6 +1060,7 @@ class PostgresTAQuestionStore:
             event_id=uuid4(),
             inbound_provider_message_id=message.provider_message_id,
             inbound_message_id=message.internet_message_id,
+            publication_decision=publication,
             responder_email=message.sender,
             answer_text=answer_text,
             received_at=message.received_at,
@@ -857,9 +1084,10 @@ class PostgresTAQuestionStore:
                 """
                 INSERT INTO ta_answers (
                     id, question_id, event_id, inbound_provider_message_id,
-                    inbound_message_id, responder_email, answer_text, received_at
+                    inbound_message_id, publication_decision, responder_email, answer_text,
+                    received_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     answer.id,
@@ -867,6 +1095,7 @@ class PostgresTAQuestionStore:
                     answer.event_id,
                     answer.inbound_provider_message_id,
                     answer.inbound_message_id,
+                    answer.publication_decision,
                     str(answer.responder_email),
                     answer.answer_text,
                     answer.received_at,
@@ -911,6 +1140,88 @@ class PostgresTAQuestionStore:
             )
         return answer
 
+    async def record_online_answer(
+        self,
+        question: TAQuestion,
+        *,
+        instructor_message_id: UUID,
+        responder_email: str,
+        answer_text: str,
+        publication: PublicationDecision,
+        processed_at: datetime,
+    ) -> TAAnswer | None:
+        answer = TAAnswer(
+            id=uuid4(),
+            question_id=question.id,
+            event_id=uuid4(),
+            source="online",
+            publication_decision=publication,
+            online_instructor_message_id=instructor_message_id,
+            responder_email=responder_email,
+            answer_text=answer_text,
+            received_at=processed_at,
+        )
+        candidate_status = "pending_publication" if publication == "publish" else "declined"
+        async with self._pool.connection() as connection, connection.transaction():
+            existing = await (
+                await connection.execute(
+                    "SELECT * FROM ta_answers WHERE online_instructor_message_id = %s",
+                    (instructor_message_id,),
+                )
+            ).fetchone()
+            if existing is not None:
+                return TAAnswer.model_validate(existing)
+            cursor = await connection.execute(
+                """
+                UPDATE ta_questions
+                SET status = 'answered', resolved_at = %s
+                WHERE id = %s AND status IN ('queued', 'open')
+                RETURNING id
+                """,
+                (processed_at, question.id),
+            )
+            if await cursor.fetchone() is None:
+                return None
+            await connection.execute(
+                """
+                INSERT INTO ta_answers (
+                    id, question_id, event_id, source, publication_decision,
+                    online_instructor_message_id, responder_email, answer_text, received_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    answer.id,
+                    answer.question_id,
+                    answer.event_id,
+                    answer.source,
+                    answer.publication_decision,
+                    answer.online_instructor_message_id,
+                    str(answer.responder_email),
+                    answer.answer_text,
+                    answer.received_at,
+                ),
+            )
+            await connection.execute(
+                """
+                INSERT INTO faq_review_candidates (
+                    id, question_id, answer_id, suggested_question,
+                    suggested_answer, status, created_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    uuid4(),
+                    question.id,
+                    answer.id,
+                    question.question_text,
+                    answer_text,
+                    candidate_status,
+                    processed_at,
+                ),
+            )
+        return answer
+
     async def get_answer(self, answer_id: UUID) -> TAAnswer | None:
         async with self._pool.connection() as connection:
             row = await (
@@ -933,7 +1244,22 @@ class PostgresTAQuestionStore:
             )
 
     async def list_answers_pending_notification(self, *, limit: int = 20) -> list[TAAnswer]:
-        return await self._list_answers("notified_at IS NULL", limit)
+        async with self._pool.connection() as connection:
+            rows = await (
+                await connection.execute(
+                    """
+                    SELECT answer.*
+                    FROM ta_answers AS answer
+                    JOIN ta_questions AS question ON question.id = answer.question_id
+                    WHERE answer.notified_at IS NULL
+                      AND (answer.source = 'email' OR question.provider_message_id IS NOT NULL)
+                    ORDER BY answer.received_at
+                    LIMIT %s
+                    """,
+                    (limit,),
+                )
+            ).fetchall()
+        return [TAAnswer.model_validate(row) for row in rows]
 
     async def mark_answer_notified(
         self,
@@ -962,8 +1288,12 @@ class PostgresTAQuestionStore:
                     SELECT candidate.*
                     FROM faq_review_candidates AS candidate
                     JOIN ta_answers AS answer ON answer.id = candidate.answer_id
+                    JOIN ta_questions AS question ON question.id = candidate.question_id
                     WHERE candidate.status = 'pending_publication'
-                      AND answer.notified_at IS NOT NULL
+                      AND (
+                          answer.notified_at IS NOT NULL
+                          OR (answer.source = 'online' AND question.provider_message_id IS NULL)
+                      )
                     ORDER BY candidate.created_at
                     LIMIT %s
                     """,

@@ -22,8 +22,10 @@ from .models import (
     OutboundMail,
     PublicationDecision,
     ReporterVisibility,
+    SentMail,
     TAAnswer,
     TAQuestion,
+    TAQuestionContent,
 )
 from .store import TAQuestionStore
 
@@ -111,6 +113,7 @@ class TAQuestionService:
         conversation_id: UUID,
         question_id: UUID,
         reporter_visibility: ReporterVisibility = "named",
+        edited_question: str | None = None,
     ) -> TAQuestion:
         question = await self._owned_question(
             principal=principal,
@@ -121,12 +124,22 @@ class TAQuestionService:
             return question
         if question.status != "pending_confirmation":
             raise TAQuestionStateError("question is no longer awaiting confirmation")
+        content = (
+            TAQuestionContent(
+                subject=question.subject,
+                question_text=edited_question,
+                context_text=question.context_text,
+            )
+            if edited_question is not None
+            else None
+        )
         updated = await self._questions.transition_question(
             question.id,
             expected="pending_confirmation",
             status="queued",
             changed_at=self._clock(),
             reporter_visibility=reporter_visibility,
+            content=content,
         )
         if updated is None:
             raise TAQuestionStateError("question is no longer awaiting confirmation")
@@ -435,6 +448,7 @@ class MailWorker:
                     "question_code": question.public_question_code,
                     "subject": question.subject,
                     "answer": answer.answer_text,
+                    "source": answer.source,
                     "visibility": "private",
                 },
             )
@@ -449,6 +463,28 @@ class MailWorker:
         for answer in await self._questions.list_answers_pending_notification():
             question = await self._questions.get_question(answer.question_id)
             if question is None:
+                continue
+            if answer.source == "online":
+                if question.provider_message_id is None or question.outbound_message_id is None:
+                    continue
+                sent = await self._mail.reply_to_sent_message(
+                    SentMail(
+                        provider_message_id=question.provider_message_id,
+                        internet_message_id=question.outbound_message_id,
+                    ),
+                    to=(self._staff_recipient,),
+                    subject=f"[Course Agent {question.public_question_code}] {question.subject}",
+                    text=_staff_online_resolution_body(question, answer),
+                    headers={
+                        "X-Course-Agent-Question": question.public_question_code,
+                        "X-Course-Agent-Resolution": "online",
+                    },
+                )
+                await self._questions.mark_answer_notified(
+                    answer.id,
+                    sent,
+                    notified_at=self._clock(),
+                )
                 continue
             student = await self._auth.get_user_by_id(question.student_user_id)
             if student is None or not student.active or student.role != "student":
@@ -588,7 +624,7 @@ def parse_staff_answer_reply(text: str) -> StaffAnswerDecision | None:
 
     first_command = lines[0].strip().casefold()
     last_command = lines[-1].strip().casefold()
-    commands = {"publish", "private"}
+    commands = {"publish", "public", "private"}
     if first_command in commands and last_command not in commands:
         command = first_command
         answer = "\n".join(lines[1:]).strip()
@@ -599,7 +635,7 @@ def parse_staff_answer_reply(text: str) -> StaffAnswerDecision | None:
         return None
     if not answer or len(answer) > 10_000:
         return None
-    action: PublicationDecision = "publish" if command == "publish" else "private"
+    action: PublicationDecision = "publish" if command in {"publish", "public"} else "private"
     return StaffAnswerDecision(action=action, answer=answer)
 
 
@@ -665,6 +701,15 @@ def _student_answer_body(question: TAQuestion, answer: TAAnswer) -> str:
         f"Your question:\n{question.question_text}\n\n"
         f"Course staff answer:\n{answer.answer_text}\n\n"
         "This answer is also available in your Course Agent conversation."
+    )
+
+
+def _staff_online_resolution_body(question: TAQuestion, answer: TAAnswer) -> str:
+    return (
+        "This student question was resolved in the Course Agent instructor interface.\n\n"
+        f"Decision:\n{answer.publication_decision.upper()}\n\n"
+        f"Course staff answer:\n{answer.answer_text}\n\n"
+        f"Reference: {question.public_question_code}."
     )
 
 

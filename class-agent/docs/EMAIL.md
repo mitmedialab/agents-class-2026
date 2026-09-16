@@ -13,12 +13,32 @@ It sends queued questions to the staff list, polls the configured sender mailbox
 matches replies by `In-Reply-To`/`References` before falling back to the stable question code,
 stores the answer privately, emails the student's current account address, and appends
 `email.ta_answer.received` to the owned conversation. That staff reply must place `PUBLISH` or
-`PRIVATE` on a standalone line immediately before or after the student-facing answer. `PUBLISH`
+`PRIVATE` on a standalone line immediately before or after the student-facing answer. `PUBLIC` is
+accepted as an alias for `PUBLISH`. The worker removes the command and any blank lines between it
+and the answer before storing or displaying the student-facing content. `PUBLISH`
 also places a student-independent, identity-redacted FAQ candidate in the durable publication outbox.
+
+An instructor may instead resolve a pending question in the Course Agent interface. The editable
+confirmation presents a separate **Private**/**Public** visibility choice and records it with the
+clean answer in the existing answer, event, notification, and FAQ-publication pipeline. **Private** is the
+safe default when no decision was requested. If the original question email was already sent, the
+mail worker replies to that staff thread with the online resolution, its decision, and its exact
+answer. A question resolved while it is still queued has no external email thread to update.
 
 The worker has a provider-neutral boundary. Set `MAIL_PROVIDER=google_gmail` for Gmail or
 `MAIL_PROVIDER=microsoft_graph` for Microsoft 365. A cloned deployment owns its mailbox,
 provider credentials, and staff destination; neither provider is a platform-wide assumption.
+
+The notification center projects queued/open student questions as pending communications. For the
+student, the stored private answer replaces that pending item and remains unread until acknowledged.
+When the responder still resolves to an active staff account, the card also uses that account's
+display name to select a matching registered `course://instructors` portrait. The browser receives
+only the display name and opaque asset reference, never the responder email or backing path.
+For active TA and instructor accounts, queued/open questions appear as staff action items. An
+instructor's online reply is routed by an opaque, role-filtered question reference; named questions
+show the stored student identity in confirmation while anonymous questions show only an anonymous
+label. Notification-center access is role-checked in application code and never accepts a
+model-supplied user ID.
 
 ## Gmail setup for each deployment
 
@@ -190,6 +210,11 @@ unread course notification for each student account. Publishing is idempotent pe
 The worker also atomically adds the public question and answer to the local JSON file configured by
 `PUBLISHED_FAQ_PATH`; the Course Agent reads that file through `course://faq`. No private email
 workflow fields are written to it.
+
+The online instructor confirmation uses the same two decisions through a separate visibility
+control, while the answer remains command-free. Only the answer content is shown to the student. Online
+answers replace the pending question in the student's Communications stack; they are not also
+projected as a duplicate direct instructor message.
 
 Students can select **Hide my name from course staff** before sending. The platform still retains
 the authenticated owner so it can route the private answer; the outgoing staff message substitutes
