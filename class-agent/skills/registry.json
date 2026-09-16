@@ -30,6 +30,11 @@
       "id": "instructor-application-review",
       "directory": "instructor-application-review",
       "audience": "instructors"
+    },
+    {
+      "id": "instructor-messaging",
+      "directory": "instructor-messaging",
+      "audience": "instructors"
     }
   ]
 }

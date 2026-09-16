@@ -14,6 +14,13 @@ from course_server.auth import AuthenticationService, UserAdminService
 from course_server.auth.security import hash_session_token
 from course_server.faq import PostgresFaqStore
 from course_server.index_resources import index_resources
+from course_server.instructor_messages import (
+    PENDING_QUESTION_RECIPIENT_PREFIX,
+    InstructorMessageContent,
+    InstructorMessageDraft,
+    InstructorMessageService,
+    PostgresInstructorMessageStore,
+)
 from course_server.mail import InboundMail, PostgresTAQuestionStore, SentMail
 from course_server.migrations import apply_migrations
 from course_server.postgres.auth_store import PostgresAuthStore, create_auth_pool
@@ -57,6 +64,10 @@ def test_postgres_auth_store_roundtrip() -> None:
             "0007_single_reply_faq_decision",
             "0008_faq_archives",
             "0009_local_faq_knowledge",
+            "0010_notification_center",
+            "0011_instructor_messages",
+            "0012_online_question_answers",
+            "0013_online_answer_retention",
         ]
         assert apply_migrations(scoped_url) == []
         assert index_resources(scoped_url) == [
@@ -66,9 +77,10 @@ def test_postgres_auth_store_roundtrip() -> None:
             "course://faq",
             "course://instructors",
             "course://application",
+            "course://slides/week-01",
         ]
         with psycopg.connect(scoped_url) as connection:
-            assert connection.execute("SELECT count(*) FROM course_resources").fetchone() == (6,)
+            assert connection.execute("SELECT count(*) FROM course_resources").fetchone() == (7,)
             assert connection.execute(
                 "SELECT count(*) FROM faq_entries WHERE active"
             ).fetchone() == (5,)
@@ -115,6 +127,7 @@ def test_postgres_auth_store_roundtrip() -> None:
                     "public",
                     "instructor",
                 ]
+                instructor_principal = await auth.resolve_authenticated(instructor_credential.token)
 
                 conversations = PostgresConversationStore(pool)
                 conversation = Conversation(user_id=principal.user_id)
@@ -217,6 +230,84 @@ def test_postgres_auth_store_roundtrip() -> None:
                     read_at=conversation.created_at,
                 )
                 assert await faqs.list_unread(issued.user.id) == []
+
+                instructor_conversation = Conversation(user_id=instructor.user.id)
+                await conversations.create_conversation(instructor_conversation)
+                message_store = PostgresInstructorMessageStore(pool)
+                messaging = InstructorMessageService(
+                    messages=message_store,
+                    auth=store,
+                    questions=questions,
+                )
+                prepared = await messaging.prepare(
+                    principal=instructor_principal,
+                    conversation_id=instructor_conversation.id,
+                    draft=InstructorMessageDraft(
+                        audience="specific_students",
+                        recipients=["alice"],
+                        subject="Studio reminder",
+                        message="Bring your prototype to class.",
+                    ),
+                )
+                assert await message_store.list_sent_for_student(issued.user.id) == []
+                await messaging.confirm(
+                    principal=instructor_principal,
+                    conversation_id=instructor_conversation.id,
+                    message_id=prepared.message.id,
+                )
+                delivered = await message_store.list_sent_for_student(issued.user.id)
+                assert [message.id for message in delivered] == [prepared.message.id]
+
+                online_question = await questions.create_question(
+                    student_user_id=issued.user.id,
+                    conversation_id=conversation.id,
+                    subject="Online response",
+                    question_text="Can this be answered online?",
+                    context_text=None,
+                    created_at=conversation.created_at,
+                )
+                queued_online_question = await questions.transition_question(
+                    online_question.id,
+                    expected="pending_confirmation",
+                    status="queued",
+                    changed_at=conversation.created_at,
+                )
+                assert queued_online_question is not None
+                online_question = queued_online_question
+                online_reply = await messaging.prepare(
+                    principal=instructor_principal,
+                    conversation_id=instructor_conversation.id,
+                    draft=InstructorMessageDraft(
+                        audience="specific_students",
+                        recipients=[f"{PENDING_QUESTION_RECIPIENT_PREFIX}{online_question.id}"],
+                        subject="Re: Online response",
+                        message="Answer this privately.",
+                    ),
+                )
+                await messaging.confirm(
+                    principal=instructor_principal,
+                    conversation_id=instructor_conversation.id,
+                    message_id=online_reply.message.id,
+                    content=InstructorMessageContent(
+                        subject="Re: Online response",
+                        message="PUBLISH\nPublish this answer.",
+                    ),
+                )
+                online_thread = next(
+                    thread
+                    for thread in await questions.list_student_threads(
+                        student_user_id=issued.user.id
+                    )
+                    if thread.question.id == online_question.id
+                )
+                assert online_thread.question.status == "answered"
+                assert online_thread.answer is not None
+                assert online_thread.answer.source == "online"
+                assert online_thread.answer.publication_decision == "publish"
+                assert [
+                    message.id
+                    for message in await message_store.list_sent_for_student(issued.user.id)
+                ] == [prepared.message.id]
 
                 anonymous = await auth.create_anonymous()
                 assert (await auth.resolve_anonymous(anonymous.token)).roles == ["public"]

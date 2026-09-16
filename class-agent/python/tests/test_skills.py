@@ -69,6 +69,7 @@ def test_skill_catalog_scans_metadata_and_filters_before_disclosure() -> None:
     assert "instructor-application-review" not in public_ids
     assert student_ids == public_ids | {"student-course-resources"}
     assert instructor_ids == public_ids | {
+        "instructor-messaging",
         "student-course-resources",
         "instructor-application-review",
     }
@@ -169,6 +170,24 @@ def test_course_help_skill_prioritizes_faq_and_offers_authorized_escalation() ->
         assert "take precedence" in instructions
         assert "offer to contact course staff on the student's behalf" in instructions
         assert "do not merely tell the student to contact staff themselves" in instructions
+
+    asyncio.run(scenario())
+
+
+def test_instructor_messaging_skill_uses_platform_confirmation_as_only_approval() -> None:
+    async def scenario() -> None:
+        skills = SkillCatalog.from_registry(SKILLS_ROOT)
+        result = await ReadSkillTool(skills).execute(
+            {"skill_id": "instructor-messaging"},
+            execution_context(authenticated_principal("instructor")),
+        )
+
+        assert isinstance(result.content, dict)
+        instructions = result.content.get("instructions")
+        assert isinstance(instructions, str)
+        assert "call the tool immediately" in instructions
+        assert "approval in chat or show a separate conversational draft" in instructions
+        assert "sole review and approval step" in instructions
 
     asyncio.run(scenario())
 
