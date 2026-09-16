@@ -25,11 +25,17 @@ from course_server.workspace import (
     load_component_registry,
     project_workspace_events,
 )
+from course_server.workspace.constants import (
+    PRESENTATION_REVIEWED_STATE_KEY,
+    WORKSPACE_CHANGED_STATE_KEY,
+    WORKSPACE_VISIBLE_STATE_KEY,
+)
 from course_server.workspace.tools import (
     WorkspaceCloseComponentTool,
     WorkspaceFocusComponentTool,
     WorkspaceListComponentsTool,
     WorkspaceOpenComponentTool,
+    WorkspaceReviewPresentationTool,
     WorkspaceUpdateComponentTool,
 )
 
@@ -52,7 +58,11 @@ def execution_context(principal: PrincipalContext | None = None) -> ToolExecutio
         principal=principal or public_principal(),
         conversation_id=uuid4(),
         permitted_resource_uris=frozenset(
-            {"course://syllabus", "course://schedule", "course://application"}
+            {
+                "course://syllabus",
+                "course://schedule",
+                "course://application",
+            }
         ),
     )
 
@@ -164,6 +174,43 @@ def test_workspace_tools_validate_and_apply_complete_panel_lifecycle() -> None:
         )
         assert closed.emitted_events[0].type == "workspace.panel.closed"
         assert WorkspaceState.model_validate(context.workspace_state).panels == []
+
+    asyncio.run(scenario())
+
+
+def test_presentation_review_validates_bounded_choice_against_workspace_state() -> None:
+    async def scenario() -> None:
+        tool = WorkspaceReviewPresentationTool()
+        context = execution_context()
+
+        reviewed = await tool.execute({"decision": "no_visual"}, context)
+
+        assert reviewed.content == {
+            "status": "reviewed",
+            "decision": "no_visual",
+            "workspace_open": False,
+            "next_action": (
+                "Call final_answer now. Any other tool call requires another presentation review."
+            ),
+        }
+        assert reviewed.storage_policy == "ephemeral"
+        assert context.transient_state[PRESENTATION_REVIEWED_STATE_KEY] is True
+
+        context.transient_state[WORKSPACE_VISIBLE_STATE_KEY] = True
+        context.transient_state[WORKSPACE_CHANGED_STATE_KEY] = True
+        reviewed = await tool.execute({"decision": "workspace_ready"}, context)
+        assert isinstance(reviewed.content, dict)
+        assert reviewed.content["decision"] == "workspace_ready"
+
+        with pytest.raises(ToolValidationError, match="does not match") as error:
+            await tool.execute({"decision": "keep_current"}, context)
+        assert getattr(error.value, "reason_code", None) == "presentation_review_invalid"
+        assert context.transient_state[PRESENTATION_REVIEWED_STATE_KEY] is False
+
+        context.transient_state[WORKSPACE_CHANGED_STATE_KEY] = False
+        reviewed = await tool.execute({"decision": "keep_current"}, context)
+        assert isinstance(reviewed.content, dict)
+        assert reviewed.content["decision"] == "keep_current"
 
     asyncio.run(scenario())
 
@@ -323,14 +370,21 @@ def test_workspace_tools_reject_unknown_component_invalid_props_and_resource() -
         tool = WorkspaceOpenComponentTool(registry)
         context = execution_context()
 
-        with pytest.raises(ToolValidationError, match="unknown component"):
-            await tool.execute({"component_id": "invented-ui"}, context)
+        with pytest.raises(ToolValidationError, match="unknown component") as unknown_error:
+            await tool.execute(
+                {
+                    "component_id": "invented-ui",
+                    "resource_uri": "course://invented-resource",
+                },
+                context,
+            )
+        assert getattr(unknown_error.value, "reason_code", None) == "component_not_registered"
         with pytest.raises(ToolValidationError, match="invalid props"):
             await tool.execute(
                 {"component_id": "calendar", "props": {"view": "timeline"}},
                 context,
             )
-        with pytest.raises(PermissionError):
+        with pytest.raises(PermissionError) as permission_error:
             await tool.execute(
                 {
                     "component_id": "document-viewer",
@@ -338,6 +392,10 @@ def test_workspace_tools_reject_unknown_component_invalid_props_and_resource() -
                 },
                 context,
             )
+        assert (
+            getattr(permission_error.value, "reason_code", None)
+            == "resource_not_authorized_for_run"
+        )
         with pytest.raises(ToolValidationError, match="invalid props"):
             await tool.execute(
                 {

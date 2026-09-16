@@ -18,8 +18,12 @@ from course_server.agent import (
     COURSE_APPLICATION_URI,
     COURSE_SYLLABUS_URI,
     GET_APPLICATION_TOOL_ID,
+    LIST_FAQ_UPDATES_TOOL_ID,
+    LIST_MY_COMMUNICATIONS_TOOL_ID,
+    READ_MY_COMMUNICATION_TOOL_ID,
     READ_SKILL_TOOL_ID,
     READ_SYLLABUS_TOOL_ID,
+    SEARCH_FAQ_TOOL_ID,
     VISIT_WEBPAGE_TOOL_ID,
     WEB_IMAGE_SEARCH_TOOL_ID,
     WEB_SEARCH_TOOL_ID,
@@ -32,18 +36,108 @@ from course_server.agent import (
     ReadSkillTool,
     SkillCatalog,
     ToolCatalog,
+    ToolExecutionContext,
     ToolExecutionResult,
 )
 from course_server.agent.capabilities import ToolEmittedEvent
 from course_server.workspace import load_component_registry
-from course_server.workspace.constants import OPEN_COMPONENT_TOOL_ID
-from course_server.workspace.tools import WorkspaceOpenComponentTool
+from course_server.workspace.constants import OPEN_COMPONENT_TOOL_ID, REVIEW_PRESENTATION_TOOL_ID
+from course_server.workspace.tools import (
+    WorkspaceOpenComponentTool,
+    WorkspaceReviewPresentationTool,
+)
 from runtime_smolagents import SmolagentsRuntime
 from runtime_smolagents.runtime import (
+    _agent_instructions,
     _conversation_history,
     _render_tool_result,
+    _RunToolState,
     _smolagents_inputs,
 )
+
+
+def test_runtime_instructs_agent_to_surface_trusted_attention_items_concisely() -> None:
+    principal = PrincipalContext(
+        authenticated=True,
+        user_id=uuid4(),
+        username="student",
+        roles=["public", "student"],
+        session_id=uuid4(),
+    )
+    context = AgentContext(
+        principal=principal,
+        conversation_id=uuid4(),
+        metadata={
+            "attention_items": [
+                {
+                    "kind": "assignment_deadline",
+                    "state": "upcoming",
+                    "title": "Assignment one",
+                    "detail": "Assignment deadline",
+                    "due_at": "2026-09-17T23:59:00-04:00",
+                    "suggested_action": "Help me make a plan.",
+                }
+            ]
+        },
+    )
+
+    instructions = _agent_instructions(context, (), "")
+
+    assert "Trusted, role-filtered notification-center items" in instructions
+    assert "Assignment one" in instructions
+    assert "assignment deadlines within two weeks" in instructions
+
+
+def test_runtime_distinguishes_public_qa_from_owned_private_communications() -> None:
+    principal = PrincipalContext(
+        authenticated=True,
+        user_id=uuid4(),
+        username="student",
+        roles=["public", "student"],
+        session_id=uuid4(),
+    )
+    context = AgentContext(
+        principal=principal,
+        conversation_id=uuid4(),
+        permitted_tool_ids=[
+            SEARCH_FAQ_TOOL_ID,
+            LIST_FAQ_UPDATES_TOOL_ID,
+            LIST_MY_COMMUNICATIONS_TOOL_ID,
+            READ_MY_COMMUNICATION_TOOL_ID,
+        ],
+    )
+
+    instructions = _agent_instructions(context, (), "")
+
+    assert "shared, staff-approved course Q&A" in instructions
+    assert "student's own private communications" in instructions
+    assert "check both authorized sources" in instructions
+
+
+def test_run_state_keeps_emitted_workspace_visibility_until_review() -> None:
+    state = _RunToolState(
+        ToolExecutionContext(
+            principal=public_principal(),
+            conversation_id=uuid4(),
+            permitted_resource_uris=frozenset(),
+        )
+    )
+    state.authorize_tool_result(
+        ToolExecutionResult(
+            content={"status": "opened"},
+            emitted_events=[
+                ToolEmittedEvent(type="workspace.panel.opened", payload={"command": {}})
+            ],
+        )
+    )
+
+    state.begin_tool_call()
+    state.authorize_tool_result(ToolExecutionResult(content={"status": "read"}))
+
+    context = state.execution_context()
+    assert context.transient_state["workspace_visible"] is True
+    assert context.transient_state["workspace_changed_this_turn"] is True
+    assert state.presentation_reviewed() is False
 
 
 class HiddenCourseTool(CourseReadSyllabusTool):
@@ -78,6 +172,27 @@ class ConfirmationTool:
                     },
                 )
             ],
+        )
+
+
+ISSUED_RESOURCE_URI = "course://assignment/runtime-issued"
+ISSUE_RESOURCE_TOOL_ID = "course.issue_resource"
+
+
+class IssueResourceTool:
+    id = ISSUE_RESOURCE_TOOL_ID
+    description = "Return one resource after checking it for the current principal."
+    input_schema: ClassVar[dict[str, Any]] = {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": False,
+    }
+
+    async def execute(self, arguments: Any, context: Any) -> ToolExecutionResult:
+        del arguments, context
+        return ToolExecutionResult(
+            content={"title": "Runtime-issued assignment"},
+            resource_uris=[ISSUED_RESOURCE_URI],
         )
 
 
@@ -305,6 +420,50 @@ class ScriptedStreamingTAConfirmationModel(ScriptedToolCallingModel):
         )
 
 
+class ScriptedPresentationReviewModel(ScriptedToolCallingModel):
+    def generate_stream(
+        self,
+        messages: list[ChatMessage],
+        stop_sequences: list[str] | None = None,
+        response_format: dict[str, str] | None = None,
+        tools_to_call_from: list[Any] | None = None,
+        **kwargs: Any,
+    ) -> Iterator[ChatMessageStreamDelta]:
+        self.message_text = "\n".join(str(message.content or "") for message in messages)
+        del stop_sequences, response_format, kwargs
+        self.available_tool_names = [tool.name for tool in tools_to_call_from or []]
+        self.calls += 1
+        if self.calls == 1:
+            name = "final_answer"
+            arguments = '{"answer":"This draft must not stream."}'
+            call_id = "unreviewed-final"
+        elif self.calls == 2:
+            name = "workspace_open_component"
+            arguments = (
+                '{"component_id":"calendar","resource_uri":"course://schedule",'
+                '"title":"Course schedule","props":{"view":"agenda"}}'
+            )
+            call_id = "open-calendar"
+        elif self.calls == 3:
+            name = "workspace_review_presentation"
+            arguments = '{"decision":"workspace_ready"}'
+            call_id = "review-presentation"
+        else:
+            name = "final_answer"
+            arguments = '{"answer":"I opened the schedule in the workspace."}'
+            call_id = "reviewed-final"
+        yield ChatMessageStreamDelta(
+            tool_calls=[
+                ChatMessageToolCallStreamDelta(
+                    index=0,
+                    id=call_id,
+                    type="function",
+                    function=ChatMessageToolCallFunction(name=name, arguments=arguments),
+                )
+            ]
+        )
+
+
 class ScriptedWorkspaceModel(ScriptedToolCallingModel):
     def generate(
         self,
@@ -333,6 +492,93 @@ class ScriptedWorkspaceModel(ScriptedToolCallingModel):
             function = ChatMessageToolCallFunction(
                 name="final_answer",
                 arguments={"answer": "I opened the schedule."},
+            )
+            call_id = "final-answer"
+        return ChatMessage(
+            role=MessageRole.ASSISTANT,
+            content="",
+            tool_calls=[ChatMessageToolCall(function=function, id=call_id, type="function")],
+        )
+
+
+class ScriptedIssuedResourceWorkspaceModel(ScriptedToolCallingModel):
+    def generate(
+        self,
+        messages: list[ChatMessage],
+        stop_sequences: list[str] | None = None,
+        response_format: dict[str, str] | None = None,
+        tools_to_call_from: list[Any] | None = None,
+        **kwargs: Any,
+    ) -> ChatMessage:
+        self.message_text = "\n".join(str(message.content or "") for message in messages)
+        del stop_sequences, response_format, kwargs
+        self.available_tool_names = [tool.name for tool in tools_to_call_from or []]
+        self.calls += 1
+        if self.calls == 1:
+            function = ChatMessageToolCallFunction(
+                name="course_issue_resource",
+                arguments={},
+            )
+            call_id = "issue-resource"
+        elif self.calls == 2:
+            function = ChatMessageToolCallFunction(
+                name="workspace_open_component",
+                arguments={
+                    "component_id": "visual-composition",
+                    "resource_uri": ISSUED_RESOURCE_URI,
+                    "title": "Assignment ideas",
+                    "props": {
+                        "root_id": "summary",
+                        "elements": [
+                            {
+                                "id": "summary",
+                                "type": "text",
+                                "text": "Three small agent project directions.",
+                            }
+                        ],
+                    },
+                },
+            )
+            call_id = "open-issued-resource"
+        else:
+            function = ChatMessageToolCallFunction(
+                name="final_answer",
+                arguments={"answer": "I opened the assignment ideas."},
+            )
+            call_id = "final-answer"
+        return ChatMessage(
+            role=MessageRole.ASSISTANT,
+            content="",
+            tool_calls=[ChatMessageToolCall(function=function, id=call_id, type="function")],
+        )
+
+
+class ScriptedUnknownWorkspaceModel(ScriptedToolCallingModel):
+    def generate(
+        self,
+        messages: list[ChatMessage],
+        stop_sequences: list[str] | None = None,
+        response_format: dict[str, str] | None = None,
+        tools_to_call_from: list[Any] | None = None,
+        **kwargs: Any,
+    ) -> ChatMessage:
+        self.message_text = "\n".join(str(message.content or "") for message in messages)
+        del stop_sequences, response_format, kwargs
+        self.available_tool_names = [tool.name for tool in tools_to_call_from or []]
+        self.calls += 1
+        if self.calls == 1:
+            function = ChatMessageToolCallFunction(
+                name="workspace_open_component",
+                arguments={
+                    "component_id": "assignment-editor",
+                    "resource_uri": "course://assignment-draft",
+                },
+            )
+            call_id = "open-unknown-workspace"
+        else:
+            function = ChatMessageToolCallFunction(
+                name="final_answer",
+                arguments={"answer": "That workspace view is not supported."},
             )
             call_id = "final-answer"
         return ChatMessage(
@@ -818,6 +1064,95 @@ def test_workspace_tool_emits_validated_portable_panel_event() -> None:
     asyncio.run(scenario())
 
 
+def test_tool_returned_resource_is_authorized_for_later_workspace_call_in_same_run() -> None:
+    async def scenario() -> None:
+        model = ScriptedIssuedResourceWorkspaceModel()
+        registry = load_component_registry()
+        runtime = SmolagentsRuntime(
+            model_provider=ScriptedProvider(model),
+            tools=ToolCatalog(
+                [
+                    IssueResourceTool(),
+                    WorkspaceOpenComponentTool(registry, strict_visual_policy=False),
+                ]
+            ),
+        )
+        conversation_id = uuid4()
+        principal = public_principal()
+
+        result = await runtime.run(
+            context=AgentContext(
+                principal=principal,
+                conversation_id=conversation_id,
+                permitted_tool_ids=[ISSUE_RESOURCE_TOOL_ID, OPEN_COMPONENT_TOOL_ID],
+                permitted_resource_uris=[],
+            ),
+            input=AgentInput(conversation_id=conversation_id, text="Show assignment ideas."),
+        )
+
+        assert not [event for event in result.events if event.type == "agent.tool.failed"]
+        resource_event = next(event for event in result.events if event.type == "resource.read")
+        assert resource_event.payload == {"uri": ISSUED_RESOURCE_URI}
+        opened_event = next(
+            event for event in result.events if event.type == "workspace.panel.opened"
+        )
+        command = opened_event.payload["command"]
+        assert isinstance(command, dict)
+        panel = command["panel"]
+        assert isinstance(panel, dict)
+        assert panel["resource_uri"] == ISSUED_RESOURCE_URI
+
+        model.calls = 1
+        later_run = await runtime.run(
+            context=AgentContext(
+                principal=principal,
+                conversation_id=conversation_id,
+                permitted_tool_ids=[OPEN_COMPONENT_TOOL_ID],
+                permitted_resource_uris=[],
+            ),
+            input=AgentInput(conversation_id=conversation_id, text="Open those ideas again."),
+        )
+        failed_event = next(
+            event for event in later_run.events if event.type == "agent.tool.failed"
+        )
+        assert failed_event.payload == {
+            "tool_id": OPEN_COMPONENT_TOOL_ID,
+            "category": "permission_denied",
+            "reason_code": "resource_not_authorized_for_run",
+        }
+
+    asyncio.run(scenario())
+
+
+def test_workspace_failure_event_uses_safe_specific_reason_code() -> None:
+    async def scenario() -> None:
+        model = ScriptedUnknownWorkspaceModel()
+        registry = load_component_registry()
+        runtime = SmolagentsRuntime(
+            model_provider=ScriptedProvider(model),
+            tools=ToolCatalog([WorkspaceOpenComponentTool(registry)]),
+        )
+        conversation_id = uuid4()
+
+        result = await runtime.run(
+            context=AgentContext(
+                principal=public_principal(),
+                conversation_id=conversation_id,
+                permitted_tool_ids=[OPEN_COMPONENT_TOOL_ID],
+            ),
+            input=AgentInput(conversation_id=conversation_id, text="Open an assignment editor."),
+        )
+
+        failed_event = next(event for event in result.events if event.type == "agent.tool.failed")
+        assert failed_event.payload == {
+            "tool_id": OPEN_COMPONENT_TOOL_ID,
+            "category": "invalid_request",
+            "reason_code": "component_not_registered",
+        }
+
+    asyncio.run(scenario())
+
+
 def test_agent_owned_application_start_opens_canonical_draft_once() -> None:
     async def scenario() -> None:
         model = ScriptedApplicationStartModel()
@@ -990,6 +1325,51 @@ def test_toolcalling_adapter_discards_nonfinal_text_and_streams_final_answer() -
             "agent.message",
             "agent.run.completed",
         ]
+
+    asyncio.run(scenario())
+
+
+def test_runtime_requires_presentation_review_and_suppresses_rejected_draft() -> None:
+    async def scenario() -> None:
+        model = ScriptedPresentationReviewModel()
+        registry = load_component_registry()
+        runtime = SmolagentsRuntime(
+            model_provider=ScriptedProvider(model),
+            tools=ToolCatalog(
+                [
+                    WorkspaceOpenComponentTool(registry),
+                    WorkspaceReviewPresentationTool(),
+                ]
+            ),
+        )
+        conversation_id = uuid4()
+        text_deltas: list[str] = []
+
+        result = await runtime.run_observed(
+            context=AgentContext(
+                principal=public_principal(),
+                conversation_id=conversation_id,
+                permitted_tool_ids=[OPEN_COMPONENT_TOOL_ID, REVIEW_PRESENTATION_TOOL_ID],
+                permitted_resource_uris=[COURSE_SYLLABUS_URI, "course://schedule"],
+                metadata={"workspace_state": {"panels": []}},
+            ),
+            input=AgentInput(conversation_id=conversation_id, text="Show me the schedule."),
+            event_observer=lambda _event: None,
+            text_delta_observer=text_deltas.append,
+        )
+
+        expected = "I opened the schedule in the workspace."
+        assert result.output_text == expected
+        assert "".join(text_deltas) == expected
+        assert "This draft must not stream." not in "".join(text_deltas)
+        assert model.calls == 4
+        assert [
+            event.payload["tool_id"]
+            for event in result.events
+            if event.type == "agent.tool.requested"
+        ] == [OPEN_COMPONENT_TOOL_ID, REVIEW_PRESENTATION_TOOL_ID]
+        assert "Immediately before final_answer" in model.message_text
+        assert "workspace_review_presentation" in model.available_tool_names
 
     asyncio.run(scenario())
 

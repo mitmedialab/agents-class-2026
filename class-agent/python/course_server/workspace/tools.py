@@ -30,7 +30,12 @@ from .constants import (
     FOCUS_COMPONENT_TOOL_ID,
     LIST_COMPONENTS_TOOL_ID,
     OPEN_COMPONENT_TOOL_ID,
+    PRESENTATION_REVIEW_DECISION_STATE_KEY,
+    PRESENTATION_REVIEWED_STATE_KEY,
+    REVIEW_PRESENTATION_TOOL_ID,
     UPDATE_COMPONENT_TOOL_ID,
+    WORKSPACE_CHANGED_STATE_KEY,
+    WORKSPACE_VISIBLE_STATE_KEY,
 )
 from .models import (
     CloseWorkspaceCommand,
@@ -72,6 +77,18 @@ _APPLICANT_PHOTO_URI = re.compile(
     r"^applicant://[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-"
     r"[89ab][0-9a-f]{3}-[0-9a-f]{12}/photo$"
 )
+
+
+class _WorkspacePermissionError(PermissionError):
+    def __init__(self, message: str, *, reason_code: str) -> None:
+        super().__init__(message)
+        self.reason_code = reason_code
+
+
+class _WorkspaceValidationError(ToolValidationError):
+    def __init__(self, message: str, *, reason_code: str) -> None:
+        super().__init__(message)
+        self.reason_code = reason_code
 
 
 def _reject_unknown(
@@ -160,7 +177,10 @@ def _confirms_initial_application_name(
 
 def _authorize_resource(resource_uri: str | None, context: ToolExecutionContext) -> None:
     if resource_uri is not None and resource_uri not in context.permitted_resource_uris:
-        raise PermissionError(f"{resource_uri} is not authorized for this run")
+        raise _WorkspacePermissionError(
+            "The requested resource is not authorized for this run.",
+            reason_code="resource_not_authorized_for_run",
+        )
 
 
 def _visual_composition_text(panel: WorkspacePanel) -> str:
@@ -569,6 +589,82 @@ class WorkspaceListComponentsTool:
         )
 
 
+class WorkspaceReviewPresentationTool:
+    """Record the agent's final bounded presentation choice for this turn."""
+
+    id = REVIEW_PRESENTATION_TOOL_ID
+    description = (
+        "Review the trusted current workspace immediately before final_answer and choose the "
+        "presentation state that best serves the response. Use keep_current when a panel from a "
+        "prior turn remains appropriate, workspace_ready after opening, updating, or replacing "
+        "the workspace this turn, or no_visual when chat alone is clearest and no panel is open. "
+        "If the current workspace does not match the intended answer, use the workspace tools to "
+        "fix or close it first, then call this tool. Call final_answer immediately afterward; any "
+        "other tool call requires another review."
+    )
+    input_schema: ClassVar[dict[str, JsonValue]] = {
+        "type": "object",
+        "properties": {
+            "decision": {
+                "type": "string",
+                "enum": ["keep_current", "workspace_ready", "no_visual"],
+                "description": "Bounded presentation decision verified against workspace state.",
+            }
+        },
+        "required": ["decision"],
+        "additionalProperties": False,
+    }
+
+    async def execute(
+        self,
+        arguments: Mapping[str, JsonValue],
+        context: ToolExecutionContext,
+    ) -> ToolExecutionResult:
+        context.transient_state[PRESENTATION_REVIEWED_STATE_KEY] = False
+        context.transient_state.pop(PRESENTATION_REVIEW_DECISION_STATE_KEY, None)
+        _reject_unknown(arguments, frozenset({"decision"}))
+        decision = _required_string(arguments, "decision")
+        if decision not in {"keep_current", "workspace_ready", "no_visual"}:
+            raise _WorkspaceValidationError(
+                "decision must be keep_current, workspace_ready, or no_visual",
+                reason_code="presentation_review_invalid",
+            )
+
+        persisted_workspace_open = bool(_current_state(context).panels)
+        workspace_open = context.transient_state.get(WORKSPACE_VISIBLE_STATE_KEY)
+        if not isinstance(workspace_open, bool):
+            workspace_open = persisted_workspace_open
+        workspace_changed = context.transient_state.get(WORKSPACE_CHANGED_STATE_KEY) is True
+
+        valid = (
+            (decision == "keep_current" and workspace_open and not workspace_changed)
+            or (decision == "workspace_ready" and workspace_open and workspace_changed)
+            or (decision == "no_visual" and not workspace_open)
+        )
+        if not valid:
+            raise _WorkspaceValidationError(
+                "presentation decision does not match the trusted workspace state; "
+                "adjust the workspace before reviewing again",
+                reason_code="presentation_review_invalid",
+            )
+
+        context.transient_state[PRESENTATION_REVIEWED_STATE_KEY] = True
+        context.transient_state[PRESENTATION_REVIEW_DECISION_STATE_KEY] = decision
+        return ToolExecutionResult(
+            content={
+                "status": "reviewed",
+                "decision": decision,
+                "workspace_open": workspace_open,
+                "next_action": (
+                    "Call final_answer now. Any other tool call requires another presentation "
+                    "review."
+                ),
+            },
+            summary=f"Reviewed presentation: {decision}.",
+            storage_policy="ephemeral",
+        )
+
+
 class WorkspaceOpenComponentTool:
     id = OPEN_COMPONENT_TOOL_ID
     description = (
@@ -639,10 +735,13 @@ class WorkspaceOpenComponentTool:
                 resource_uri = default_resource_uri
         title = _optional_string(arguments, "title")
         props = _optional_object(arguments, "props") or {}
-        _authorize_resource(resource_uri, context)
         manifest = self._registry.get(component_id)
         if manifest is None:
-            raise ToolValidationError(f"unknown component: {component_id}")
+            raise _WorkspaceValidationError(
+                f"unknown component: {component_id}",
+                reason_code="component_not_registered",
+            )
+        _authorize_resource(resource_uri, context)
         application_open = (
             component_id == "draft-document" and resource_uri == COURSE_APPLICATION_URI
         )

@@ -6,6 +6,7 @@ import asyncio
 import json
 import re
 from collections.abc import Callable, Iterable, Mapping
+from dataclasses import replace
 from threading import Lock
 from typing import Any, cast
 
@@ -18,6 +19,10 @@ from smolagents.monitoring import LogLevel, Timing
 from agent_core import AgentContext, AgentInput, AgentResult, Event, ModelProvider
 from course_server.agent.capabilities import (
     GET_APPLICATION_TOOL_ID,
+    LIST_FAQ_UPDATES_TOOL_ID,
+    LIST_MY_COMMUNICATIONS_TOOL_ID,
+    READ_MY_COMMUNICATION_TOOL_ID,
+    SEARCH_FAQ_TOOL_ID,
     VISIT_WEBPAGE_TOOL_ID,
     WEB_SEARCH_TOOL_ID,
     ExecutableTool,
@@ -28,13 +33,22 @@ from course_server.agent.capabilities import (
     ToolProviderError,
     ToolValidationError,
 )
+from course_server.workspace.constants import (
+    PRESENTATION_REVIEW_DECISION_STATE_KEY,
+    PRESENTATION_REVIEWED_STATE_KEY,
+    REVIEW_PRESENTATION_TOOL_ID,
+    WORKSPACE_CHANGED_STATE_KEY,
+    WORKSPACE_VISIBLE_STATE_KEY,
+)
 
 _JSON_OBJECT = TypeAdapter(dict[str, JsonValue])
 _TOOL_NAME_CHARACTER = re.compile(r"[^A-Za-z0-9_]")
+_TOOL_FAILURE_REASON_CODE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _FINAL_ANSWER_START = re.compile(r'"answer"\s*:\s*"')
 _PRESENTATION_EVENT_TYPES = frozenset(
     {
         "email.ta_question.confirmation_requested",
+        "instructor.message.confirmation_requested",
         "workspace.panel.opened",
         "workspace.panel.updated",
     }
@@ -140,6 +154,33 @@ def _agent_instructions(
         entries = "\n".join(f"- {entry}" for entry in authorized_resource_index)
         sections.append(f"Official information available through tools:\n{entries}")
 
+    if {
+        SEARCH_FAQ_TOOL_ID,
+        LIST_FAQ_UPDATES_TOOL_ID,
+        LIST_MY_COMMUNICATIONS_TOOL_ID,
+        READ_MY_COMMUNICATION_TOOL_ID,
+    }.issubset(context.permitted_tool_ids):
+        sections.append(
+            "Distinguish shared, staff-approved course Q&A from this student's own private "
+            "communications. List recent public FAQ additions or search them by topic, and "
+            "list/read the student's "
+            "owned communications for private or previous staff exchanges. If a request covers "
+            "both categories, check both authorized sources before reporting that nothing is "
+            "available."
+        )
+
+    attention_items = context.metadata.get("attention_items")
+    if isinstance(attention_items, list) and attention_items:
+        sections.append(
+            "Trusted, role-filtered notification-center items that may need attention:\n"
+            + json.dumps(attention_items, ensure_ascii=False, sort_keys=True)
+            + "\nBriefly surface materially new updates, staff replies, staff action items, and "
+            "assignment deadlines within two weeks, then suggest a concrete next action. "
+            "Keep this concise when the user's current request is unrelated, do not repeat an "
+            "item already addressed in recent dialogue, and use authorized tools before adding "
+            "details that are not present here."
+        )
+
     workspace_state = context.metadata.get("workspace_state")
     if (
         isinstance(workspace_state, dict)
@@ -149,6 +190,15 @@ def _agent_instructions(
         sections.append(
             "Current trusted workspace state for follow-up tool arguments only:\n"
             + json.dumps(workspace_state, ensure_ascii=False, sort_keys=True)
+        )
+
+    if REVIEW_PRESENTATION_TOOL_ID in context.permitted_tool_ids:
+        sections.append(
+            "Immediately before final_answer, review the trusted current workspace and call "
+            "workspace.review_presentation. If the open workspace is stale or a clearer "
+            "registered presentation would help, use the workspace tools to close, replace, or "
+            "build it before reviewing. Choose no_visual only when chat alone is clearest and no "
+            "workspace panel is open. Any tool call after the review requires another review."
         )
 
     if supporting_history:
@@ -206,6 +256,13 @@ def _tool_error_category(error: Exception) -> str:
     if isinstance(error, (TypeError, ValueError)):
         return "invalid_request"
     return "temporary_failure"
+
+
+def _tool_error_reason_code(error: Exception, category: str) -> str:
+    reason_code = getattr(error, "reason_code", None)
+    if isinstance(reason_code, str) and _TOOL_FAILURE_REASON_CODE.fullmatch(reason_code):
+        return reason_code
+    return category
 
 
 def _render_tool_result(result: ToolExecutionResult) -> str:
@@ -283,8 +340,13 @@ def _partial_json_answer(arguments: str) -> str | None:
 class _FinalAnswerDeltaExtractor:
     """Extract text only after the model selects the final-answer tool."""
 
-    def __init__(self, observer: Callable[[str], None]) -> None:
+    def __init__(
+        self,
+        observer: Callable[[str], None],
+        should_emit: Callable[[], bool],
+    ) -> None:
         self._observer = observer
+        self._should_emit = should_emit
         self._tool_names: dict[int, str] = {}
         self._arguments: dict[int, str] = {}
         self._emitted: dict[int, str] = {}
@@ -311,6 +373,8 @@ class _FinalAnswerDeltaExtractor:
                 self._emit_new(index, answer_prefix)
 
     def _emit_new(self, index: int, answer_prefix: str) -> None:
+        if not self._should_emit():
+            return
         emitted = self._emitted.get(index, "")
         if not answer_prefix.startswith(emitted):
             return
@@ -319,18 +383,26 @@ class _FinalAnswerDeltaExtractor:
             self._observer(new_text)
             self._emitted[index] = answer_prefix
 
+    def finish_step(self) -> None:
+        self._tool_names.clear()
+        self._arguments.clear()
+        self._emitted.clear()
+
 
 def _run_streaming_agent(
     agent: ToolCallingAgent,
     text: str,
     text_delta_observer: Callable[[str], None],
+    should_emit_final_answer: Callable[[], bool],
 ) -> object:
-    extractor = _FinalAnswerDeltaExtractor(text_delta_observer)
+    extractor = _FinalAnswerDeltaExtractor(text_delta_observer, should_emit_final_answer)
     output: object | None = None
     stream = cast(Iterable[object], agent.run(text, stream=True, reset=False))
     for item in stream:
         if isinstance(item, ChatMessageStreamDelta):
             extractor.add(item)
+        elif isinstance(item, ActionStep):
+            extractor.finish_step()
         elif isinstance(item, FinalAnswerStep):
             output = item.output
     if output is None:
@@ -355,6 +427,53 @@ class _EventCollector:
             return list(self._events)
 
 
+class _RunToolState:
+    """Authorization state issued by trusted tools during one runtime invocation."""
+
+    def __init__(self, execution_context: ToolExecutionContext) -> None:
+        self._execution_context = execution_context
+        self._permitted_resource_uris = set(execution_context.permitted_resource_uris)
+        transient_state = execution_context.transient_state
+        panels = execution_context.workspace_state.get("panels")
+        transient_state[PRESENTATION_REVIEWED_STATE_KEY] = False
+        transient_state.pop(PRESENTATION_REVIEW_DECISION_STATE_KEY, None)
+        transient_state[WORKSPACE_CHANGED_STATE_KEY] = False
+        transient_state[WORKSPACE_VISIBLE_STATE_KEY] = bool(isinstance(panels, list) and panels)
+
+    def execution_context(self) -> ToolExecutionContext:
+        return replace(
+            self._execution_context,
+            permitted_resource_uris=frozenset(self._permitted_resource_uris),
+        )
+
+    def begin_tool_call(self) -> None:
+        self._execution_context.transient_state[PRESENTATION_REVIEWED_STATE_KEY] = False
+        self._execution_context.transient_state.pop(
+            PRESENTATION_REVIEW_DECISION_STATE_KEY,
+            None,
+        )
+
+    def authorize_tool_result(self, result: ToolExecutionResult) -> None:
+        self._permitted_resource_uris.update(result.resource_uris)
+        workspace_visible = (
+            self._execution_context.transient_state.get(WORKSPACE_VISIBLE_STATE_KEY) is True
+        )
+        workspace_changed = False
+        for event in result.emitted_events:
+            if event.type in {"workspace.panel.opened", "workspace.panel.updated"}:
+                workspace_visible = True
+                workspace_changed = True
+            elif event.type == "workspace.panel.closed":
+                workspace_visible = False
+                workspace_changed = True
+        if workspace_changed:
+            self._execution_context.transient_state[WORKSPACE_CHANGED_STATE_KEY] = True
+        self._execution_context.transient_state[WORKSPACE_VISIBLE_STATE_KEY] = workspace_visible
+
+    def presentation_reviewed(self) -> bool:
+        return self._execution_context.transient_state.get(PRESENTATION_REVIEWED_STATE_KEY) is True
+
+
 class _SmolagentsToolAdapter(Tool):  # type: ignore[misc]
     skip_forward_signature_validation = True
 
@@ -362,12 +481,12 @@ class _SmolagentsToolAdapter(Tool):  # type: ignore[misc]
         self,
         *,
         platform_tool: ExecutableTool,
-        execution_context: ToolExecutionContext,
+        run_tool_state: _RunToolState,
         agent_context: AgentContext,
         collector: _EventCollector,
     ) -> None:
         self._platform_tool = platform_tool
-        self._execution_context = execution_context
+        self._run_tool_state = run_tool_state
         self._agent_context = agent_context
         self._collector = collector
         self.name = _runtime_tool_name(platform_tool.id)
@@ -377,6 +496,7 @@ class _SmolagentsToolAdapter(Tool):  # type: ignore[misc]
         super().__init__()
 
     def forward(self, **arguments: Any) -> str:
+        self._run_tool_state.begin_tool_call()
         portable_arguments = _JSON_OBJECT.validate_python(arguments)
         common = {
             "actor": "course-agent",
@@ -391,24 +511,34 @@ class _SmolagentsToolAdapter(Tool):  # type: ignore[misc]
         self._collector.add(Event(type="agent.tool.requested", payload=requested_payload, **common))
         try:
             result = asyncio.run(
-                self._platform_tool.execute(portable_arguments, self._execution_context)
+                self._platform_tool.execute(
+                    portable_arguments,
+                    self._run_tool_state.execution_context(),
+                )
             )
         except Exception as error:
             category = _tool_error_category(error)
+            reason_code = _tool_error_reason_code(error, category)
             self._collector.add(
                 Event(
                     type="agent.tool.failed",
-                    payload={"tool_id": self._platform_tool.id, "category": category},
+                    payload={
+                        "tool_id": self._platform_tool.id,
+                        "category": category,
+                        "reason_code": reason_code,
+                    },
                     **common,
                 )
             )
             message = (
                 str(error)
                 if isinstance(error, (ToolProviderError, ToolValidationError))
+                or reason_code != category
                 else "tool execution failed"
             )
             raise RuntimeError(f"{category}: {message}") from error
 
+        self._run_tool_state.authorize_tool_result(result)
         for resource_uri in result.resource_uris:
             self._collector.add(
                 Event(
@@ -444,6 +574,23 @@ class _SmolagentsToolAdapter(Tool):  # type: ignore[misc]
 def _conversation_history(context: AgentContext) -> str:
     lines: list[str] = []
     for event in context.recent_events:
+        if event.type == "instructor.message.confirmation_requested":
+            subject = event.payload.get("subject")
+            if isinstance(subject, str):
+                lines.append(f"Instructor message prepared for confirmation: {subject}")
+            continue
+        if event.type in {"instructor.message.sent", "instructor.message.cancelled"}:
+            subject = event.payload.get("subject")
+            message_action = "sent" if event.type.endswith("sent") else "cancelled"
+            if isinstance(event.payload.get("source_question_id"), str):
+                message_action = (
+                    "resolved online" if event.type.endswith("sent") else "reply cancelled"
+                )
+            if isinstance(subject, str):
+                lines.append(f"Trusted instructor action — {message_action}: {subject}")
+            else:
+                lines.append(f"Trusted instructor action — prepared message {message_action}.")
+            continue
         if event.type == "email.ta_question.confirmation_requested":
             question = event.payload.get("question")
             if isinstance(question, str):
@@ -586,10 +733,12 @@ class SmolagentsRuntime:
             permitted_resource_uris=frozenset(context.permitted_resource_uris),
             workspace_state=_JSON_OBJECT.validate_python(raw_workspace_state),
         )
+        run_tool_state = _RunToolState(execution_context)
+        presentation_review_required = REVIEW_PRESENTATION_TOOL_ID in context.permitted_tool_ids
         runtime_tools = [
             _SmolagentsToolAdapter(
                 platform_tool=tool,
-                execution_context=execution_context,
+                run_tool_state=run_tool_state,
                 agent_context=context,
                 collector=collector,
             )
@@ -603,15 +752,32 @@ class SmolagentsRuntime:
         )
 
         model = self._model_provider.create_model()
+
+        def presentation_review_check(
+            _final_answer: object,
+            _memory: object,
+            *,
+            agent: object,
+        ) -> bool:
+            del agent
+            if not run_tool_state.presentation_reviewed():
+                raise ValueError(
+                    "call workspace.review_presentation immediately before final_answer"
+                )
+            return True
+
         agent = ToolCallingAgent(
             tools=runtime_tools,
             model=model,
             prompt_templates=_TOOL_CALLING_PROMPT_TEMPLATES,
             instructions=instructions,
-            max_steps=self._max_steps,
+            max_steps=self._max_steps + (1 if presentation_review_required else 0),
             add_base_tools=False,
             max_tool_threads=1,
             stream_outputs=text_delta_observer is not None,
+            final_answer_checks=(
+                [presentation_review_check] if presentation_review_required else []
+            ),
             verbosity_level=LogLevel.OFF,
         )
         _seed_dialogue_memory(agent, context)
@@ -636,12 +802,20 @@ class SmolagentsRuntime:
         if text_delta_observer is None:
             output = await asyncio.to_thread(agent.run, input.text, reset=False)
         else:
+            should_emit_final_answer = (
+                run_tool_state.presentation_reviewed
+                if presentation_review_required
+                else lambda: True
+            )
             output = await asyncio.to_thread(
                 _run_streaming_agent,
                 agent,
                 input.text,
                 text_delta_observer,
+                should_emit_final_answer,
             )
+        if presentation_review_required and not run_tool_state.presentation_reviewed():
+            raise RuntimeError("agent completed without the required presentation review")
         collected_events = collector.snapshot()
         output_text = str(output)
         agent_message = Event(

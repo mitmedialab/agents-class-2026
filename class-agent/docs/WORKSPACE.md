@@ -41,12 +41,30 @@ schemas, and JSON results. They are application wrappers around the canonical MC
 concepts, not a competing tool protocol. The standalone MCP transport/gateway remains
 separate from this stable contract.
 
+`workspace.review_presentation` is the turn-ending presentation checkpoint. Immediately before
+`final_answer`, the agent must select one bounded decision: keep an appropriate panel inherited
+from a prior turn, confirm a panel opened or changed during this turn, or use chat alone when no
+panel is open. Platform code verifies the choice against trusted run state. A mismatched choice
+fails with `presentation_review_invalid`, and any later tool call invalidates a successful review.
+The review request is inspectable through ordinary tool events, while no private rationale or
+free-form chain of thought is persisted. This tool adds runtime policy only; it does not change the
+versioned workspace schema.
+
+Opening a panel validates the component ID against the trusted registry before checking an
+optional resource URI. An invented component therefore fails with the safe
+`component_not_registered` reason instead of being misreported as a permission failure. A valid
+component still requires its resource URI to be authorized before any content is opened or read.
+Tool failures persist and stream a bounded `reason_code` so the browser can present a useful
+message without exposing raw exceptions or backing paths.
+
 When workspace tools are authorized, runtime policy treats registered components as
 the preferred presentation surface. The agent should display schedules, documents,
 and other suitable structured results in a component rather than paste their complete
 contents into chat. When a workspace component carries the detailed result, chat gives
 only a short handoff or the single next question needed from the user; it does not restate
-content already visible in the component. This preference never bypasses component, prop,
+content already visible in the component. The final checkpoint lets the agent keep, replace,
+update, construct, close, or decline a workspace visual according to the current intent; it does
+not force a visual when prose is clearer. This preference never bypasses component, prop,
 operation, or resource authorization validation, and it does not permit generated JavaScript
 or arbitrary UI.
 
@@ -55,8 +73,13 @@ inside the column. The current panel receives the full available height and omit
 chrome; its close action floats unobtrusively over the canvas. Opening or focusing a
 different subject, artifact, or view replaces the previous panel. Component content
 remains independently scrollable, so profile descriptions and other material below the
-initial viewport are not clipped. Mobile uses the same current-panel model below the
-conversation area.
+initial viewport are not clipped. At widths of 900 pixels or less, an explicit **Chat / Workspace**
+switch selects Workspace when a panel opens and gives the current panel the full available content
+height above the shared composer. Chat remains one switch away rather than competing with the panel
+in a cramped stacked layout.
+The workspace has priority over the notification center in their shared presentation slot. An open
+workspace hides, but does not consume, the current notification projection; closing the workspace
+restores it immediately.
 
 The server reconstructs workspace state from all prior panel events before a run.
 Commands reject unknown components, invalid props, unsupported operations, duplicate
@@ -110,8 +133,9 @@ conversations; it does not weaken the resource-content endpoint's authorization.
 ## Built-in components
 
 `document-viewer` opens a specific Markdown, plain-text, or PDF artifact when the user
-wants to navigate, search, or discuss its particular content. It is not used merely
-because a knowledge source is stored as a document.
+wants to navigate, search, or discuss its particular content. PDF pages are contain-fitted to
+the viewer's current usable width and height and rerender when that surface resizes. It is not used
+merely because a knowledge source is stored as a document.
 
 `visual-composition` is the default presentation component for synthesized knowledge
 without a specialized view. The agent reads the source, selects the useful information,
@@ -160,6 +184,8 @@ Application drafts use short text, email, URL, year, multiline, and attachment-r
 presentations without exposing the internal photo receipt as an editable value. Bounded
 invalid text remains durable as a candidate so applicants can correct it without losing
 work. These are additive component-props changes; version 1.0.0 drafts remain valid.
+Reading an authorized assignment opens the exact stored Markdown in the safe renderer as a
+read-only workspace document. No assignment-authoring component is registered.
 The runtime receives current trusted workspace state and instructs the agent to update
 the existing panel rather than open duplicates. Updates are canonical workspace events
 and survive conversation reloads. A rendered draft never counts as submission,
