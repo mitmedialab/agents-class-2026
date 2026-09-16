@@ -1759,7 +1759,29 @@ def create_app(
             },
         )
         persisted_events = [event]
-        if payload.action == "draft.change":
+        if payload.action == "document.change_page":
+            command = UpdateWorkspaceCommand(
+                panel_id=panel.id,
+                props={"page": payload.value},
+            )
+            try:
+                registry.apply(workspace, command)
+            except WorkspaceValidationError as error:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=str(error),
+                ) from error
+            persisted_events.append(
+                Event(
+                    type="workspace.panel.updated",
+                    actor="user",
+                    principal_user_id=principal.user_id,
+                    anonymous_session_id=principal.anonymous_session_id,
+                    conversation_id=conversation_id,
+                    payload={"command": command.model_dump(mode="json", exclude_none=True)},
+                )
+            )
+        elif payload.action == "draft.change":
             assert draft_update is not None
             command = UpdateWorkspaceCommand(
                 panel_id=panel.id,
@@ -1776,7 +1798,7 @@ def create_app(
                 )
             )
         await state.services.conversations.append_events(conversation_id, persisted_events)
-        return persisted_events[-1]
+        return persisted_events[-1] if payload.action == "draft.change" else event
 
     @router.get(
         "/conversations/{conversation_id}/browser/{session_id}/snapshot",

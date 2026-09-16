@@ -88,7 +88,9 @@ before changing UI state. User focus/close actions return to the server for the 
 validation and durable event append.
 Calendar selection/view changes and document page/find actions emit validated
 `workspace.interaction` events, which are available to the next agent turn without
-storing DOM details.
+storing DOM details. A PDF page change also updates the document panel's canonical `page` prop in
+the same append, so the focused page survives reloads and is supplied to the next run as trusted
+workspace state rather than inferred from recent prose.
 
 Visual Composition `1.1.0` adds a backward-compatible registered-image form. An image
 may still carry a verified HTTPS `url`, or it may carry an `asset_id` returned by the

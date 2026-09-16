@@ -96,6 +96,30 @@ class RecordingRuntime:
                     },
                 ),
             )
+        elif input.text == "open slides":
+            events.insert(
+                0,
+                Event(
+                    type="workspace.panel.opened",
+                    actor="course-agent",
+                    principal_user_id=context.principal.user_id,
+                    anonymous_session_id=context.principal.anonymous_session_id,
+                    conversation_id=context.conversation_id,
+                    payload={
+                        "command": {
+                            "type": "open",
+                            "panel": {
+                                "id": "40000000-0000-4000-8000-000000000002",
+                                "component_id": "document-viewer",
+                                "title": "Week 1 Slides",
+                                "resource_uri": "course://slides/week-01",
+                                "props": {"page": 1},
+                                "state": {},
+                            },
+                        }
+                    },
+                ),
+            )
         return AgentResult(
             input_id=input.id,
             conversation_id=context.conversation_id,
@@ -935,6 +959,49 @@ def test_workspace_actions_validate_existing_panels_and_persist_events() -> None
         ).status_code
         == 400
     )
+
+
+def test_document_page_interaction_persists_canonical_workspace_page() -> None:
+    client, _, runtime = _build_client()
+    conversation_id = _create_conversation(client)
+    opened = client.post(
+        f"/conversations/{conversation_id}/run",
+        json={"text": "open slides"},
+    )
+    assert opened.status_code == 200
+
+    changed = client.post(
+        f"/conversations/{conversation_id}/workspace/interactions",
+        json={
+            "panel_id": "40000000-0000-4000-8000-000000000002",
+            "action": "document.change_page",
+            "value": 9,
+        },
+    )
+    assert changed.status_code == 200
+    assert changed.json()["type"] == "workspace.interaction"
+
+    response = client.post(
+        f"/conversations/{conversation_id}/run",
+        json={"text": "What is on this slide?"},
+    )
+    assert response.status_code == 200
+    workspace = runtime.contexts[-1].metadata["workspace_state"]
+    assert isinstance(workspace, dict)
+    panels = workspace["panels"]
+    assert isinstance(panels, list)
+    panel = cast(dict[str, Any], panels[0])
+    props = cast(dict[str, Any], panel["props"])
+    assert props["page"] == 9
+
+    detail = client.get(f"/conversations/{conversation_id}")
+    assert [
+        event["type"] for event in detail.json()["events"] if event["type"].startswith("workspace.")
+    ] == [
+        "workspace.panel.opened",
+        "workspace.interaction",
+        "workspace.panel.updated",
+    ]
 
 
 def test_application_draft_opens_complete_and_persists_user_edits() -> None:
