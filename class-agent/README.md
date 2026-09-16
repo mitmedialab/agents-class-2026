@@ -2,7 +2,7 @@
 
 Class Agent is the extensible Course Agent platform described in [CONSTITUTION.md](CONSTITUTION.md). It is designed for an MIT Media Lab course and favors explicit, portable contracts that students can inspect and extend.
 
-The repository is currently at **Phase 7**, plus the explicitly authorized course-email workflow from Phase 10: validated native workspace components over the Phase 6 Course Agent, with an optional Gmail or Microsoft 365 mailbox worker for unanswered student questions and email-moderated FAQ publication. It contains stable core and workspace contracts, access-code and anonymous authentication, portable PostgreSQL conversation/event history, a `ToolCallingAgent` adapter, public course resources and search, private course applications, typed workspace tools, an event-derived panel workspace, visual compositions, a specific-artifact DocumentViewer, and a month/agenda Calendar. It intentionally does not yet contain MCP Apps, Agent Bridge, or a browser extension. It loads standard `SKILL.md` bundles progressively: the model initially sees only login-authorized skill metadata and reads full instructions or references on demand.
+The repository is currently at **Phase 7**, plus the explicitly authorized course-email workflow from Phase 10: validated native workspace components over the Phase 6 Course Agent, with an optional Gmail or Microsoft 365 mailbox worker for unanswered student questions and email-moderated FAQ publication. It contains stable core and workspace contracts, access-code and anonymous authentication, portable PostgreSQL conversation/event history, a `ToolCallingAgent` adapter, public course resources and search, private course applications, typed workspace tools, an event-derived panel workspace, visual compositions, a specific-artifact DocumentViewer, a month/agenda Calendar, and a role-scoped notification center for course releases, staff communications, and near assignment deadlines. It intentionally does not yet contain MCP Apps, Agent Bridge, or a browser extension. It loads standard `SKILL.md` bundles progressively: the model initially sees only login-authorized skill metadata and reads full instructions or references on demand.
 
 ## Requirements
 
@@ -90,6 +90,19 @@ normally belongs in protected production backups. See
 [docs/COURSE_RESOURCES.md](docs/COURSE_RESOURCES.md) for resource manifests, automatic
 indexing, uploads, and application-storage operations.
 
+Course assignments are one validated JSON file each under `ASSIGNMENT_DATA_PATH` (default
+`var/assignments/`). Released assignments are available to logged-in students and TAs through the
+agent and drive the notification center's release and fourteen-day deadline items; reading one opens
+the exact posted Markdown in the workspace. The application does not expose an assignment-authoring
+tool or editor. See
+[docs/ASSIGNMENTS.md](docs/ASSIGNMENTS.md) for the exact schema and operations.
+
+Logged-in instructors can also prepare an in-app message for all active students or a validated
+set of specific students through the instructor-only messaging skill. The platform snapshots the
+resolved recipients, shows the exact subject, message, and audience, and requires a separate Send
+or Cancel action before delivery. Confirmed messages remain in each recipient's Communications
+stack and authorized agent context until the student marks them read.
+
 Role-scoped course resources live under `COURSE_DATA_PATH` (default `data/`): student
 resources are available to logged-in students and instructors, while instructor resources
 are available only to instructors. Their contents are ignored by Git and are never added to
@@ -99,12 +112,32 @@ Authenticated students can optionally escalate a question that the maintained si
 appropriate research cannot answer. The agent prepares the exact email, but platform code
 requires the student to choose **Send** before the separate worker contacts course staff.
 Staff replies are matched to the question, stored privately, emailed to the account address,
-and added to that student's conversation. The staff reply must place `PUBLISH` or `PRIVATE` on a
-standalone line immediately before or after the answer. `PUBLISH` also adds the redacted question
+added to that student's conversation, and replace the pending thread in the student's notification
+center. The staff reply must place `PUBLISH` or `PRIVATE` on a
+standalone line immediately before or after the answer (`PUBLIC` is accepted as an alias for
+`PUBLISH`). The command and adjacent blank lines are removed from the student-facing answer.
+`PUBLISH` also adds the redacted question
 and answer to searchable `course://faq` knowledge and generates an unread login notification for
 students, while `PRIVATE` keeps it student-specific. Configure each cloned deployment with its
 own dedicated Gmail or Outlook mailbox, staff list, and provider credentials; see
 [docs/EMAIL.md](docs/EMAIL.md).
+
+The agent can list and read the logged-in student's complete private communication history on
+demand. This includes questions whose student identity was hidden from staff and confirmed in-app
+messages addressed to that student. Platform code derives the owner from the active session; no
+tool argument can select another student. Only a staff reply explicitly marked `PUBLISH` is also
+available to other users through the public course Q&A/FAQ.
+Recent published Q&A additions can be listed without a topical query, while topic-specific FAQ
+questions use the separate public search tool.
+
+For logged-in course members, active updates, communications, and near deadlines appear
+automatically as a compact right-edge card stack. A small **See more** control keeps read updates,
+resolved communications, and past deadlines available as newest-first history without treating them
+as active again. Each authenticated page load also asks the Course Agent for a fresh greeting using those same
+authorized items. It gives a compact agent-authored list separating new changes from pending
+communications and assignments, or suggests something useful when the projection is empty. A
+successful welcome acknowledges the Updates visible for that opening so they are absent next time;
+ongoing Communications and Upcoming items remain until their own state changes.
 
 Staff-published FAQ knowledge is kept separately from maintained course files in one local,
 versioned JSON file at `var/course-knowledge/published-faq.json`. The mail worker updates it
@@ -155,6 +188,7 @@ shared/course/            public course content and per-resource manifests
 shared/registry/          public resource and trusted component registries
 data/                     untracked role-scoped student and instructor resources
 var/course-knowledge/     local generated public FAQ knowledge
+var/assignments/          local validated assignment JSON records
 docs/                    architecture and versioning decisions
 ```
 

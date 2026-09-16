@@ -1,5 +1,12 @@
 import type { Conversation, PrincipalContext } from "@class-agent/protocol";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App.js";
 import * as api from "./api.js";
@@ -7,18 +14,20 @@ import * as api from "./api.js";
 vi.mock("./api.js", () => ({
   applyWorkspacePanelAction: vi.fn(),
   clickBrowserSession: vi.fn(),
+  confirmInstructorMessage: vi.fn(),
   confirmTAQuestion: vi.fn(),
   continueAgentAfterEvent: vi.fn(),
   createConversation: vi.fn(),
   ensureApplicationDraft: vi.fn(),
+  generatePageGreeting: vi.fn(),
   getCourseResourceContent: vi.fn(),
   getConversation: vi.fn(),
+  getNotificationCenter: vi.fn(),
   getPrincipal: vi.fn(),
   listConversations: vi.fn(),
-  listNotifications: vi.fn(),
   login: vi.fn(),
   logout: vi.fn(),
-  markNotificationRead: vi.fn(),
+  markNotificationCenterItemRead: vi.fn(),
   recordWorkspaceInteraction: vi.fn(),
   resizeBrowserSession: vi.fn(),
   scrollBrowserSession: vi.fn(),
@@ -74,8 +83,16 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(api.getPrincipal).mockResolvedValue(publicPrincipal);
   vi.mocked(api.listConversations).mockResolvedValue([conversation]);
-  vi.mocked(api.listNotifications).mockResolvedValue([]);
-  vi.mocked(api.markNotificationRead).mockResolvedValue();
+  vi.mocked(api.getNotificationCenter).mockResolvedValue({
+    generated_at: "2026-09-05T12:00:00Z",
+    unread_count: 0,
+    items: [],
+  });
+  vi.mocked(api.generatePageGreeting).mockResolvedValue({
+    output_text: "Hello. You have no new notifications or upcoming deadlines. We could review the schedule.",
+    event_ids: [],
+  });
+  vi.mocked(api.markNotificationCenterItemRead).mockResolvedValue();
   vi.mocked(api.continueAgentAfterEvent).mockResolvedValue({
     output_text: "Course staff now have that question. What else should we work on?",
     event_ids: [],
@@ -225,9 +242,32 @@ describe("Course Agent interface", () => {
       "placeholder",
       "Start typing to interact with the agent",
     );
-    expect(screen.getByTestId("workspace-shell")).toBeInTheDocument();
+    const workspaceShell = screen.getByTestId("workspace-shell");
+    const composerForm = screen.getByRole("form", { name: "Message Course Agent" });
+    expect(workspaceShell).toContainElement(composerForm);
     fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
     expect(screen.getByRole("button", { name: /Week one/ })).toBeInTheDocument();
+  });
+
+  it("keeps an expanding multiline composer in the workspace layout flow", () => {
+    render(<App />);
+
+    const composer = screen.getByRole<HTMLTextAreaElement>("textbox", {
+      name: "Message",
+    });
+    Object.defineProperty(composer, "scrollHeight", {
+      configurable: true,
+      value: 240,
+    });
+
+    fireEvent.change(composer, {
+      target: { value: "A long draft\nwith enough lines\nto expand the composer" },
+    });
+
+    expect(composer).toHaveStyle({ height: "160px" });
+    expect(
+      screen.getByRole("form", { name: "Message Course Agent" }).parentElement,
+    ).toBe(screen.getByTestId("workspace-shell"));
   });
 
   it("requires the student to confirm question details without exposing email metadata", async () => {
@@ -295,15 +335,18 @@ describe("Course Agent interface", () => {
     expect(
       screen.queryByText("I can ask course staff about this."),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("May I use a local model?")).toBeVisible();
+    expect(screen.getByRole("textbox", { name: "Question" })).toHaveValue(
+      "May I use a local model?",
+    );
     expect(
       screen.queryByText("The assignment page does not specify deployment."),
     ).not.toBeInTheDocument();
     expect(screen.queryByText("Q-2026-00001")).not.toBeInTheDocument();
-    expect(screen.queryByText("Assignment model")).not.toBeInTheDocument();
-    expect(screen.queryByText("Subject")).not.toBeInTheDocument();
-    expect(screen.queryByText("Question")).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Subject" })).not.toBeInTheDocument();
     expect(composer).toBeDisabled();
+    fireEvent.change(screen.getByRole("textbox", { name: "Question" }), {
+      target: { value: "May I use a local open-weight model?" },
+    });
     fireEvent.click(
       screen.getByRole("checkbox", { name: "Hide my name from course staff" }),
     );
@@ -315,6 +358,9 @@ describe("Course Agent interface", () => {
         "50000000-0000-4000-8000-000000000001",
         "send",
         "anonymous",
+        {
+          question: "May I use a local open-weight model?",
+        },
       ),
     );
     await waitFor(() =>
@@ -401,34 +447,228 @@ describe("Course Agent interface", () => {
     expect(screen.getByRole("textbox", { name: "Message" })).toBeEnabled();
   });
 
-  it("shows unread course knowledge to a student and saves acknowledgement", async () => {
+  it("shows student notifications automatically and removes the surface when caught up", async () => {
     vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
     vi.mocked(api.listConversations).mockResolvedValue([]);
-    vi.mocked(api.listNotifications).mockResolvedValue([
-      {
-        id: "60000000-0000-4000-8000-000000000001",
-        faq_entry_id: "70000000-0000-4000-8000-000000000001",
-        question: "Which assignments use groups?",
-        answer: "Assignments 2 and 4 use groups.",
-        published_at: "2026-09-05T12:00:00Z",
-      },
-    ]);
+    vi.mocked(api.getNotificationCenter).mockResolvedValue({
+      generated_at: "2026-09-05T12:00:00Z",
+      unread_count: 1,
+      items: [
+        {
+          id: "60000000-0000-4000-8000-000000000001",
+          section: "notifications",
+          kind: "course_update",
+          state: "unread",
+          title: "Which assignments use groups?",
+          detail: "Assignments 2 and 4 use groups.",
+          timestamp: "2026-09-05T12:00:00Z",
+          due_at: null,
+          action_label: "Discuss update",
+          action_prompt: "Explain this update.",
+          unread: true,
+          dismissible: true,
+          sender: null,
+        },
+      ],
+    });
+    vi.mocked(api.generatePageGreeting).mockResolvedValue({
+      output_text:
+        "Hello Alice. There is a new course clarification; we can review it together.",
+      event_ids: [],
+    });
 
     render(<App />);
 
     expect(
-      await screen.findByRole("complementary", { name: "Course updates" }),
+      await screen.findByRole("complementary", { name: "Notification center" }),
     ).toBeVisible();
+    const mobileView = screen.getByRole("group", { name: "Mobile view" });
+    const chatView = within(mobileView).getByRole("button", { name: "Chat" });
+    const updatesView = within(mobileView).getByRole("button", { name: /Updates/ });
+    expect(chatView).toHaveAttribute("aria-pressed", "true");
+    expect(updatesView).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(updatesView);
+    expect(screen.getByTestId("course-agent-interface").parentElement).toHaveAttribute(
+      "data-mobile-notifications-open",
+      "true",
+    );
+    fireEvent.click(chatView);
+    expect(screen.getByTestId("course-agent-interface").parentElement).toHaveAttribute(
+      "data-mobile-notifications-open",
+      "false",
+    );
+    expect(screen.getByTestId("course-agent-interface").parentElement).toHaveAttribute(
+      "data-notifications-open",
+      "true",
+    );
+    expect(
+      screen.queryByRole("button", { name: /Notifications/ }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("Which assignments use groups?")).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Mark read" }));
+    expect(
+      await screen.findByText(
+        "Hello Alice. There is a new course clarification; we can review it together.",
+      ),
+    ).toBeVisible();
+    expect(api.createConversation).toHaveBeenCalledWith("Course Agent welcome");
+    expect(api.generatePageGreeting).toHaveBeenCalledWith(
+      conversation.id,
+      expect.any(AbortSignal),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Schedule" }));
+    await waitFor(() =>
+      expect(api.streamAgentRun).toHaveBeenCalledWith(
+        conversation.id,
+        "Show me the course schedule.",
+        expect.any(Function),
+        expect.any(AbortSignal),
+      ),
+    );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Mark “Which assignments use groups?” read",
+      }),
+    );
 
     await waitFor(() =>
-      expect(api.markNotificationRead).toHaveBeenCalledWith(
+      expect(api.markNotificationCenterItemRead).toHaveBeenCalledWith(
         "60000000-0000-4000-8000-000000000001",
       ),
     );
     await waitFor(() =>
-      expect(screen.queryByRole("complementary", { name: "Course updates" })).toBeNull(),
+      expect(
+        screen.queryByRole("complementary", { name: "Notification center" }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("course-agent-interface").parentElement).toHaveAttribute(
+      "data-notifications-open",
+      "false",
+    );
+  });
+
+  it("keeps resolved communication history available without pre-solving it", async () => {
+    const actionPrompt =
+      "Show me any additional information available about the instructor message titled “Studio reminder”. Do not solve it or recommend an action. Ask what I want to do next.";
+    const agentResponse = "What would you like to do with this message?";
+    vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
+    vi.mocked(api.listConversations).mockResolvedValue([]);
+    vi.mocked(api.getNotificationCenter).mockResolvedValue({
+      generated_at: "2026-09-05T12:00:00Z",
+      unread_count: 0,
+      items: [],
+      history_items: [
+        {
+          id: "60000000-0000-4000-8000-000000000031",
+          section: "communications",
+          kind: "instructor_message",
+          state: "read",
+          title: "Studio reminder",
+          detail: "Bring your prototype to class.",
+          timestamp: "2026-09-04T12:00:00Z",
+          due_at: null,
+          action_label: "View details",
+          action_prompt: actionPrompt,
+          unread: false,
+          dismissible: false,
+          sender: null,
+        },
+      ],
+    });
+    vi.mocked(api.streamAgentRun).mockImplementation(async (_id, _text, onEvent) => {
+      onEvent({ kind: "text_final", text: agentResponse });
+      onEvent({ kind: "done" });
+    });
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("button", { name: "See more" }),
+    ).toBeVisible();
+    expect(screen.queryByText("Studio reminder")).not.toBeInTheDocument();
+    expect(screen.getByTestId("course-agent-interface").parentElement).toHaveAttribute(
+      "data-notifications-open",
+      "false",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "See more" }));
+    expect(await screen.findByText("Studio reminder")).toBeVisible();
+    expect(screen.getByTestId("course-agent-interface").parentElement).toHaveAttribute(
+      "data-notifications-open",
+      "true",
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Updates/ }));
+    expect(screen.getByTestId("course-agent-interface").parentElement).toHaveAttribute(
+      "data-mobile-notifications-open",
+      "true",
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "View details: Studio reminder" }),
+    );
+
+    await waitFor(() =>
+      expect(api.streamAgentRun).toHaveBeenCalledWith(
+        conversation.id,
+        actionPrompt,
+        expect.any(Function),
+        expect.any(AbortSignal),
+      ),
+    );
+    const presentedCard = await screen.findByRole("article", {
+      name: "Communication: Studio reminder",
+    });
+    expect(
+      screen.queryByRole("complementary", { name: "Notification center" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("course-agent-interface").parentElement).toHaveAttribute(
+      "data-notifications-open",
+      "false",
+    );
+    expect(
+      within(presentedCard).getByText("Bring your prototype to class."),
+    ).toBeVisible();
+    expect(within(presentedCard).queryByText("View details")).not.toBeInTheDocument();
+    const response = await screen.findByText(agentResponse);
+    expect(
+      presentedCard.compareDocumentPosition(response) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("asks the agent for a caught-up greeting on authenticated page load", async () => {
+    vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
+    vi.mocked(api.listConversations).mockResolvedValue([]);
+
+    render(<App />);
+
+    expect(
+      await screen.findByText(
+        "Hello. You have no new notifications or upcoming deadlines. We could review the schedule.",
+      ),
+    ).toBeVisible();
+    expect(api.generatePageGreeting).toHaveBeenCalledOnce();
+    expect(
+      screen.queryByRole("complementary", { name: "Notification center" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("retries an interrupted authenticated page greeting without showing the public welcome", async () => {
+    vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
+    vi.mocked(api.listConversations).mockResolvedValue([]);
+    vi.mocked(api.generatePageGreeting)
+      .mockRejectedValueOnce(new Error("connection interrupted"))
+      .mockResolvedValueOnce({
+        output_text: "Hello Alice. Your course updates are ready.",
+        event_ids: [],
+      });
+
+    render(<App />);
+
+    expect(
+      await screen.findByText("Hello Alice. Your course updates are ready."),
+    ).toBeVisible();
+    expect(api.generatePageGreeting).toHaveBeenCalledTimes(2);
+    expect(document.querySelector(".latest-response")).not.toHaveTextContent(
+      /Welcome\. I’m the Course Agent/,
     );
   });
 
@@ -945,7 +1185,7 @@ describe("Course Agent interface", () => {
     );
   });
 
-  it("returns to a newly animated welcome after five minutes without activity", async () => {
+  it("keeps the current draft when time passes without a page reload", async () => {
     vi.useFakeTimers();
     try {
       render(<App />);
@@ -961,22 +1201,11 @@ describe("Course Agent interface", () => {
       const composer = screen.getByRole("textbox", { name: "Message" });
       fireEvent.change(composer, { target: { value: "An unfinished thought" } });
 
-      act(() => vi.advanceTimersByTime(4 * 60 * 1000));
-      fireEvent.pointerMove(window);
-      act(() => vi.advanceTimersByTime(5 * 60 * 1000 - 1));
+      act(() => vi.advanceTimersByTime(24 * 60 * 60 * 1000));
       expect(document.querySelector(".latest-response")).toHaveTextContent(
         /Welcome\. I’m the Course Agent/,
       );
-
-      act(() => vi.advanceTimersByTime(1));
-      expect(document.querySelector(".latest-response")).toHaveTextContent(
-        /Welcome\. I’m the Course Agent/,
-      );
-      expect(document.querySelector(".latest-response")).toHaveAttribute(
-        "data-staggered",
-        "true",
-      );
-      expect(composer).toHaveValue("");
+      expect(composer).toHaveValue("An unfinished thought");
     } finally {
       vi.clearAllTimers();
       vi.useRealTimers();
@@ -1033,6 +1262,15 @@ describe("Course Agent interface", () => {
         state: {},
       },
     };
+    const openedEvent = {
+      ...previousEvent,
+      id: "30000000-0000-4000-8000-000000000008",
+      type: "workspace.panel.opened",
+      payload: { command: openCommand },
+    };
+    vi.mocked(api.getConversation)
+      .mockResolvedValueOnce({ conversation, events: [previousEvent] })
+      .mockResolvedValueOnce({ conversation, events: [previousEvent, openedEvent] });
     vi.mocked(api.streamAgentRun).mockImplementation(async (_id, _text, onEvent) => {
       onEvent({ kind: "workspace", command: openCommand });
       onEvent({ kind: "text_final", text: "I opened the course schedule." });
@@ -1063,6 +1301,24 @@ describe("Course Agent interface", () => {
       "data-tabbed",
       "false",
     );
+    const mobileView = screen.getByRole("group", { name: "Mobile view" });
+    const chatView = within(mobileView).getByRole("button", { name: "Chat" });
+    const workspaceView = within(mobileView).getByRole("button", {
+      name: "Workspace",
+    });
+    expect(workspaceView).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("course-agent-interface").parentElement).toHaveAttribute(
+      "data-mobile-workspace-open",
+      "true",
+    );
+    fireEvent.click(chatView);
+    expect(chatView).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("course-agent-interface").parentElement).toHaveAttribute(
+      "data-mobile-workspace-open",
+      "false",
+    );
+    fireEvent.click(workspaceView);
+    expect(workspaceView).toHaveAttribute("aria-pressed", "true");
     expect(screen.queryByRole("tablist", { name: "Workspace panels" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Apply" })).not.toBeInTheDocument();
     expect(api.getCourseResourceContent).toHaveBeenCalledWith("course://schedule");
@@ -1089,12 +1345,159 @@ describe("Course Agent interface", () => {
     expect(screen.getByRole("button", { name: "Apply" })).toBeInTheDocument();
   });
 
-  it("replaces the prior workspace panel when a new focus opens", async () => {
+  it("gives the workspace the right-side slot and restores notifications after close", async () => {
+    const panelId = "40000000-0000-4000-8000-000000000021";
+    const studentConversation = {
+      ...conversation,
+      user_id: studentPrincipal.user_id,
+      anonymous_session_id: null,
+    };
+    vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
+    vi.mocked(api.listConversations).mockResolvedValue([]);
+    vi.mocked(api.createConversation).mockResolvedValue(studentConversation);
+    vi.mocked(api.getNotificationCenter).mockResolvedValue({
+      generated_at: "2026-09-05T12:00:00Z",
+      unread_count: 0,
+      items: [
+        {
+          id: "60000000-0000-4000-8000-000000000021",
+          section: "communications",
+          kind: "pending_message",
+          state: "pending",
+          title: "Model choice",
+          detail: "May I use a local model?",
+          timestamp: "2026-09-05T10:00:00Z",
+          due_at: null,
+          action_label: "Check status",
+          action_prompt: "Check my question.",
+          unread: false,
+          dismissible: false,
+          sender: null,
+        },
+      ],
+    });
     vi.mocked(api.streamAgentRun).mockImplementation(async (_id, _text, onEvent) => {
-      for (const [id, title] of [
-        ["40000000-0000-4000-8000-000000000011", "Course schedule"],
-        ["40000000-0000-4000-8000-000000000012", "Review dates"],
-      ]) {
+      onEvent({
+        kind: "workspace",
+        command: {
+          type: "open",
+          panel: {
+            id: panelId,
+            component_id: "calendar",
+            title: "Course schedule",
+            props: { view: "agenda", focus_date: "2026-10-08" },
+            state: {},
+          },
+        },
+      });
+      onEvent({ kind: "text_final", text: "I opened the course schedule." });
+      onEvent({ kind: "done" });
+    });
+    vi.mocked(api.getConversation).mockResolvedValue({
+      conversation: studentConversation,
+      events: [
+        {
+          ...previousEvent,
+          id: "30000000-0000-4000-8000-000000000020",
+          type: "workspace.panel.opened",
+          principal_user_id: studentPrincipal.user_id,
+          anonymous_session_id: null,
+          conversation_id: studentConversation.id,
+          payload: {
+            command: {
+              type: "open",
+              panel: {
+                id: panelId,
+                component_id: "calendar",
+                title: "Course schedule",
+                props: { view: "agenda", focus_date: "2026-10-08" },
+                state: {},
+              },
+            },
+          },
+        },
+      ],
+    });
+    vi.mocked(api.applyWorkspacePanelAction).mockResolvedValue({
+      ...previousEvent,
+      id: "30000000-0000-4000-8000-000000000021",
+      type: "workspace.panel.closed",
+      principal_user_id: studentPrincipal.user_id,
+      anonymous_session_id: null,
+      conversation_id: studentConversation.id,
+      payload: { command: { type: "close", panel_id: panelId } },
+    });
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("complementary", { name: "Notification center" }),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Schedule" }));
+
+    expect(await screen.findByRole("complementary", { name: "Workspace" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Workspace" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(
+      screen.queryByRole("complementary", { name: "Notification center" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("course-agent-interface").parentElement).toHaveAttribute(
+      "data-notifications-open",
+      "false",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Close workspace" }));
+
+    expect(
+      await screen.findByRole("complementary", { name: "Notification center" }),
+    ).toBeVisible();
+    expect(screen.getByText("Model choice")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Chat" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: /Updates/ })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(screen.getByTestId("course-agent-interface").parentElement).toHaveAttribute(
+      "data-notifications-open",
+      "true",
+    );
+  });
+
+  it("replaces the prior workspace panel when a new focus opens", async () => {
+    const openEvents = [
+      ["40000000-0000-4000-8000-000000000011", "Course schedule"],
+      ["40000000-0000-4000-8000-000000000012", "Review dates"],
+    ] as const;
+    const persistedOpenEvents = openEvents.map(([id, title], index) => ({
+      ...previousEvent,
+      id: `30000000-0000-4000-8000-00000000003${index}`,
+      type: "workspace.panel.opened",
+      payload: {
+        command: {
+          type: "open",
+          panel: {
+            id,
+            component_id: "calendar",
+            title,
+            props: { view: "agenda" },
+            state: {},
+          },
+        },
+      },
+    }));
+    vi.mocked(api.getConversation)
+      .mockResolvedValueOnce({ conversation, events: [previousEvent] })
+      .mockResolvedValueOnce({
+        conversation,
+        events: [previousEvent, ...persistedOpenEvents],
+      });
+    vi.mocked(api.streamAgentRun).mockImplementation(async (_id, _text, onEvent) => {
+      for (const [id, title] of openEvents) {
         onEvent({
           kind: "workspace",
           command: {

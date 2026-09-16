@@ -22,15 +22,18 @@ Open the About drawer from the right side of the header. It contains a concise
 description, new/history navigation, and student login or logout without adding
 persistent chrome to the main interface.
 
-Response typography is continuously length-aware. Short answers retain the large
-display treatment; as character and line counts grow, type size, line height, measure,
-spacing, and padding interpolate toward a bounded reading layout. Responses are capped
-at the smaller of 44 percent of the viewport or 30rem. The renderer safely handles
-basic headings, lists, numbered lists, and bold text without injecting model-provided
-HTML.
+Response typography uses the largest display scale that fits its rendered bounds without
+scrolling. The browser measures actual content overflow and continuously adjusts type size, line
+height, measure, spacing, and padding when text or the surrounding notification/workspace layout
+changes. A length-based estimate prevents an oversized first paint before measurement; scrolling
+remains only when the smallest reading scale still cannot fit. Responses are capped at the smaller
+of 44 percent of the viewport or 30rem. The renderer safely handles basic headings, lists, numbered
+lists, and bold text without injecting model-provided HTML.
 
 The borderless composer sits roughly 15 percent of the viewport above the bottom edge
-on larger screens and uses the native system text face for a quieter writing surface.
+on larger screens and uses the native system text face for a quieter writing surface. It occupies
+an auto-sized layout row: multiline drafts and attachment receipts grow that row while the response
+row yields the same amount of space, so the two surfaces never overlap.
 While empty, muted placeholder text invites the visitor to start typing to interact
 with the agent. An attachment control uploads supported files before sending; removable
 filename chips show which principal-scoped temporary upload receipts will accompany the
@@ -38,12 +41,12 @@ next message.
 
 When an authenticated student asks something the maintained site and appropriate research cannot
 answer, the agent may prepare a course-staff email. A platform-owned confirmation appears beneath
-a model-authored response and shows only the content-only question. The runtime preserves the
-agent's final wording instead of substituting a platform-authored handoff. Optional context needed
-by staff remains part of the prepared request but is not rendered as a second explanation in the
-student interface.
-Internal tracking codes, subject lines, greetings, sign-offs, and transport formatting stay out of
-the student interface. The composer pauses
+a model-authored response and shows the content-only question as borderless editable text in the
+existing preview. The
+runtime preserves the agent's final wording instead of substituting a platform-authored handoff.
+Optional context needed by staff remains part of the prepared request but is not rendered as a
+second explanation in the student interface. Internal tracking codes, subject lines, greetings,
+sign-offs, and transport formatting stay out of the student interface. The composer pauses
 until the student chooses **Send** or **Cancel**. The Course Agent is instructed not to repeat the
 detailed question already visible in the confirmation. Send only queues the dedicated mail worker;
 the UI closes the confirmation and asks the Course Agent to continue from the trusted action event.
@@ -52,10 +55,96 @@ including whether to acknowledge the send or continue other unfinished work. The
 no prewritten success response. The composer reopens when that continuation finishes.
 The confirmation also offers **Hide my name from course staff**. This substitutes an anonymous
 staff-facing label and redacts the account's known name and email from the question/context;
-platform code retains the authenticated owner for private reply delivery. Staff FAQ review
-has no web dashboard: it stays in the original email thread. When staff publishes an answer,
-authenticated students see a restrained **New course knowledge** notice on their next login and
-can mark each item read.
+platform code retains the authenticated owner for private reply delivery. Staff FAQ review remains
+in the original email thread.
+
+An instructor-authored student message uses the same platform-owned confirmation pattern without
+email transport. The confirmation shows editable subject and body fields plus the resolved,
+read-only recipient snapshot in the existing preview layout; a response prepared from a pending
+question uses a trusted server-side reply reference instead of making the agent guess the student.
+Anonymous questions display an anonymous recipient label while retaining private delivery to the
+stored owner. A pending-question reply presents **Private** and **Public** as a separate visibility
+choice beside the editable answer; moderation commands are not part of the displayed or submitted
+answer body. Only the answer content is shown back to the student. The composer pauses until Send
+or Cancel. The browser cannot supply
+identity, role, or additional
+recipients. A confirmed message then appears only in each addressed student's Communications stack
+and authorized Course Agent context. A confirmed question reply instead replaces that student's
+pending question with the existing staff-reply presentation, avoiding a duplicate message card.
+
+Authenticated course members automatically see a narrow macOS-inspired right-edge surface made
+from separate, compact notification cards rather than a dashboard or model-generated workspace.
+It has no header tab, modal backdrop, or enclosing panel. When no active items remain, it keeps only
+a small **See more** history control without shifting the conversation layout or intercepting the
+surface beneath it. The site's own monochrome tokens, type, and restrained motion remain
+authoritative. Updates cards are first; Communications and Upcoming appear as stacked groups
+when they have active items. Updates contains staff-approved FAQ knowledge and explicit
+course-resource
+release notes. Communications shows a student's queued/open staff questions and addressed
+instructor messages, replacing a pending question item with the private answer when one arrives;
+TAs and instructors instead see questions that still
+need a staff reply. Upcoming contains authorized structured assignments only during the fourteen
+days before their stored deadline and computes the countdown from the server projection time. Course
+updates and replies can be marked read; pending threads and deadlines remain visible while active.
+After a successful authenticated page welcome, the Updates visible for that opening are
+acknowledged so they do not reappear on the next visit. The current browser snapshot remains visible
+for that opening, while Communications and Upcoming continue to reflect their active state.
+Read updates and messages, resolved question threads, staff replies, and past deadlines remain in
+the authorized history projection. **See more** replaces the active projection with the newest three
+items in each non-empty category, ordered newest first; each category can then expand to its full
+retained history or return to the three-item preview.
+
+Every item has a bounded details action that starts an ordinary Course Agent turn. That turn may
+retrieve additional facts from an authorized source, but it must not solve the issue, draft a
+response, recommend or take an action, or infer the user's intent. It ends by asking what the user
+wants to do. Selecting a Communications item also presents that complete trusted card in the
+conversation, without its stack truncation or repeated action control, with the Course Agent's
+streamed response immediately underneath. The notification stack yields its presentation slot while
+that communication is in the conversation so it cannot cover the full card at narrow widths or
+duplicate it at desktop widths. A later ordinary message or different notification action clears
+that transient presentation and restores the stack; durable communication data remains server-owned.
+Ordinary cards are borderless and use a large, semantic color tile for their trusted type
+icon beside the site's sans-serif text treatment. Staff replies and instructor messages show only
+the trusted sender's first name in the muted metadata row. They use the sender's registered course
+portrait in the tile when its asset resolves; otherwise the semantic message icon remains. Upcoming assignments use a distinct calendar-date
+layout with the countdown and exact due time. Dismiss controls appear on pointer hover or keyboard
+focus and remain visible on touch-only devices. Details actions follow the same hover/focus rule
+and appear as compact, brighter button-shaped controls without directional arrows, with a persistent
+touch fallback. Cards reserve the action's final height before reveal so hovering never resizes a
+card or shifts the stack. Update timestamps use locale-aware relative time while the exact
+date remains available as native time metadata. The stack scrolls over the fixed header and recedes
+through an opacity mask into the page's black top edge instead of clipping against a hard boundary;
+once scrolling begins, the header shortcuts from Apply onward fade completely out of its path.
+
+Every authenticated page load starts one fresh conversation and invokes a dedicated Course Agent
+greeting operation. The generated greeting receives the same trusted, role-filtered items as the
+visible surface. Its wording, prioritization, and whether to suggest an action are entirely
+agent-authored; the platform supplies trusted, semantically categorized content plus an approximate
+70-word brevity guardrail, not response copy. With active items, the agent uses a compact Markdown
+list to distinguish new changes from pending communications and assignments. When no new Updates
+exist, it assumes the remaining items were already seen and presents them only as pending reminders
+with useful next actions. The platform records
+an `agent.greeting.requested` trigger and the generated response without inventing a `user.message`.
+Anonymous visitors retain the static public welcome to avoid spending model quota on reloads. The
+authenticated loading state does not reuse that public welcome, and a failed greeting request is
+retried once against the idempotent greeting route.
+
+At desktop widths, opening the notification stack transitions both the agent response and composer
+into the horizontal space that remains to its left, centered within that region in the same manner
+as the workspace transition. At widths of 900 pixels or less, the notification stack is hidden by
+default and an explicit **Chat / Updates** switch presents only one opaque surface at a time. Chat is
+the default whenever the page opens, a prompt starts, or a notification action begins. This switch
+controls browser presentation only and does not create or persist workspace state. When a registered
+workspace opens at the same narrow widths, the control becomes **Chat / Workspace**, selects
+Workspace automatically, and gives that surface the full available content height above the shared
+composer. Switching to Chat keeps the validated workspace mounted but hidden until the user returns.
+Reduced-motion preferences disable the desktop transition.
+The notification center and registered workspace share one mutually exclusive right-side
+presentation slot. Opening a workspace temporarily hides the center without acknowledging or
+discarding its items; closing the workspace restores the same notification projection.
+While the stack is at its initial position, visible header shortcuts remain in the top interaction
+layer and are clickable through the stack's transparent header area. As cards scroll over that area,
+the shortcuts fade out and stop receiving pointer events.
 
 This non-duplication rule applies to every trusted platform presentation, not only email
 confirmations. When a tool opens or updates UI, that UI is the primary carrier of its visible
@@ -86,9 +175,9 @@ transitions upward.
 
 Non-final model prose is not shown in chat. While a run is active, the interface
 shows only verified platform activity; decoded final-answer fragments replace
-the prior answer when the model reaches its final response. Future workspace
-tools, including a PDF viewer, can add their verified operations to the same
-trace; the PDF UI tool is not yet implemented.
+the prior answer when the model reaches its final response. Workspace tools add
+their verified operations to the same trace; DocumentViewer supports registered
+PDF resources with page navigation and document search.
 
 Press Enter to send and Shift+Enter for a newline. The composer is an ordinary
 accessible textarea despite having no visible input box. Typing a printable key
@@ -134,6 +223,14 @@ attachment-receipt presentations. Validation guidance appears beside the affecte
 and a rejected transport save retains the applicant's typed value for retry. Application
 picture receipts remain internal; the field directs applicants to the existing message
 attachment control.
+Authorized assignment reads open the exact stored Markdown assignment in the workspace. No
+assignment editor is registered.
+The read-only surface presents the assignment title once, omitting only an equivalent leading
+Markdown H1 from the rendered body. It shows no internal document-status label. The complete
+**Due** line uses the assignment-deadline color for the authored local date and time without exposing
+the raw UTC-offset suffix. The stored assignment and the complete content returned to the Course
+Agent remain unchanged. The read-only document owns vertical scrolling so the full brief remains
+reachable at desktop and narrow workspace sizes.
 The desktop workspace is a full-height right-side canvas without an enclosing card.
 It has one current surface. Opening or focusing a different subject, artifact, or view
 replaces the prior panel immediately, so stale workspaces never compete for attention.
@@ -154,8 +251,11 @@ rounded image, heading, badge, facts, biography, and link. The agent cannot supp
 classes or arbitrary style declarations.
 
 DocumentViewer opens a specific Markdown, text, or PDF artifact for close reading and
-focused discussion. It is not the default for knowledge extracted from documents: the
-agent synthesizes that knowledge into a VisualComposition. Calendar provides agenda and
+focused discussion. PDF pages preserve their aspect ratio and fit inside the usable workspace
+area; the viewer rerenders them offscreen when the desktop pane or narrow Workspace surface changes
+size, then swaps in the completed frame so composer and layout changes do not flash a blank page.
+It is not the default for knowledge extracted from documents: the agent synthesizes that knowledge
+into a VisualComposition. Calendar provides agenda and
 month views over a normalized resource without embedding schedule data in component
 code. Panel focus and close use semantic operations rather than arbitrary DOM or
 JavaScript.

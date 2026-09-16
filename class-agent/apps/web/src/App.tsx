@@ -10,18 +10,20 @@ import {
 import {
   applyWorkspacePanelAction,
   clickBrowserSession,
+  confirmInstructorMessage,
   confirmTAQuestion,
   continueAgentAfterEvent,
   createConversation,
   ensureApplicationDraft,
+  generatePageGreeting,
   getCourseResourceContent,
   getConversation,
+  getNotificationCenter,
   getPrincipal,
   listConversations,
-  listNotifications,
   login,
   logout,
-  markNotificationRead,
+  markNotificationCenterItemRead,
   recordWorkspaceInteraction,
   resizeBrowserSession,
   scrollBrowserSession,
@@ -29,11 +31,20 @@ import {
   uploadFile,
   type AgentActivity,
   type AgentStreamEvent,
-  type CourseNotification,
+  type NotificationCenterData,
+  type NotificationCenterItem,
   type TemporaryUpload,
 } from "./api.js";
 import { ActivityTrace } from "./ActivityTrace.js";
-import { CourseNotifications } from "./CourseNotifications.js";
+import {
+  CommunicationDetailCard,
+  NotificationCenter,
+} from "./NotificationCenter.js";
+import {
+  MobileViewSwitcher,
+  type MobileView,
+} from "./MobileViewSwitcher.js";
+import { InstructorMessageConfirmation } from "./InstructorMessageConfirmation.js";
 import {
   AgentResponse,
   RESPONSE_CHARACTER_STAGGER_MS,
@@ -47,13 +58,22 @@ import {
   pendingTAQuestionContinuation,
   projectTAQuestionEvents,
   type TAQuestionConfirmation as TAQuestionConfirmationState,
+  type TAQuestionEdit,
 } from "./taQuestions.js";
+import {
+  applyInstructorMessageEvent,
+  pendingInstructorMessageContinuation,
+  projectInstructorMessageEvents,
+  type InstructorMessageConfirmation as InstructorMessageConfirmationState,
+  type InstructorMessageEdit,
+} from "./instructorMessages.js";
 import {
   type DragEvent,
   type FormEvent,
   type KeyboardEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -68,7 +88,6 @@ const WELCOME_PRESENTATION_MS =
   WELCOME_MORPH_DELAY_MS +
   (WELCOME_MESSAGE.length - 1) * RESPONSE_CHARACTER_STAGGER_MS +
   180;
-const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const SUPPORTED_UPLOAD_EXTENSIONS = new Set([
   "csv",
@@ -98,6 +117,11 @@ const HEADER_PROMPTS = [
   { label: "Schedule", message: "Show me the course schedule." },
   { label: "Grading", message: "How is grading handled in this course?" },
 ] as const;
+const EMPTY_NOTIFICATION_CENTER: NotificationCenterData = {
+  generated_at: "1970-01-01T00:00:00Z",
+  unread_count: 0,
+  items: [],
+};
 
 function newestFirst(conversations: Conversation[]): Conversation[] {
   return [...conversations].sort(
@@ -185,17 +209,12 @@ function workspaceFromEvents(events: Event[]): WorkspaceState {
 
 async function notificationsFor(
   resolvedPrincipal: PrincipalContext,
-): Promise<CourseNotification[]> {
-  if (
-    !resolvedPrincipal.authenticated ||
-    !resolvedPrincipal.roles.includes("student")
-  ) {
-    return [];
-  }
+): Promise<NotificationCenterData> {
+  if (!resolvedPrincipal.authenticated) return EMPTY_NOTIFICATION_CENTER;
   try {
-    return await listNotifications();
+    return await getNotificationCenter();
   } catch {
-    return [];
+    return EMPTY_NOTIFICATION_CENTER;
   }
 }
 
@@ -203,7 +222,7 @@ export default function App() {
   const [principal, setPrincipal] = useState<PrincipalContext | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
-  const [latestResponse, setLatestResponse] = useState(WELCOME_MESSAGE);
+  const [latestResponse, setLatestResponse] = useState("");
   const [currentAction, setCurrentAction] = useState<string | null>("Connecting");
   const [activities, setActivities] = useState<AgentActivity[]>([]);
   const [workspaceState, setWorkspaceState] = useState<WorkspaceState>(
@@ -235,7 +254,15 @@ export default function App() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [taQuestion, setTAQuestion] = useState<TAQuestionConfirmationState | null>(null);
-  const [notifications, setNotifications] = useState<CourseNotification[]>([]);
+  const [instructorMessage, setInstructorMessage] =
+    useState<InstructorMessageConfirmationState | null>(null);
+  const [notificationCenter, setNotificationCenter] =
+    useState<NotificationCenterData>(EMPTY_NOTIFICATION_CENTER);
+  const [notificationHistoryExpanded, setNotificationHistoryExpanded] =
+    useState(false);
+  const [mobileView, setMobileView] = useState<MobileView>("chat");
+  const [presentedCommunication, setPresentedCommunication] =
+    useState<NotificationCenterItem | null>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const historyRef = useRef<HTMLElement>(null);
@@ -246,6 +273,12 @@ export default function App() {
     taQuestion?.status === "pending_confirmation" ||
     taQuestion?.status === "submitting" ||
     taQuestion?.status === "error";
+  const awaitingInstructorMessageAction =
+    instructorMessage?.status === "pending_confirmation" ||
+    instructorMessage?.status === "submitting" ||
+    instructorMessage?.status === "error";
+  const awaitingConfirmationAction =
+    awaitingTAQuestionAction || awaitingInstructorMessageAction;
 
   const showWelcomeMessage = useCallback(() => {
     setLatestResponse(WELCOME_MESSAGE);
@@ -267,9 +300,13 @@ export default function App() {
     setUploads([]);
     setUploadError(null);
     setTAQuestion(null);
+    setInstructorMessage(null);
     setIsRunning(false);
     setIsStreamingText(false);
     setHistoryOpen(false);
+    setNotificationHistoryExpanded(false);
+    setMobileView("chat");
+    setPresentedCommunication(null);
     setAboutOpen(false);
     requestAnimationFrame(() => composerRef.current?.focus());
   }, [showWelcomeMessage]);
@@ -282,12 +319,18 @@ export default function App() {
       const response = latestAgentResponse(detail.events);
       if (response) setLatestResponse(response);
       else showWelcomeMessage();
-      setWorkspaceState(workspaceFromEvents(detail.events));
+      const projectedWorkspace = workspaceFromEvents(detail.events);
+      setWorkspaceState(projectedWorkspace);
       setTAQuestion(projectTAQuestionEvents(detail.events));
+      setInstructorMessage(projectInstructorMessageEvents(detail.events));
       setActivities([]);
+      setMobileView(projectedWorkspace.panels.length > 0 ? "workspace" : "chat");
+      setPresentedCommunication(null);
       setHistoryOpen(false);
       setAboutOpen(false);
-      const pendingContinuation = pendingTAQuestionContinuation(detail.events);
+      const pendingContinuation =
+        pendingTAQuestionContinuation(detail.events) ??
+        pendingInstructorMessageContinuation(detail.events);
       if (pendingContinuation) {
         await runAgentContinuation(conversation.id, pendingContinuation.id);
       }
@@ -304,8 +347,52 @@ export default function App() {
     return loaded;
   }
 
+  const showPageGreeting = useCallback(
+    async (
+      resolvedPrincipal: PrincipalContext,
+      loadedConversations: Conversation[],
+      signal?: AbortSignal,
+    ): Promise<void> => {
+      if (!resolvedPrincipal.authenticated) {
+        setSelectedConversationId(null);
+        showWelcomeMessage();
+        return;
+      }
+      setLatestResponse("");
+      setIsPresentingWelcome(false);
+      setCurrentAction("Preparing welcome");
+      setActivities([]);
+      setWorkspaceState(emptyWorkspaceState());
+      setTAQuestion(null);
+      setInstructorMessage(null);
+      setMobileView("chat");
+      setPresentedCommunication(null);
+      const created = await createConversation("Course Agent welcome");
+      if (signal?.aborted) return;
+      setSelectedConversationId(created.id);
+      setConversations(
+        newestFirst([
+          created,
+          ...loadedConversations.filter((conversation) => conversation.id !== created.id),
+        ]),
+      );
+      let greeting: Awaited<ReturnType<typeof generatePageGreeting>>;
+      try {
+        greeting = await generatePageGreeting(created.id, signal);
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        greeting = await generatePageGreeting(created.id, signal);
+      }
+      if (signal?.aborted) return;
+      setLatestResponse(greeting.output_text);
+      setActivities([{ kind: "complete", label: "Agent welcome complete" }]);
+    },
+    [showWelcomeMessage],
+  );
+
   useEffect(() => {
     let disposed = false;
+    const controller = new AbortController();
 
     async function initialize() {
       try {
@@ -319,15 +406,13 @@ export default function App() {
         if (disposed) return;
         const sorted = newestFirst(loaded);
         setConversations(sorted);
-        setNotifications(loadedNotifications);
-        // A full page load always begins as a fresh, unsaved conversation. Existing
-        // conversations remain available from history and a new server record is
-        // created only when the visitor sends their first message.
-        setSelectedConversationId(null);
-        showWelcomeMessage();
-        setWorkspaceState(emptyWorkspaceState());
+        setNotificationCenter(loadedNotifications);
+        await showPageGreeting(resolvedPrincipal, sorted, controller.signal);
       } catch {
-        if (!disposed) setLatestResponse(CONNECTION_ERROR);
+        if (!disposed) {
+          setLatestResponse(CONNECTION_ERROR);
+          setIsPresentingWelcome(false);
+        }
       } finally {
         if (!disposed) {
           setCurrentAction(null);
@@ -339,9 +424,10 @@ export default function App() {
     void initialize();
     return () => {
       disposed = true;
+      controller.abort();
       activeRun.current?.abort();
     };
-  }, [showWelcomeMessage]);
+  }, [showPageGreeting, showWelcomeMessage]);
 
   useEffect(() => {
     if (!isOpening) return;
@@ -369,34 +455,7 @@ export default function App() {
     return () => window.clearTimeout(timeout);
   }, [isOpening, latestResponse, welcomePresentationId]);
 
-  useEffect(() => {
-    let inactivityTimer = window.setTimeout(startNewConversation, INACTIVITY_TIMEOUT_MS);
-
-    function resetInactivityTimer() {
-      window.clearTimeout(inactivityTimer);
-      inactivityTimer = window.setTimeout(startNewConversation, INACTIVITY_TIMEOUT_MS);
-    }
-
-    const activityEvents = [
-      "keydown",
-      "pointerdown",
-      "pointermove",
-      "scroll",
-      "touchstart",
-    ] as const;
-    activityEvents.forEach((eventName) =>
-      window.addEventListener(eventName, resetInactivityTimer, { passive: true }),
-    );
-
-    return () => {
-      window.clearTimeout(inactivityTimer);
-      activityEvents.forEach((eventName) =>
-        window.removeEventListener(eventName, resetInactivityTimer),
-      );
-    };
-  }, [startNewConversation]);
-
-  useEffect(() => {
+  useLayoutEffect(() => {
     const composer = composerRef.current;
     if (!composer) return;
     composer.style.height = "0px";
@@ -476,7 +535,8 @@ export default function App() {
     suggestedMessage?: string,
     existingConversationId?: string,
     operationAlreadyClaimed = false,
-  ): Promise<void> {
+    communication: NotificationCenterItem | null = null,
+  ): Promise<boolean> {
     const isSuggestedPrompt = suggestedMessage !== undefined;
     const visibleText = (suggestedMessage ?? message).trim();
     const pendingUploads = isSuggestedPrompt ? [] : uploads;
@@ -487,10 +547,12 @@ export default function App() {
       isUploading ||
       (!operationAlreadyClaimed && operationInFlight.current)
     ) {
-      return;
+      return false;
     }
     if (!operationAlreadyClaimed) operationInFlight.current = true;
     const text = messageWithUploads(visibleText, pendingUploads);
+    setMobileView("chat");
+    setPresentedCommunication(communication);
 
     if (!isSuggestedPrompt) {
       setMessage("");
@@ -512,6 +574,7 @@ export default function App() {
     setLatestResponse("");
     let conversationId = existingConversationId ?? selectedConversationId;
     let receivedError = false;
+    let completed = false;
     let writingActivityRecorded = false;
     let streamedText = "";
     const controller = new AbortController();
@@ -548,6 +611,7 @@ export default function App() {
           setActivities((current) => [...current, event.activity]);
           setCurrentAction(event.activity.label);
         } else if (event.kind === "workspace") {
+          setMobileView("workspace");
           setWorkspaceState((current) => {
             try {
               return builtInComponentRegistry.apply(current, event.command);
@@ -556,6 +620,7 @@ export default function App() {
             }
           });
         } else if (event.kind === "application_submitted") {
+          setMobileView("chat");
           setWorkspaceState((current) => {
             const applicationPanels = current.panels.filter(
               (panel) =>
@@ -577,6 +642,8 @@ export default function App() {
           applicationReturnResponse.current = null;
         } else if (event.kind === "ta_question_confirmation") {
           setTAQuestion(event.confirmation);
+        } else if (event.kind === "instructor_message_confirmation") {
+          setInstructorMessage(event.confirmation);
         } else if (event.kind === "done") {
           setActivities((current) => [
             ...current,
@@ -593,14 +660,27 @@ export default function App() {
       };
 
       await streamAgentRun(conversationId, text, handleStreamEvent, controller.signal);
+      completed = !receivedError;
       if (!receivedError) {
         setCurrentAction("Presenting response");
+      }
+      if (!controller.signal.aborted) {
+        try {
+          const detail = await getConversation(activeConversationId);
+          const persistedWorkspace = workspaceFromEvents(detail.events);
+          if (persistedWorkspace.panels.length > 0) {
+            setWorkspaceState(persistedWorkspace);
+          }
+        } catch {
+          // Keep the streamed projection usable if canonical reconciliation fails.
+        }
       }
       try {
         await loadConversationList();
       } catch {
         // The completed answer remains usable if refreshing navigation fails.
       }
+      await refreshNotificationCenter();
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError")) {
         setLatestResponse(CONNECTION_ERROR);
@@ -613,6 +693,7 @@ export default function App() {
       setIsRunning(false);
       requestAnimationFrame(() => composerRef.current?.focus());
     }
+    return completed;
   }
 
   async function startApplication(): Promise<void> {
@@ -633,6 +714,7 @@ export default function App() {
         builtInComponentRegistry.apply(current, event.payload.command),
       );
       void sendMessage(HEADER_PROMPTS[0].message, conversationId, true);
+      setMobileView("workspace");
     } catch {
       setLatestResponse(CONNECTION_ERROR);
       operationInFlight.current = false;
@@ -678,7 +760,7 @@ export default function App() {
     !isInitializing &&
     !isRunning &&
     !isUploading &&
-    !awaitingTAQuestionAction;
+    !awaitingConfirmationAction;
 
   function dragContainsFiles(event: DragEvent<HTMLDivElement>): boolean {
     return Array.from(event.dataTransfer.types).includes("Files");
@@ -720,6 +802,7 @@ export default function App() {
       return;
     }
     setHistoryOpen(false);
+    setMobileView("chat");
     setAboutOpen(true);
     setSyllabusContent(null);
     setSyllabusError(null);
@@ -746,16 +829,23 @@ export default function App() {
         loadConversationList(),
         notificationsFor(nextPrincipal),
       ]);
-      setNotifications(loadedNotifications);
-      const newest = loaded[0];
-      if (newest) {
-        await showConversation(newest);
-      } else {
-        startNewConversation();
+      setNotificationCenter(loadedNotifications);
+      setNotificationHistoryExpanded(false);
+      setMobileView("chat");
+      setIsRunning(true);
+      try {
+        await showPageGreeting(nextPrincipal, loaded);
+      } catch {
+        setLatestResponse(CONNECTION_ERROR);
+        setIsPresentingWelcome(false);
       }
+      setHistoryOpen(false);
+      setAboutOpen(false);
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : "Login failed");
     } finally {
+      setIsRunning(false);
+      setCurrentAction(null);
       setAuthSubmitting(false);
     }
   }
@@ -767,7 +857,9 @@ export default function App() {
       await logout();
       const nextPrincipal = await getPrincipal();
       setPrincipal(nextPrincipal);
-      setNotifications([]);
+      setNotificationCenter(EMPTY_NOTIFICATION_CENTER);
+      setNotificationHistoryExpanded(false);
+      setMobileView("chat");
       const loaded = await loadConversationList();
       const newest = loaded[0];
       if (newest) {
@@ -796,6 +888,7 @@ export default function App() {
       setWorkspaceState((current) =>
         builtInComponentRegistry.apply(current, event.payload.command),
       );
+      setMobileView(action === "close" ? "chat" : "workspace");
     } catch {
       setActivities((current) => [
         ...current,
@@ -807,6 +900,7 @@ export default function App() {
   async function handleTAQuestionAction(
     action: "send" | "cancel",
     reporterVisibility: "named" | "anonymous",
+    edit?: TAQuestionEdit,
   ): Promise<void> {
     if (!selectedConversationId || !taQuestion || taQuestion.status === "submitting") return;
     setTAQuestion((current) => (current ? { ...current, status: "submitting" } : null));
@@ -816,9 +910,11 @@ export default function App() {
         taQuestion.id,
         action,
         reporterVisibility,
+        edit,
       );
       setTAQuestion((current) => applyTAQuestionEvent(current, event));
       await runAgentContinuation(selectedConversationId, event.id);
+      await refreshNotificationCenter();
       try {
         await loadConversationList();
       } catch {
@@ -826,6 +922,42 @@ export default function App() {
       }
     } catch {
       setTAQuestion((current) => (current ? { ...current, status: "error" } : null));
+    }
+  }
+
+  async function handleInstructorMessageAction(
+    action: "send" | "cancel",
+    edit?: InstructorMessageEdit,
+  ): Promise<void> {
+    if (
+      !selectedConversationId ||
+      !instructorMessage ||
+      instructorMessage.status === "submitting"
+    ) {
+      return;
+    }
+    setInstructorMessage((current) =>
+      current ? { ...current, status: "submitting" } : null,
+    );
+    try {
+      const event = await confirmInstructorMessage(
+        selectedConversationId,
+        instructorMessage.id,
+        action,
+        edit,
+      );
+      setInstructorMessage((current) => applyInstructorMessageEvent(current, event));
+      await runAgentContinuation(selectedConversationId, event.id);
+      await refreshNotificationCenter();
+      try {
+        await loadConversationList();
+      } catch {
+        // The confirmed action remains authoritative if navigation refresh fails.
+      }
+    } catch {
+      setInstructorMessage((current) =>
+        current ? { ...current, status: "error" } : null,
+      );
     }
   }
 
@@ -845,11 +977,13 @@ export default function App() {
         const detail = await getConversation(conversationId);
         setWorkspaceState(workspaceFromEvents(detail.events));
         setTAQuestion(projectTAQuestionEvents(detail.events));
+        setInstructorMessage(projectInstructorMessageEvents(detail.events));
       } catch {
         // The generated continuation remains usable if projection refresh fails.
       }
     } catch {
       setTAQuestion(null);
+      setInstructorMessage(null);
       setLatestResponse(CONNECTION_ERROR);
       setActivities([{ kind: "error", label: "Agent run failed" }]);
     } finally {
@@ -859,15 +993,78 @@ export default function App() {
     }
   }
 
+  async function refreshNotificationCenter(): Promise<void> {
+    if (!principal?.authenticated) return;
+    try {
+      setNotificationCenter(await getNotificationCenter());
+    } catch {
+      // Keep the last trusted projection visible if refresh fails.
+    }
+  }
+
   async function handleNotificationRead(notificationId: string): Promise<void> {
     try {
-      await markNotificationRead(notificationId);
-      setNotifications((current) =>
-        current.filter((notification) => notification.id !== notificationId),
+      await markNotificationCenterItemRead(notificationId);
+      setNotificationCenter((current) => ({
+        ...current,
+        unread_count: Math.max(
+          0,
+          current.unread_count -
+            Number(
+              current.items.some(
+                (notification) =>
+                  notification.id === notificationId && notification.unread,
+              ),
+            ),
+        ),
+        items: current.items.filter(
+          (notification) => notification.id !== notificationId,
+        ),
+        ...(current.history_items
+          ? {
+              history_items: current.history_items.map((notification) =>
+                notification.id === notificationId
+                  ? {
+                      ...notification,
+                      dismissible: false,
+                      state:
+                        notification.state === "responded"
+                          ? "responded"
+                          : "read",
+                      unread: false,
+                    }
+                  : notification,
+              ),
+            }
+          : {}),
+      }));
+      setPresentedCommunication((current) =>
+        current?.id === notificationId
+          ? {
+              ...current,
+              dismissible: false,
+              state: current.state === "responded" ? "responded" : "read",
+              unread: false,
+            }
+          : current,
       );
     } catch {
       // Keep the unread update visible when acknowledgement could not be saved.
     }
+  }
+
+  async function handleNotificationAction(item: NotificationCenterItem): Promise<void> {
+    setAboutOpen(false);
+    setHistoryOpen(false);
+    setNotificationHistoryExpanded(false);
+    setMobileView("chat");
+    const completed = await sendMessage(
+      item.action_prompt,
+      undefined,
+      false,
+      item.section === "communications" ? item : null,
+    );
+    if (completed && item.dismissible) await handleNotificationRead(item.id);
   }
 
   async function handleCloseWorkspace(): Promise<void> {
@@ -881,6 +1078,7 @@ export default function App() {
       activeRun.current?.abort();
     }
     setWorkspaceState(emptyWorkspaceState());
+    setMobileView("chat");
     if (isApplicationWorkspace) {
       setActivities([]);
       setCurrentAction(null);
@@ -1025,13 +1223,35 @@ export default function App() {
 
   const isWelcomePresentationActive =
     !isOpening && latestResponse === WELCOME_MESSAGE && isPresentingWelcome;
+  const hasOpenWorkspace = workspaceState.panels.length > 0;
+  const notificationCenterVisible =
+    principal?.authenticated === true &&
+    (notificationCenter.items.length > 0 ||
+      (notificationCenter.history_items?.length ?? 0) > 0) &&
+    !hasOpenWorkspace &&
+    presentedCommunication === null;
+  const notificationCenterAffectsLayout =
+    notificationCenterVisible &&
+    (notificationCenter.items.length > 0 || notificationHistoryExpanded);
+  const mobileSecondaryView = hasOpenWorkspace ? "workspace" : "updates";
+  const activeMobileView: MobileView =
+    mobileView === mobileSecondaryView ? mobileView : "chat";
+  const mobileViewSwitcherVisible =
+    !aboutOpen && (hasOpenWorkspace || notificationCenterVisible);
   return (
     <div
       className="course-agent"
       data-about-open={aboutOpen}
       data-file-drag-active={isFileDragActive}
+      data-mobile-notifications-open={
+        notificationCenterVisible && activeMobileView === "updates"
+      }
+      data-mobile-workspace-open={
+        !aboutOpen && hasOpenWorkspace && activeMobileView === "workspace"
+      }
+      data-notifications-open={notificationCenterAffectsLayout}
       data-opening={isOpening}
-      data-workspace-open={!aboutOpen && workspaceState.panels.length > 0}
+      data-workspace-open={!aboutOpen && hasOpenWorkspace}
       onDragEnter={handleFileDragEnter}
       onDragLeave={handleFileDragLeave}
       onDragOver={handleFileDragOver}
@@ -1072,7 +1292,7 @@ export default function App() {
               <Button
                 className="header-prompt"
                 disabled={
-                  isInitializing || isRunning || isUploading || awaitingTAQuestionAction
+                  isInitializing || isRunning || isUploading || awaitingConfirmationAction
                 }
                 key={prompt.label}
                 onClick={() =>
@@ -1097,6 +1317,7 @@ export default function App() {
               className="logs-link"
               onClick={() => {
                 setAboutOpen(false);
+                setMobileView("chat");
                 setHistoryOpen(true);
               }}
             >
@@ -1106,6 +1327,28 @@ export default function App() {
         ) : null}
       </header>
 
+      {mobileViewSwitcherVisible ? (
+        <MobileViewSwitcher
+          activeView={activeMobileView}
+          count={
+            mobileSecondaryView === "updates" ? notificationCenter.items.length : undefined
+          }
+          onViewChange={setMobileView}
+          secondaryView={mobileSecondaryView}
+        />
+      ) : null}
+
+      {notificationCenterVisible ? (
+        <NotificationCenter
+          busy={isInitializing || isRunning || isUploading || awaitingConfirmationAction}
+          data={notificationCenter}
+          historyExpanded={notificationHistoryExpanded}
+          onAction={(item) => void handleNotificationAction(item)}
+          onHistoryExpandedChange={setNotificationHistoryExpanded}
+          onMarkRead={(notificationId) => void handleNotificationRead(notificationId)}
+        />
+      ) : null}
+
       {aboutOpen ? (
         <SyllabusPage
           content={syllabusContent}
@@ -1114,10 +1357,6 @@ export default function App() {
         />
       ) : (
         <>
-          <CourseNotifications
-            notifications={notifications}
-            onRead={(notificationId) => void handleNotificationRead(notificationId)}
-          />
           <main className="workspace-shell" data-testid="workspace-shell">
         <section aria-atomic="false" aria-live="polite" className="response-stage">
           <MorphingLineFigure
@@ -1129,6 +1368,12 @@ export default function App() {
               currentAction !== null
             }
           />
+          {presentedCommunication ? (
+            <CommunicationDetailCard
+              generatedAt={notificationCenter.generated_at}
+              item={presentedCommunication}
+            />
+          ) : null}
           <div className="response-agent-line" data-testid="response-agent-line">
             <span className="response-agent-name">Course Agent</span>
             <ActivityTrace activities={activities} currentLabel={currentAction} />
@@ -1151,8 +1396,18 @@ export default function App() {
           {taQuestion ? (
             <TAQuestionConfirmation
               confirmation={taQuestion}
-              onAction={(action, reporterVisibility) =>
-                void handleTAQuestionAction(action, reporterVisibility)
+              key={taQuestion.id}
+              onAction={(action, reporterVisibility, edit) =>
+                void handleTAQuestionAction(action, reporterVisibility, edit)
+              }
+            />
+          ) : null}
+          {instructorMessage ? (
+            <InstructorMessageConfirmation
+              confirmation={instructorMessage}
+              key={instructorMessage.id}
+              onAction={(action, edit) =>
+                void handleInstructorMessageAction(action, edit)
               }
             />
           ) : null}
@@ -1170,8 +1425,6 @@ export default function App() {
             state={workspaceState}
           />
         ) : null}
-          </main>
-
           <form
         aria-label="Message Course Agent"
         className="composer"
@@ -1250,7 +1503,7 @@ export default function App() {
               autoComplete="off"
               autoFocus={!isOpening}
               className="composer-text"
-              disabled={isInitializing || isRunning || isUploading || awaitingTAQuestionAction}
+              disabled={isInitializing || isRunning || isUploading || awaitingConfirmationAction}
               enterKeyHint="send"
               onChange={(event) => setMessage(event.target.value)}
               onKeyDown={handleComposerKeyDown}
@@ -1269,7 +1522,7 @@ export default function App() {
                 aria-label="Attach files"
                 className="attachment-button"
                 disabled={
-                  isInitializing || isRunning || isUploading || awaitingTAQuestionAction
+                  isInitializing || isRunning || isUploading || awaitingConfirmationAction
                 }
                 onClick={() => fileInputRef.current?.click()}
                 type="button"
@@ -1286,6 +1539,7 @@ export default function App() {
           Send
         </button>
           </form>
+          </main>
         </>
       )}
 
