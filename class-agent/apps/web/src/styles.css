@@ -1239,11 +1239,13 @@ textarea {
   width: 1.65rem;
 }
 
-.notification-card-layout:has(.notification-slide-thumbnail) {
+.notification-card-layout:has(.notification-slide-thumbnail),
+.notification-card-layout:has([data-notification-icon="course_update"]) {
   grid-template-columns: var(--notification-featured-tile-width) minmax(0, 1fr);
 }
 
-.notification-slide-thumbnail {
+.notification-slide-thumbnail,
+.notification-card-icon[data-notification-icon="course_update"] {
   width: var(--notification-featured-tile-width);
   height: var(--notification-featured-tile-height);
   overflow: hidden;

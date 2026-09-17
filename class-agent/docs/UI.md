@@ -97,7 +97,7 @@ retained history or return to the three-item preview.
 **Lecture Slides** appears only after **See more**, follows Upcoming, and lists authorized published slide decks in descending
 lecture order, with the registered deck title beneath each lecture number and a first-slide
 thumbnail replacing the generic icon. Thumbnails fill and crop to the same tile dimensions as
-Upcoming deadlines. Existing card spacing and interaction styles remain. Its
+Upcoming deadlines; Updates tiles use those same dimensions. Existing card spacing and interaction styles remain. Its
 **View slides** action asks the Course Agent to open the registered deck in the workspace.
 Slides remain available in history after viewing and are excluded from unread counts and greeting reminders.
 

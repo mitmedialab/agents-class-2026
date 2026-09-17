@@ -1656,6 +1656,12 @@
   font: inherit;
 }
 
+.ca-document-download,
+.ca-document-search input::placeholder {
+  color: var(--color-text-muted);
+  opacity: 1;
+}
+
 .ca-document-search button:disabled,
 .ca-pdf-pagination button:disabled {
   cursor: default;

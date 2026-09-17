@@ -140,7 +140,7 @@ conversations; it does not weaken the resource-content endpoint's authorization.
 wants to navigate, search, or discuss its particular content. PDF pages are contain-fitted to
 the viewer's current usable width and height and rerender when that surface resizes.
 The PDF toolbar includes a **Download PDF** icon immediately left of Find, matching the
-workspace close icon in size and retaining that size on the About page, which saves the already-authorized original bytes
+workspace close icon in size and the Find placeholder in color, retaining both on the About page, which saves the already-authorized original bytes
 locally using the document title as the filename. It remains available if page rendering fails
 and does not require another server request or a new resource permission. Markdown resources
 with a registered PDF edition also show the same icon, linking to their authorized `pdf` asset.
