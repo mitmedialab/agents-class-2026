@@ -5,6 +5,16 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   envDir: "../..",
   plugins: [react(), basicSsl()],
+  build: {
+    rollupOptions: {
+      output: {
+        assetFileNames: (asset) =>
+          asset.names.some((name) => name.endsWith(".mjs"))
+            ? "assets/[name]-[hash].js"
+            : "assets/[name]-[hash][extname]",
+      },
+    },
+  },
   server: {
     proxy: {
       "/api": "http://127.0.0.1:8000",

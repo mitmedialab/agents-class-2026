@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPdfLoadingTask } from "./pdfRuntime.js";
 
 export interface DocumentResource {
   uri: string;
@@ -413,16 +414,14 @@ function PdfDocument({
   }, []);
   useEffect(() => {
     let disposed = false;
-    let loaded: import("pdfjs-dist").PDFDocumentProxy | null = null;
     let loadingTask: import("pdfjs-dist").PDFDocumentLoadingTask | null = null;
+    setDocument(null);
+    setPageText("");
+    setError(null);
     async function load() {
       try {
-        const pdfjs = await import("pdfjs-dist");
-        const workerUrl = (await import("pdfjs-dist/build/pdf.worker.min.mjs?url"))
-          .default;
-        pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
-        loadingTask = pdfjs.getDocument({ data: resource.data.slice() });
-        loaded = await loadingTask.promise;
+        loadingTask = await createPdfLoadingTask(resource.data);
+        const loaded = await loadingTask.promise;
         if (!disposed) setDocument(loaded);
       } catch {
         if (!disposed) setError("This PDF could not be opened.");
@@ -433,7 +432,7 @@ function PdfDocument({
       disposed = true;
       void loadingTask?.destroy();
     };
-  }, [resource]);
+  }, [resource.data, resource.uri]);
 
   useEffect(() => {
     if (!document || pageArea.width < 1 || pageArea.height < 1) return;
@@ -560,7 +559,7 @@ export function DocumentViewer({
   const [activeMatch, setActiveMatch] = useState(0);
   const content = useMemo(
     () => (resource.mediaType === "application/pdf" ? "" : decoder.decode(resource.data)),
-    [resource],
+    [resource.data, resource.mediaType],
   );
   const matches = useMemo(() => occurrences(content, query), [content, query]);
   const anchoredRange = useMemo(
