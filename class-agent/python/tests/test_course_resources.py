@@ -256,8 +256,11 @@ def test_public_resource_registry_includes_provisional_schedule() -> None:
 
     instructor_contents = asyncio.run(resources.read(COURSE_INSTRUCTORS_URI))
     assert "Pattie Maes" in instructor_contents.text
+    assert "Sheer Karny" in instructor_contents.text
+    assert "skarny@media.mit.edu" in instructor_contents.text
     assert "Yasith Samaradivakara" in instructor_contents.text
     assert "portraits/pattie_maes.jpg" in instructor_contents.text
+    assert "portraits/sheer_karny.jpeg" in instructor_contents.text
     assert "portraits/yasith_samaradivakara.jpg" in instructor_contents.text
     assert "## Application Fields" not in instructor_contents.text
 
@@ -270,6 +273,7 @@ def test_public_resource_registry_includes_provisional_schedule() -> None:
         "chitralekha_gupta_portrait",
         "pattie_maes_portrait",
         "rachel_poonsiriwong_portrait",
+        "sheer_karny_portrait",
         "valdemar_danry_portrait",
         "wazeer_zulfikar_portrait",
         "yasith_samaradivakara_portrait",

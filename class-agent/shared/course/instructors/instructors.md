@@ -76,6 +76,28 @@ Source: [personal website](https://chitralekha.info/)
 
 Source: [DesignSingapore Council profile](https://designsingapore.org/stories/rachel-poonsiriwong-is-finding-the-human-middle-ground-in-the-age-of-ai/)
 
+### Sheer Karny
+
+| Field | Value |
+| --- | --- |
+| Role | Teaching Assistant |
+| Portrait | [sheer_karny.jpeg](portraits/sheer_karny.jpeg) |
+| Email | skarny@media.mit.edu |
+| Department | Program in Media Arts and Sciences, MIT Media Lab |
+| Research group | Cyborg Psychology |
+| MIT status | Graduate student |
+| Webpage | [sheerkarny.com](https://sheerkarny.com/) |
+
+#### Bio (verbatim)
+
+> Sheer Karny is a multidisciplinary researcher studying human-AI interaction advised by Dr. Pat Pataranutaporn. A through-line of his research is creating collaborative AI systems by designing assistants, agents, and interfaces that complement human cognition, decision-making, and well-being. His recent work has been about bridging mechanistic interpretability -- the ability to make sense of neural-level activity in LLMs -- and user interfaces to create safer human-chatbot interactions, helping dub the term [*Neural Transparency*](https://arxiv.org/abs/2511.00230). This connects to his contributions to a recent pre-print, ["My Boyfriend is AI"](https://arxiv.org/abs/2509.11391), underscoring his desire to understand the individual and societal-level implications of the increasing prevalence of human-AI companionship. This work has been covered by [MIT Tech Review](https://www.technologyreview.com/2025/09/24/1123915/relationship-ai-without-seeking-it/), [The Guardian,](https://www.theguardian.com/technology/2025/oct/22/im-suddenly-so-angry-my-strange-unnerving-week-with-an-ai-friend) and [The New York Times](https://www.nytimes.com/interactive/2025/11/05/magazine/ai-chatbot-marriage-love-romance-sex.html), among others.
+>
+> His work has been published in journals and conference proceedings such as [Nature Machine Intelligence](https://www.nature.com/articles/s42256-024-00976-7) and the [ACM Collective Intelligence Conference](https://dl.acm.org/doi/abs/10.1145/3643562.3672610).
+>
+> To stay up-to-date on his work, check out his [website](https://sheerkarny.com/) and [google scholar profile](https://scholar.google.com/citations?hl=en\&user=1FZ9W28AAAAJ).
+
+Source: [MIT Media Lab profile](https://www.media.mit.edu/people/skarny/overview/)
+
 ### Wazeer Zulfikar
 
 | Field | Value |

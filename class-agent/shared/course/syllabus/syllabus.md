@@ -1,7 +1,7 @@
 # **AI Agents for Cognitive Augmentation**
 
 **Instructors:** Valdemar Danry and Professor Pattie Maes  
-**TAs:** Chitralekha Gupta, Rachel Poonsiriwong, Wazeer Zulfikar, Yasith Samaradivakara  
+**TAs:** Chitralekha Gupta, Rachel Poonsiriwong, Sheer Karny, Wazeer Zulfikar, Yasith Samaradivakara\
 **Format:** Weekly 2-hour session: 1-hour lecture \+ 1-hour hands-on tutorial  
 **Course structure:** Classes, weekly technical implementation assignments, cumulative agentic website, final project or study  
 **Credits:** 2-0-10  
