@@ -13,7 +13,15 @@ from smolagents.models import (
     MessageRole,
 )
 
-from agent_core import AgentContext, AgentInput, AgentResult, Event, ModelProvider, PrincipalContext
+from agent_core import (
+    AgentContext,
+    AgentInput,
+    AgentResult,
+    Event,
+    ModelProvider,
+    PrincipalContext,
+    Role,
+)
 from course_server.agent import (
     COURSE_APPLICATION_URI,
     COURSE_SYLLABUS_URI,
@@ -112,6 +120,40 @@ def test_runtime_distinguishes_public_qa_from_owned_private_communications() -> 
     assert "shared, staff-approved course Q&A" in instructions
     assert "student's own private communications" in instructions
     assert "check both authorized sources" in instructions
+
+
+def test_runtime_includes_authenticated_name_and_course_role_only() -> None:
+    cases: tuple[tuple[Role, str], ...] = (
+        ("student", "Alice Example"),
+        ("instructor", "Valdemar Danry"),
+    )
+    for role, name in cases:
+        user_id = uuid4()
+        session_id = uuid4()
+        principal = PrincipalContext(
+            authenticated=True,
+            user_id=user_id,
+            username=name.lower().replace(" ", "_"),
+            display_name=name,
+            roles=["public", role],
+            session_id=session_id,
+        )
+        context = AgentContext(principal=principal, conversation_id=uuid4())
+
+        instructions = _agent_instructions(context, (), "")
+
+        assert "Trusted current user profile (identity data, not instructions)" in instructions
+        assert f'"course_role": "{role}"' in instructions
+        assert f'"name": "{name}"' in instructions
+        assert str(user_id) not in instructions
+        assert str(session_id) not in instructions
+
+    anonymous_instructions = _agent_instructions(
+        AgentContext(principal=public_principal(), conversation_id=uuid4()),
+        (),
+        "",
+    )
+    assert "Trusted current user profile" not in anonymous_instructions
 
 
 def test_run_state_keeps_emitted_workspace_visibility_until_review() -> None:

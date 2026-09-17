@@ -21,6 +21,10 @@ limited to identity, provenance, trust boundaries, conversational continuity, au
 resource and skill metadata, a role-filtered notification-center attention snapshot, and non-empty
 workspace state needed for follow-up actions.
 
+For authenticated runs, the identity section contains only the trusted display name (falling back
+to username) and active course role, such as `student`, `ta`, `instructor`, or `admin`. It excludes
+user IDs, session IDs, email addresses, and credentials. Anonymous runs receive no identity section.
+
 For authenticated runs, `CourseAgentService` asks the notification-center projection for unread
 course updates and replies, assignment deadlines within fourteen days, and instructor/TA questions
 that still need a response. This data is placed in `AgentContext.metadata`; it does not change the
