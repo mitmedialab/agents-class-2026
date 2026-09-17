@@ -228,3 +228,8 @@ Application sharing update: authenticated students may use the existing applicat
 tools and photo route only for accepted application UUIDs explicitly shared in the private
 `student-access.json` registry. Instructor access remains unrestricted. See
 [STORAGE.md](STORAGE.md) for authorization, provisioning, and revocation details.
+
+Resources with a registered `pdf` asset include `X-Class-Agent-Pdf-Asset: pdf` on the authorized
+resource-content response. The web adapter derives the PDF download URL from that opaque
+asset ID and the same resource URI. The header is additive; there are no schema or database
+migrations. Asset downloads retain the existing resource authorization checks.

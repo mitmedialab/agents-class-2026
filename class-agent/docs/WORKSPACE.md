@@ -141,7 +141,8 @@ wants to navigate, search, or discuss its particular content. PDF pages are cont
 the viewer's current usable width and height and rerender when that surface resizes.
 The PDF toolbar includes a **Download PDF** icon immediately left of Find, which saves the already-authorized original bytes
 locally using the document title as the filename. It remains available if page rendering fails
-and does not require another server request or a new resource permission.
+and does not require another server request or a new resource permission. Markdown resources
+with a registered PDF edition also show the same icon, linking to their authorized `pdf` asset.
 The PDF loading task follows the resource URI and byte buffer, so metadata and conversation
 updates do not destroy an in-progress document render. It is not used
 merely because a knowledge source is stored as a document.

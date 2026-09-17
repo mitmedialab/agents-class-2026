@@ -246,6 +246,7 @@ export default function App() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [syllabusPdfUrl, setSyllabusPdfUrl] = useState<string | undefined>();
   const [syllabusContent, setSyllabusContent] = useState<string | null>(null);
   const [syllabusError, setSyllabusError] = useState<string | null>(null);
   const [syllabusLoading, setSyllabusLoading] = useState(false);
@@ -805,11 +806,13 @@ export default function App() {
     setMobileView("chat");
     setAboutOpen(true);
     setSyllabusContent(null);
+    setSyllabusPdfUrl(undefined);
     setSyllabusError(null);
     setSyllabusLoading(true);
     try {
       const resource = await getCourseResourceContent("course://syllabus");
       setSyllabusContent(new TextDecoder().decode(resource.data));
+      setSyllabusPdfUrl(resource.pdfDownloadUrl);
     } catch {
       setSyllabusError("The syllabus could not be loaded. Please try again.");
     } finally {
@@ -1352,6 +1355,7 @@ export default function App() {
       {aboutOpen ? (
         <SyllabusPage
           content={syllabusContent}
+          pdfDownloadUrl={syllabusPdfUrl}
           error={syllabusError}
           loading={syllabusLoading}
         />

@@ -8,7 +8,10 @@
       "media_type": "text/markdown",
       "path": "course/syllabus/syllabus.md",
       "visibility": "public",
-      "status": "published"
+      "status": "published",
+      "assets": {
+        "pdf": "course/syllabus/syllabus.pdf"
+      }
     },
     {
       "uri": "course://schedule",

@@ -1,0 +1,62 @@
+/* A paper rendition of the same syllabus, without application chrome. */
+@media print {
+  @page syllabus { size: letter; margin: 0.65in 0.7in; }
+  :root:has(.syllabus-page) {
+    color-scheme: light;
+    --color-background: white;
+    --color-text: black;
+    --color-text-muted: #333;
+    --color-border: #ccc;
+  }
+  html:has(.syllabus-page), body:has(.syllabus-page),
+  #root:has(.syllabus-page), .course-agent:has(.syllabus-page),
+  .course-agent-interface:has(.syllabus-page) {
+    display: block;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+    background: white;
+    color: black;
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+  .course-agent:has(.syllabus-page) > :not(.course-agent-interface),
+  .course-agent-interface:has(.syllabus-page) > :not(.syllabus-page),
+  .syllabus-download { display: none !important; }
+  .syllabus-page { page: syllabus; min-height: 0; padding: 0; }
+  .syllabus-document, .syllabus-sections { max-width: none; }
+  .syllabus-document > h1 {
+    font-size: 26pt;
+    line-height: 1.08;
+    max-width: none;
+    margin: 0 0 18pt;
+  }
+  .syllabus-metadata { margin-bottom: 20pt; }
+  .syllabus-metadata > div {
+    grid-template-columns: 95pt 1fr;
+    gap: 12pt;
+    padding: 5pt 0;
+    break-inside: avoid;
+  }
+  .syllabus-metadata dt, .syllabus-metadata dd { font-size: 9pt; line-height: 1.4; }
+  .syllabus-sections h1, .syllabus-sections h2, .syllabus-sections h3 {
+    font-size: 15pt;
+    margin: 18pt 0 8pt;
+    padding-top: 8pt;
+    break-after: avoid;
+  }
+  .syllabus-sections p, .syllabus-sections li,
+  .syllabus-sections td, .syllabus-sections th { font-size: 10pt; line-height: 1.4; }
+  .syllabus-sections p { margin-bottom: 9pt; widows: 3; orphans: 3; }
+  .syllabus-sections ul, .syllabus-sections ol {
+    display: block;
+    margin-bottom: 12pt;
+    padding-left: 16pt;
+  }
+  .syllabus-sections li { margin-bottom: 4pt; break-inside: avoid; }
+  .syllabus-table-scroll { overflow: visible; margin-top: 10pt; }
+  .syllabus-table-scroll table { min-width: 0; }
+  .syllabus-table-scroll th, .syllabus-table-scroll td { padding: 6pt; }
+  .syllabus-table-scroll tr { break-inside: avoid; }
+}

@@ -46,3 +46,5 @@ export {
   type VisualElement,
 } from "./VisualComposition.js";
 export { WebpageViewer, type WebpageViewerProps } from "./WebpageViewer.js";
+
+export { PdfDownload, type PdfDownloadProps } from "./PdfDownload.js";

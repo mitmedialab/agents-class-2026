@@ -512,3 +512,18 @@ describe("temporary uploads", () => {
     vi.unstubAllGlobals();
   });
 });
+
+
+it("derives a PDF download from the registered asset header", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("# Syllabus", {
+    headers: { "content-type": "text/markdown", "X-Class-Agent-Pdf-Asset": "pdf" },
+  })));
+  try {
+    const resource = await getCourseResourceContent("course://syllabus");
+    expect(resource.pdfDownloadUrl).toBe(
+      "/api/v1/course/resources/asset?uri=course%3A%2F%2Fsyllabus&asset_id=pdf",
+    );
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

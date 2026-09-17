@@ -127,6 +127,7 @@ beforeEach(() => {
   vi.mocked(api.getCourseResourceContent).mockImplementation(async (uri) => {
     if (uri === "course://syllabus") {
       return {
+        pdfDownloadUrl: "/api/v1/course/resources/asset?uri=course%3A%2F%2Fsyllabus&asset_id=pdf",
         uri,
         mediaType: "text/markdown",
         data: new TextEncoder().encode(
@@ -1042,6 +1043,9 @@ describe("Course Agent interface", () => {
       }),
     ).toBeInTheDocument();
     expect(api.getCourseResourceContent).toHaveBeenCalledWith("course://syllabus");
+    expect(screen.getByRole("link", { name: "Download syllabus PDF" })).toHaveAttribute(
+      "download", "Course syllabus.pdf",
+    );
     expect(screen.getByText("Proposed instructors")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Course Overview" })).toBeInTheDocument();
     expect(screen.getByRole("cell", { name: "35%" })).toBeInTheDocument();

@@ -318,6 +318,7 @@ function ResourcePanel({
         title: panel.title ?? "Course document",
         mediaType: resource.mediaType,
         data: resource.data,
+        ...(resource.pdfDownloadUrl ? { pdfDownloadUrl: resource.pdfDownloadUrl } : {}),
       }
     : null;
   const calendarData = useMemo(() => {

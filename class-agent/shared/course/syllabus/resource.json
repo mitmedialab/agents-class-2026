@@ -8,6 +8,9 @@
     "file": "syllabus.md",
     "visibility": "public",
     "status": "published",
-    "order": 10
+    "order": 10,
+    "assets": {
+      "pdf": "syllabus.pdf"
+    }
   }
 }

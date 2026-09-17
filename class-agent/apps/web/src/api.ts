@@ -44,6 +44,7 @@ export interface TemporaryUpload {
 }
 
 export interface CourseResourceContent {
+  pdfDownloadUrl?: string;
   uri: string;
   mediaType: string;
   data: Uint8Array;
@@ -338,6 +339,9 @@ export async function getCourseResourceContent(
   return {
     uri: resourceUri,
     mediaType,
+    ...(response.headers.get("X-Class-Agent-Pdf-Asset") === "pdf"
+      ? { pdfDownloadUrl: courseResourceAssetUrl(resourceUri, "pdf") }
+      : {}),
     data: new Uint8Array(await response.arrayBuffer()),
   };
 }

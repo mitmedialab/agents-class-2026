@@ -216,3 +216,23 @@ Application sharing update: authenticated students may use the existing applicat
 tools and photo route only for accepted application UUIDs explicitly shared in the private
 `student-access.json` registry. Instructor access remains unrestricted. See
 [STORAGE.md](STORAGE.md) for authorization, provisioning, and revocation details.
+
+## Syllabus PDF download
+
+`syllabus.md` remains the maintained syllabus source. Its sidecar registers `syllabus.pdf`
+as the `pdf` asset. Both the About page and a Markdown DocumentViewer offer the same
+registered download through the existing authorized asset endpoint.
+
+After editing the syllabus, regenerate the PDF from the running frontend's syllabus renderer
+and print styles, review its pages, then refresh the resource catalog:
+
+```bash
+uv run python -m course_server.export_syllabus --web-url https://localhost:5173
+uv run python -m course_server.index_resources
+```
+
+The export uses installed Playwright Chromium by default. For local development with system
+Chrome and Vite's self-signed certificate, add `--browser-channel chrome --ignore-https-errors`.
+The exporter intercepts only the syllabus-content read with current repository Markdown, so
+it does not accidentally export stale API content. A regression test compares the PDF's text
+with the maintained Markdown and rejects empty pages. No PDF generation occurs on user downloads.

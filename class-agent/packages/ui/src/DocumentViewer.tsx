@@ -1,3 +1,4 @@
+import { PdfDownload } from "./PdfDownload.js";
 import {
   type FormEvent,
   type ReactNode,
@@ -12,6 +13,7 @@ export interface DocumentResource {
   title: string;
   mediaType: string;
   data: Uint8Array;
+  pdfDownloadUrl?: string;
 }
 
 export interface TextHighlightAnchor {
@@ -556,37 +558,6 @@ function PdfDocument({
   );
 }
 
-function PdfDownload({ resource }: { resource: DocumentResource }) {
-  const downloadUrl = useRef<string | null>(null);
-  useEffect(() => () => {
-    if (downloadUrl.current) URL.revokeObjectURL(downloadUrl.current);
-    downloadUrl.current = null;
-  }, [resource.data]);
-
-  function download() {
-    if (!downloadUrl.current) {
-      downloadUrl.current = URL.createObjectURL(
-        new Blob([resource.data.slice()], { type: "application/pdf" }),
-      );
-    }
-    const link = window.document.createElement("a");
-    link.href = downloadUrl.current;
-    // Keep a readable filename while removing filesystem separators and control characters.
-    const title = resource.title.replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-").trim();
-    link.download = `${title.replace(/\.pdf$/i, "") || "lecture-slides"}.pdf`;
-    link.click();
-  }
-
-  return (
-    <button aria-label="Download PDF" title="Download PDF"
-      className="ca-document-download" onClick={download} type="button">
-      <svg aria-hidden="true" viewBox="0 0 24 24">
-        <path d="M12 3v12m-4-4 4 4 4-4M5 16v5h14v-5" />
-      </svg>
-    </button>
-  );
-}
-
 export function DocumentViewer({
   resource,
   page = 1,
@@ -636,7 +607,12 @@ export function DocumentViewer({
           <span>{resource.mediaType}</span>
         </div>
         <SearchBar
-          leadingControl={resource.mediaType === "application/pdf" ? <PdfDownload resource={resource} /> : null}
+          leadingControl={
+            resource.mediaType === "application/pdf" || resource.pdfDownloadUrl ? (
+              <PdfDownload title={resource.title} href={resource.pdfDownloadUrl}
+                data={resource.mediaType === "application/pdf" ? resource.data : undefined} />
+            ) : null
+          }
           activeMatch={activeMatch}
           initialQuery={query}
           matchCount={matches.length}

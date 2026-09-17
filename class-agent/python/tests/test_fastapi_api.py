@@ -717,6 +717,35 @@ def test_authorized_resource_content_is_served_by_uri_without_exposing_paths() -
     )
 
 
+def test_syllabus_advertises_and_serves_registered_pdf_download() -> None:
+    client, _, _ = _build_client()
+    response = client.get(
+        f"{API_PREFIX}/course/resources/content",
+        params={"uri": "course://syllabus"},
+    )
+    assert response.status_code == 200
+    assert response.headers["X-Class-Agent-Pdf-Asset"] == "pdf"
+    pdf = client.get(
+        f"{API_PREFIX}/course/resources/asset",
+        params={"uri": "course://syllabus", "asset_id": "pdf"},
+    )
+    assert pdf.status_code == 200
+    assert pdf.headers["content-type"] == "application/pdf"
+    assert pdf.content.startswith(b"%PDF-")
+    assert (
+        client.get(
+            f"{API_PREFIX}/course/resources/asset",
+            params={"uri": "course://private-grades", "asset_id": "pdf"},
+        ).status_code
+        == 404
+    )
+    schedule = client.get(
+        f"{API_PREFIX}/course/resources/content",
+        params={"uri": "course://schedule"},
+    )
+    assert "X-Class-Agent-Pdf-Asset" not in schedule.headers
+
+
 def test_registered_course_asset_is_served_by_resource_and_asset_id() -> None:
     client, _, _ = _build_client()
 
