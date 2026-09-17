@@ -85,6 +85,7 @@ from course_server.student_communications import (
     CourseReadMyCommunicationTool,
     StudentCommunicationService,
 )
+from course_server.student_identity import StudentIdentityPolicy
 from course_server.student_projects import (
     GitHubStudentProjectCatalog,
     InspectStudentRepositoryTool,
@@ -163,6 +164,7 @@ def build_runtime(
     student_communications: StudentCommunicationService | None = None,
     faq_updates: FaqKnowledgeStore | None = None,
     student_projects: StudentProjectCatalog | None = None,
+    auth_store: AuthStore | None = None,
 ) -> SmolagentsRuntime:
     course_resources = (
         resources
@@ -195,6 +197,12 @@ def build_runtime(
     application_access = ApplicationAccessPolicy(
         settings.applicant_data_path / "student-access.json"
     )
+    student_identities = StudentIdentityPolicy(
+        auth_store,
+        applicants=applicant_store,
+        access=application_access,
+        repository_prefix=settings.github_repository_prefix,
+    )
     executable_tools: list[ExecutableTool] = [
         CourseReadSyllabusTool(course_resources),
         CourseReadPublicFileTool(course_resources),
@@ -219,8 +227,8 @@ def build_runtime(
             ),
         ),
         CourseSubmitApplicationTool(applicant_store, upload_store),
-        InstructorListApplicationsTool(applicant_store, application_access),
-        InstructorReadApplicationTool(applicant_store, application_access),
+        InstructorListApplicationsTool(applicant_store, application_access, student_identities),
+        InstructorReadApplicationTool(applicant_store, application_access, student_identities),
         InstructorInspectApplicationImagesTool(
             applicant_store,
             lambda photos, prompt: inspect_private_images_with_openai(
@@ -293,7 +301,7 @@ def build_runtime(
     if project_catalog is not None:
         executable_tools.extend(
             [
-                ListStudentProjectsTool(project_catalog),
+                ListStudentProjectsTool(project_catalog, student_identities),
                 InspectStudentSiteTool(project_catalog, fetch_public_webpage),
                 InspectStudentRepositoryTool(project_catalog),
             ]
@@ -339,6 +347,7 @@ async def _run_postgres_turn(
                 skills=skills,
                 faq_updates=faq_knowledge,
                 applicants=applicant_store,
+                auth_store=PostgresAuthStore(pool),
             ),
             auth_store=PostgresAuthStore(pool),
             conversation_store=PostgresConversationStore(pool),

@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import pytest
 from pydantic import JsonValue
-from test_course_resources import authenticated_principal, public_principal
+from test_course_resources import authenticated_principal, public_principal, student_identity_policy
 
 from course_server.application_access import ApplicationAccessPolicy
 
@@ -76,7 +76,9 @@ def test_student_listing_never_enumerates_unshared_applications(tmp_path: Path) 
         }
         access = ApplicationAccessPolicy(path)
         context = execution_context(principal=authenticated_principal("student"))
-        result = await InstructorListApplicationsTool(store, access).execute({}, context)
+        result = await InstructorListApplicationsTool(
+            store, access, student_identity_policy()
+        ).execute({}, context)
         assert isinstance(result.content, list)
         assert len(result.content) == 1
         store.list_applications.assert_not_called()
@@ -122,7 +124,7 @@ def test_instructor_can_list_and_read_only_accepted_cohort(tmp_path: Path) -> No
             "application": {"name": "Fictional Applicant"},
         }
         policy = ApplicationAccessPolicy(path)
-        listing = InstructorListApplicationsTool(store, policy)
+        listing = InstructorListApplicationsTool(store, policy, student_identity_policy())
         reading = InstructorReadApplicationTool(store, policy)
         instructor = execution_context(principal=authenticated_principal("instructor"))
         student = execution_context(principal=authenticated_principal("student"))

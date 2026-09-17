@@ -75,7 +75,7 @@ class FakeStudentProjects:
 def test_course_members_list_and_inspect_every_deployed_student_site() -> None:
     async def scenario() -> None:
         projects = FakeStudentProjects()
-        listed = await ListStudentProjectsTool(projects).execute({}, context("student"))
+        listed = await ListStudentProjectsTool(projects).execute({}, context("instructor"))
         assert isinstance(listed.content, dict)
         listed_projects = listed.content["projects"]
         assert isinstance(listed_projects, list)

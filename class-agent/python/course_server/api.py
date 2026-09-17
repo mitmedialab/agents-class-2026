@@ -898,6 +898,7 @@ def create_app(
             agent=CourseAgentService(
                 runtime=build_runtime(
                     resolved_settings,
+                    auth_store=auth_store,
                     resources=course_resources,
                     applicants=applicant_store,
                     uploads=upload_store,

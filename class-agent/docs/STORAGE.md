@@ -240,6 +240,16 @@ the local file remains, but this repository does not require a second export, re
 automatic backup. Deleting it removes the agent's learned FAQ overlay; maintained static FAQ
 content under `shared/course/faq/` is unaffected.
 
+## Student self-exclusion
+
+Peer selection uses the existing account email and accepted application records, with no extra
+identity file. All student application listings exclude records with that email; own-profile
+reads resolve the email to a unique accepted application. Website candidate lists apply the
+course's first-name repository naming convention after resolving the same account email.
+The existing accepted UUID allowlist remains the access authority. See
+[STUDENT_PROJECTS.md](STUDENT_PROJECTS.md#peer-recommendations-and-self-exclusion) for ambiguity
+handling, direct own-record reads, deployment, and compatibility.
+
 ## PostgreSQL integration tests
 
 Set `TEST_DATABASE_URL` to a disposable development PostgreSQL database and run `uv run pytest -m postgres`. Tests create a random isolated schema and drop that schema afterward. They do not modify the database's public schema.

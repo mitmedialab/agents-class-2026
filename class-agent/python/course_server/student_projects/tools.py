@@ -17,6 +17,7 @@ from course_server.agent.capabilities import (
     ToolValidationError,
     WebVisitRunner,
 )
+from course_server.student_identity import StudentIdentityPolicy
 from course_server.student_project_tool_ids import (
     INSPECT_STUDENT_REPOSITORY_TOOL_ID,
     INSPECT_STUDENT_SITE_TOOL_ID,
@@ -77,6 +78,9 @@ class ListStudentProjectsTool:
         "the exact agents2026-* project identifier or deployed URL is not yet known. Once "
         "the project is identified, continue with the appropriate site or repository "
         "inspection tool instead of searching general course resources. "
+        "For student logins, lists only other accepted students using the course first-name "
+        "repository convention; the current student and ambiguous names are always excluded. "
+        "To inspect your own known site, use course.inspect_student_site directly. "
         "Available only to authenticated course members. This does not expose "
         "repository source or GitHub development metadata."
     )
@@ -86,8 +90,11 @@ class ListStudentProjectsTool:
         "additionalProperties": False,
     }
 
-    def __init__(self, projects: StudentProjectCatalog) -> None:
+    def __init__(
+        self, projects: StudentProjectCatalog, identities: StudentIdentityPolicy | None = None
+    ) -> None:
         self._projects = projects
+        self._identities = identities or StudentIdentityPolicy()
 
     async def execute(
         self,
@@ -97,10 +104,17 @@ class ListStudentProjectsTool:
         _require_course_member(context.principal)
         if arguments:
             raise ToolValidationError("This tool accepts no arguments.")
+        peer_ids = (
+            await self._identities.project_candidates(context.principal)
+            if "student" in context.principal.roles
+            else None
+        )
         try:
             projects = await asyncio.to_thread(self._projects.list_projects)
         except StudentProjectProviderError as error:
             raise _translate_provider_error(error) from error
+        if peer_ids is not None:
+            projects = [project for project in projects if project.id.casefold() in peer_ids]
         return ToolExecutionResult(
             content={
                 "projects": [
@@ -110,7 +124,11 @@ class ListStudentProjectsTool:
                 "provider": "github",
                 "retrieved_at": datetime.now(UTC).isoformat(),
             },
-            summary=f"Listed {len(projects)} student project websites.",
+            summary=(
+                f"Listed {len(projects)} other accepted student websites, excluding yourself."
+                if peer_ids is not None
+                else f"Listed {len(projects)} student project websites."
+            ),
             storage_policy="server_summary",
         )
 

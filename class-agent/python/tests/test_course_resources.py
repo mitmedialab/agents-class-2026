@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import Literal
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import httpx
@@ -56,6 +57,7 @@ from course_server.faq import (
     CourseReadFaqUpdateTool,
     InMemoryFaqStore,
 )
+from course_server.student_identity import StudentIdentityPolicy
 from course_server.uploads import FileTemporaryUploadStore
 
 
@@ -80,6 +82,12 @@ def authenticated_principal(
         roles=["public", role],
         session_id=uuid4(),
     )
+
+
+def student_identity_policy() -> StudentIdentityPolicy:
+    policy = AsyncMock(spec=StudentIdentityPolicy)
+    policy.email.return_value = "requester@example.org"
+    return policy
 
 
 def execution_context(
@@ -1094,7 +1102,9 @@ def test_application_tool_stores_private_json_with_server_generated_name(
         student_context = execution_context(principal=authenticated_principal("student"))
         access_path = tmp_path / "student-access.json"
         access = ApplicationAccessPolicy(access_path)
-        student_list = InstructorListApplicationsTool(applicant_store, access)
+        student_list = InstructorListApplicationsTool(
+            applicant_store, access, student_identity_policy()
+        )
         student_read = InstructorReadApplicationTool(applicant_store, access)
         student_images = InstructorInspectApplicationImagesTool(
             applicant_store, inspect_application_images, access

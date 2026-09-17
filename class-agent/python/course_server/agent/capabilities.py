@@ -44,6 +44,7 @@ from course_server.course_application import (
     CourseApplication,
 )
 from course_server.resource_text import ResourceTextExtractionError, extract_resource_text
+from course_server.student_identity import StudentIdentityPolicy
 from course_server.student_project_tool_ids import (
     INSPECT_STUDENT_REPOSITORY_TOOL_ID,
     STUDENT_PROJECT_TOOL_IDS,
@@ -2374,6 +2375,8 @@ class InstructorListApplicationsTool:
         "List submitted course applications available to this login: all for instructors, "
         "only shared accepted applicants for students. Set accepted_only=true when asked about "
         "accepted/admitted students, to avoid listing the entire applicant pool. "
+        "Student listings always exclude applications with the current account email. "
+        "Use these other accepted students as collaborator candidates. "
         "Returns application IDs and concise applicant metadata, never filesystem paths."
     )
     input_schema: ClassVar[dict[str, JsonValue]] = {
@@ -2386,16 +2389,20 @@ class InstructorListApplicationsTool:
                     "Only accepted/admitted applicants in the private student access allowlist. "
                     "Use true for accepted-cohort analysis. Students are always restricted to it."
                 ),
-            }
+            },
         },
         "additionalProperties": False,
     }
 
     def __init__(
-        self, applicants: ApplicantStore, access: ApplicationAccessPolicy | None = None
+        self,
+        applicants: ApplicantStore,
+        access: ApplicationAccessPolicy | None = None,
+        identities: StudentIdentityPolicy | None = None,
     ) -> None:
         self._applicants = applicants
         self._access = access or ApplicationAccessPolicy()
+        self._identities = identities or StudentIdentityPolicy()
 
     async def execute(
         self,
@@ -2405,6 +2412,11 @@ class InstructorListApplicationsTool:
         _reject_unknown_arguments(arguments, frozenset({"accepted_only"}))
         accepted_only = _application_accepted_only(arguments)
         scope = self._access.scope(context.principal, accepted_only=accepted_only)
+        student_email = (
+            await self._identities.email(context.principal)
+            if "student" in context.principal.roles
+            else None
+        )
         if scope is None:
             applications = await self._applicants.list_applications()
         else:
@@ -2418,6 +2430,10 @@ class InstructorListApplicationsTool:
                 fields = record.get("application")
                 if not isinstance(fields, dict):
                     raise ToolValidationError("A shared application is unavailable.")
+                if student_email is not None and (
+                    str(fields.get("email", "")).strip().casefold() == student_email
+                ):
+                    continue
                 applications.append(
                     ApplicationSummary(
                         application_id=application_id,
@@ -2434,7 +2450,9 @@ class InstructorListApplicationsTool:
         return ToolExecutionResult(
             content=[application.model_dump(mode="json") for application in applications],
             summary=(
-                f"Listed {len(applications)} accepted course applications."
+                f"Listed {len(applications)} other accepted applications, excluding yourself."
+                if student_email is not None
+                else f"Listed {len(applications)} accepted course applications."
                 if scope is not None
                 else f"Listed {len(applications)} private course applications."
             ),
@@ -2454,7 +2472,10 @@ class InstructorReadApplicationTool:
         "is reported as protected metadata. If the user explicitly asks about visible "
         "image content, use instructor.inspect_application_images with the application ID. "
         "For accepted-cohort analysis, set accepted_only=true and copy the UUID exactly from "
-        "the accepted-only listing; unaccepted IDs will be rejected."
+        "the accepted-only listing; unaccepted IDs will be rejected. "
+        "Students: omit application_id to read your own accepted application using your login "
+        "email before comparing your interests with the other students. Your own profile is "
+        "comparison context, never a collaborator candidate."
     )
     input_schema: ClassVar[dict[str, JsonValue]] = {
         "type": "object",
@@ -2470,18 +2491,21 @@ class InstructorReadApplicationTool:
             "application_id": {
                 "type": "string",
                 "format": "uuid",
-                "description": "Server-issued application UUID.",
+                "description": "Server-issued UUID. Omit for the student's own application.",
             },
         },
-        "required": ["application_id"],
         "additionalProperties": False,
     }
 
     def __init__(
-        self, applicants: ApplicantStore, access: ApplicationAccessPolicy | None = None
+        self,
+        applicants: ApplicantStore,
+        access: ApplicationAccessPolicy | None = None,
+        identities: StudentIdentityPolicy | None = None,
     ) -> None:
         self._applicants = applicants
         self._access = access or ApplicationAccessPolicy()
+        self._identities = identities or StudentIdentityPolicy()
 
     async def execute(
         self,
@@ -2491,12 +2515,15 @@ class InstructorReadApplicationTool:
         self._access.scope(context.principal)
         _reject_unknown_arguments(arguments, frozenset({"application_id", "accepted_only"}))
         accepted_only = _application_accepted_only(arguments)
-        try:
-            application_id = UUID(
-                _required_text_argument(arguments, "application_id", max_length=36)
-            )
-        except ValueError as error:
-            raise ToolValidationError("application_id must be a UUID.") from error
+        if "application_id" not in arguments:
+            application_id = await self._identities.own_application_id(context.principal)
+        else:
+            try:
+                application_id = UUID(
+                    _required_text_argument(arguments, "application_id", max_length=36)
+                )
+            except ValueError as error:
+                raise ToolValidationError("application_id must be a UUID.") from error
         try:
             self._access.require(context.principal, application_id, accepted_only=accepted_only)
             application = await self._applicants.read_application(application_id)

@@ -139,7 +139,7 @@ def test_empty_development_store_stays_closed_and_existing_registry_is_not_repla
 def test_bootstrap_reads_existing_file_applications_and_enables_student_tools(
     tmp_path: Path,
 ) -> None:
-    from test_course_resources import execution_context
+    from test_course_resources import execution_context, student_identity_policy
 
     from course_server.agent.capabilities import (
         FileApplicantStore,
@@ -165,9 +165,9 @@ def test_bootstrap_reads_existing_file_applications_and_enables_student_tools(
         store = FileApplicantStore(tmp_path)
         await initialize_student_application_access(store, tmp_path)
         policy = ApplicationAccessPolicy(tmp_path / "student-access.json")
-        result = await InstructorListApplicationsTool(store, policy).execute(
-            {}, execution_context(principal=authenticated_principal("student"))
-        )
+        result = await InstructorListApplicationsTool(
+            store, policy, student_identity_policy()
+        ).execute({}, execution_context(principal=authenticated_principal("student")))
         assert isinstance(result.content, list)
         assert len(result.content) == 1
         assert isinstance(result.content[0], dict)
