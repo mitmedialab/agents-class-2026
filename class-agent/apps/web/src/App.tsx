@@ -77,6 +77,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { mergeNotificationCenterUpdates } from "./notifications.js";
 
 const CONNECTION_ERROR = "I couldn’t reach the Course Agent. Please try again.";
 const WELCOME_MESSAGE =
@@ -88,6 +89,7 @@ const WELCOME_PRESENTATION_MS =
   WELCOME_MORPH_DELAY_MS +
   (WELCOME_MESSAGE.length - 1) * RESPONSE_CHARACTER_STAGGER_MS +
   180;
+const NOTIFICATION_POLL_INTERVAL_MS = 60_000;
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const SUPPORTED_UPLOAD_EXTENSIONS = new Set([
   "csv",
@@ -454,6 +456,28 @@ export default function App() {
     );
     return () => window.clearTimeout(timeout);
   }, [isOpening, latestResponse, welcomePresentationId]);
+
+  useEffect(() => {
+    if (!principal?.authenticated) return;
+    let requestInFlight = false;
+    const interval = window.setInterval(() => {
+      if (requestInFlight) return;
+      requestInFlight = true;
+      void getNotificationCenter()
+        .then((incoming) => {
+          setNotificationCenter((current) =>
+            mergeNotificationCenterUpdates(current, incoming),
+          );
+        })
+        .catch(() => {
+          // Keep the last trusted projection visible if polling fails.
+        })
+        .finally(() => {
+          requestInFlight = false;
+        });
+    }, NOTIFICATION_POLL_INTERVAL_MS);
+    return () => window.clearInterval(interval);
+  }, [principal?.authenticated, principal?.session_id]);
 
   useLayoutEffect(() => {
     const composer = composerRef.current;

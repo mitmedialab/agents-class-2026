@@ -142,6 +142,9 @@ Reduced-motion preferences disable the desktop transition.
 The notification center and registered workspace share one mutually exclusive right-side
 presentation slot. Opening a workspace temporarily hides the center without acknowledging or
 discarding its items; closing the workspace restores the same notification projection.
+While an authenticated page remains open, the browser checks for notification updates once per
+minute. Polls add new items and refresh matching items without removing the page's current snapshot;
+a full page refresh starts a new authoritative snapshot and drops items that are no longer active.
 While the stack is at its initial position, visible header shortcuts remain in the top interaction
 layer and are clickable through the stack's transparent header area. As cards scroll over that area,
 the shortcuts fade out and stop receiving pointer events.

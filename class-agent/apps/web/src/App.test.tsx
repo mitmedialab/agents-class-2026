@@ -546,6 +546,78 @@ describe("Course Agent interface", () => {
     );
   });
 
+  it("polls for new notifications after one minute without removing the current snapshot", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
+      vi.mocked(api.listConversations).mockResolvedValue([]);
+      vi.mocked(api.getNotificationCenter)
+        .mockResolvedValueOnce({
+          generated_at: "2026-09-16T06:00:00Z",
+          unread_count: 1,
+          items: [
+            {
+              id: "60000000-0000-4000-8000-000000000041",
+              section: "notifications",
+              kind: "course_update",
+              state: "unread",
+              title: "Earlier update",
+              detail: "Keep this update until the page refreshes.",
+              timestamp: "2026-09-16T06:00:00Z",
+              due_at: null,
+              action_label: "Discuss update",
+              action_prompt: "Discuss the earlier update.",
+              unread: true,
+              dismissible: true,
+              sender: null,
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          generated_at: "2026-09-16T06:01:00Z",
+          unread_count: 1,
+          items: [
+            {
+              id: "60000000-0000-4000-8000-000000000042",
+              section: "notifications",
+              kind: "course_update",
+              state: "unread",
+              title: "New update",
+              detail: "This update arrived while the page was open.",
+              timestamp: "2026-09-16T06:01:00Z",
+              due_at: null,
+              action_label: "Discuss update",
+              action_prompt: "Discuss the new update.",
+              unread: true,
+              dismissible: true,
+              sender: null,
+            },
+          ],
+        });
+
+      render(<App />);
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(api.getNotificationCenter).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        vi.advanceTimersByTime(60_000);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(api.getNotificationCenter).toHaveBeenCalledTimes(2);
+      expect(screen.getByText("Earlier update")).toBeVisible();
+      expect(screen.getByText("New update")).toBeVisible();
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
   it("keeps resolved communication history available without pre-solving it", async () => {
     const actionPrompt =
       "Show me any additional information available about the instructor message titled “Studio reminder”. Do not solve it or recommend an action. Ask what I want to do next.";
