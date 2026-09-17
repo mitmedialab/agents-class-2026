@@ -60,7 +60,8 @@ export interface CourseNotification {
 export type NotificationCenterSection =
   | "notifications"
   | "communications"
-  | "upcoming";
+  | "upcoming"
+  | "lecture_slides";
 
 export type NotificationCenterItemKind =
   | "course_update"
@@ -90,6 +91,7 @@ export interface NotificationCenterItem {
   unread: boolean;
   dismissible: boolean;
   sender: NotificationSender | null;
+  thumbnail?: { resource_uri: string; asset_id: string } | null;
 }
 
 export interface NotificationCenterData {

@@ -138,7 +138,12 @@ conversations; it does not weaken the resource-content endpoint's authorization.
 
 `document-viewer` opens a specific Markdown, plain-text, or PDF artifact when the user
 wants to navigate, search, or discuss its particular content. PDF pages are contain-fitted to
-the viewer's current usable width and height and rerender when that surface resizes. It is not used
+the viewer's current usable width and height and rerender when that surface resizes.
+The PDF toolbar includes a **Download PDF** icon immediately left of Find, which saves the already-authorized original bytes
+locally using the document title as the filename. It remains available if page rendering fails
+and does not require another server request or a new resource permission.
+The PDF loading task follows the resource URI and byte buffer, so metadata and conversation
+updates do not destroy an in-progress document render. It is not used
 merely because a knowledge source is stored as a document.
 
 When a question depends on the visible content of the focused PDF page, the agent may call

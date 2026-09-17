@@ -316,7 +316,9 @@ function SearchBar({
   onSubmit,
   onPrevious,
   onNext,
+  leadingControl,
 }: {
+  leadingControl?: ReactNode;
   initialQuery: string;
   matchCount: number;
   activeMatch: number;
@@ -332,6 +334,7 @@ function SearchBar({
   }
   return (
     <form className="ca-document-search" onSubmit={submit}>
+      {leadingControl}
       <label>
         <span className="ca-visually-hidden">Find in document</span>
         <input
@@ -413,6 +416,9 @@ function PdfDocument({
   }, []);
   useEffect(() => {
     let disposed = false;
+    setDocument(null);
+    setError(null);
+    setPageText("");
     let loaded: import("pdfjs-dist").PDFDocumentProxy | null = null;
     let loadingTask: import("pdfjs-dist").PDFDocumentLoadingTask | null = null;
     async function load() {
@@ -420,6 +426,7 @@ function PdfDocument({
         const pdfjs = await import("pdfjs-dist");
         const workerUrl = (await import("pdfjs-dist/build/pdf.worker.min.mjs?url"))
           .default;
+        if (disposed) return;
         pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
         loadingTask = pdfjs.getDocument({ data: resource.data.slice() });
         loaded = await loadingTask.promise;
@@ -433,7 +440,8 @@ function PdfDocument({
       disposed = true;
       void loadingTask?.destroy();
     };
-  }, [resource]);
+    // Metadata wrappers change during workspace updates; only new bytes or URI reload the PDF.
+  }, [resource.data, resource.uri]);
 
   useEffect(() => {
     if (!document || pageArea.width < 1 || pageArea.height < 1) return;
@@ -548,6 +556,37 @@ function PdfDocument({
   );
 }
 
+function PdfDownload({ resource }: { resource: DocumentResource }) {
+  const downloadUrl = useRef<string | null>(null);
+  useEffect(() => () => {
+    if (downloadUrl.current) URL.revokeObjectURL(downloadUrl.current);
+    downloadUrl.current = null;
+  }, [resource.data]);
+
+  function download() {
+    if (!downloadUrl.current) {
+      downloadUrl.current = URL.createObjectURL(
+        new Blob([resource.data.slice()], { type: "application/pdf" }),
+      );
+    }
+    const link = window.document.createElement("a");
+    link.href = downloadUrl.current;
+    // Keep a readable filename while removing filesystem separators and control characters.
+    const title = resource.title.replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-").trim();
+    link.download = `${title.replace(/\.pdf$/i, "") || "lecture-slides"}.pdf`;
+    link.click();
+  }
+
+  return (
+    <button aria-label="Download PDF" title="Download PDF"
+      className="ca-document-download" onClick={download} type="button">
+      <svg aria-hidden="true" viewBox="0 0 24 24">
+        <path d="M12 3v12m-4-4 4 4 4-4M5 16v5h14v-5" />
+      </svg>
+    </button>
+  );
+}
+
 export function DocumentViewer({
   resource,
   page = 1,
@@ -597,6 +636,7 @@ export function DocumentViewer({
           <span>{resource.mediaType}</span>
         </div>
         <SearchBar
+          leadingControl={resource.mediaType === "application/pdf" ? <PdfDownload resource={resource} /> : null}
           activeMatch={activeMatch}
           initialQuery={query}
           matchCount={matches.length}
@@ -614,6 +654,7 @@ export function DocumentViewer({
       >
         {resource.mediaType === "application/pdf" ? (
           <PdfDocument
+            key={resource.uri}
             highlight={highlight}
             initialPage={page}
             onPageChange={onPageChange}

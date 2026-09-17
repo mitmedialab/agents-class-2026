@@ -22,6 +22,7 @@ from course_server.agent.capabilities import (
     ResourceDeadline,
 )
 from course_server.resource_text import extract_resource_text
+from course_server.slide_thumbnails import FIRST_SLIDE_ASSET_ID, generate_slide_thumbnail
 
 DEFAULT_FAQ_PATH = DEFAULT_RESOURCE_REGISTRY_PATH.parent.parent / "course/faq/faq.json"
 
@@ -122,6 +123,12 @@ def refresh_resource_registry(
                 raise ValueError(f"duplicate resource file in manifests: {relative_asset_path}")
             seen_paths.add(relative_asset_path)
             assets[asset_id] = relative_asset_path
+        if (
+            resource.uri.startswith("course://slides/")
+            and resource.media_type == "application/pdf"
+            and resource.status == "published"
+        ):
+            assets[FIRST_SLIDE_ASSET_ID] = generate_slide_thumbnail(file_path, shared_root)
         entry = GeneratedResourceEntry(
             uri=resource.uri,
             title=resource.title,

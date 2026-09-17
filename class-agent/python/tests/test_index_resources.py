@@ -59,3 +59,39 @@ def test_resource_registry_is_generated_from_sidecar_manifests(tmp_path: Path) -
     assert generated["resources"][0]["assets"] == {"guide_portrait": "course/guide/portrait.jpg"}
     assert generated["resources"][0]["announcement"]["revision"] == "fall-2026-v1"
     assert generated["resources"][0]["deadline"]["kind"] == "assignment"
+
+
+def test_slide_thumbnail_is_generated_and_refreshed_with_deck_bytes(tmp_path: Path) -> None:
+    from PIL import Image
+    from pypdf import PdfWriter
+
+    directory = tmp_path / "shared/course/slides/week-01"
+    directory.mkdir(parents=True)
+    pdf_path = directory / "slides.pdf"
+    writer = PdfWriter()
+    writer.add_blank_page(width=1600, height=900)
+    writer.write(pdf_path)
+    (directory / "resource.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "resource": {
+                    "uri": "course://slides/week-01",
+                    "title": "Lecture",
+                    "media_type": "application/pdf",
+                    "file": "slides.pdf",
+                },
+            }
+        )
+    )
+    registry_path = tmp_path / "shared/registry/resources.json"
+    refresh_resource_registry(registry_path)
+    asset = json.loads(registry_path.read_text())["resources"][0]["assets"]["first_slide"]
+    with Image.open(tmp_path / "shared" / asset) as image:
+        assert image.size == (320, 180)
+    refresh_resource_registry(registry_path)
+    assert json.loads(registry_path.read_text())["resources"][0]["assets"]["first_slide"] == asset
+    writer.add_blank_page(width=1600, height=900)
+    writer.write(pdf_path)
+    refresh_resource_registry(registry_path)
+    assert json.loads(registry_path.read_text())["resources"][0]["assets"]["first_slide"] != asset

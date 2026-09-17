@@ -27,9 +27,10 @@ from course_server.instructor_messages import (
     InstructorMessageStore,
 )
 from course_server.mail import TAQuestionStore, parse_staff_answer_reply
+from course_server.slide_thumbnails import FIRST_SLIDE_ASSET_ID
 
 UPCOMING_WINDOW = timedelta(days=14)
-NotificationSection = Literal["notifications", "communications", "upcoming"]
+NotificationSection = Literal["notifications", "communications", "upcoming", "lecture_slides"]
 NotificationKind = Literal[
     "course_update",
     "instructor_message",
@@ -62,6 +63,11 @@ class NotificationSender(NotificationCenterModel):
     image_asset_id: str | None = Field(default=None, min_length=1, max_length=200)
 
 
+class NotificationThumbnail(NotificationCenterModel):
+    resource_uri: str
+    asset_id: str
+
+
 class NotificationCenterItem(NotificationCenterModel):
     id: UUID
     section: NotificationSection
@@ -76,6 +82,7 @@ class NotificationCenterItem(NotificationCenterModel):
     unread: bool = False
     dismissible: bool = False
     sender: NotificationSender | None = None
+    thumbnail: NotificationThumbnail | None = None
 
 
 class NotificationCenter(NotificationCenterModel):
@@ -170,6 +177,7 @@ class NotificationCenterService:
             *await self._course_updates(principal, user, now, assignments),
             *await self._communications(principal, user),
             *self._upcoming(principal, now, assignments),
+            *self._lecture_slides(principal),
         ]
         history_items.sort(key=_history_item_sort_key)
         items = [item for item in history_items if _is_active(item, now)]
@@ -194,7 +202,11 @@ class NotificationCenterService:
             (candidate for candidate in center.history_items if candidate.id == item_id),
             None,
         )
-        if item is None or item.kind not in READ_ACKNOWLEDGEABLE_KINDS:
+        if (
+            item is None
+            or item.section == "lecture_slides"
+            or item.kind not in READ_ACKNOWLEDGEABLE_KINDS
+        ):
             return False
         if not item.unread:
             # The page-load greeting acknowledges Updates after taking the browser's
@@ -245,6 +257,7 @@ class NotificationCenterService:
                 "suggested_action": item.action_prompt,
             }
             for item in center.items
+            if item.section != "lecture_slides"
         ]
 
     async def _active_user(self, principal: PrincipalContext) -> User:
@@ -259,6 +272,47 @@ class NotificationCenterService:
         if self._resources is None:
             return []
         return self._resources.list_feed_metadata(principal)
+
+    def _lecture_slides(self, principal: PrincipalContext) -> list[NotificationCenterItem]:
+        if self._resources is None:
+            return []
+        lectures: list[tuple[int, NotificationCenterItem]] = []
+        for resource in self._resources.list_authorized(principal):
+            # The maintained slide URI convention supplies the lecture number.
+            match = re.fullmatch(r"course://slides/week-([0-9]+)", resource.uri)
+            if (
+                not match
+                or resource.status != "published"
+                or resource.media_type != "application/pdf"
+            ):
+                continue
+            number = int(match.group(1))
+            lectures.append(
+                (
+                    number,
+                    NotificationCenterItem(
+                        id=_item_id("lecture-slides", resource.uri),
+                        section="lecture_slides",
+                        kind="course_update",
+                        state="read",
+                        title=f"Lecture {number}",
+                        detail=resource.title,
+                        thumbnail=(
+                            NotificationThumbnail(
+                                resource_uri=resource.uri,
+                                asset_id=FIRST_SLIDE_ASSET_ID,
+                            )
+                            if FIRST_SLIDE_ASSET_ID in self._resources.asset_ids(resource.uri)
+                            else None
+                        ),
+                        action_label="View slides",
+                        action_prompt=(
+                            f"Open the lecture slides from {resource.uri} in the workspace."
+                        ),
+                    ),
+                )
+            )
+        return [item for _, item in sorted(lectures, key=lambda entry: entry[0], reverse=True)]
 
     async def _released_assignments(
         self,
@@ -621,7 +675,9 @@ class NotificationCenterService:
 
 
 def _item_sort_key(item: NotificationCenterItem) -> tuple[int, float, str]:
-    section_order = {"notifications": 0, "communications": 1, "upcoming": 2}
+    section_order = {"notifications": 0, "communications": 1, "upcoming": 2, "lecture_slides": 3}
+    if item.section == "lecture_slides":
+        return (section_order[item.section], 0, "")
     moment = item.due_at or item.timestamp
     seconds = moment.timestamp() if moment is not None else 0.0
     direction = seconds if item.section == "upcoming" else -seconds
@@ -629,13 +685,17 @@ def _item_sort_key(item: NotificationCenterItem) -> tuple[int, float, str]:
 
 
 def _history_item_sort_key(item: NotificationCenterItem) -> tuple[int, float, str]:
-    section_order = {"notifications": 0, "communications": 1, "upcoming": 2}
+    section_order = {"notifications": 0, "communications": 1, "upcoming": 2, "lecture_slides": 3}
+    if item.section == "lecture_slides":
+        return (section_order[item.section], 0, "")
     moment = item.due_at or item.timestamp
     seconds = moment.timestamp() if moment is not None else 0.0
     return (section_order[item.section], -seconds, str(item.id))
 
 
 def _is_active(item: NotificationCenterItem, now: datetime) -> bool:
+    if item.section == "lecture_slides":
+        return False
     if item.section == "notifications":
         return item.unread
     if item.section == "communications":

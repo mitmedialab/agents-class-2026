@@ -63,6 +63,16 @@ shared/course/slides/week-01/
 }
 ```
 
+The side panel's **Lecture Slides** section derives published PDF decks from authorized
+`course://slides/week-NN` resources and labels them Lecture 1, Lecture 2, and so on,
+ordered by descending lecture number. Add each new PDF and sidecar using this convention;
+restart the backend to index and load the updated catalog. No frontend list needs editing.
+Indexing generates a content-addressed `first_slide` PNG asset for every published slide PDF
+under `shared/registry/slide-thumbnails/`. The panel loads these small first-page previews through
+the existing authorized asset endpoint. New or changed PDFs regenerate their thumbnails automatically.
+Slides appear only in **See more**, stay available after opening, and do not create unread
+alerts or greeting reminders.
+
 PDF indexing extracts embedded text by page for Course Agent reads and search while retaining the
 original bytes for the workspace's `document-viewer`. Image-only or scanned slides still render
 and the agent can inspect the focused page visually on demand through the authorized

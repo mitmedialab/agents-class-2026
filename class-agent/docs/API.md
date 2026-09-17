@@ -93,8 +93,14 @@ knowledge. These two routes remain as the narrow Phase 10 compatibility surface.
 
 The notification-center routes require an active authenticated course account and derive identity
 and role from the session. The response is a path-free projection with `notifications`,
-`communications`, and `upcoming` sections. Its `items` list contains the current active projection
-used by the page greeting. Its separate `history_items` list retains authorized read updates and
+`communications`, `upcoming`, and `lecture_slides` sections. The additive `lecture_slides`
+section reuses `course_update` items with no read acknowledgement or unread count; it remains
+in `history_items` only and is ordered by descending lecture number. The browser reveals it
+when **See more** is selected. An optional `thumbnail` supplies the authorized resource URI and
+registered asset ID of the first-slide preview; it contains no backing path. It is excluded from
+agent greeting attention. This extends the application endpoint only; no versioned core schema
+or persisted data changes or migrations are needed. Its `items` list contains the current active
+projection; the page greeting uses its notification items, excluding slides. Its separate `history_items` list retains authorized read updates and
 messages, resolved question threads and replies, and past deadlines in newest-first category order.
 Students see their own sent question threads and
 confirmed instructor messages addressed to them; an answer replaces its pending question item. TAs and instructors see queued/open student questions; other roles do

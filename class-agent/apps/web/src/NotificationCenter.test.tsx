@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -307,4 +308,56 @@ describe("NotificationCenter", () => {
       screen.getByRole("button", { name: "Show newest 3 updates" }),
     ).toHaveAttribute("aria-expanded", "true");
   });
+});
+
+it("shows lecture slides only after See more and invokes their resource action", () => {
+  const onAction = vi.fn();
+  const slides = [10, 2, 1].map((number) => ({
+    ...data.items[0]!,
+    id: `lecture-${number}`,
+    thumbnail: { resource_uri: `course://slides/week-${number}`, asset_id: "first_slide" },
+    section: "lecture_slides" as const,
+    state: "read" as const,
+    title: `Lecture ${number}`,
+    action_label: "View slides",
+    action_prompt: `Open course://slides/week-${number}`,
+    unread: false,
+    dismissible: false,
+    timestamp: null,
+  }));
+  function Preview() {
+    const [expanded, setExpanded] = useState(false);
+    return (
+      <NotificationCenter
+        busy={false}
+        data={{ ...data, unread_count: 0, items: [], history_items: slides }}
+        historyExpanded={expanded}
+        onAction={onAction}
+        onHistoryExpandedChange={setExpanded}
+        onMarkRead={vi.fn()}
+      />
+    );
+  }
+  render(<Preview />);
+  expect(screen.queryByRole("region", { name: "Lecture Slides" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "See more" }));
+  const section = screen.getByRole("region", { name: "Lecture Slides" });
+  const thumbnail = section.querySelector(".notification-slide-thumbnail img");
+  expect(thumbnail).toHaveAttribute("src", expect.stringContaining("first_slide"));
+  fireEvent.error(thumbnail!);
+  expect(section.querySelectorAll(".notification-slide-thumbnail img")).toHaveLength(2);
+  const buttons = within(section).getAllByRole("button");
+  expect(buttons.map((button) => button.getAttribute("aria-label"))).toEqual([
+    "View slides: Lecture 10",
+    "View slides: Lecture 2",
+    "View slides: Lecture 1",
+  ]);
+  fireEvent.click(buttons[0]!);
+  expect(onAction).toHaveBeenCalledWith(slides[0]);
+  expect(
+    within(section).queryByRole("button", { name: /Mark/ }),
+  ).not.toBeInTheDocument();
+  expect(screen.getByText("Lecture 10")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Show current" }));
+  expect(screen.queryByRole("region", { name: "Lecture Slides" })).not.toBeInTheDocument();
 });

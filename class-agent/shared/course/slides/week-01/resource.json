@@ -2,7 +2,7 @@
   "schema_version": 1,
   "resource": {
     "uri": "course://slides/week-01",
-    "title": "Week 1 Slides",
+    "title": "AI Agents for Cognitive Augmentation",
     "description": "Slides for the first course meeting.",
     "media_type": "application/pdf",
     "file": "week-01-slides.pdf",

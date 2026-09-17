@@ -15,6 +15,7 @@ const SECTIONS: ReadonlyArray<{
   { id: "notifications", label: "Updates" },
   { id: "communications", label: "Communications" },
   { id: "upcoming", label: "Upcoming" },
+  { id: "lecture_slides", label: "Lecture Slides" },
 ];
 
 const MINUTE_MS = 60_000;
@@ -110,6 +111,18 @@ function NotificationKindIcon({ kind }: { kind: NotificationCenterItem["kind"] }
 }
 
 function NotificationTile({ item }: { item: NotificationCenterItem }) {
+  const [failedThumbnail, setFailedThumbnail] = useState<string | null>(null);
+  const thumbnailUrl = item.thumbnail
+    ? courseResourceAssetUrl(item.thumbnail.resource_uri, item.thumbnail.asset_id)
+    : null;
+  if (thumbnailUrl && failedThumbnail !== thumbnailUrl) {
+    return (
+      <span className="notification-card-icon notification-slide-thumbnail">
+        <img alt="" src={thumbnailUrl} loading="lazy"
+          onError={() => setFailedThumbnail(thumbnailUrl)} />
+      </span>
+    );
+  }
   if (item.sender?.resource_uri && item.sender.image_asset_id) {
     return (
       <span className="notification-card-icon notification-card-portrait">
@@ -236,7 +249,7 @@ function StandardNotificationCardContent({
       <span className="notification-card-content">
         <span className="notification-card-meta">
           <span>
-            {STATE_LABELS[item.state]}
+            {item.section === "lecture_slides" ? "Slides" : STATE_LABELS[item.state]}
             {senderName ? (
               <span className="notification-card-sender">
                 <span aria-hidden="true"> · </span>
@@ -248,7 +261,7 @@ function StandardNotificationCardContent({
             dateTime={item.timestamp ?? undefined}
             title={item.timestamp ? formatDate(item.timestamp) : undefined}
           >
-            {itemMeta(item, generatedAt)}
+            {item.section === "lecture_slides" ? null : itemMeta(item, generatedAt)}
           </time>
         </span>
         <strong className="notification-card-title">{item.title}</strong>

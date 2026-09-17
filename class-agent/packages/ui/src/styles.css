@@ -1625,6 +1625,18 @@
   width: 8rem;
 }
 
+.ca-document-download svg {
+  display: block;
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ca-document-download,
 .ca-document-search button,
 .ca-pdf-pagination button,
 .ca-calendar button {
@@ -1642,6 +1654,7 @@
   opacity: 0.3;
 }
 
+.ca-document-download:focus-visible,
 .ca-document-search input:focus-visible,
 .ca-document-search button:focus-visible,
 .ca-pdf-pagination button:focus-visible,
