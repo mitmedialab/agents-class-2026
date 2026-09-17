@@ -1657,6 +1657,7 @@
 }
 
 .ca-document-download,
+.ca-document-search .ca-document-download,
 .ca-document-search input::placeholder {
   color: var(--color-text-muted);
   opacity: 1;
