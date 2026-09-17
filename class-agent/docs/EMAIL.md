@@ -53,9 +53,11 @@ mailbox or put OAuth credentials in Git.
    `https://www.googleapis.com/auth/gmail.readonly`. Sending needs the first scope. Polling reply
    headers and bodies needs the second; Google classifies `gmail.readonly` as restricted.
 3. Create an OAuth client for the operator flow and authorize the dedicated mailbox with offline
-   access. Store the resulting client ID, client secret, and refresh token in `.env.mail`. Never
-   log or commit the refresh token. OAuth apps left in external **Testing** status may issue
-   refresh tokens that expire after seven days, so use that mode only for local validation.
+   access. Store the resulting client ID, client secret, and refresh token in a mode-`0600`
+   `.env.mail` when separating mailbox credentials from the API, or in `.env` for a single-file
+   deployment. Never log or commit the refresh token. OAuth apps left in external **Testing**
+   status may issue refresh tokens that expire after seven days, so use that mode only for local
+   validation.
 4. Set the staff recipient to the course forwarding address. This deployment uses
    `cognitive-agents@media.mit.edu`; a cloned course should use its own address.
 5. Put every individual staff address that may reply in `MAIL_AUTHORIZED_REPLY_SENDERS`, or create
@@ -130,13 +132,14 @@ MAIL_POLL_INTERVAL_SECONDS=60
 
 `MAILBOX_ADDRESS` is the dedicated provider mailbox that sends questions and receives staff
 replies. `MAIL_STAFF_RECIPIENT_ADDRESS` is the forwarding list that receives new questions.
-These may be different addresses. Secrets are read only by the mail worker and are never
-placed in events, tool arguments, logs, or browser responses.
+These may be different addresses. Mailbox secrets are never placed in events, tool arguments,
+logs, or browser responses.
 
-For production, keep only `MAIL_ENABLED=true` in the API's `.env`. Put `DATABASE_URL` and the
-complete provider block in a separate mode-`0600` `.env.mail` used by the worker service. This
-keeps mailbox credentials out of the request-serving process. A local development process may use
-one `.env` for convenience.
+The systemd worker loads the deployment's mode-`0600` `.env` first, then an optional mode-`0600`
+`.env.mail`. Keep shared settings such as `DATABASE_URL`, `MAIL_ENABLED`, and storage paths in
+`.env`. For production process separation, put the complete provider credential block in
+`.env.mail`; values there override the shared file and keep mailbox credentials out of the
+request-serving process. A single-file deployment may instead keep that block in `.env`.
 
 Apply migrations and restart the API so student capability filtering sees mail as enabled:
 
@@ -152,8 +155,10 @@ up automatically. Once a worker cycle publishes an answer, FAQ reads and search 
 local JSON immediately and the API does not need to restart.
 
 Production should install both `deploy/class-agent-api.service` and
-`deploy/class-agent-mail-worker.service`; the worker unit reads the separate protected `.env.mail`
-file. Only one mail worker should run for a mailbox. The worker overlaps polling windows and
+`deploy/class-agent-mail-worker.service`; the worker unit reads the shared protected `.env` and
+then an optional protected `.env.mail` override. Create `var/course-knowledge/` before starting the
+hardened worker; its unit grants that directory the narrow write access required for atomic FAQ
+publication. Only one mail worker should run for a mailbox. The worker overlaps polling windows and
 deduplicates provider message IDs so an ordinary retry does not create a second answer.
 
 ## Accounts and login

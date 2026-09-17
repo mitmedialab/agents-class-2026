@@ -8,7 +8,8 @@ Type=simple
 User=wazeer
 Group=wazeer
 WorkingDirectory=/home/wazeer/agents-class-2026/class-agent
-EnvironmentFile=/home/wazeer/agents-class-2026/class-agent/.env.mail
+EnvironmentFile=/home/wazeer/agents-class-2026/class-agent/.env
+EnvironmentFile=-/home/wazeer/agents-class-2026/class-agent/.env.mail
 Environment=PYTHONDONTWRITEBYTECODE=1
 ExecStart=/home/wazeer/agents-class-2026/class-agent/.venv/bin/python -m course_server.mail_worker
 Restart=on-failure
@@ -26,6 +27,7 @@ ProtectKernelLogs=true
 ProtectKernelModules=true
 ProtectKernelTunables=true
 ProtectSystem=strict
+ReadWritePaths=/home/wazeer/agents-class-2026/class-agent/var/course-knowledge
 CapabilityBoundingSet=
 LockPersonality=true
 MemoryDenyWriteExecute=true
