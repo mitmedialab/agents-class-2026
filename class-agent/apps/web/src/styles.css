@@ -602,6 +602,55 @@ textarea {
   padding: var(--space-6);
 }
 
+.workspace-resource-loading {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  height: 100%;
+  justify-content: center;
+  min-height: 12rem;
+  width: 100%;
+}
+
+.workspace-resource-loading p {
+  align-items: baseline;
+  color: var(--color-text-muted);
+  display: flex;
+  font-size: 0.8125rem;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.workspace-resource-loading p span {
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.workspace-resource-loading-bar {
+  background: var(--color-border);
+  height: 0.125rem;
+  max-width: 12rem;
+  overflow: hidden;
+  position: relative;
+  width: 42%;
+}
+
+.workspace-resource-loading-bar span {
+  animation: workspace-resource-loading 1.1s ease-in-out infinite;
+  background: var(--color-text);
+  inset-block: 0;
+  position: absolute;
+  width: 38%;
+}
+
+.workspace-resource-loading-bar[data-determinate="true"] span {
+  animation: none;
+  inset-inline: 0;
+  transform-origin: left;
+  width: 100%;
+}
+
 .response-stage {
   --response-stage-offset: clamp(-10rem, -13dvh, -5rem);
 
@@ -2217,6 +2266,16 @@ textarea {
   }
 }
 
+@keyframes workspace-resource-loading {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(365%);
+  }
+}
+
 @media (max-width: 900px) {
   .mobile-view-switcher {
     align-items: center;
@@ -2549,6 +2608,7 @@ textarea {
   .composer-drop-state,
   .composer-drop-icon,
   .upload-progress-track span,
+  .workspace-resource-loading-bar span,
   .latest-response[data-streaming="true"] > :last-child::after {
     animation: none;
     transition: none;

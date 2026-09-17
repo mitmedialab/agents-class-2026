@@ -468,19 +468,33 @@ describe("temporary uploads", () => {
 
   it("reads a registered slide PDF from the course resource route", async () => {
     const bytes = new Uint8Array([37, 80, 68, 70]);
+    const read = vi
+      .fn()
+      .mockResolvedValueOnce({ done: false, value: bytes.slice(0, 2) })
+      .mockResolvedValueOnce({ done: false, value: bytes.slice(2) })
+      .mockResolvedValueOnce({ done: true, value: undefined });
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      headers: new Headers({ "content-type": "application/pdf" }),
-      arrayBuffer: vi.fn().mockResolvedValue(bytes.buffer),
+      headers: new Headers({
+        "content-length": String(bytes.byteLength),
+        "content-type": "application/pdf",
+      }),
+      body: { getReader: () => ({ read }) },
     });
     vi.stubGlobal("fetch", fetchMock);
+    const onProgress = vi.fn();
 
-    await expect(getCourseResourceContent("course://slides/week-01")).resolves.toEqual({
+    await expect(getCourseResourceContent("course://slides/week-01", onProgress)).resolves.toEqual({
       uri: "course://slides/week-01",
       mediaType: "application/pdf",
       data: bytes,
     });
+    expect(onProgress.mock.calls).toEqual([
+      [0, 4],
+      [2, 4],
+      [4, 4],
+    ]);
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/v1/course/resources/content?uri=course%3A%2F%2Fslides%2Fweek-01",
       { credentials: "include" },

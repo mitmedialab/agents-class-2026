@@ -4,6 +4,57 @@ import { describe, expect, it, vi } from "vitest";
 import { Workspace } from "./Workspace.js";
 
 describe("Workspace", () => {
+  it("centers an accessible loading bar with resource download progress", async () => {
+    const read = vi
+      .fn()
+      .mockResolvedValueOnce({ done: false, value: new Uint8Array([37, 80]) })
+      .mockImplementation(() => new Promise(() => undefined));
+    const fetchRequest = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({
+          "content-length": "4",
+          "content-type": "application/pdf",
+        }),
+        body: { getReader: () => ({ read }) },
+      } as unknown as Response);
+    const view = render(
+      <Workspace
+        conversationId="20000000-0000-4000-8000-000000000001"
+        onBrowserActivate={vi.fn(async () => undefined)}
+        onBrowserResize={vi.fn(async () => undefined)}
+        onBrowserScroll={vi.fn(async () => undefined)}
+        onCloseWorkspace={vi.fn(async () => undefined)}
+        onInteraction={vi.fn()}
+        onPanelAction={vi.fn(async () => undefined)}
+        onSubmitApplication={vi.fn()}
+        state={{
+          focusedPanelId: "40000000-0000-4000-8000-000000000004",
+          panels: [
+            {
+              id: "40000000-0000-4000-8000-000000000004",
+              componentId: "document-viewer",
+              resourceUri: "course://slides/week-01",
+              props: {},
+              state: {},
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Opening resource…")).toBeVisible();
+    const progressbar = screen.getByRole("progressbar", { name: "Opening resource" });
+    expect(progressbar).toBeVisible();
+    await waitFor(() => expect(progressbar).toHaveAttribute("aria-valuenow", "50"));
+    expect(screen.getByText("50%")).toBeVisible();
+
+    view.unmount();
+    fetchRequest.mockRestore();
+  });
+
   it("resolves a registered image ID through the guarded course asset route", () => {
     render(
       <Workspace

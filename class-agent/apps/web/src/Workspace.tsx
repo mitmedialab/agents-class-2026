@@ -236,6 +236,7 @@ function ResourcePanel({
 }) {
   const [resource, setResource] = useState<CourseResourceContent | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const pendingDraftCommit = useRef<Promise<void> | null>(null);
   const resourceUri = panel.resourceUri ?? DEFAULT_COMPONENT_RESOURCES[panel.componentId];
   const webpageUrl = stringProp(panel.props, "url");
@@ -285,6 +286,7 @@ function ResourcePanel({
     let disposed = false;
     setResource(null);
     setError(null);
+    setDownloadProgress(null);
     if (
       panel.componentId === "webpage-viewer" ||
       panel.componentId === "browser-viewer" ||
@@ -300,7 +302,11 @@ function ResourcePanel({
         disposed = true;
       };
     }
-    void getCourseResourceContent(resourceUri)
+    void getCourseResourceContent(resourceUri, (loadedBytes, totalBytes) => {
+      if (!disposed && totalBytes) {
+        setDownloadProgress(Math.min(100, (loadedBytes / totalBytes) * 100));
+      }
+    })
       .then((loaded) => {
         if (!disposed) setResource(loaded);
       })
@@ -466,7 +472,36 @@ function ResourcePanel({
     return <p className="workspace-panel-message">The draft document data is invalid.</p>;
   }
   if (error) return <p className="workspace-panel-message">{error}</p>;
-  if (!resource) return <p className="workspace-panel-message">Opening resource…</p>;
+  if (!resource) {
+    return (
+      <div aria-busy="true" className="workspace-resource-loading">
+        <p>
+          Opening resource…
+          {downloadProgress === null ? null : <span>{Math.round(downloadProgress)}%</span>}
+        </p>
+        <div
+          aria-label="Opening resource"
+          aria-valuemax={100}
+          aria-valuemin={0}
+          aria-valuenow={downloadProgress === null ? undefined : Math.round(downloadProgress)}
+          aria-valuetext={
+            downloadProgress === null ? "Loading" : `${Math.round(downloadProgress)}% downloaded`
+          }
+          className="workspace-resource-loading-bar"
+          data-determinate={downloadProgress !== null}
+          role="progressbar"
+        >
+          <span
+            style={
+              downloadProgress === null
+                ? undefined
+                : { transform: `scaleX(${downloadProgress / 100})` }
+            }
+          />
+        </div>
+      </div>
+    );
+  }
   if (panel.componentId === "document-viewer" && documentResource) {
     return (
       <DocumentViewer

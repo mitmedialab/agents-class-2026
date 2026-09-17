@@ -319,6 +319,7 @@ export async function markNotificationCenterItemRead(itemId: Uuid): Promise<void
 
 export async function getCourseResourceContent(
   resourceUri: string,
+  onProgress?: (loadedBytes: number, totalBytes: number | null) => void,
 ): Promise<CourseResourceContent> {
   const uploadId = resourceUri.startsWith("upload://")
     ? resourceUri.slice("upload://".length)
@@ -333,10 +334,37 @@ export async function getCourseResourceContent(
     throw await responseError(response);
   }
   const mediaType = response.headers.get("content-type")?.split(";", 1)[0] ?? "text/plain";
+  const contentLength = Number(response.headers.get("content-length"));
+  const totalBytes = Number.isSafeInteger(contentLength) && contentLength > 0
+    ? contentLength
+    : null;
+  const reader = response.body?.getReader();
+  if (!reader) {
+    const data = new Uint8Array(await response.arrayBuffer());
+    onProgress?.(data.byteLength, totalBytes);
+    return { uri: resourceUri, mediaType, data };
+  }
+
+  const chunks: Uint8Array[] = [];
+  let loadedBytes = 0;
+  onProgress?.(loadedBytes, totalBytes);
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    loadedBytes += value.byteLength;
+    onProgress?.(loadedBytes, totalBytes);
+  }
+  const data = new Uint8Array(loadedBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    data.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
   return {
     uri: resourceUri,
     mediaType,
-    data: new Uint8Array(await response.arrayBuffer()),
+    data,
   };
 }
 

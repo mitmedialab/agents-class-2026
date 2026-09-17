@@ -257,6 +257,9 @@ DocumentViewer opens a specific Markdown, text, or PDF artifact for close readin
 focused discussion. PDF pages preserve their aspect ratio and fit inside the usable workspace
 area; the viewer rerenders them offscreen when the desktop pane or narrow Workspace surface changes
 size, then swaps in the completed frame so composer and layout changes do not flash a blank page.
+While its resource request is pending, the workspace centers the opening label and a thin
+monochrome loading bar in the available viewer pane. The bar reports downloaded bytes against the
+response content length when available and remains indeterminate when the server omits that length.
 It is not the default for knowledge extracted from documents: the agent synthesizes that knowledge
 into a VisualComposition. Calendar provides agenda and
 month views over a normalized resource without embedding schedule data in component
