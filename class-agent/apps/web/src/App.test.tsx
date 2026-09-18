@@ -741,6 +741,30 @@ describe("Course Agent interface", () => {
     }
   });
 
+  it.each([
+    ["student", "I'd like to email the course instructors. Help me prepare a question for course staff using the available email tool."],
+    ["instructor", "I'd like to contact students. Help me prepare a message using the instructor messaging tool, asking for the audience and message details you need."],
+  ] as const)("starts the %s contact workflow through the agent", async (role, prompt) => {
+    vi.mocked(api.getPrincipal).mockResolvedValue({
+      ...studentPrincipal,
+      roles: ["public", role],
+    });
+    render(<App />);
+    await openExistingConversation();
+
+    expect(screen.queryByRole("button", { name: "Apply" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Contact" }));
+
+    await waitFor(() =>
+      expect(api.streamAgentRun).toHaveBeenCalledWith(
+        conversation.id, prompt, expect.any(Function), expect.any(AbortSignal),
+      ),
+    );
+    expect(api.ensureApplicationDraft).not.toHaveBeenCalled();
+    expect(api.confirmTAQuestion).not.toHaveBeenCalled();
+    expect(api.confirmInstructorMessage).not.toHaveBeenCalled();
+  });
+
   it("does not open the application draft from typed message text", async () => {
     render(<App />);
     await openExistingConversation();
@@ -1567,5 +1591,7 @@ describe("Course Agent interface", () => {
     await waitFor(() =>
       expect(screen.queryByRole("dialog", { name: "Chat history" })).not.toBeInTheDocument(),
     );
+    expect(screen.getByRole("button", { name: "Contact" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Apply" })).not.toBeInTheDocument();
   });
 });
