@@ -71,6 +71,10 @@ identity, role, or additional
 recipients. A confirmed message then appears only in each addressed student's Communications stack
 and authorized Course Agent context. A confirmed question reply instead replaces that student's
 pending question with the existing staff-reply presentation, avoiding a duplicate message card.
+When a page load finds an unresolved student-message or course-staff-question confirmation in an
+owned conversation, that conversation and its Send/Cancel surface are restored before the app
+creates a fresh greeting conversation. This keeps every durable pending action recoverable after
+navigation or reload.
 
 Authenticated course members automatically see a narrow macOS-inspired right-edge surface made
 from separate, compact notification cards rather than a dashboard or model-generated workspace.

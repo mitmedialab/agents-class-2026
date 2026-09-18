@@ -55,6 +55,16 @@ const studentPrincipal: PrincipalContext = {
   session_id: "10000000-0000-4000-8000-000000000004",
 };
 
+const instructorPrincipal: PrincipalContext = {
+  authenticated: true,
+  user_id: "10000000-0000-4000-8000-000000000005",
+  anonymous_session_id: null,
+  username: "instructor",
+  display_name: "Course Instructor",
+  roles: ["public", "instructor"],
+  session_id: "10000000-0000-4000-8000-000000000006",
+};
+
 const conversation: Conversation = {
   id: "20000000-0000-4000-8000-000000000001",
   user_id: null,
@@ -445,6 +455,92 @@ describe("Course Agent interface", () => {
       }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Message" })).toBeEnabled();
+  });
+
+  it("restores a pending student message instead of starting a fresh page greeting", async () => {
+    const instructorConversation = {
+      ...conversation,
+      user_id: instructorPrincipal.user_id,
+      anonymous_session_id: null,
+    };
+    const messageId = "50000000-0000-4000-8000-000000000006";
+    const confirmationEvent = {
+      ...previousEvent,
+      id: "50000000-0000-4000-8000-000000000007",
+      type: "instructor.message.confirmation_requested",
+      principal_user_id: instructorPrincipal.user_id,
+      anonymous_session_id: null,
+      conversation_id: instructorConversation.id,
+      payload: {
+        message_id: messageId,
+        audience: "specific_students",
+        recipients: [{ username: "alice", display_name: "Alice Example" }],
+        recipient_count: 1,
+        subject: "Studio reminder",
+        message: "Bring your prototype.",
+        status: "pending_confirmation",
+      },
+    };
+    vi.mocked(api.getPrincipal).mockResolvedValue(instructorPrincipal);
+    vi.mocked(api.listConversations).mockResolvedValue([instructorConversation]);
+    const pendingDetail = {
+      conversation: instructorConversation,
+      events: [
+        {
+          ...previousEvent,
+          principal_user_id: instructorPrincipal.user_id,
+          anonymous_session_id: null,
+          conversation_id: instructorConversation.id,
+          payload: { text: "Please review this message before sending it." },
+        },
+        confirmationEvent,
+      ],
+    };
+    const cancelledEvent = {
+      ...confirmationEvent,
+      id: "50000000-0000-4000-8000-000000000008",
+      type: "instructor.message.cancelled",
+      payload: { message_id: messageId, status: "cancelled" },
+    };
+    vi.mocked(api.getConversation)
+      .mockResolvedValueOnce(pendingDetail)
+      .mockResolvedValue({
+        conversation: instructorConversation,
+        events: [...pendingDetail.events, cancelledEvent],
+      });
+    vi.mocked(api.confirmInstructorMessage).mockResolvedValue(cancelledEvent);
+
+    render(<App />);
+
+    const confirmation = await screen.findByRole("region", {
+      name: "Student message confirmation",
+    });
+    expect(confirmation).toBeVisible();
+    expect(
+      within(confirmation).getByRole("textbox", { name: "Subject" }),
+    ).toHaveValue("Studio reminder");
+    expect(
+      within(screen.getByRole("form", { name: "Message Course Agent" })).getByRole(
+        "textbox",
+        { name: "Message" },
+      ),
+    ).toBeDisabled();
+    expect(api.createConversation).not.toHaveBeenCalled();
+    expect(api.generatePageGreeting).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() =>
+      expect(api.confirmInstructorMessage).toHaveBeenCalledWith(
+        instructorConversation.id,
+        messageId,
+        "cancel",
+        undefined,
+      ),
+    );
+    expect(
+      screen.queryByRole("region", { name: "Student message confirmation" }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows student notifications automatically and removes the surface when caught up", async () => {

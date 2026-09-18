@@ -369,6 +369,33 @@ export default function App() {
       setInstructorMessage(null);
       setMobileView("chat");
       setPresentedCommunication(null);
+      for (const conversation of loadedConversations) {
+        if (signal?.aborted) return;
+        try {
+          const detail = await getConversation(conversation.id);
+          const pendingTAQuestion = projectTAQuestionEvents(detail.events);
+          const pendingInstructorMessage = projectInstructorMessageEvents(
+            detail.events,
+          );
+          if (!pendingTAQuestion && !pendingInstructorMessage) continue;
+
+          const response = latestAgentResponse(detail.events);
+          const projectedWorkspace = workspaceFromEvents(detail.events);
+          setSelectedConversationId(conversation.id);
+          setLatestResponse(response ?? "");
+          setWorkspaceState(projectedWorkspace);
+          setTAQuestion(pendingTAQuestion);
+          setInstructorMessage(pendingInstructorMessage);
+          setActivities([]);
+          setMobileView(
+            projectedWorkspace.panels.length > 0 ? "workspace" : "chat",
+          );
+          return;
+        } catch {
+          // A failed history item must not prevent recovery from another conversation.
+        }
+      }
+      if (signal?.aborted) return;
       const created = await createConversation("Course Agent welcome");
       if (signal?.aborted) return;
       setSelectedConversationId(created.id);
