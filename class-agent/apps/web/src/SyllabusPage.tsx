@@ -1,3 +1,4 @@
+import { PdfDownload } from "@class-agent/ui";
 import type { ReactNode } from "react";
 
 interface MarkdownTable {
@@ -170,12 +171,13 @@ function markdownBlocks(lines: string[], startIndex: number): ReactNode[] {
 }
 
 export interface SyllabusPageProps {
+  pdfDownloadUrl?: string | undefined;
   content: string | null;
   error: string | null;
   loading: boolean;
 }
 
-export function SyllabusPage({ content, error, loading }: SyllabusPageProps) {
+export function SyllabusPage({ content, error, loading, pdfDownloadUrl }: SyllabusPageProps) {
   if (loading) {
     return (
       <main className="syllabus-page">
@@ -214,6 +216,11 @@ export function SyllabusPage({ content, error, loading }: SyllabusPageProps) {
   return (
     <main className="syllabus-page">
       <article className="syllabus-document">
+        {pdfDownloadUrl ? (
+          <div className="syllabus-download">
+            <PdfDownload href={pdfDownloadUrl} title="Course syllabus" label="Download syllabus PDF" />
+          </div>
+        ) : null}
         <h1>{inlineMarkdown(title, "title")}</h1>
         {metadata.length ? (
           <dl className="syllabus-metadata">

@@ -15,6 +15,13 @@ sending its prompt. Application requests typed in chat are not matched against b
 API keywords; the agent recognizes the intent and opens the same canonical workspace with
 its registered tool during the first response.
 
+For authenticated students and instructors, **Contact** replaces Apply. It starts an ordinary
+agent turn to prepare a course-staff email for students or an instructor message to students.
+The agent gathers missing content and audience details through the existing authorized tools;
+the shortcut does not send anything. Student email requires mail to be enabled, and instructor
+messages use the existing in-app delivery. Both retain the platform's Send/Cancel confirmation.
+Other roles and anonymous visitors retain Apply.
+
 Submitting a new prompt immediately removes the prior answer and resets the
 activity trace, so only the new run's process is visible until its answer begins.
 Canonical history is still persisted as events and is available through the conversation drawer.
@@ -98,7 +105,15 @@ the authorized history projection. **See more** replaces the active projection w
 items in each non-empty category, ordered newest first; each category can then expand to its full
 retained history or return to the three-item preview.
 
-Every item has a bounded details action that starts an ordinary Course Agent turn. That turn may
+**Lecture Slides** appears only after **See more**, follows Upcoming, and lists authorized published slide decks in descending
+lecture order, with the registered deck title beneath each lecture number and a first-slide
+thumbnail replacing the generic icon. Thumbnails fill and crop to the same tile dimensions as
+Upcoming deadlines; Updates tiles use those same dimensions. Existing card spacing and interaction styles remain. Its
+**View slides** action asks the Course Agent to open the registered deck in the workspace.
+Slides remain available in history after viewing and are excluded from unread counts and greeting reminders.
+
+Every notification other than a lecture slide has a bounded details action that starts an ordinary
+Course Agent turn. That turn may
 retrieve additional facts from an authorized source, but it must not solve the issue, draft a
 response, recommend or take an action, or infer the user's intent. It ends by asking what the user
 wants to do. Selecting a Communications item also presents that complete trusted card in the

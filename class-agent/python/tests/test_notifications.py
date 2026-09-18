@@ -387,3 +387,52 @@ def test_confirmed_instructor_message_appears_only_for_its_students() -> None:
         assert (await center.get(alice)).items == []
 
     asyncio.run(scenario())
+
+
+def test_lecture_slides_are_authorized_persistent_and_sorted_numerically(tmp_path: Path) -> None:
+    async def scenario() -> None:
+        auth = InMemoryAuthStore()
+        student = await _course_member(auth, username="alice", role="student")
+        resources = FileResourceProvider(
+            [
+                ResourceDefinition(
+                    uri=f"course://slides/week-{number:02}",
+                    title=f"Week {number} Slides",
+                    media_type="application/pdf",
+                    path=tmp_path / f"{number}.pdf",
+                    assets={"first_slide": tmp_path / f"{number}.png"},
+                    visibility="instructors" if number == 4 else "public",
+                    status="provisional" if number == 5 else "published",
+                )
+                for number in [1, 10, 2, 4, 5]
+            ]
+        )
+        service = NotificationCenterService(
+            faqs=InMemoryFaqStore(),
+            reads=InMemoryNotificationItemReadStore(),
+            auth=auth,
+            resources=resources,
+        )
+        center = await service.get(student)
+        assert [item.title for item in center.history_items] == [
+            "Lecture 10",
+            "Lecture 2",
+            "Lecture 1",
+        ]
+        assert center.history_items[0].detail == "Week 10 Slides"
+        assert center.history_items[0].thumbnail is not None
+        assert center.history_items[0].thumbnail.resource_uri == "course://slides/week-10"
+        assert center.history_items[0].thumbnail.asset_id == "first_slide"
+        assert center.items == []
+        assert center.unread_count == 0
+        assert all(not item.dismissible for item in center.history_items)
+        assert "course://slides/week-10" in center.history_items[0].action_prompt
+        assert str(tmp_path) not in center.model_dump_json()
+        assert not await service.mark_read(student, center.history_items[0].id)
+        await service.mark_updates_seen(student)
+        assert (await service.get(student)).history_items == center.history_items
+        assert await service.agent_attention(student) == []
+        staff = await _course_member(auth, username="prof", role="instructor")
+        assert "Lecture 4" in [item.title for item in (await service.get(staff)).history_items]
+
+    asyncio.run(scenario())

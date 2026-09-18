@@ -1,3 +1,4 @@
+import { PdfDownload } from "./PdfDownload.js";
 import {
   type FormEvent,
   type ReactNode,
@@ -13,6 +14,7 @@ export interface DocumentResource {
   title: string;
   mediaType: string;
   data: Uint8Array;
+  pdfDownloadUrl?: string;
 }
 
 export interface TextHighlightAnchor {
@@ -317,7 +319,9 @@ function SearchBar({
   onSubmit,
   onPrevious,
   onNext,
+  leadingControl,
 }: {
+  leadingControl?: ReactNode;
   initialQuery: string;
   matchCount: number;
   activeMatch: number;
@@ -333,6 +337,7 @@ function SearchBar({
   }
   return (
     <form className="ca-document-search" onSubmit={submit}>
+      {leadingControl}
       <label>
         <span className="ca-visually-hidden">Find in document</span>
         <input
@@ -432,6 +437,7 @@ function PdfDocument({
       disposed = true;
       void loadingTask?.destroy();
     };
+    // Metadata wrappers change during workspace updates; only new bytes or URI reload the PDF.
   }, [resource.data, resource.uri]);
 
   useEffect(() => {
@@ -596,6 +602,12 @@ export function DocumentViewer({
           <span>{resource.mediaType}</span>
         </div>
         <SearchBar
+          leadingControl={
+            resource.mediaType === "application/pdf" || resource.pdfDownloadUrl ? (
+              <PdfDownload title={resource.title} href={resource.pdfDownloadUrl}
+                data={resource.mediaType === "application/pdf" ? resource.data : undefined} />
+            ) : null
+          }
           activeMatch={activeMatch}
           initialQuery={query}
           matchCount={matches.length}
@@ -613,6 +625,7 @@ export function DocumentViewer({
       >
         {resource.mediaType === "application/pdf" ? (
           <PdfDocument
+            key={resource.uri}
             highlight={highlight}
             initialPage={page}
             onPageChange={onPageChange}

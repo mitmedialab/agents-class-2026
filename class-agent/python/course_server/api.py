@@ -1156,6 +1156,7 @@ def create_app(
                     "private, max-age=60" if catalog.is_public(uri) else "private, no-store"
                 ),
                 "X-Class-Agent-Resource-Uri": resource.uri,
+                **({"X-Class-Agent-Pdf-Asset": "pdf"} if "pdf" in catalog.asset_ids(uri) else {}),
                 "X-Content-Type-Options": "nosniff",
             },
         )

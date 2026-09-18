@@ -20,6 +20,17 @@ import {
 import publishedSchedule from "../../../shared/course/schedule/schedule.md?raw";
 
 describe("DocumentViewer", () => {
+  it("offers a registered PDF alongside a Markdown document", () => {
+    render(<DocumentViewer resource={{
+      uri: "course://syllabus", title: "Course syllabus", mediaType: "text/markdown",
+      data: new TextEncoder().encode("# Syllabus"),
+      pdfDownloadUrl: "/api/v1/course/resources/asset?uri=course%3A%2F%2Fsyllabus&asset_id=pdf",
+    }} />);
+    const download = screen.getByRole("link", { name: "Download PDF" });
+    expect(download).toHaveAttribute("download", "Course syllabus.pdf");
+    expect(download).toHaveAttribute("href", expect.stringContaining("asset_id=pdf"));
+    expect(screen.getByRole("heading", { name: "Syllabus" })).toBeVisible();
+  });
   it("resolves a semantic quote with surrounding text and highlights Markdown", () => {
     const content =
       "# Syllabus\n\nPresentation week. Final projects are due at 11:59 PM.\n";

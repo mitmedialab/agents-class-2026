@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import "@class-agent/ui/styles.css";
 import App from "./App.js";
 import "./styles.css";
+import "./syllabus-print.css";
 
 const root = document.getElementById("root");
 
