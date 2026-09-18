@@ -15,6 +15,13 @@ sending its prompt. Application requests typed in chat are not matched against b
 API keywords; the agent recognizes the intent and opens the same canonical workspace with
 its registered tool during the first response.
 
+For authenticated students and instructors, **Contact** replaces Apply. It starts an ordinary
+agent turn to prepare a course-staff email for students or an instructor message to students.
+The agent gathers missing content and audience details through the existing authorized tools;
+the shortcut does not send anything. Student email requires mail to be enabled, and instructor
+messages use the existing in-app delivery. Both retain the platform's Send/Cancel confirmation.
+Other roles and anonymous visitors retain Apply.
+
 Submitting a new prompt immediately removes the prior answer and resets the
 activity trace, so only the new run's process is visible until its answer begins.
 Canonical history is still persisted as events and is available through the conversation drawer.

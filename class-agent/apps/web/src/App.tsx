@@ -119,6 +119,14 @@ const HEADER_PROMPTS = [
   { label: "Schedule", message: "Show me the course schedule." },
   { label: "Grading", message: "How is grading handled in this course?" },
 ] as const;
+const STUDENT_CONTACT_PROMPT = {
+  label: "Contact",
+  message: "I'd like to email the course instructors. Help me prepare a question for course staff using the available email tool.",
+};
+const INSTRUCTOR_CONTACT_PROMPT = {
+  label: "Contact",
+  message: "I'd like to contact students. Help me prepare a message using the instructor messaging tool, asking for the audience and message details you need.",
+};
 const EMPTY_NOTIFICATION_CENTER: NotificationCenterData = {
   generated_at: "1970-01-01T00:00:00Z",
   unread_count: 0,
@@ -1262,6 +1270,16 @@ export default function App() {
     mobileView === mobileSecondaryView ? mobileView : "chat";
   const mobileViewSwitcherVisible =
     !aboutOpen && (hasOpenWorkspace || notificationCenterVisible);
+  const contactPrompt = principal?.authenticated
+    ? principal.roles.includes("instructor")
+      ? INSTRUCTOR_CONTACT_PROMPT
+      : principal.roles.includes("student")
+        ? STUDENT_CONTACT_PROMPT
+        : null
+    : null;
+  const headerPrompts = HEADER_PROMPTS.map((prompt) =>
+    prompt.label === "Apply" && contactPrompt ? contactPrompt : prompt,
+  );
   return (
     <div
       className="course-agent"
@@ -1312,7 +1330,7 @@ export default function App() {
         </div>
         {workspaceState.panels.length === 0 || aboutOpen ? (
           <nav aria-label="Course shortcuts" className="header-actions">
-            {HEADER_PROMPTS.map((prompt) => (
+            {headerPrompts.map((prompt) => (
               <Button
                 className="header-prompt"
                 disabled={
