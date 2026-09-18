@@ -8,7 +8,10 @@
       "media_type": "text/markdown",
       "path": "course/syllabus/syllabus.md",
       "visibility": "public",
-      "status": "published"
+      "status": "published",
+      "assets": {
+        "pdf": "course/syllabus/syllabus.pdf"
+      }
     },
     {
       "uri": "course://schedule",
@@ -66,12 +69,15 @@
     },
     {
       "uri": "course://slides/week-01",
-      "title": "Week 1 Slides",
+      "title": "AI Agents for Cognitive Augmentation",
       "description": "Slides for the first course meeting.",
       "media_type": "application/pdf",
       "path": "course/slides/week-01/week-01-slides.pdf",
       "visibility": "public",
-      "status": "published"
+      "status": "published",
+      "assets": {
+        "first_slide": "registry/slide-thumbnails/dd4d5c4926e7810e111aba74a12280533fb18f4c4f9205b2a1c640ae385277ef.png"
+      }
     }
   ]
 }

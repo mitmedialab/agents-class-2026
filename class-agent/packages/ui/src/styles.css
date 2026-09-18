@@ -1625,6 +1625,26 @@
   width: 8rem;
 }
 
+.ca-document-download {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  padding: 0;
+}
+
+.ca-document-download svg {
+  display: block;
+  width: var(--space-8);
+  height: var(--space-8);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ca-document-download,
 .ca-document-search button,
 .ca-pdf-pagination button,
 .ca-calendar button {
@@ -1636,12 +1656,20 @@
   font: inherit;
 }
 
+.ca-document-download,
+.ca-document-search .ca-document-download,
+.ca-document-search input::placeholder {
+  color: var(--color-text-muted);
+  opacity: 1;
+}
+
 .ca-document-search button:disabled,
 .ca-pdf-pagination button:disabled {
   cursor: default;
   opacity: 0.3;
 }
 
+.ca-document-download:focus-visible,
 .ca-document-search input:focus-visible,
 .ca-document-search button:focus-visible,
 .ca-pdf-pagination button:focus-visible,

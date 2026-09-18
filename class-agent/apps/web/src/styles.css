@@ -25,6 +25,8 @@ textarea {
 .course-agent {
   --notification-center-edge: clamp(1rem, 2vw, 1.75rem);
   --notification-center-width: min(23rem, calc(100vw - 2rem));
+  --notification-featured-tile-width: 3.75rem;
+  --notification-featured-tile-height: 4.1rem;
   background: var(--color-background);
   min-height: 100dvh;
   overflow: hidden;
@@ -189,6 +191,12 @@ textarea {
 .syllabus-document {
   margin: 0 auto;
   max-width: 76rem;
+}
+
+.syllabus-download {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--space-3);
 }
 
 .syllabus-document > h1 {
@@ -1280,6 +1288,25 @@ textarea {
   width: 1.65rem;
 }
 
+.notification-card-layout:has(.notification-slide-thumbnail),
+.notification-card-layout:has([data-notification-icon="course_update"]) {
+  grid-template-columns: var(--notification-featured-tile-width) minmax(0, 1fr);
+}
+
+.notification-slide-thumbnail,
+.notification-card-icon[data-notification-icon="course_update"] {
+  width: var(--notification-featured-tile-width);
+  height: var(--notification-featured-tile-height);
+  overflow: hidden;
+}
+
+.notification-slide-thumbnail img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .notification-card-portrait {
   background: var(--color-surface-muted);
   overflow: hidden;
@@ -1410,7 +1437,7 @@ textarea {
 .notification-assignment-main {
   display: grid;
   gap: 0.95rem;
-  grid-template-columns: 3.75rem minmax(0, 1fr);
+  grid-template-columns: var(--notification-featured-tile-width) minmax(0, 1fr);
   width: 100%;
 }
 
@@ -1422,10 +1449,10 @@ textarea {
   color: var(--color-text);
   display: flex;
   flex-direction: column;
-  height: 4.1rem;
+  height: var(--notification-featured-tile-height);
   justify-content: center;
   line-height: 1;
-  width: 3.75rem;
+  width: var(--notification-featured-tile-width);
 }
 
 .notification-assignment-date span {

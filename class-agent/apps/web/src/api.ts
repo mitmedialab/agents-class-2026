@@ -44,6 +44,7 @@ export interface TemporaryUpload {
 }
 
 export interface CourseResourceContent {
+  pdfDownloadUrl?: string;
   uri: string;
   mediaType: string;
   data: Uint8Array;
@@ -60,7 +61,8 @@ export interface CourseNotification {
 export type NotificationCenterSection =
   | "notifications"
   | "communications"
-  | "upcoming";
+  | "upcoming"
+  | "lecture_slides";
 
 export type NotificationCenterItemKind =
   | "course_update"
@@ -90,6 +92,7 @@ export interface NotificationCenterItem {
   unread: boolean;
   dismissible: boolean;
   sender: NotificationSender | null;
+  thumbnail?: { resource_uri: string; asset_id: string } | null;
 }
 
 export interface NotificationCenterData {
@@ -334,6 +337,10 @@ export async function getCourseResourceContent(
     throw await responseError(response);
   }
   const mediaType = response.headers.get("content-type")?.split(";", 1)[0] ?? "text/plain";
+  const pdfDownloadUrl =
+    response.headers.get("X-Class-Agent-Pdf-Asset") === "pdf"
+      ? courseResourceAssetUrl(resourceUri, "pdf")
+      : null;
   const contentLength = Number(response.headers.get("content-length"));
   const totalBytes = Number.isSafeInteger(contentLength) && contentLength > 0
     ? contentLength
@@ -342,7 +349,12 @@ export async function getCourseResourceContent(
   if (!reader) {
     const data = new Uint8Array(await response.arrayBuffer());
     onProgress?.(data.byteLength, totalBytes);
-    return { uri: resourceUri, mediaType, data };
+    return {
+      uri: resourceUri,
+      mediaType,
+      ...(pdfDownloadUrl ? { pdfDownloadUrl } : {}),
+      data,
+    };
   }
 
   const chunks: Uint8Array[] = [];
@@ -364,6 +376,7 @@ export async function getCourseResourceContent(
   return {
     uri: resourceUri,
     mediaType,
+    ...(pdfDownloadUrl ? { pdfDownloadUrl } : {}),
     data,
   };
 }

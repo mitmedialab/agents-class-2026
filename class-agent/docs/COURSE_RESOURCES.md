@@ -63,6 +63,16 @@ shared/course/slides/week-01/
 }
 ```
 
+The side panel's **Lecture Slides** section derives published PDF decks from authorized
+`course://slides/week-NN` resources and labels them Lecture 1, Lecture 2, and so on,
+ordered by descending lecture number. Add each new PDF and sidecar using this convention;
+restart the backend to index and load the updated catalog. No frontend list needs editing.
+Indexing generates a content-addressed `first_slide` PNG asset for every published slide PDF
+under `shared/registry/slide-thumbnails/`. The panel loads these small first-page previews through
+the existing authorized asset endpoint. New or changed PDFs regenerate their thumbnails automatically.
+Slides appear only in **See more**, stay available after opening, and do not create unread
+alerts or greeting reminders.
+
 PDF indexing extracts embedded text by page for Course Agent reads and search while retaining the
 original bytes for the workspace's `document-viewer`. Image-only or scanned slides still render
 and the agent can inspect the focused page visually on demand through the authorized
@@ -206,3 +216,23 @@ Application sharing update: authenticated students may use the existing applicat
 tools and photo route only for accepted application UUIDs explicitly shared in the private
 `student-access.json` registry. Instructor access remains unrestricted. See
 [STORAGE.md](STORAGE.md) for authorization, provisioning, and revocation details.
+
+## Syllabus PDF download
+
+`syllabus.md` remains the maintained syllabus source. Its sidecar registers `syllabus.pdf`
+as the `pdf` asset. Both the About page and a Markdown DocumentViewer offer the same
+registered download through the existing authorized asset endpoint.
+
+After editing the syllabus, regenerate the PDF from the running frontend's syllabus renderer
+and print styles, review its pages, then refresh the resource catalog:
+
+```bash
+uv run python -m course_server.export_syllabus --web-url https://localhost:5173
+uv run python -m course_server.index_resources
+```
+
+The export uses installed Playwright Chromium by default. For local development with system
+Chrome and Vite's self-signed certificate, add `--browser-channel chrome --ignore-https-errors`.
+The exporter intercepts only the syllabus-content read with current repository Markdown, so
+it does not accidentally export stale API content. A regression test compares the PDF's text
+with the maintained Markdown and rejects empty pages. No PDF generation occurs on user downloads.

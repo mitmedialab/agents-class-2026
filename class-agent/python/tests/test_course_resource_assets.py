@@ -124,3 +124,22 @@ def test_visual_composition_accepts_only_assets_registered_to_its_resource() -> 
             )
 
     asyncio.run(scenario())
+
+
+def test_syllabus_pdf_matches_the_maintained_markdown() -> None:
+    import re
+    import unicodedata
+    from pathlib import Path
+
+    from pypdf import PdfReader
+
+    directory = Path(__file__).resolve().parents[2] / "shared/course/syllabus"
+    source = (directory / "syllabus.md").read_text(encoding="utf-8")
+    reader = PdfReader(directory / "syllabus.pdf")
+    assert all(page.extract_text().strip() for page in reader.pages)
+    exported = "\n".join(page.extract_text() for page in reader.pages)
+
+    def words(text: str) -> list[str]:
+        return re.findall(r"[A-Za-z0-9]+", unicodedata.normalize("NFKC", text))
+
+    assert words(exported) == words(source)
