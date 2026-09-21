@@ -2,6 +2,7 @@
 .env
 .env.github
 .env.mail
+.env.swp
 .venv/
 .pytest_cache/
 .mypy_cache/
@@ -17,6 +18,7 @@ test-results/
 var/applicants/
 var/assignments/
 var/course-knowledge/
+var/log/
 var/uploads/
 data/students/*
 !data/students/.gitkeep
