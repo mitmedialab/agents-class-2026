@@ -260,6 +260,9 @@ export function confirmInstructorMessage(
         action,
         ...(action === "send" && edit
           ? {
+              ...(edit.sendEmail !== undefined
+                ? { send_email: edit.sendEmail }
+                : {}),
               subject: edit.subject,
               message: edit.message,
               ...(edit.publicationDecision

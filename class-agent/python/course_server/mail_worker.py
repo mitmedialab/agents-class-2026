@@ -18,6 +18,7 @@ from course_server.mail import (
     MicrosoftGraphMailAdapter,
     PostgresTAQuestionStore,
 )
+from course_server.mail.instructor_delivery import InstructorEmailDelivery
 from course_server.migrations import apply_migrations
 from course_server.postgres.auth_store import PostgresAuthStore, create_auth_pool
 from course_server.postgres.conversation_store import PostgresConversationStore
@@ -62,9 +63,11 @@ async def run_worker(*, database_url: str, settings: MailSettings, once: bool = 
         staff_recipient=str(settings.staff_recipient_address),
         authorized_reply_senders=(str(value) for value in settings.authorized_reply_senders),
     )
+    instructor_delivery = InstructorEmailDelivery(pool, adapter)
     try:
         while True:
             try:
+                await instructor_delivery.run_once()
                 await worker.run_once()
             except Exception as error:
                 logger.error("Mail worker cycle failed (%s)", type(error).__name__)

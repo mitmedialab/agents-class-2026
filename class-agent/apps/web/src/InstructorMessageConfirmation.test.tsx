@@ -93,3 +93,125 @@ describe("InstructorMessageConfirmation", () => {
     });
   });
 });
+
+it.each(["all_students", "specific_students"] as const)(
+  "offers opt-in email for %s and does not include it on Cancel",
+  (audience) => {
+    const onAction = vi.fn();
+    render(
+      <InstructorMessageConfirmation
+        confirmation={{
+          id: "email-preview",
+          audience,
+          recipients: [{ username: "alice", display_name: "Alice" }],
+          recipientCount: 1,
+          subject: "Reminder",
+          message: "Bring your prototype.",
+          emailAvailable: true,
+          status: "pending_confirmation",
+        }}
+        onAction={onAction}
+      />,
+    );
+    const checkbox = screen.getByRole("checkbox", { name: "Also send by email" });
+    expect(checkbox).not.toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(onAction).toHaveBeenLastCalledWith(
+      "send",
+      expect.objectContaining({ sendEmail: false }),
+    );
+    fireEvent.click(checkbox);
+    fireEvent.change(screen.getByRole("textbox", { name: "Message" }), {
+      target: { value: "Edited message" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(onAction).toHaveBeenLastCalledWith("send", {
+      subject: "Reminder",
+      message: "Edited message",
+      sendEmail: true,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(onAction).toHaveBeenLastCalledWith("cancel");
+  },
+);
+
+it("disables email when unavailable or while sending", () => {
+  const confirmation = {
+    id: "email-preview",
+    audience: "all_students" as const,
+    recipients: [{ username: "alice", display_name: "Alice" }],
+    recipientCount: 1,
+    subject: "Reminder",
+    message: "Hello",
+    status: "pending_confirmation" as const,
+  };
+  const { rerender } = render(
+    <InstructorMessageConfirmation
+      confirmation={confirmation}
+      onAction={vi.fn()}
+    />,
+  );
+  expect(screen.getByRole("checkbox", { name: "Also send by email" })).toBeDisabled();
+  expect(screen.getByText(/Email delivery is not configured/)).toBeVisible();
+  rerender(
+    <InstructorMessageConfirmation
+      confirmation={{ ...confirmation, emailAvailable: true, status: "submitting" }}
+      onAction={vi.fn()}
+    />,
+  );
+  expect(screen.getByRole("checkbox", { name: "Also send by email" })).toBeDisabled();
+});
+
+
+it.each(["Best,\nChitra", ""])("sends the full edited email with sign-off %j", (signOff) => {
+  const onAction = vi.fn();
+  render(
+    <InstructorMessageConfirmation
+      confirmation={{
+        id: "full-email-preview",
+        audience: "all_students",
+        recipients: [{ username: "alice", display_name: "Alice" }],
+        recipientCount: 1,
+        subject: "Reminder",
+        message: "Hi everyone,\n\nBring your prototype.\n\nRegards,\nCourse staff",
+        emailAvailable: true,
+        status: "pending_confirmation",
+      }}
+      onAction={onAction}
+    />,
+  );
+  const body = screen.getByRole("textbox", { name: "Message" });
+  expect(body).toHaveValue("Hi everyone,\n\nBring your prototype.\n\nRegards,\nCourse staff");
+  expect(body).toHaveAccessibleDescription(/including the greeting and sign-off/);
+  const edited = `Hello students,\n\nBring your revised prototype.${signOff ? `\n\n${signOff}` : ""}`;
+  fireEvent.change(body, { target: { value: edited } });
+  fireEvent.change(screen.getByRole("textbox", { name: "Subject" }), {
+    target: { value: "Updated reminder" },
+  });
+  fireEvent.click(screen.getByRole("checkbox", { name: "Also send by email" }));
+  fireEvent.click(screen.getByRole("button", { name: "Send" }));
+  expect(onAction).toHaveBeenCalledWith("send", {
+    subject: "Updated reminder", message: edited, sendEmail: true,
+  });
+});
+
+it.each(["all_students", "specific_students"] as const)(
+  "shows recipient emails to the instructor for %s",
+  (audience) => {
+    render(
+      <InstructorMessageConfirmation
+        confirmation={{
+          id: "recipient-preview", audience,
+          recipients: [{ username: "alice", display_name: "Alice", email: "alice@example.com" }],
+          recipientCount: 1, subject: "Reminder", message: "Hello Alice,\n\nPlease accept.\n\nBest,\nInstructor",
+          status: "pending_confirmation", emailAvailable: true,
+        }}
+        onAction={vi.fn()}
+      />,
+    );
+    if (audience === "all_students") {
+      fireEvent.click(screen.getByText("Recipient email addresses"));
+    }
+    expect(screen.getByText(/alice@example.com/)).toBeVisible();
+  },
+);

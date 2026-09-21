@@ -27,6 +27,7 @@ def test_migrations_are_discoverable_and_checksummed() -> None:
         "0011_instructor_messages",
         "0012_online_question_answers",
         "0013_online_answer_retention",
+        "0014_instructor_message_email",
     ]
     assert all(len(migration.checksum) == 64 for migration in migrations)
 

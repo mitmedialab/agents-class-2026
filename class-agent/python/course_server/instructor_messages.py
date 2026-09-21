@@ -14,8 +14,10 @@ from pydantic import (
     AwareDatetime,
     BaseModel,
     ConfigDict,
+    EmailStr,
     Field,
     JsonValue,
+    StrictBool,
     StringConstraints,
     ValidationError,
     model_validator,
@@ -65,6 +67,8 @@ class InstructorMessageDraft(InstructorMessageModel):
     recipients: list[StudentIdentifier] = Field(default_factory=list, max_length=100)
     subject: MessageSubject
     message: MessageBody
+    greeting: MessageSubject | None = None
+    sign_off: MessageBody | None = None
 
     @model_validator(mode="after")
     def validate_audience(self) -> InstructorMessageDraft:
@@ -79,6 +83,7 @@ class InstructorMessageContent(InstructorMessageModel):
     subject: MessageSubject
     message: MessageBody
     publication_decision: PublicationDecision | None = None
+    send_email: StrictBool = False
 
 
 class InstructorMessage(InstructorMessageModel):
@@ -89,6 +94,7 @@ class InstructorMessage(InstructorMessageModel):
     subject: MessageSubject
     message: MessageBody
     source_question_id: UUID | None = None
+    send_email: bool = False
     status: MessageStatus
     created_at: AwareDatetime
     sent_at: AwareDatetime | None = None
@@ -121,6 +127,7 @@ class PreparedInstructorMessage:
 class InstructorMessageRecipientPreview(InstructorMessageModel):
     username: str
     display_name: str
+    email: EmailStr | None = None
 
 
 @dataclass(frozen=True)
@@ -209,7 +216,11 @@ class InMemoryInstructorMessageStore:
                 "sent_at": changed_at if status == "sent" else None,
                 "cancelled_at": changed_at if status == "cancelled" else None,
                 **(
-                    {"subject": content.subject, "message": content.message}
+                    {
+                        "subject": content.subject,
+                        "message": content.message,
+                        "send_email": content.send_email,
+                    }
                     if content is not None
                     else {}
                 ),
@@ -291,7 +302,7 @@ class PostgresInstructorMessageStore:
                     """
                     SELECT id, conversation_id, sender_user_id, audience, subject,
                            body AS message, source_question_id, status, created_at, sent_at,
-                           cancelled_at
+                           cancelled_at, send_email
                     FROM instructor_messages WHERE id = %s
                     """,
                     (message_id,),
@@ -331,11 +342,12 @@ class PostgresInstructorMessageStore:
                         sent_at = CASE WHEN %s = 'sent' THEN %s ELSE NULL END,
                         cancelled_at = CASE WHEN %s = 'cancelled' THEN %s ELSE NULL END,
                         subject = CASE WHEN %s THEN %s ELSE subject END,
-                        body = CASE WHEN %s THEN %s ELSE body END
+                        body = CASE WHEN %s THEN %s ELSE body END,
+                        send_email = %s
                     WHERE id = %s AND status = %s
                     RETURNING id, conversation_id, sender_user_id, audience, subject,
                               body AS message, source_question_id, status, created_at, sent_at,
-                              cancelled_at
+                              cancelled_at, send_email
                     """,
                     (
                         status,
@@ -347,6 +359,7 @@ class PostgresInstructorMessageStore:
                         content.subject if content is not None else None,
                         content is not None,
                         content.message if content is not None else None,
+                        bool(status == "sent" and content and content.send_email),
                         message_id,
                         expected,
                     ),
@@ -361,7 +374,7 @@ class PostgresInstructorMessageStore:
                     """
                     SELECT m.id, m.conversation_id, m.sender_user_id, m.audience, m.subject,
                            m.body AS message, m.source_question_id, m.status, m.created_at,
-                           m.sent_at, m.cancelled_at
+                           m.sent_at, m.cancelled_at, m.send_email
                     FROM instructor_messages AS m
                     JOIN instructor_message_recipients AS r ON r.message_id = m.id
                     WHERE r.student_user_id = %s AND m.status = 'sent'
@@ -382,6 +395,10 @@ class InstructorMessageStateError(RuntimeError):
     """The message is missing, foreign, or no longer awaiting confirmation."""
 
 
+class InstructorMessageEmailUnavailable(InstructorMessageStateError):
+    """Email delivery is not enabled for this message."""
+
+
 class InstructorMessageRecipientError(ValueError):
     """One or more requested student recipients cannot be resolved safely."""
 
@@ -393,11 +410,13 @@ class InstructorMessageService:
         messages: InstructorMessageStore,
         auth: AuthStore,
         questions: TAQuestionStore | None = None,
+        email_enabled: bool = False,
         clock: Callable[[], datetime] = _clock,
     ) -> None:
         self._messages = messages
         self._auth = auth
         self._questions = questions
+        self.email_enabled = email_enabled
         self._clock = clock
 
     async def prepare(
@@ -414,6 +433,16 @@ class InstructorMessageService:
         if resolved_recipients.source_question_id is not None:
             publication, answer = _online_reply_content(message_body)
             message_body = f"{publication.upper()}\n\n{answer}"
+        else:
+            # The agent supplies wording; the platform requires a complete reviewable draft.
+            # Compose once, before persistence, so preview and delivery share the same text.
+            if draft.greeting is None or draft.sign_off is None:
+                raise InstructorMessageStateError(
+                    "Ordinary messages require greeting and sign_off. Supply the main content "
+                    "in message, the salutation in greeting, and the full closing and sender "
+                    "name in sign_off. The instructor can edit all parts before Send."
+                )
+            message_body = f"{draft.greeting}\n\n{message_body}\n\n{draft.sign_off}"
         message = InstructorMessage(
             id=uuid4(),
             conversation_id=conversation_id,
@@ -486,6 +515,14 @@ class InstructorMessageService:
             or stored.message.status != "pending_confirmation"
         ):
             raise InstructorMessageStateError("message is no longer awaiting confirmation")
+        if (
+            content is not None
+            and content.send_email
+            and (not self.email_enabled or stored.message.source_question_id is not None)
+        ):
+            raise InstructorMessageEmailUnavailable(
+                "Email delivery is unavailable for this message."
+            )
         if status == "sent" and stored.message.source_question_id is not None:
             if self._questions is None:
                 raise InstructorMessageStateError("question replies are not available")
@@ -546,21 +583,33 @@ class InstructorMessageService:
             raise InstructorMessageAccessDenied("instructor login required")
         return user.public()
 
+    async def list_students(self, principal: PrincipalContext) -> list[User]:
+        """Expose the active student directory only to a current instructor."""
+        await self._active_instructor(principal)
+        return await self._active_students()
+
+    async def _active_students(self) -> list[User]:
+        return sorted(
+            (
+                user.public()
+                for user in await self._auth.list_users()
+                if user.active and user.role == "student"
+            ),
+            key=lambda user: user.username,
+        )
+
     async def _resolve_recipients(
         self,
         draft: InstructorMessageDraft,
     ) -> ResolvedInstructorMessageRecipients:
-        students = [
-            user.public()
-            for user in await self._auth.list_users()
-            if user.active and user.role == "student"
-        ]
+        students = await self._active_students()
         if draft.audience == "all_students":
             recipients = {user.id: user for user in students}
             previews = {
                 user.id: InstructorMessageRecipientPreview(
                     username=user.username,
                     display_name=user.display_name,
+                    email=user.email,
                 )
                 for user in students
             }
@@ -615,6 +664,7 @@ class InstructorMessageService:
                 previews[recipient.id] = InstructorMessageRecipientPreview(
                     username=recipient.username,
                     display_name=recipient.display_name,
+                    email=recipient.email,
                 )
         if not recipients:
             raise InstructorMessageRecipientError("No active student recipients were found.")
@@ -700,7 +750,10 @@ class InstructorMessageStudentsTool:
         "to press Send before students receive it. Use recipients=[] for all_students; for "
         "specific_students use student usernames, emails, exact display names, or the trusted "
         "reply_reference supplied with a pending student question. Pending-question replies use "
-        "a PUBLISH or PRIVATE line; an omitted decision is safely prepared as PRIVATE."
+        "a PUBLISH or PRIVATE line; an omitted decision is safely prepared as PRIVATE. "
+        "For ordinary messages, supply greeting and sign_off (including the sender name), "
+        "and put only the main content in message. All three parts are assembled into one "
+        "editable draft before confirmation; omitting either part is rejected."
     )
     redact_arguments_in_events = True
     input_schema: ClassVar[dict[str, JsonValue]] = {
@@ -721,7 +774,31 @@ class InstructorMessageStudentsTool:
                 ),
             },
             "subject": {"type": "string", "minLength": 1, "maxLength": 200},
-            "message": {"type": "string", "minLength": 1, "maxLength": 10_000},
+            "message": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 10_000,
+                "description": "Main message content, without the separate greeting or sign-off.",
+            },
+            "greeting": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "description": (
+                    "Required for ordinary messages: the salutation, e.g. Hello everyone,. "
+                    "Omit for pending-question replies."
+                ),
+            },
+            "sign_off": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 10_000,
+                "description": (
+                    "Required for ordinary messages: closing and sender name. Use the "
+                    "instructor's requested signature or trusted login display name; never "
+                    "invent a title. Omit for pending-question replies."
+                ),
+            },
         },
         "required": ["audience", "recipients", "subject", "message"],
         "additionalProperties": False,
@@ -761,7 +838,8 @@ class InstructorMessageStudentsTool:
                 "publication_decision": publication,
             }
         recipient_preview: list[JsonValue] = [
-            preview.model_dump(mode="json") for preview in prepared.recipient_previews
+            preview.model_dump(mode="json", exclude_none=True)
+            for preview in prepared.recipient_previews
         ]
         return ToolExecutionResult(
             content={
@@ -783,6 +861,8 @@ class InstructorMessageStudentsTool:
                         "subject": message.subject,
                         "message": confirmation_message,
                         "status": message.status,
+                        "email_available": self._service.email_enabled
+                        and message.source_question_id is None,
                         **reply_fields,
                     },
                     metadata={"visibility": "private"},
