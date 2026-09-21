@@ -10,6 +10,7 @@ export type InstructorMessageStatus =
 export type InstructorMessagePublicationDecision = "publish" | "private";
 
 export interface InstructorMessageRecipient {
+  email?: string;
   username: string;
   display_name: string;
 }
@@ -22,10 +23,12 @@ export interface InstructorMessageConfirmation {
   subject: string;
   message: string;
   publicationDecision?: InstructorMessagePublicationDecision;
+  emailAvailable?: boolean;
   status: InstructorMessageStatus;
 }
 
 export interface InstructorMessageEdit {
+  sendEmail?: boolean;
   subject: string;
   message: string;
   publicationDecision?: InstructorMessagePublicationDecision;
@@ -48,6 +51,8 @@ export function instructorMessageFromPayload(
   const sourceQuestionId = payload.source_question_id;
   const publicationDecision = payload.publication_decision;
   if (
+    (payload.email_available !== undefined &&
+      typeof payload.email_available !== "boolean") ||
     typeof id !== "string" ||
     (audience !== "all_students" && audience !== "specific_students") ||
     !Array.isArray(recipients) ||
@@ -75,13 +80,15 @@ export function instructorMessageFromPayload(
     if (
       !isRecord(recipient) ||
       typeof recipient.username !== "string" ||
-      typeof recipient.display_name !== "string"
+      typeof recipient.display_name !== "string" ||
+      (recipient.email !== undefined && typeof recipient.email !== "string")
     ) {
       return null;
     }
     parsedRecipients.push({
       username: recipient.username,
       display_name: recipient.display_name,
+      ...(typeof recipient.email === "string" ? { email: recipient.email } : {}),
     });
   }
   if (parsedRecipients.length !== recipientCount) return null;
@@ -94,6 +101,9 @@ export function instructorMessageFromPayload(
     message,
     ...(parsedPublicationDecision
       ? { publicationDecision: parsedPublicationDecision }
+      : {}),
+    ...(typeof payload.email_available === "boolean"
+      ? { emailAvailable: payload.email_available }
       : {}),
     status: "pending_confirmation",
   };

@@ -17,7 +17,15 @@ from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
 from psycopg_pool import AsyncConnectionPool
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, StringConstraints, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    JsonValue,
+    StrictBool,
+    StringConstraints,
+    model_validator,
+)
 
 from agent_core import AgentResult, Conversation, Event, PrincipalContext
 from course_server.agent import (
@@ -88,6 +96,7 @@ from course_server.index_resources import index_resources
 from course_server.instructor_messages import (
     InstructorMessageAccessDenied,
     InstructorMessageContent,
+    InstructorMessageEmailUnavailable,
     InstructorMessageService,
     InstructorMessageStateError,
     PostgresInstructorMessageStore,
@@ -215,6 +224,7 @@ class InstructorMessageConfirmationRequest(ApiModel):
     subject: ConfirmationSubject | None = None
     message: ConfirmationMessage | None = None
     publication_decision: Literal["publish", "private"] | None = None
+    send_email: StrictBool = False
 
     @model_validator(mode="after")
     def validate_edit(self) -> InstructorMessageConfirmationRequest:
@@ -224,6 +234,10 @@ class InstructorMessageConfirmationRequest(ApiModel):
             raise ValueError("message edits are accepted only when sending")
         if supplied_fields and supplied_fields != edit_fields:
             raise ValueError("subject and message must be submitted together")
+        if "send_email" in self.model_fields_set and (
+            self.action != "send" or supplied_fields != edit_fields
+        ):
+            raise ValueError("email choice requires Send with subject and message")
         if "publication_decision" in self.model_fields_set:
             if self.action != "send":
                 raise ValueError("visibility can be selected only when sending")
@@ -240,6 +254,7 @@ class InstructorMessageConfirmationRequest(ApiModel):
             subject=self.subject,
             message=self.message,
             publication_decision=self.publication_decision,
+            send_email=self.send_email,
         )
 
 
@@ -853,6 +868,7 @@ def create_app(
         instructor_message_service = InstructorMessageService(
             messages=instructor_message_store,
             auth=auth_store,
+            email_enabled=resolved_settings.mail_enabled,
             questions=question_store,
         )
         student_communication_service = StudentCommunicationService(
@@ -1567,6 +1583,11 @@ def create_app(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="not found",
             ) from error
+        except InstructorMessageEmailUnavailable as error:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Email delivery is unavailable for this message.",
+            ) from error
         except InstructorMessageStateError as error:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -1592,6 +1613,7 @@ def create_app(
                 "subject": message.subject,
                 "message": message.message,
                 "recipient_count": len(stored.recipient_user_ids),
+                "email_queued": message.send_email,
                 "status": message.status,
             },
             metadata={"visibility": "private"},

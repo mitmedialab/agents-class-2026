@@ -101,10 +101,13 @@ the exact posted Markdown in the workspace. The application does not expose an a
 tool or editor. See
 [docs/ASSIGNMENTS.md](docs/ASSIGNMENTS.md) for the exact schema and operations.
 
-Logged-in instructors can also prepare an in-app message for all active students or a validated
+Logged-in instructors can look up active student names, usernames, and emails through the
+instructor-only student directory tool. They can also prepare an in-app message for all active students or a validated
 set of specific students through the instructor-only messaging skill. The platform snapshots the
 resolved recipients, shows the exact subject, message, and audience, and requires a separate Send
-or Cancel action before delivery. Confirmed messages remain in each recipient's Communications
+or Cancel action before delivery. In the same preview, **Also send by email** optionally queues
+a separate email copy for each student through the configured mail worker. This defaults to off;
+in-app delivery always occurs. Confirmed messages remain in each recipient's Communications
 stack and authorized agent context until the student marks them read.
 
 Students can use the application-review tools for accepted applicants explicitly shared by

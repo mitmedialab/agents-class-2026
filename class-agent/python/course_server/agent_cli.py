@@ -72,6 +72,7 @@ from course_server.faq import (
     PublishedFaqResourceCatalog,
 )
 from course_server.index_resources import index_resources
+from course_server.instructor_contacts import InstructorListStudentsTool
 from course_server.instructor_messages import (
     InstructorMessageService,
     InstructorMessageStudentsTool,
@@ -278,7 +279,12 @@ def build_runtime(
     if ta_questions is not None:
         executable_tools.append(CourseAskTATool(ta_questions))
     if instructor_messages is not None:
-        executable_tools.append(InstructorMessageStudentsTool(instructor_messages))
+        executable_tools.extend(
+            [
+                InstructorMessageStudentsTool(instructor_messages),
+                InstructorListStudentsTool(instructor_messages),
+            ]
+        )
     if student_communications is not None:
         executable_tools.extend(
             [

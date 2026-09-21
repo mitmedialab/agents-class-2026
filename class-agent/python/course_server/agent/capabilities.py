@@ -80,6 +80,7 @@ INSTRUCTOR_LIST_APPLICATIONS_TOOL_ID = "instructor.list_applications"
 INSTRUCTOR_READ_APPLICATION_TOOL_ID = "instructor.read_application"
 INSTRUCTOR_INSPECT_APPLICATION_IMAGES_TOOL_ID = "instructor.inspect_application_images"
 INSTRUCTOR_MESSAGE_STUDENTS_TOOL_ID = "instructor.message_students"
+INSTRUCTOR_LIST_STUDENTS_TOOL_ID = "instructor.list_students"
 WEB_SEARCH_TOOL_ID = "web.search"
 WEB_IMAGE_SEARCH_TOOL_ID = "web.search_images"
 WEB_IMAGE_INSPECT_TOOL_ID = "web.inspect_images"
@@ -2772,7 +2773,7 @@ class CourseCapabilityPolicy:
                     else ()
                 ),
                 *(
-                    (INSTRUCTOR_MESSAGE_STUDENTS_TOOL_ID,)
+                    (INSTRUCTOR_MESSAGE_STUDENTS_TOOL_ID, INSTRUCTOR_LIST_STUDENTS_TOOL_ID)
                     if self._instructor_messaging_enabled
                     and principal.authenticated
                     and "instructor" in principal.roles

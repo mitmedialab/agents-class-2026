@@ -98,3 +98,13 @@ describe("instructor message events", () => {
     expect(pendingInstructorMessageContinuation([sent, completed])).toBeNull();
   });
 });
+
+it("restores instructor recipient emails while accepting older previews", () => {
+  const payload = {
+    ...confirmationPayload,
+    recipients: [{ username: "alice", display_name: "Alice", email: "alice@example.com" }],
+  };
+  expect(instructorMessageFromPayload(payload)?.recipients[0]?.email).toBe("alice@example.com");
+  expect(instructorMessageFromPayload(confirmationPayload)?.recipients[0]?.email).toBeUndefined();
+  expect(instructorMessageFromPayload({ ...payload, recipients: [{ username: "alice", display_name: "Alice", email: 42 }] })).toBeNull();
+});

@@ -775,11 +775,15 @@ def test_public_image_search_normalizes_https_candidates_for_workspace_images() 
         }
         assert result.summary == "Found 3 verified public image candidates."
         assert result.storage_policy == "server_summary"
-        assert probed_urls == [
-            "https://images.example.org/fluid.jpg",
-            "https://images.example.org/fallback-thumb.jpg",
-            "https://cdn.example.org/second.jpg",
-        ]
+        # Probes run concurrently; completion order is not part of the contract.
+        # Check exact calls, including duplicates; result order is checked separately above.
+        assert sorted(probed_urls) == sorted(
+            [
+                "https://images.example.org/fluid.jpg",
+                "https://images.example.org/fallback-thumb.jpg",
+                "https://cdn.example.org/second.jpg",
+            ]
+        )
         assert context.transient_state == {
             "image_search_attempted": True,
             "image_search_candidates": [

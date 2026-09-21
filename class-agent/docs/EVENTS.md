@@ -80,3 +80,11 @@ When a message confirms a pending-question reply, the linked `TAAnswer` is autho
 message row is not separately projected to the student.
 An agent continuation from Send or Cancel carries the trusted trigger event ID and creates no fake
 `user.message`.
+
+Instructor message confirmation payloads may additionally include `email_available` (boolean)
+and optional recipient `email` fields for ordinary messages. These previews are private to the
+instructor's owned conversation; anonymous-question previews omit the address. Older previews
+without recipient email fields still render correctly.
+The sent/cancelled private action payload includes `email_queued` (boolean, false on cancellation).
+This records the confirmed delivery choice, not provider delivery success. Older events omit these
+fields and preserve in-app-only behavior; the versioned Event envelope is unchanged.

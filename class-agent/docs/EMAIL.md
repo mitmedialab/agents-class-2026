@@ -225,3 +225,29 @@ Students can select **Hide my name from course staff** before sending. The platf
 the authenticated owner so it can route the private answer; the outgoing staff message substitutes
 an anonymous label and redacts the account's known name and email from the question and included
 context. The model cannot autonomously send an anonymous report.
+
+## Optional instructor message copies
+
+For ordinary instructor messages to all or selected students, the Send/Cancel preview includes
+**Also send by email**, unchecked by default. It is disabled when `MAIL_ENABLED` is false.
+The instructor confirms this choice together with the exact edited subject and body. The tool
+cannot select email delivery. In-app delivery always occurs; question replies retain their existing
+visibility and staff-thread workflow.
+
+The confirmed `send_email` flag and fixed recipient rows form a durable outbox, committed in the
+same conditional update as the reviewed content. The existing `course_server.mail_worker` sends
+one plain-text email per recipient using the configured mailbox and their current active student
+account address. Other recipients' addresses are never included. New students added after draft
+preparation are excluded. Inactive accounts or accounts that no longer have the student role are
+skipped; they remain pending and can be delivered if restored to active student status.
+
+Each recipient records attempts, a sanitized error class, and the provider ID and timestamp on
+success. Failures retry on subsequent worker cycles without repeating successful recipients;
+row locks prevent concurrent cycles from sending the same recipient simultaneously. Provider
+acceptance followed by a crash before recording success can still result in a duplicate on retry.
+These adapters do not provide a shared exactly-once delivery guarantee. Queue acceptance is
+reported separately from email delivery; there is no instructor delivery-status UI in this change.
+
+Apply migration `0014_instructor_message_email` and restart the API and mail worker. Existing
+messages default to in-app only and are not emailed retroactively. No additional credentials or
+provider permissions beyond the existing configured mail adapter are required.

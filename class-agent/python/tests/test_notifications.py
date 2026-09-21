@@ -344,6 +344,8 @@ def test_confirmed_instructor_message_appears_only_for_its_students() -> None:
             principal=instructor,
             conversation_id=uuid4(),
             draft=InstructorMessageDraft(
+                greeting="Hello students,",
+                sign_off="Best,\nMaya",
                 audience="specific_students",
                 recipients=["alice"],
                 subject="Office hours",
@@ -371,7 +373,10 @@ def test_confirmed_instructor_message_appears_only_for_its_students() -> None:
         item = alice_center.items[0]
         assert item.kind == "instructor_message"
         assert item.title == "Office hours"
-        assert item.detail == "Please come to office hours this afternoon."
+        assert (
+            item.detail
+            == "Hello students,\n\nPlease come to office hours this afternoon.\n\nBest,\nMaya"
+        )
         assert item.unread and item.dismissible
         assert item.sender is not None
         assert item.sender.first_name == "Maya"

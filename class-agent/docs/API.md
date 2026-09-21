@@ -48,8 +48,18 @@ separate mail worker; the HTTP request never contacts the email provider. Missin
 questions fail closed. Repeating the same decision is idempotent; trying the opposite decision
 after the question has advanced returns `409`.
 
+Ordinary `instructor.message_students` drafts require separate nonblank `greeting` and
+`sign_off` fields in addition to the main `message` content. The service joins them with blank
+lines and validates the total body length before storing or emitting a confirmation. The
+confirmation still carries one complete editable `message`, and Send uses that reviewed body
+without adding anything. Pending-question replies retain their existing format. Existing stored
+messages and v1 event schemas are unchanged; tool clients must supply the new composition fields
+for new ordinary drafts. Previously stored pending drafts retain their original content and may
+be edited in full or cancelled and prepared again.
+
 The instructor-message confirmation route accepts only `send` or `cancel`. On `send`, the browser
-may submit the complete reviewed `subject` and `message`; a pending-question reply also submits the
+may submit the complete reviewed `subject` and `message` and a strict boolean `send_email`
+(default false, accepted only with the complete content on Send); a pending-question reply also submits the
 separate bounded `publication_decision` of `private` or `publish`. Partial edits, a standalone
 visibility value, and edits on `cancel` are rejected. It requires the active instructor who owns
 both the conversation and pending message.
@@ -62,7 +72,10 @@ question, and only the clean answer—not a moderation command or duplicate mess
 the student. Content
 edits for an ordinary message and its status transition are one conditional store operation; an
 online answer uses its linked message ID as an idempotency key before completing that transition;
-`cancel` creates no delivery. A missing, foreign, or previously resolved
+`cancel` creates no delivery. Email opt-in is restricted to ordinary messages and requires
+`MAIL_ENABLED`; unavailable email requests return 409 without delivering the message. The private
+confirmation preview includes `email_available` and each ordinary recipient's account `email`, and the sent event includes `email_queued`.
+Queued does not mean that the provider has delivered the email. A missing, foreign, or previously resolved
 message fails closed.
 
 The continuation route accepts only a server-issued `trigger_event_id` from the owned
