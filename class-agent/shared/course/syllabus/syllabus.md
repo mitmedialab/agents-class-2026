@@ -43,7 +43,7 @@ Every week, students will complete an open-ended agent build based on the lectur
 
 The semester will culminate in a final project: either a substantial agentic system or an empirical study evaluating an agent’s capabilities, limitations, or effects on people.
 
-The course will be restricted to 20 people. Priority will be given to students from Media, Arts and Sciences and other MIT programs over students from other institutions. 
+The course will enroll 30 for-credit students and up to 10 listeners. Listeners participate in course sessions and weekly builds on the same basis as for-credit students but are not graded. Priority will be given to students from Media, Arts and Sciences and other MIT programs over students from other institutions.
 
 ## **Modules**
 
