@@ -322,8 +322,9 @@ Only the separate `course_server.mail_worker` talks to the configured Gmail or M
 After Send or Cancel, an allowlisted trusted action event—not client-authored prose—triggers a
 single idempotent agent continuation. The completed action and exact question become the trusted
 runtime context. The current input is only a neutral description of the completed action and makes
-clear that the platform has already finished the Send or Cancel transition; the
-model decides whether and how to acknowledge it and may continue any other unfinished work
+clear that the platform has just finished the Send or Cancel transition. For an online answer it
+also states the successful pending-to-answered transition in positive terms. The model decides
+whether and how to acknowledge it and may continue any other unfinished work
 without a prewritten browser response, duplicated question text, or a fabricated `user.message`.
 The staff-question tool is withheld only for that continuation turn to prevent recursive
 confirmation loops. A private staff reply event is included among recent supporting events so the

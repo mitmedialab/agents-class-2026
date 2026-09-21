@@ -82,9 +82,10 @@ The continuation route accepts only a server-issued `trigger_event_id` from the 
 conversation. Platform code permits the Course Agent to continue only from explicitly allowlisted
 trusted action events, currently TA-question and instructor-message Send and Cancel. It does not append a fabricated
 `user.message`; the agent receives a neutral description of the completed action as its current
-input. That description explicitly says the platform transition has already succeeded so the agent
-does not mistake a completed Send for an unavailable future action, while the exact question remains
-available in trusted event context. The continuation does
+input. For an online question reply, that description says the Send succeeded just now and changed
+the question from pending to answered, so the agent does not mistake the completed Send for an
+unavailable future action. The exact question remains available in trusted event context. The
+continuation does
 not prescribe or prewrite the agent's response. The tool that prepared the completed action is
 withheld for that continuation turn to prevent it from recursively opening another confirmation,
 while every other authorized capability

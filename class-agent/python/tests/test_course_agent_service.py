@@ -684,11 +684,13 @@ def test_course_agent_continuation_distinguishes_online_question_resolution() ->
         )
 
         assert runtime.inputs[0].text == (
-            "The platform has already completed the instructor's Send action: the pending "
-            "student question was resolved online with the confirmed answer. The mail worker "
-            "will mirror that resolution to the original staff email thread when one exists. "
-            "No further send action is required."
+            "The instructor's Send action succeeded just now. As part of this action, the "
+            "platform recorded the confirmed answer and changed the student question from "
+            "pending to answered. The mail worker will mirror the answer to the original staff "
+            "email thread when one exists. Do not send the answer again."
         )
+        assert "resolved" not in runtime.inputs[0].text
+        assert "error" not in runtime.inputs[0].text
 
     asyncio.run(scenario())
 

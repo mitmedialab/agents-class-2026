@@ -138,10 +138,10 @@ def _trusted_action_input(trigger: Event) -> str:
     if trigger.type == "instructor.message.sent":
         if isinstance(trigger.payload.get("source_question_id"), str):
             return (
-                "The platform has already completed the instructor's Send action: the pending "
-                "student question was resolved online with the confirmed answer. The mail worker "
-                "will mirror that resolution to the original staff email thread when one exists. "
-                "No further send action is required."
+                "The instructor's Send action succeeded just now. As part of this action, the "
+                "platform recorded the confirmed answer and changed the student question from "
+                "pending to answered. The mail worker will mirror the answer to the original "
+                "staff email thread when one exists. Do not send the answer again."
             )
         email_status = (
             " Email copies were queued for the mail worker; email delivery is not yet confirmed."
