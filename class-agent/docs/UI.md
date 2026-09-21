@@ -10,6 +10,15 @@ screen is intentionally sparse:
 
 An empty or new conversation explains that the Course Agent is itself the class
 website and invites visitors to ask for course information or discuss applying.
+Opening the site with a non-empty `q` query parameter starts a fresh conversation and submits the
+decoded value through the same agent path as typed text. For example,
+`/?q=Show%20me%20the%20course%20schedule` opens with that request instead of generating a separate
+page greeting. The browser consumes `q` once and removes it from the address bar while retaining
+other query parameters and the URL fragment. Shared queries are limited to the API's 20,000-character
+prompt bound; blank values return to the ordinary opening behavior. Because URLs may be retained by
+browsers and intermediary systems before the application loads, shared links should not contain
+private information.
+
 The header's Apply shortcut opens the canonical application workspace directly before
 sending its prompt. Application requests typed in chat are not matched against browser or
 API keywords; the agent recognizes the intent and opens the same canonical workspace with
@@ -95,10 +104,16 @@ identity, role, or additional
 recipients. A confirmed message then appears only in each addressed student's Communications stack
 and authorized Course Agent context. A confirmed question reply instead replaces that student's
 pending question with the existing staff-reply presentation, avoiding a duplicate message card.
-When a page load finds an unresolved student-message or course-staff-question confirmation in an
-owned conversation, that conversation and its Send/Cancel surface are restored before the app
-creates a fresh greeting conversation. This keeps every durable pending action recoverable after
-navigation or reload.
+When an ordinary page load without a startup query finds an unresolved student-message or
+course-staff-question confirmation in an owned conversation, that conversation and its Send/Cancel
+surface are restored before the app creates a fresh greeting conversation. A `q` link instead
+honors the explicit shared request in a new conversation; the pending action remains recoverable
+from **Your logs**. The browser performs one owned pending-action lookup for ordinary restoration;
+it does not download each conversation to discover pending state.
+
+The **Your logs** drawer initially lists the five most recently updated conversation summaries.
+When more exist, **Show 5 more** expands the server-bounded query by five entries at a time. Full
+canonical events remain unloaded until the user opens a conversation.
 
 Authenticated course members automatically see a narrow macOS-inspired right-edge surface made
 from separate, compact notification cards rather than a dashboard or model-generated workspace.

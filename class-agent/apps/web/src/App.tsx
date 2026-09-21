@@ -79,6 +79,7 @@ import {
   useState,
 } from "react";
 import { mergeNotificationCenterUpdates } from "./notifications.js";
+import { readStartupQuery, urlWithoutStartupQuery } from "./startupQuery.js";
 
 const CONNECTION_ERROR = "I couldn’t reach the Course Agent. Please try again.";
 const WELCOME_MESSAGE =
@@ -231,6 +232,7 @@ async function notificationsFor(
 }
 
 export default function App() {
+  const [startupQuery] = useState(() => readStartupQuery(window.location.href));
   const [principal, setPrincipal] = useState<PrincipalContext | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationDisplayLimit, setConversationDisplayLimit] = useState(
@@ -285,6 +287,7 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const historyRef = useRef<HTMLElement>(null);
   const activeRun = useRef<AbortController | null>(null);
+  const startupQueryStarted = useRef(false);
   const operationInFlight = useRef(false);
   const applicationReturnResponse = useRef<string | null>(null);
   const awaitingTAQuestionAction =
@@ -462,6 +465,15 @@ export default function App() {
   );
 
   useEffect(() => {
+    if (!startupQuery.isPresent) return;
+    window.history.replaceState(
+      window.history.state,
+      "",
+      urlWithoutStartupQuery(window.location.href),
+    );
+  }, [startupQuery]);
+
+  useEffect(() => {
     let disposed = false;
     const controller = new AbortController();
 
@@ -477,7 +489,13 @@ export default function App() {
         ]);
         if (disposed) return;
         setNotificationCenter(loadedNotifications);
-        await showPageGreeting(resolvedPrincipal, controller.signal);
+        if (startupQuery.error) {
+          setSelectedConversationId(null);
+          setLatestResponse(startupQuery.error);
+          setIsPresentingWelcome(false);
+        } else if (!startupQuery.prompt) {
+          await showPageGreeting(resolvedPrincipal, controller.signal);
+        }
       } catch {
         if (!disposed) {
           setLatestResponse(CONNECTION_ERROR);
@@ -497,7 +515,19 @@ export default function App() {
       controller.abort();
       activeRun.current?.abort();
     };
-  }, [loadConversationList, showPageGreeting, showWelcomeMessage]);
+  }, [loadConversationList, showPageGreeting, showWelcomeMessage, startupQuery]);
+
+  useEffect(() => {
+    if (
+      isInitializing ||
+      !startupQuery.prompt ||
+      startupQueryStarted.current
+    ) {
+      return;
+    }
+    startupQueryStarted.current = true;
+    void sendMessage(startupQuery.prompt);
+  }, [isInitializing, startupQuery]);
 
   useEffect(() => {
     if (!isOpening) return;

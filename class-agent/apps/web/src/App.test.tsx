@@ -92,6 +92,7 @@ const previousEvent = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  window.history.replaceState({}, "", "/");
   vi.mocked(api.getPrincipal).mockResolvedValue(publicPrincipal);
   vi.mocked(api.listConversations).mockResolvedValue([conversation]);
   vi.mocked(api.getNotificationCenter).mockResolvedValue({
@@ -260,6 +261,69 @@ describe("Course Agent interface", () => {
     expect(workspaceShell).toContainElement(composerForm);
     fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
     expect(screen.getByRole("button", { name: /Week one/ })).toBeInTheDocument();
+  });
+
+  it("starts a fresh conversation from a shared q query and consumes the parameter", async () => {
+    vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
+    const sharedConversation = {
+      ...conversation,
+      user_id: studentPrincipal.user_id,
+      anonymous_session_id: null,
+      title: "How does grading work?",
+    };
+    vi.mocked(api.createConversation).mockResolvedValue(sharedConversation);
+    window.history.replaceState(
+      { source: "shared-link" },
+      "",
+      "/?q=%20How%20does%20grading%20work%3F%20&ref=course#overview",
+    );
+
+    render(<App />);
+
+    await waitFor(() =>
+      expect(api.streamAgentRun).toHaveBeenCalledWith(
+        sharedConversation.id,
+        "How does grading work?",
+        expect.any(Function),
+        expect.any(AbortSignal),
+      ),
+    );
+    expect(api.createConversation).toHaveBeenCalledWith("How does grading work?");
+    expect(api.generatePageGreeting).not.toHaveBeenCalled();
+    expect(api.getPendingActionConversation).not.toHaveBeenCalled();
+    expect(window.location.pathname + window.location.search + window.location.hash).toBe(
+      "/?ref=course#overview",
+    );
+    expect(window.history.state).toEqual({ source: "shared-link" });
+  });
+
+  it("does not submit a blank shared q query", async () => {
+    window.history.replaceState({}, "", "/?q=%20%20");
+
+    render(<App />);
+
+    await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
+    expect(document.querySelector(".latest-response")).toHaveTextContent(
+      /Welcome\. I’m the Course Agent/,
+    );
+    expect(api.streamAgentRun).not.toHaveBeenCalled();
+    expect(window.location.search).toBe("");
+  });
+
+  it("rejects an oversized shared q query without truncating or submitting it", async () => {
+    const query = new URLSearchParams({ q: "x".repeat(20_001) });
+    window.history.replaceState({}, "", `/?${query.toString()}`);
+
+    render(<App />);
+
+    expect(
+      await screen.findByText(
+        "This shared query is too long. Shorten it to 20,000 characters or fewer and try again.",
+      ),
+    ).toBeVisible();
+    expect(api.createConversation).not.toHaveBeenCalled();
+    expect(api.streamAgentRun).not.toHaveBeenCalled();
+    expect(window.location.search).toBe("");
   });
 
   it("loads conversation history five at a time", async () => {
