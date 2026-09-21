@@ -43,6 +43,7 @@ from course_server.mail import (
     parse_faq_review_reply,
     parse_staff_answer_reply,
 )
+from course_server.mail.content import strip_quoted_reply
 
 
 @dataclass
@@ -715,6 +716,25 @@ def test_staff_reply_accepts_decision_before_or_after_answer() -> None:
     assert parse_staff_answer_reply("PRIVATE\n") is None
     assert parse_staff_answer_reply("Answer first.\nPUBLISH\nEmail signature") is None
     assert parse_staff_answer_reply("PUBLISH\nConflicting commands.\nPRIVATE") is None
+
+
+def test_staff_reply_ignores_localized_apple_mail_quote_after_decision() -> None:
+    reply = strip_quoted_reply(
+        "Please find the course agent GitHub repo at https://github.com/mitmedialab/"
+        "agents-class-2026. Fork it and submit pull requests.\n\n"
+        "PUBLISH\n\n"
+        "Den 16. sep. 2026 kl. 1.33 AM skrev agent.cognitive.agents@gmail.com:\n"
+        "> Student:\n"
+        "> Test Student 2\n"
+        "> Reference: Q-2026-00005."
+    )
+
+    parsed = parse_staff_answer_reply(reply)
+
+    assert parsed is not None
+    assert parsed.action == "publish"
+    assert parsed.answer.endswith("Fork it and submit pull requests.")
+    assert "Test Student 2" not in parsed.answer
 
 
 def test_private_staff_answer_never_enters_publication_outbox() -> None:

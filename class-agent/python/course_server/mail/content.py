@@ -7,6 +7,7 @@ from html.parser import HTMLParser
 
 _QUOTED_REPLY_MARKERS = (
     re.compile(r"^On .+ wrote:\s*$", re.IGNORECASE),
+    re.compile(r"^Den .+ skrev .+:\s*$", re.IGNORECASE),
     re.compile(r"^-{2,}\s*Original Message\s*-{2,}$", re.IGNORECASE),
     re.compile(r"^From:\s+.+$", re.IGNORECASE),
 )
