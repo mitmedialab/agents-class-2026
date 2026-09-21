@@ -16,7 +16,7 @@
     {
       "uri": "course://schedule",
       "title": "Provisional Course Schedule",
-      "description": "Provisional weekly topics, tutorials, speakers, and readings.",
+      "description": "Provisional weekly topics, tutorials, and speakers.",
       "media_type": "text/markdown",
       "path": "course/schedule/schedule.md",
       "visibility": "public",

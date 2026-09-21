@@ -282,6 +282,7 @@ describe("Calendar", () => {
       dateLabel: "TBD",
       title: "Final project presentations",
     });
+    expect(data.events.every((event) => event.readings === undefined)).toBe(true);
     expect(data.notices).toContainEqual({
       label: "Application deadline",
       text: "September 4, midnight",

@@ -240,7 +240,7 @@ def test_public_resource_registry_includes_provisional_schedule() -> None:
     assert instructors.title == "Course Staff"
     schedule = next(summary for summary in summaries if summary.uri == COURSE_SCHEDULE_URI)
     assert schedule.status == "provisional"
-    assert schedule.description == "Provisional weekly topics, tutorials, speakers, and readings."
+    assert schedule.description == "Provisional weekly topics, tutorials, and speakers."
 
     schedule_contents = asyncio.run(resources.read(COURSE_SCHEDULE_URI))
     assert schedule_contents.media_type == "text/markdown"
