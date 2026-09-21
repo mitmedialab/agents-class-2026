@@ -68,6 +68,7 @@ def test_postgres_auth_store_roundtrip() -> None:
             "0011_instructor_messages",
             "0012_online_question_answers",
             "0013_online_answer_retention",
+            "0014_instructor_message_email",
         ]
         assert apply_migrations(scoped_url) == []
         assert index_resources(scoped_url) == [
@@ -243,6 +244,8 @@ def test_postgres_auth_store_roundtrip() -> None:
                     principal=instructor_principal,
                     conversation_id=instructor_conversation.id,
                     draft=InstructorMessageDraft(
+                        greeting="Hello students,",
+                        sign_off="Best,\nProfessor Example",
                         audience="specific_students",
                         recipients=["alice"],
                         subject="Studio reminder",
@@ -330,6 +333,137 @@ def test_postgres_auth_store_roundtrip() -> None:
                 """
             ).fetchone() == (1,)
 
+    finally:
+        with psycopg.connect(TEST_DATABASE_URL) as connection:
+            connection.execute(
+                sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(schema_name))
+            )
+
+
+def test_instructor_email_outbox_retries_only_failed_recipients() -> None:
+    from unittest.mock import AsyncMock
+
+    from course_server.mail.instructor_delivery import InstructorEmailDelivery
+    from course_server.mail.models import MailAdapter
+
+    assert TEST_DATABASE_URL is not None
+    schema_name = f"test_instructor_email_{uuid4().hex}"
+    with psycopg.connect(TEST_DATABASE_URL) as connection:
+        connection.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(schema_name)))
+    scoped_url = _database_url_for_schema(TEST_DATABASE_URL, schema_name)
+    try:
+        apply_migrations(scoped_url)
+
+        async def scenario() -> None:
+            pool = create_auth_pool(scoped_url)
+            await pool.open()
+            try:
+                store = PostgresAuthStore(pool)
+                admin = UserAdminService(store)
+                instructor = await admin.create_user(
+                    username="prof", display_name="Prof", email="prof@mit.edu", role="instructor"
+                )
+                for name in ("alice", "bob", "inactive"):
+                    await admin.create_user(
+                        username=name, display_name=name, email=f"{name}@mit.edu", role="student"
+                    )
+                auth = AuthenticationService(store)
+                login = await auth.login(username="prof", access_code=instructor.access_code)
+                principal = await auth.resolve_authenticated(login.token)
+                conversations = PostgresConversationStore(pool)
+                conversation = Conversation(user_id=instructor.user.id)
+                await conversations.create_conversation(conversation)
+                messages = PostgresInstructorMessageStore(pool)
+                service = InstructorMessageService(
+                    messages=messages, auth=store, email_enabled=True
+                )
+                adapter = AsyncMock(spec=MailAdapter)
+                delivery = InstructorEmailDelivery(pool, adapter)
+                prepared = await service.prepare(
+                    principal=principal,
+                    conversation_id=conversation.id,
+                    draft=InstructorMessageDraft(
+                        greeting="Hello students,",
+                        sign_off="Best,\nProfessor Example",
+                        audience="all_students",
+                        subject="Draft",
+                        message="Original",
+                    ),
+                )
+                await delivery.run_once()
+                adapter.send_message.assert_not_called()
+                await service.confirm(
+                    principal=principal,
+                    conversation_id=conversation.id,
+                    message_id=prepared.message.id,
+                    content=InstructorMessageContent(
+                        subject="Reviewed",
+                        message="Hello students,\n\nFinal body.\n\nBest,\nChitra",
+                        send_email=True,
+                    ),
+                )
+                async with pool.connection() as connection:
+                    await connection.execute(
+                        "UPDATE users SET active = false WHERE username = 'inactive'"
+                    )
+                await admin.create_user(
+                    username="later", display_name="Later", email="later@mit.edu", role="student"
+                )
+                adapter.send_message.side_effect = [
+                    RuntimeError("private provider details"),
+                    SentMail(provider_message_id="ok", internet_message_id="<ok>"),
+                ]
+                await delivery.run_once()
+                assert adapter.send_message.call_count == 2
+                first_calls = [call.args[0] for call in adapter.send_message.call_args_list]
+                assert {str(mail.to[0]) for mail in first_calls} == {"alice@mit.edu", "bob@mit.edu"}
+                assert all(
+                    len(mail.to) == 1
+                    and mail.subject == "Reviewed"
+                    and mail.text == "Hello students,\n\nFinal body.\n\nBest,\nChitra"
+                    for mail in first_calls
+                )
+                adapter.send_message.side_effect = None
+                adapter.send_message.return_value = SentMail(
+                    provider_message_id="retry", internet_message_id="<retry>"
+                )
+                await asyncio.gather(delivery.run_once(), delivery.run_once())
+                assert adapter.send_message.call_count == 3
+                assert adapter.send_message.call_args.args[0].to == first_calls[0].to
+                await delivery.run_once()
+                assert adapter.send_message.call_count == 3
+                for action in ("cancel", "in_app"):
+                    pending = await service.prepare(
+                        principal=principal,
+                        conversation_id=conversation.id,
+                        draft=InstructorMessageDraft(
+                            greeting="Hello students,",
+                            sign_off="Best,\nProfessor Example",
+                            audience="all_students",
+                            subject="Other",
+                            message="In app only",
+                        ),
+                    )
+                    if action == "cancel":
+                        await service.cancel(
+                            principal=principal,
+                            conversation_id=conversation.id,
+                            message_id=pending.message.id,
+                        )
+                    else:
+                        await service.confirm(
+                            principal=principal,
+                            conversation_id=conversation.id,
+                            message_id=pending.message.id,
+                        )
+                    await delivery.run_once()
+                    assert adapter.send_message.call_count == 3
+                persisted = await messages.get(prepared.message.id)
+                assert persisted is not None and persisted.message.send_email
+            finally:
+                await pool.close()
+
+        asyncio.run(scenario())
     finally:
         with psycopg.connect(TEST_DATABASE_URL) as connection:
             connection.execute(

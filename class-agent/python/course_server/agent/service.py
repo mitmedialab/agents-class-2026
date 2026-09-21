@@ -143,10 +143,15 @@ def _trusted_action_input(trigger: Event) -> str:
                 "will mirror that resolution to the original staff email thread when one exists. "
                 "No further send action is required."
             )
+        email_status = (
+            " Email copies were queued for the mail worker; email delivery is not yet confirmed."
+            if trigger.payload.get("email_queued") is True
+            else ""
+        )
         return (
             "The platform has already completed the instructor's Send action: the prepared "
             "in-app message was delivered to its fixed student recipients. No further send "
-            "action is required."
+            "action is required." + email_status
         )
     if trigger.type == "instructor.message.cancelled":
         return (

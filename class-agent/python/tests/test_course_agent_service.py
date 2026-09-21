@@ -22,6 +22,7 @@ from course_server.agent import (
     GET_APPLICATION_TOOL_ID,
     INSTRUCTOR_INSPECT_APPLICATION_IMAGES_TOOL_ID,
     INSTRUCTOR_LIST_APPLICATIONS_TOOL_ID,
+    INSTRUCTOR_LIST_STUDENTS_TOOL_ID,
     INSTRUCTOR_MESSAGE_STUDENTS_TOOL_ID,
     INSTRUCTOR_READ_APPLICATION_TOOL_ID,
     LIST_FAQ_UPDATES_TOOL_ID,
@@ -241,24 +242,20 @@ def test_assignment_tools_require_enabled_store_and_course_roles() -> None:
     )
 
 
-def test_instructor_messaging_tool_requires_enabled_service_and_exact_instructor_role() -> None:
+@pytest.mark.parametrize(
+    "tool_id", [INSTRUCTOR_MESSAGE_STUDENTS_TOOL_ID, INSTRUCTOR_LIST_STUDENTS_TOOL_ID]
+)
+def test_instructor_messaging_tool_requires_enabled_service_and_exact_instructor_role(
+    tool_id: str,
+) -> None:
     disabled = CourseCapabilityPolicy()
     enabled = CourseCapabilityPolicy(instructor_messaging_enabled=True)
 
-    assert (
-        INSTRUCTOR_MESSAGE_STUDENTS_TOOL_ID
-        in enabled.authorize(authenticated_principal("instructor")).tool_ids
-    )
+    assert tool_id in enabled.authorize(authenticated_principal("instructor")).tool_ids
     for role in ("student", "ta", "admin"):
-        assert (
-            INSTRUCTOR_MESSAGE_STUDENTS_TOOL_ID
-            not in enabled.authorize(authenticated_principal(role)).tool_ids
-        )
-    assert INSTRUCTOR_MESSAGE_STUDENTS_TOOL_ID not in enabled.authorize(public_principal()).tool_ids
-    assert (
-        INSTRUCTOR_MESSAGE_STUDENTS_TOOL_ID
-        not in disabled.authorize(authenticated_principal("instructor")).tool_ids
-    )
+        assert tool_id not in enabled.authorize(authenticated_principal(role)).tool_ids
+    assert tool_id not in enabled.authorize(public_principal()).tool_ids
+    assert tool_id not in disabled.authorize(authenticated_principal("instructor")).tool_ids
 
 
 def test_private_communication_tools_require_enabled_service_and_exact_student_role() -> None:

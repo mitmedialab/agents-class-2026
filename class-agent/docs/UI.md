@@ -65,8 +65,23 @@ staff-facing label and redacts the account's known name and email from the quest
 platform code retains the authenticated owner for private reply delivery. Staff FAQ review remains
 in the original email thread.
 
+Ordinary instructor message confirmations include an unchecked **Also send by email** checkbox
+above Send/Cancel, using the existing checkbox treatment. It is disabled while submitting or when
+the server reports email unavailable; nearby help explains that in-app delivery still occurs.
+Selected-student previews show their account email beside the name; all-student previews include
+an expandable recipient-address list. These addresses are supplied only in the instructor-owned
+confirmation, never in student notifications or anonymous-question reply previews.
+The choice travels only with Send and the complete edited content. Pending-question replies
+retain their separate Private/Public control and do not show this email option.
+
+
 An instructor-authored student message uses the same platform-owned confirmation pattern without
-email transport. The confirmation shows editable subject and body fields plus the resolved,
+mandatory email transport. The confirmation labels the editable subject and full body, including
+the greeting and sign-off, with visible keyboard focus and a multiline editor. The app appends no
+signature after confirmation. Ordinary drafts require a greeting, main content, and sign-off at
+preparation; the service assembles and stores the full body before the editor receives it, so
+incomplete model output cannot create a partial confirmation. These are composition requirements,
+not restrictions on the instructor's later edits. It also shows the resolved,
 read-only recipient snapshot in the existing preview layout; a response prepared from a pending
 question uses a trusted server-side reply reference instead of making the agent guess the student.
 Anonymous questions display an anonymous recipient label while retaining private delivery to the

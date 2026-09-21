@@ -84,6 +84,7 @@ course.ask_ta (configured, exact student role only)
 course.list_assignments (logged-in student, TA, or instructor)
 course.get_assignment (logged-in student, TA, or instructor)
 instructor.message_students (exact instructor role only)
+instructor.list_students (exact instructor role only)
 course.list_student_projects (configured, authenticated course members only)
 course.inspect_student_site (configured, authenticated course members only)
 staff.inspect_student_repository (configured, TA/instructor/admin only)
@@ -148,6 +149,11 @@ replaces only the matching file. An authorized read emits a validated workspace 
 the exact stored Markdown. See
 [ASSIGNMENTS.md](ASSIGNMENTS.md).
 
+`instructor.list_students` exposes a paginated active-student directory (display name, username,
+and email) only when the instructor messaging service is configured. Capability filtering and a
+fresh stored-account role check both require the exact instructor role. It omits inactive students,
+credentials, user IDs, and question ownership. Tool events retain only a count summary.
+
 `instructor.message_students` is available only when the PostgreSQL-backed messaging service is
 configured and the trusted principal has the exact instructor role. It resolves model-provided
 recipient labels only against active student accounts, or snapshots all current active students,
@@ -157,7 +163,10 @@ stored student owner without asking the model to infer an identity. The tool can
 message. A separate owned HTTP
 confirmation may edit the subject and body while it atomically transitions that fixed snapshot to
 sent, or may cancel without changing content; sent records are projected into
-only their recipients' notification centers and attention context. The confirmation tool arguments
+only their recipients' notification centers and attention context. Ordinary message confirmations
+may also opt into email when `MAIL_ENABLED` is true. The fixed recipients and confirmed email flag
+form a durable outbox consumed by the separate mail worker; the API never sends provider mail.
+The confirmation tool arguments
 are redacted from generic tool events, while the exact private preview remains in the instructor's
 owned conversation event. Anonymous question references retain an anonymous recipient label in that
 preview even though the platform keeps the actual account as the delivery target.

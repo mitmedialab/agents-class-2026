@@ -8,6 +8,7 @@ from typing import Any, cast
 from uuid import UUID, uuid4
 
 import httpx
+import pytest
 from fastapi.testclient import TestClient
 
 from agent_core import AgentContext, AgentInput, AgentResult, Event, PrincipalContext
@@ -1796,7 +1797,8 @@ def test_blank_messages_and_unknown_fields_are_rejected() -> None:
     assert extra.status_code == 422
 
 
-def test_instructor_message_confirmation_delivers_only_after_send() -> None:
+@pytest.mark.parametrize("send_email", [False, True])
+def test_instructor_message_confirmation_delivers_only_after_send(send_email: bool) -> None:
     auth_store = InMemoryAuthStore()
     admin = UserAdminService(auth_store)
     instructor = asyncio.run(
@@ -1817,7 +1819,7 @@ def test_instructor_message_confirmation_delivers_only_after_send() -> None:
     )
     conversations = InMemoryConversationStore()
     messages = InMemoryInstructorMessageStore()
-    messaging = InstructorMessageService(messages=messages, auth=auth_store)
+    messaging = InstructorMessageService(messages=messages, auth=auth_store, email_enabled=True)
     center = NotificationCenterService(
         faqs=InMemoryFaqStore(),
         reads=InMemoryNotificationItemReadStore(),
@@ -1853,6 +1855,8 @@ def test_instructor_message_confirmation_delivers_only_after_send() -> None:
             principal=principal,
             conversation_id=UUID(conversation_id),
             draft=InstructorMessageDraft(
+                greeting="Hello students,",
+                sign_off="Best,\nProfessor Example",
                 audience="specific_students",
                 recipients=["alice"],
                 subject="Studio reminder",
@@ -1881,9 +1885,11 @@ def test_instructor_message_confirmation_delivers_only_after_send() -> None:
             "action": "send",
             "subject": "Updated studio reminder",
             "message": "Bring your revised prototype to class.",
+            "send_email": send_email,
         },
     )
 
+    assert sent.json()["payload"]["email_queued"] is send_email
     assert sent.status_code == 200
     assert sent.json()["type"] == "instructor.message.sent"
     assert sent.json()["payload"]["subject"] == "Updated studio reminder"

@@ -57,7 +57,7 @@ describe("message confirmation", () => {
       {
         subject: "Updated reminder",
         message: "Bring the revised prototype.",
-        publicationDecision: "publish",
+        sendEmail: true,
       },
     );
 
@@ -66,9 +66,9 @@ describe("message confirmation", () => {
       expect.objectContaining({
         body: JSON.stringify({
           action: "send",
+          send_email: true,
           subject: "Updated reminder",
           message: "Bring the revised prototype.",
-          publication_decision: "publish",
         }),
       }),
     );

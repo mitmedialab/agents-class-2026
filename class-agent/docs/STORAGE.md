@@ -240,6 +240,18 @@ the local file remains, but this repository does not require a second export, re
 automatic backup. Deleting it removes the agent's learned FAQ overlay; maintained static FAQ
 content under `shared/course/faq/` is unaffected.
 
+## Instructor message email migration
+
+Migration `0014_instructor_message_email` adds a default-false confirmed email choice to
+`instructor_messages` and per-recipient attempt/error/provider/timestamp fields to
+`instructor_message_recipients`. These existing private rows form the mail outbox and retain
+their existing cascade deletion behavior. Recipient addresses appear only in the instructor-owned
+private preview event; outbox records continue to reference accounts rather than copying addresses.
+Existing messages are not backfilled for delivery. Apply before deploying the API and
+worker; rolling back application code can leave these additive columns in place, but pending
+email copies require the new worker to drain. The v1 portable schemas are unchanged; the HTTP
+confirmation and private event payload additions are optional and default to in-app-only behavior.
+
 ## PostgreSQL integration tests
 
 Set `TEST_DATABASE_URL` to a disposable development PostgreSQL database and run `uv run pytest -m postgres`. Tests create a random isolated schema and drop that schema afterward. They do not modify the database's public schema.

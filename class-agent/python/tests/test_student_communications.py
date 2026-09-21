@@ -134,6 +134,8 @@ def test_student_tools_list_and_read_only_the_owners_private_communications() ->
             principal=instructor,
             conversation_id=uuid4(),
             draft=InstructorMessageDraft(
+                greeting="Hi Alice,",
+                sign_off="Best,\nMaya",
                 audience="specific_students",
                 recipients=["alice"],
                 subject="Studio reminder",
