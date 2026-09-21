@@ -25,6 +25,11 @@
       "id": "6f4960b4-fab4-4ea9-bc3c-8ca3e8b1ba9d",
       "question": "Where are student repositories documented?",
       "answer": "Student repository overview"
+    },
+    {
+      "id": "0bac4ea0-d90c-40de-9385-cfd318fd3c24",
+      "question": "What does running a model locally mean for Week 1?",
+      "answer": "Use a downloaded LLM whose inference runs in Google Colab or on your computer. Hosted model APIs such as Anthropic or OpenAI do not satisfy the assignment. Implement the agent loop yourself without agent frameworks or SDKs such as the Claude Agent SDK. The application may be in any domain, but it must use an LLM-based agent loop; an image generator may be a tool or output, but cannot replace that loop."
     }
   ]
 }

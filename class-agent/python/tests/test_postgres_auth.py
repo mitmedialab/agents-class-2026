@@ -84,7 +84,7 @@ def test_postgres_auth_store_roundtrip() -> None:
             assert connection.execute("SELECT count(*) FROM course_resources").fetchone() == (7,)
             assert connection.execute(
                 "SELECT count(*) FROM faq_entries WHERE active"
-            ).fetchone() == (5,)
+            ).fetchone() == (6,)
 
         async def scenario() -> None:
             pool = create_auth_pool(scoped_url)
