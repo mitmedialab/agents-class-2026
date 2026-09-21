@@ -73,6 +73,66 @@ class PostgresConversationStore:
             rows = await cursor.fetchall()
         return [Conversation.model_validate(row) for row in rows]
 
+    async def find_pending_action_conversation(
+        self, principal: PrincipalContext
+    ) -> Conversation | None:
+        if principal.authenticated:
+            owner_column = "user_id"
+            owner_id = principal.user_id
+        else:
+            owner_column = "anonymous_session_id"
+            owner_id = principal.anonymous_session_id
+        query = f"""
+            SELECT c.id, c.user_id, c.anonymous_session_id, c.created_at,
+                   c.updated_at, c.title, c.archived_at
+            FROM conversations AS c
+            WHERE c.{owner_column} = %s
+              AND EXISTS (
+                  SELECT 1
+                  FROM events AS requested
+                  WHERE requested.conversation_id = c.id
+                    AND requested.type IN (
+                        'email.ta_question.confirmation_requested',
+                        'instructor.message.confirmation_requested'
+                    )
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM events AS resolved
+                        WHERE resolved.conversation_id = requested.conversation_id
+                          AND (resolved.timestamp, resolved.id)
+                              > (requested.timestamp, requested.id)
+                          AND (
+                              (
+                                  requested.type = 'email.ta_question.confirmation_requested'
+                                  AND resolved.type IN (
+                                      'email.ta_question.queued',
+                                      'email.ta_question.cancelled',
+                                      'email.ta_question.created',
+                                      'email.ta_answer.received'
+                                  )
+                                  AND resolved.payload ->> 'question_id'
+                                      = requested.payload ->> 'question_id'
+                              )
+                              OR (
+                                  requested.type = 'instructor.message.confirmation_requested'
+                                  AND resolved.type IN (
+                                      'instructor.message.sent',
+                                      'instructor.message.cancelled'
+                                  )
+                                  AND resolved.payload ->> 'message_id'
+                                      = requested.payload ->> 'message_id'
+                              )
+                          )
+                    )
+              )
+            ORDER BY c.updated_at DESC
+            LIMIT 1
+        """
+        async with self._pool.connection() as connection:
+            cursor = await connection.execute(query, (owner_id,))
+            row = await cursor.fetchone()
+        return Conversation.model_validate(row) if row is not None else None
+
     async def append_events(self, conversation_id: UUID, events: list[Event]) -> None:
         if not events:
             return

@@ -211,8 +211,14 @@ export async function logout(): Promise<void> {
   }
 }
 
-export function listConversations(): Promise<Conversation[]> {
-  return requestJson<Conversation[]>("/conversations");
+export function listConversations(
+  options: { limit?: number; offset?: number } = {},
+): Promise<Conversation[]> {
+  const query = new URLSearchParams();
+  if (options.limit !== undefined) query.set("limit", String(options.limit));
+  if (options.offset !== undefined) query.set("offset", String(options.offset));
+  const suffix = query.size > 0 ? `?${query.toString()}` : "";
+  return requestJson<Conversation[]>(`/conversations${suffix}`);
 }
 
 export function createConversation(title: string): Promise<Conversation> {
@@ -224,6 +230,10 @@ export function createConversation(title: string): Promise<Conversation> {
 
 export function getConversation(conversationId: Uuid): Promise<ConversationDetail> {
   return requestJson<ConversationDetail>(`/conversations/${conversationId}`);
+}
+
+export function getPendingActionConversation(): Promise<ConversationDetail | null> {
+  return requestJson<ConversationDetail | null>("/conversations/pending-action");
 }
 
 export function confirmTAQuestion(

@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 
 import httpx
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from agent_core import AgentContext, AgentInput, AgentResult, Event, PrincipalContext
@@ -862,6 +863,61 @@ def test_conversation_routes_persist_events_and_enforce_ownership() -> None:
         ).status_code
         == 404
     )
+
+
+def test_conversation_list_supports_bounded_pages() -> None:
+    client, _, _ = _build_client(anonymous_quota_policy=AnonymousQuotaPolicy(enabled=False))
+    for index in range(7):
+        _create_conversation(client, title=f"Conversation {index + 1}")
+
+    first_page = client.get("/conversations", params={"limit": 6, "offset": 0})
+    second_page = client.get("/conversations", params={"limit": 3, "offset": 5})
+
+    assert first_page.status_code == 200
+    assert len(first_page.json()) == 6
+    assert second_page.status_code == 200
+    assert len(second_page.json()) == 2
+
+
+def test_pending_action_route_returns_only_unresolved_owned_confirmation() -> None:
+    client, _, _ = _build_client()
+    principal = client.get("/auth/me").json()
+    conversation_id = UUID(_create_conversation(client, title="Pending question"))
+    question_id = uuid4()
+    requested = Event(
+        type="email.ta_question.confirmation_requested",
+        actor="course-agent",
+        anonymous_session_id=UUID(principal["anonymous_session_id"]),
+        conversation_id=conversation_id,
+        payload={
+            "question_id": str(question_id),
+            "question_code": "Q-2026-00001",
+            "question": "Can I use a local model?",
+            "status": "pending_confirmation",
+        },
+    )
+    services = cast(FastAPI, client.app).state.course_state.services
+    assert services is not None
+    asyncio.run(services.conversations.append_events(conversation_id, [requested]))
+
+    pending = client.get("/conversations/pending-action")
+
+    assert pending.status_code == 200
+    assert pending.json()["conversation"]["id"] == str(conversation_id)
+    assert [event["type"] for event in pending.json()["events"]] == [requested.type]
+
+    queued = Event(
+        type="email.ta_question.queued",
+        actor="user",
+        anonymous_session_id=UUID(principal["anonymous_session_id"]),
+        conversation_id=conversation_id,
+        payload={"question_id": str(question_id), "status": "queued"},
+    )
+    asyncio.run(services.conversations.append_events(conversation_id, [queued]))
+
+    resolved = client.get("/conversations/pending-action")
+    assert resolved.status_code == 200
+    assert resolved.json() is None
 
 
 def test_free_text_application_intent_is_left_to_the_agent() -> None:

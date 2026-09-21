@@ -19,6 +19,7 @@ import {
   getCourseResourceContent,
   getConversation,
   getNotificationCenter,
+  getPendingActionConversation,
   getPrincipal,
   listConversations,
   login,
@@ -90,6 +91,7 @@ const WELCOME_PRESENTATION_MS =
   (WELCOME_MESSAGE.length - 1) * RESPONSE_CHARACTER_STAGGER_MS +
   180;
 const NOTIFICATION_POLL_INTERVAL_MS = 60_000;
+const CONVERSATION_PAGE_SIZE = 5;
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const SUPPORTED_UPLOAD_EXTENSIONS = new Set([
   "csv",
@@ -231,6 +233,11 @@ async function notificationsFor(
 export default function App() {
   const [principal, setPrincipal] = useState<PrincipalContext | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [conversationDisplayLimit, setConversationDisplayLimit] = useState(
+    CONVERSATION_PAGE_SIZE,
+  );
+  const [hasMoreConversations, setHasMoreConversations] = useState(false);
+  const [isLoadingMoreConversations, setIsLoadingMoreConversations] = useState(false);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [latestResponse, setLatestResponse] = useState("");
   const [currentAction, setCurrentAction] = useState<string | null>("Connecting");
@@ -352,16 +359,48 @@ export default function App() {
     }
   }
 
-  async function loadConversationList(): Promise<Conversation[]> {
-    const loaded = newestFirst(await listConversations());
-    setConversations(loaded);
-    return loaded;
+  const loadConversationList = useCallback(
+    async (visibleLimit: number): Promise<Conversation[]> => {
+      const loaded = newestFirst(
+        await listConversations({ limit: visibleLimit + 1, offset: 0 }),
+      );
+      setHasMoreConversations(loaded.length > visibleLimit);
+      const visible = loaded.slice(0, visibleLimit);
+      setConversations(visible);
+      return visible;
+    },
+    [],
+  );
+
+  async function showMoreConversations(): Promise<void> {
+    if (isLoadingMoreConversations || !hasMoreConversations) return;
+    setIsLoadingMoreConversations(true);
+    try {
+      const loaded = newestFirst(
+        await listConversations({
+          limit: CONVERSATION_PAGE_SIZE + 1,
+          offset: conversations.length,
+        }),
+      );
+      setHasMoreConversations(loaded.length > CONVERSATION_PAGE_SIZE);
+      const nextPage = loaded.slice(0, CONVERSATION_PAGE_SIZE);
+      setConversations((current) =>
+        newestFirst([
+          ...current,
+          ...nextPage.filter(
+            (candidate) => !current.some(({ id }) => id === candidate.id),
+          ),
+        ]),
+      );
+      setConversationDisplayLimit((current) => current + nextPage.length);
+    } finally {
+      setIsLoadingMoreConversations(false);
+    }
   }
 
   const showPageGreeting = useCallback(
     async (
       resolvedPrincipal: PrincipalContext,
-      loadedConversations: Conversation[],
       signal?: AbortSignal,
     ): Promise<void> => {
       if (!resolvedPrincipal.authenticated) {
@@ -378,41 +417,34 @@ export default function App() {
       setInstructorMessage(null);
       setMobileView("chat");
       setPresentedCommunication(null);
-      for (const conversation of loadedConversations) {
-        if (signal?.aborted) return;
-        try {
-          const detail = await getConversation(conversation.id);
-          const pendingTAQuestion = projectTAQuestionEvents(detail.events);
-          const pendingInstructorMessage = projectInstructorMessageEvents(
-            detail.events,
-          );
-          if (!pendingTAQuestion && !pendingInstructorMessage) continue;
-
-          const response = latestAgentResponse(detail.events);
-          const projectedWorkspace = workspaceFromEvents(detail.events);
-          setSelectedConversationId(conversation.id);
-          setLatestResponse(response ?? "");
-          setWorkspaceState(projectedWorkspace);
-          setTAQuestion(pendingTAQuestion);
-          setInstructorMessage(pendingInstructorMessage);
-          setActivities([]);
-          setMobileView(
-            projectedWorkspace.panels.length > 0 ? "workspace" : "chat",
-          );
-          return;
-        } catch {
-          // A failed history item must not prevent recovery from another conversation.
-        }
+      const pendingDetail = await getPendingActionConversation();
+      if (signal?.aborted) return;
+      if (pendingDetail) {
+        const response = latestAgentResponse(pendingDetail.events);
+        const projectedWorkspace = workspaceFromEvents(pendingDetail.events);
+        setSelectedConversationId(pendingDetail.conversation.id);
+        setLatestResponse(response ?? "");
+        setWorkspaceState(projectedWorkspace);
+        setTAQuestion(projectTAQuestionEvents(pendingDetail.events));
+        setInstructorMessage(projectInstructorMessageEvents(pendingDetail.events));
+        setActivities([]);
+        setMobileView(projectedWorkspace.panels.length > 0 ? "workspace" : "chat");
+        setConversations((current) =>
+          current.some(({ id }) => id === pendingDetail.conversation.id)
+            ? current
+            : [...current, pendingDetail.conversation],
+        );
+        return;
       }
       if (signal?.aborted) return;
       const created = await createConversation("Course Agent welcome");
       if (signal?.aborted) return;
       setSelectedConversationId(created.id);
-      setConversations(
+      setConversations((current) =>
         newestFirst([
           created,
-          ...loadedConversations.filter((conversation) => conversation.id !== created.id),
-        ]),
+          ...current.filter((conversation) => conversation.id !== created.id),
+        ]).slice(0, CONVERSATION_PAGE_SIZE),
       );
       let greeting: Awaited<ReturnType<typeof generatePageGreeting>>;
       try {
@@ -424,8 +456,9 @@ export default function App() {
       if (signal?.aborted) return;
       setLatestResponse(greeting.output_text);
       setActivities([{ kind: "complete", label: "Agent welcome complete" }]);
+      await loadConversationList(CONVERSATION_PAGE_SIZE);
     },
-    [showWelcomeMessage],
+    [loadConversationList, showWelcomeMessage],
   );
 
   useEffect(() => {
@@ -437,15 +470,14 @@ export default function App() {
         const resolvedPrincipal = await getPrincipal();
         if (disposed) return;
         setPrincipal(resolvedPrincipal);
-        const [loaded, loadedNotifications] = await Promise.all([
-          listConversations(),
+        setConversationDisplayLimit(CONVERSATION_PAGE_SIZE);
+        const [, loadedNotifications] = await Promise.all([
+          loadConversationList(CONVERSATION_PAGE_SIZE),
           notificationsFor(resolvedPrincipal),
         ]);
         if (disposed) return;
-        const sorted = newestFirst(loaded);
-        setConversations(sorted);
         setNotificationCenter(loadedNotifications);
-        await showPageGreeting(resolvedPrincipal, sorted, controller.signal);
+        await showPageGreeting(resolvedPrincipal, controller.signal);
       } catch {
         if (!disposed) {
           setLatestResponse(CONNECTION_ERROR);
@@ -465,7 +497,7 @@ export default function App() {
       controller.abort();
       activeRun.current?.abort();
     };
-  }, [showPageGreeting, showWelcomeMessage]);
+  }, [loadConversationList, showPageGreeting, showWelcomeMessage]);
 
   useEffect(() => {
     if (!isOpening) return;
@@ -736,7 +768,7 @@ export default function App() {
         }
       }
       try {
-        await loadConversationList();
+        await loadConversationList(conversationDisplayLimit);
       } catch {
         // The completed answer remains usable if refreshing navigation fails.
       }
@@ -887,8 +919,9 @@ export default function App() {
       const nextPrincipal = await login(username.trim(), accessCode);
       setPrincipal(nextPrincipal);
       setAccessCode("");
-      const [loaded, loadedNotifications] = await Promise.all([
-        loadConversationList(),
+      setConversationDisplayLimit(CONVERSATION_PAGE_SIZE);
+      const [, loadedNotifications] = await Promise.all([
+        loadConversationList(CONVERSATION_PAGE_SIZE),
         notificationsFor(nextPrincipal),
       ]);
       setNotificationCenter(loadedNotifications);
@@ -896,7 +929,7 @@ export default function App() {
       setMobileView("chat");
       setIsRunning(true);
       try {
-        await showPageGreeting(nextPrincipal, loaded);
+        await showPageGreeting(nextPrincipal);
       } catch {
         setLatestResponse(CONNECTION_ERROR);
         setIsPresentingWelcome(false);
@@ -922,7 +955,8 @@ export default function App() {
       setNotificationCenter(EMPTY_NOTIFICATION_CENTER);
       setNotificationHistoryExpanded(false);
       setMobileView("chat");
-      const loaded = await loadConversationList();
+      setConversationDisplayLimit(CONVERSATION_PAGE_SIZE);
+      const loaded = await loadConversationList(CONVERSATION_PAGE_SIZE);
       const newest = loaded[0];
       if (newest) {
         await showConversation(newest);
@@ -978,7 +1012,7 @@ export default function App() {
       await runAgentContinuation(selectedConversationId, event.id);
       await refreshNotificationCenter();
       try {
-        await loadConversationList();
+        await loadConversationList(conversationDisplayLimit);
       } catch {
         // The confirmed action remains authoritative if navigation refresh fails.
       }
@@ -1012,7 +1046,7 @@ export default function App() {
       await runAgentContinuation(selectedConversationId, event.id);
       await refreshNotificationCenter();
       try {
-        await loadConversationList();
+        await loadConversationList(conversationDisplayLimit);
       } catch {
         // The confirmed action remains authoritative if navigation refresh fails.
       }
@@ -1669,6 +1703,15 @@ export default function App() {
                   ))}
                 </ol>
               )}
+              {hasMoreConversations ? (
+                <Button
+                  className="conversation-load-more"
+                  disabled={isLoadingMoreConversations}
+                  onClick={() => void showMoreConversations()}
+                >
+                  {isLoadingMoreConversations ? "Loading" : "Show 5 more"}
+                </Button>
+              ) : null}
             </nav>
 
             <section className="account-section">

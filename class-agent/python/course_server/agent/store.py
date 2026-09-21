@@ -32,6 +32,10 @@ class ConversationStore(Protocol):
 
     async def list_conversations(self, principal: PrincipalContext) -> list[Conversation]: ...
 
+    async def find_pending_action_conversation(
+        self, principal: PrincipalContext
+    ) -> Conversation | None: ...
+
     async def append_events(self, conversation_id: UUID, events: list[Event]) -> None: ...
 
     async def list_events(self, conversation_id: UUID) -> list[Event]: ...
@@ -64,6 +68,14 @@ class InMemoryConversationStore:
             reverse=True,
         )
 
+    async def find_pending_action_conversation(
+        self, principal: PrincipalContext
+    ) -> Conversation | None:
+        for conversation in await self.list_conversations(principal):
+            if _has_pending_action(await self.list_events(conversation.id)):
+                return conversation
+        return None
+
     async def append_events(self, conversation_id: UUID, events: list[Event]) -> None:
         conversation = self.conversations.get(conversation_id)
         if conversation is None:
@@ -88,3 +100,33 @@ class InMemoryConversationStore:
             self.events[conversation_id],
             key=lambda event: (event.timestamp, str(event.id)),
         )
+
+
+def _has_pending_action(events: list[Event]) -> bool:
+    pending: set[tuple[str, str]] = set()
+    for event in events:
+        if event.type == "email.ta_question.confirmation_requested":
+            action_id = event.payload.get("question_id")
+            if isinstance(action_id, str):
+                pending.add(("ta_question", action_id))
+        elif event.type in {
+            "email.ta_question.queued",
+            "email.ta_question.cancelled",
+            "email.ta_question.created",
+            "email.ta_answer.received",
+        }:
+            action_id = event.payload.get("question_id")
+            if isinstance(action_id, str):
+                pending.discard(("ta_question", action_id))
+        elif event.type == "instructor.message.confirmation_requested":
+            action_id = event.payload.get("message_id")
+            if isinstance(action_id, str):
+                pending.add(("instructor_message", action_id))
+        elif event.type in {
+            "instructor.message.sent",
+            "instructor.message.cancelled",
+        }:
+            action_id = event.payload.get("message_id")
+            if isinstance(action_id, str):
+                pending.discard(("instructor_message", action_id))
+    return bool(pending)

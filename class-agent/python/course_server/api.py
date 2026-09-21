@@ -14,7 +14,7 @@ from typing import Annotated, Any, Literal, cast
 from uuid import UUID, uuid4
 
 from dotenv import load_dotenv
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
 from psycopg_pool import AsyncConnectionPool
 from pydantic import (
@@ -1337,10 +1337,33 @@ def create_app(
     async def list_conversations(
         request: Request,
         principal: Annotated[PrincipalContext, Depends(_require_principal)],
+        limit: Annotated[int | None, Query(ge=1, le=100)] = None,
+        offset: Annotated[int, Query(ge=0)] = 0,
     ) -> list[Conversation]:
         state = _get_app_state(request)
         assert state.services is not None
-        return await state.services.conversations.list_conversations(principal)
+        conversations = await state.services.conversations.list_conversations(principal)
+        if limit is None:
+            return conversations[offset:]
+        return conversations[offset : offset + limit]
+
+    @router.get(
+        "/conversations/pending-action",
+        response_model=ConversationDetailResponse | None,
+    )
+    async def get_pending_action_conversation(
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> ConversationDetailResponse | None:
+        state = _get_app_state(request)
+        assert state.services is not None
+        conversation = await state.services.conversations.find_pending_action_conversation(
+            principal
+        )
+        if conversation is None:
+            return None
+        events = await state.services.conversations.list_events(conversation.id)
+        return ConversationDetailResponse(conversation=conversation, events=events)
 
     @router.post(
         "/conversations",

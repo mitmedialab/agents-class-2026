@@ -24,7 +24,8 @@ GET  /api/v1/course/resources/asset?uri={resource_uri}&asset_id={asset_id}
 GET  /api/v1/instructor/applications/{application_id}/photo
 POST /api/v1/uploads?filename={filename}
 
-GET  /api/v1/conversations
+GET  /api/v1/conversations?limit={limit}&offset={offset}
+GET  /api/v1/conversations/pending-action
 POST /api/v1/conversations
 GET  /api/v1/conversations/{conversation_id}
 POST /api/v1/conversations/{conversation_id}/workspace/actions
@@ -101,6 +102,18 @@ context. Repeating the route for that conversation returns the existing greeting
 with unrelated prior events fails closed. No fabricated `user.message` is appended. Only after a
 successful result, the server acknowledges that user's current one-time Updates projection;
 Communications and Upcoming are not consumed by the greeting.
+
+The conversation list remains newest-first and accepts optional bounded `limit` and non-negative
+`offset` query parameters. Omitting them preserves the complete-list compatibility behavior. The
+web history drawer requests six summaries at first, displays five, and uses the extra result only to
+decide whether another five can be revealed. Conversation events are fetched only after a user
+opens that conversation.
+
+The pending-action route returns either the newest owned conversation containing an unresolved
+TA-question or instructor-message confirmation, including its canonical events, or `null`. It
+derives ownership from the active principal and matches each confirmation only with its own later
+Send or Cancel event. This lets page-load recovery preserve durable confirmation workflows without
+enumerating every conversation through the browser.
 
 The notification routes require the exact active `student` role. The list contains unread
 staff-approved FAQ publications; acknowledgement is idempotent and scoped to the authenticated

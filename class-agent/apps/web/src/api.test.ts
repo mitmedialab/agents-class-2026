@@ -4,11 +4,39 @@ import {
   confirmTAQuestion,
   continueAgentAfterEvent,
   getCourseResourceContent,
+  getPendingActionConversation,
+  listConversations,
   recordWorkspaceInteraction,
   streamAgentRun,
   uploadFile,
   type AgentStreamEvent,
 } from "./api.js";
+
+describe("conversation history", () => {
+  it("requests bounded pages and the dedicated pending-action lookup", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue([]),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await listConversations({ limit: 6, offset: 5 });
+    await getPendingActionConversation();
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/v1/conversations?limit=6&offset=5",
+      expect.objectContaining({ credentials: "include" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/v1/conversations/pending-action",
+      expect.objectContaining({ credentials: "include" }),
+    );
+    vi.unstubAllGlobals();
+  });
+});
 
 describe("message confirmation", () => {
   it("submits edited student question content only with Send", async () => {

@@ -23,6 +23,7 @@ vi.mock("./api.js", () => ({
   getCourseResourceContent: vi.fn(),
   getConversation: vi.fn(),
   getNotificationCenter: vi.fn(),
+  getPendingActionConversation: vi.fn(),
   getPrincipal: vi.fn(),
   listConversations: vi.fn(),
   login: vi.fn(),
@@ -98,6 +99,7 @@ beforeEach(() => {
     unread_count: 0,
     items: [],
   });
+  vi.mocked(api.getPendingActionConversation).mockResolvedValue(null);
   vi.mocked(api.generatePageGreeting).mockResolvedValue({
     output_text: "Hello. You have no new notifications or upcoming deadlines. We could review the schedule.",
     event_ids: [],
@@ -258,6 +260,31 @@ describe("Course Agent interface", () => {
     expect(workspaceShell).toContainElement(composerForm);
     fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
     expect(screen.getByRole("button", { name: /Week one/ })).toBeInTheDocument();
+  });
+
+  it("loads conversation history five at a time", async () => {
+    const history = Array.from({ length: 12 }, (_, index) => ({
+      ...conversation,
+      id: `20000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+      title: `Conversation ${index + 1}`,
+      updated_at: new Date(Date.parse(conversation.updated_at) - index * 60_000).toISOString(),
+    }));
+    vi.mocked(api.listConversations).mockImplementation(
+      async ({ limit, offset = 0 } = {}) => history.slice(offset, offset + (limit ?? 0)),
+    );
+
+    render(<App />);
+    await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
+
+    expect(screen.getAllByRole("button", { name: /Conversation \d/ })).toHaveLength(5);
+    fireEvent.click(screen.getByRole("button", { name: "Show 5 more" }));
+
+    await waitFor(() =>
+      expect(screen.getAllByRole("button", { name: /Conversation \d/ })).toHaveLength(10),
+    );
+    expect(api.listConversations).toHaveBeenLastCalledWith({ limit: 6, offset: 5 });
+    expect(screen.getByRole("button", { name: "Show 5 more" })).toBeInTheDocument();
   });
 
   it("keeps an expanding multiline composer in the workspace layout flow", () => {
@@ -503,12 +530,11 @@ describe("Course Agent interface", () => {
       type: "instructor.message.cancelled",
       payload: { message_id: messageId, status: "cancelled" },
     };
-    vi.mocked(api.getConversation)
-      .mockResolvedValueOnce(pendingDetail)
-      .mockResolvedValue({
-        conversation: instructorConversation,
-        events: [...pendingDetail.events, cancelledEvent],
-      });
+    vi.mocked(api.getConversation).mockResolvedValue({
+      conversation: instructorConversation,
+      events: [...pendingDetail.events, cancelledEvent],
+    });
+    vi.mocked(api.getPendingActionConversation).mockResolvedValue(pendingDetail);
     vi.mocked(api.confirmInstructorMessage).mockResolvedValue(cancelledEvent);
 
     render(<App />);
@@ -539,9 +565,11 @@ describe("Course Agent interface", () => {
         undefined,
       ),
     );
-    expect(
-      screen.queryByRole("region", { name: "Student message confirmation" }),
-    ).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("region", { name: "Student message confirmation" }),
+      ).not.toBeInTheDocument(),
+    );
   });
 
   it("shows student notifications automatically and removes the surface when caught up", async () => {

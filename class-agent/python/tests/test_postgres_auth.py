@@ -148,6 +148,34 @@ def test_postgres_auth_store_roundtrip() -> None:
                     conversation.id
                 ]
 
+                pending_question_id = uuid4()
+                pending_confirmation = Event(
+                    type="email.ta_question.confirmation_requested",
+                    actor="course-agent",
+                    principal_user_id=principal.user_id,
+                    conversation_id=conversation.id,
+                    payload={"question_id": str(pending_question_id)},
+                )
+                await conversations.append_events(conversation.id, [pending_confirmation])
+                pending_conversation = await conversations.find_pending_action_conversation(
+                    principal
+                )
+                assert pending_conversation is not None
+                assert pending_conversation.id == conversation.id
+                await conversations.append_events(
+                    conversation.id,
+                    [
+                        Event(
+                            type="email.ta_question.cancelled",
+                            actor="user",
+                            principal_user_id=principal.user_id,
+                            conversation_id=conversation.id,
+                            payload={"question_id": str(pending_question_id)},
+                        )
+                    ],
+                )
+                assert await conversations.find_pending_action_conversation(principal) is None
+
                 questions = PostgresTAQuestionStore(pool)
                 question = await questions.create_question(
                     student_user_id=issued.user.id,
