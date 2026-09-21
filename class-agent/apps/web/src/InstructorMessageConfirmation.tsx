@@ -118,11 +118,24 @@ export function InstructorMessageConfirmation({
               />
               <span>Public</span>
             </label>
+            <label>
+              <input
+                checked={publicationDecision === "silent_publish"}
+                disabled={busy}
+                name={`message-visibility-${confirmation.id}`}
+                onChange={() => setPublicationDecision("silent_publish")}
+                type="radio"
+                value="silent_publish"
+              />
+              <span>Silently push to FAQ</span>
+            </label>
           </div>
           <p className="message-visibility-help">
             {publicationDecision === "publish"
-              ? "Share the redacted question and answer with the course."
-              : "Send the answer only to this student."}
+              ? "Share the redacted question and answer with the course and notify students."
+              : publicationDecision === "silent_publish"
+                ? "Add the redacted question and answer to the FAQ without notifying students."
+                : "Send the answer only to this student."}
           </p>
         </fieldset>
       ) : null}

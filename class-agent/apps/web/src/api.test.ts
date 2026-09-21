@@ -74,6 +74,39 @@ describe("message confirmation", () => {
     );
     vi.unstubAllGlobals();
   });
+
+  it("submits silent FAQ publication as a bounded visibility decision", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({ type: "instructor.message.sent" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await confirmInstructorMessage(
+      "20000000-0000-4000-8000-000000000001",
+      "50000000-0000-4000-8000-000000000002",
+      "send",
+      {
+        subject: "Re: Model choice",
+        message: "A local model is fine.",
+        publicationDecision: "silent_publish",
+      },
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/conversations/20000000-0000-4000-8000-000000000001/instructor-messages/50000000-0000-4000-8000-000000000002/confirmation",
+      expect.objectContaining({
+        body: JSON.stringify({
+          action: "send",
+          subject: "Re: Model choice",
+          message: "A local model is fine.",
+          publication_decision: "silent_publish",
+        }),
+      }),
+    );
+    vi.unstubAllGlobals();
+  });
 });
 
 describe("API errors", () => {

@@ -7,7 +7,10 @@ export type InstructorMessageStatus =
   | "cancelled"
   | "error";
 
-export type InstructorMessagePublicationDecision = "publish" | "private";
+export type InstructorMessagePublicationDecision =
+  | "publish"
+  | "silent_publish"
+  | "private";
 
 export interface InstructorMessageRecipient {
   email?: string;
@@ -69,7 +72,9 @@ export function instructorMessageFromPayload(
   if (sourceQuestionId !== undefined || publicationDecision !== undefined) {
     if (
       typeof sourceQuestionId !== "string" ||
-      (publicationDecision !== "publish" && publicationDecision !== "private")
+      publicationDecision !== "publish" &&
+      publicationDecision !== "silent_publish" &&
+      publicationDecision !== "private"
     ) {
       return null;
     }

@@ -73,6 +73,7 @@ class FaqPublisher(Protocol):
         answer: str,
         published_by_user_id: UUID | None,
         published_at: datetime,
+        notify_students: bool = True,
     ) -> PublishedFaqEntry: ...
 
 
@@ -114,6 +115,7 @@ class InMemoryFaqStore:
         answer: str,
         published_by_user_id: UUID | None,
         published_at: datetime,
+        notify_students: bool = True,
     ) -> PublishedFaqEntry:
         existing = next(
             (
@@ -134,15 +136,16 @@ class InMemoryFaqStore:
             created_at=published_at,
             updated_at=published_at,
         )
-        notification = CourseNotification(
-            id=uuid4(),
-            faq_entry_id=entry.id,
-            question=entry.question,
-            answer=entry.answer,
-            published_at=published_at,
-        )
         self.entries[entry.id] = entry
-        self.notifications[notification.id] = notification
+        if notify_students:
+            notification = CourseNotification(
+                id=uuid4(),
+                faq_entry_id=entry.id,
+                question=entry.question,
+                answer=entry.answer,
+                published_at=published_at,
+            )
+            self.notifications[notification.id] = notification
         return entry
 
     async def list_active(self) -> list[PublishedFaqEntry]:
@@ -457,6 +460,7 @@ class CoordinatedFaqPublisher:
         answer: str,
         published_by_user_id: UUID | None,
         published_at: datetime,
+        notify_students: bool = True,
     ) -> PublishedFaqEntry:
         entry = await self._workflow.publish(
             source_question_id=source_question_id,
@@ -464,6 +468,7 @@ class CoordinatedFaqPublisher:
             answer=answer,
             published_by_user_id=published_by_user_id,
             published_at=published_at,
+            notify_students=notify_students,
         )
         return await self._knowledge.upsert(entry)
 
@@ -482,6 +487,7 @@ class PostgresFaqStore:
         answer: str,
         published_by_user_id: UUID | None,
         published_at: datetime,
+        notify_students: bool = True,
     ) -> PublishedFaqEntry:
         entry_id = uuid4()
         async with self._pool.connection() as connection, connection.transaction():
@@ -516,14 +522,15 @@ class PostgresFaqStore:
                 )
             ).fetchone()
             assert row is not None
-            await connection.execute(
-                """
-                INSERT INTO course_notifications (id, faq_entry_id, published_at)
-                VALUES (%s, %s, %s)
-                ON CONFLICT (faq_entry_id) DO NOTHING
-                """,
-                (uuid4(), row["id"], published_at),
-            )
+            if notify_students:
+                await connection.execute(
+                    """
+                    INSERT INTO course_notifications (id, faq_entry_id, published_at)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (faq_entry_id) DO NOTHING
+                    """,
+                    (uuid4(), row["id"], published_at),
+                )
         return PublishedFaqEntry.model_validate(row)
 
     async def list_active(self) -> list[PublishedFaqEntry]:

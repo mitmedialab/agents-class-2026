@@ -539,6 +539,7 @@ class MailWorker:
                 answer=answer_text,
                 published_by_user_id=published_by,
                 published_at=self._clock(),
+                notify_students=answer.publication_decision != "silent_publish",
             )
             await self._questions.mark_faq_candidate_published(
                 candidate.id,
@@ -705,9 +706,14 @@ def _student_answer_body(question: TAQuestion, answer: TAAnswer) -> str:
 
 
 def _staff_online_resolution_body(question: TAQuestion, answer: TAAnswer) -> str:
+    decision = (
+        "SILENT FAQ"
+        if answer.publication_decision == "silent_publish"
+        else answer.publication_decision.upper()
+    )
     return (
         "This student question was resolved in the Course Agent instructor interface.\n\n"
-        f"Decision:\n{answer.publication_decision.upper()}\n\n"
+        f"Decision:\n{decision}\n\n"
         f"Course staff answer:\n{answer.answer_text}\n\n"
         f"Reference: {question.public_question_code}."
     )

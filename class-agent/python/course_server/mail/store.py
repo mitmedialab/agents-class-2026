@@ -453,7 +453,7 @@ class InMemoryTAQuestionStore:
             received_at=message.received_at,
         )
         self.answers[answer.id] = answer
-        publish = publication == "publish"
+        publish = publication != "private"
         candidate = FaqReviewCandidate(
             id=uuid4(),
             question_id=question.id,
@@ -510,7 +510,7 @@ class InMemoryTAQuestionStore:
             received_at=processed_at,
         )
         self.answers[answer.id] = answer
-        publish = publication == "publish"
+        publish = publication != "private"
         candidate = FaqReviewCandidate(
             id=uuid4(),
             question_id=question.id,
@@ -1065,7 +1065,7 @@ class PostgresTAQuestionStore:
             answer_text=answer_text,
             received_at=message.received_at,
         )
-        publish = publication == "publish"
+        publish = publication != "private"
         candidate_status = "pending_publication" if publish else "declined"
         disposition = "answer_publish_requested" if publish else "answer_private"
         async with self._pool.connection() as connection, connection.transaction():
@@ -1161,7 +1161,7 @@ class PostgresTAQuestionStore:
             answer_text=answer_text,
             received_at=processed_at,
         )
-        candidate_status = "pending_publication" if publication == "publish" else "declined"
+        candidate_status = "pending_publication" if publication != "private" else "declined"
         async with self._pool.connection() as connection, connection.transaction():
             existing = await (
                 await connection.execute(

@@ -50,6 +50,17 @@ describe("instructor message events", () => {
       instructorMessageFromPayload({
         ...confirmationPayload,
         source_question_id: "50000000-0000-4000-8000-000000000001",
+        publication_decision: "silent_publish",
+        message: "A local model is fine.",
+      }),
+    ).toMatchObject({
+      message: "A local model is fine.",
+      publicationDecision: "silent_publish",
+    });
+    expect(
+      instructorMessageFromPayload({
+        ...confirmationPayload,
+        source_question_id: "50000000-0000-4000-8000-000000000001",
         publication_decision: "private",
         message: "A local model is fine.",
       }),

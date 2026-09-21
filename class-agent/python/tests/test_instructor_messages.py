@@ -391,6 +391,75 @@ def test_named_online_reply_can_be_edited_to_publish_and_resolves_question() -> 
     asyncio.run(scenario())
 
 
+def test_online_reply_can_request_silent_faq_publication() -> None:
+    async def scenario() -> None:
+        now = datetime(2026, 9, 15, 14, tzinfo=UTC)
+        auth = InMemoryAuthStore()
+        instructor = await create_principal(
+            auth,
+            username="prof",
+            display_name="Professor Example",
+            role="instructor",
+        )
+        student = await create_principal(
+            auth,
+            username="alice",
+            display_name="Alice Student",
+            role="student",
+        )
+        assert student.user_id is not None
+        questions = InMemoryTAQuestionStore()
+        question = await questions.create_question(
+            student_user_id=student.user_id,
+            conversation_id=uuid4(),
+            subject="Test message",
+            question_text="Can you respond?",
+            context_text=None,
+            created_at=now,
+        )
+        queued = await questions.transition_question(
+            question.id,
+            expected="pending_confirmation",
+            status="queued",
+            changed_at=now,
+        )
+        assert queued is not None
+        service = InstructorMessageService(
+            messages=InMemoryInstructorMessageStore(),
+            auth=auth,
+            questions=questions,
+            clock=lambda: now,
+        )
+        prepared = await service.prepare(
+            principal=instructor,
+            conversation_id=uuid4(),
+            draft=InstructorMessageDraft(
+                audience="specific_students",
+                recipients=[f"{PENDING_QUESTION_RECIPIENT_PREFIX}{question.id}"],
+                subject="Re: Test message",
+                message="Initial response",
+            ),
+        )
+
+        await service.confirm(
+            principal=instructor,
+            conversation_id=prepared.message.conversation_id,
+            message_id=prepared.message.id,
+            content=InstructorMessageContent(
+                subject="Re: Test message",
+                message="Useful FAQ answer.",
+                publication_decision="silent_publish",
+            ),
+        )
+
+        answer = next(iter(questions.answers.values()))
+        candidate = next(iter(questions.faq_candidates.values()))
+        assert answer.publication_decision == "silent_publish"
+        assert candidate.status == "pending_publication"
+
+    asyncio.run(scenario())
+
+
 def test_cancelled_instructor_message_is_never_delivered() -> None:
     async def scenario() -> None:
         auth = InMemoryAuthStore()

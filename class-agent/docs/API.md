@@ -59,8 +59,10 @@ be edited in full or cancelled and prepared again.
 
 The instructor-message confirmation route accepts only `send` or `cancel`. On `send`, the browser
 may submit the complete reviewed `subject` and `message` and a strict boolean `send_email`
-(default false, accepted only with the complete content on Send); a pending-question reply also submits the
-separate bounded `publication_decision` of `private` or `publish`. Partial edits, a standalone
+(default false, accepted only with the complete content on Send); a pending-question reply also
+submits the separate bounded `publication_decision` of `private`, `publish`, or `silent_publish`.
+A silent publication adds the redacted question and answer to shared FAQ knowledge without
+creating a course-wide notification. Partial edits, a standalone
 visibility value, and edits on `cancel` are rejected. It requires the active instructor who owns
 both the conversation and pending message.
 Recipients were already resolved

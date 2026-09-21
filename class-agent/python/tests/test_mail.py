@@ -829,6 +829,113 @@ def test_published_faq_is_immediately_readable_and_searchable_by_agent(
     asyncio.run(scenario())
 
 
+def test_silent_faq_publication_updates_knowledge_without_notification(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        now = datetime(2026, 9, 15, 15, tzinfo=UTC)
+        workflow_faqs = InMemoryFaqStore()
+        faq_knowledge = LocalFaqKnowledgeStore(tmp_path / "published-faq.json")
+        publisher = CoordinatedFaqPublisher(workflow_faqs, faq_knowledge)
+
+        published = await publisher.publish(
+            source_question_id=uuid4(),
+            question="May projects use local models?",
+            answer="Yes, if the setup is documented.",
+            published_by_user_id=None,
+            published_at=now,
+            notify_students=False,
+        )
+
+        assert [entry.id for entry in await workflow_faqs.list_active()] == [published.id]
+        assert [entry.id for entry in await faq_knowledge.list_active()] == [published.id]
+        assert await workflow_faqs.list_all() == []
+        assert await workflow_faqs.list_unread(uuid4()) == []
+
+    asyncio.run(scenario())
+
+
+def test_worker_honors_silent_online_publication_decision(tmp_path: Path) -> None:
+    async def scenario() -> None:
+        now = datetime(2026, 9, 15, 16, tzinfo=UTC)
+        auth = InMemoryAuthStore()
+        student = _user(role="student", email="alice@example.edu", now=now)
+        instructor = _user(role="instructor", email="instructor@example.edu", now=now)
+        await auth.create_user(student)
+        await auth.create_user(instructor)
+        conversations = InMemoryConversationStore()
+        conversation = Conversation(
+            user_id=student.id,
+            created_at=now,
+            updated_at=now,
+            title="Silent FAQ publication",
+        )
+        await conversations.create_conversation(conversation)
+        questions = InMemoryTAQuestionStore()
+        question = await questions.create_question(
+            student_user_id=student.id,
+            conversation_id=conversation.id,
+            subject="Repository",
+            question_text="Where is the repository?",
+            context_text=None,
+            created_at=now,
+        )
+        queued = await questions.transition_question(
+            question.id,
+            expected="pending_confirmation",
+            status="queued",
+            changed_at=now,
+        )
+        assert queued is not None
+        opened = await questions.mark_question_sent(
+            question.id,
+            SentMail(
+                provider_message_id="provider-question",
+                internet_message_id="<question@example.edu>",
+            ),
+            sent_at=now,
+        )
+        assert opened is not None
+        answer = await questions.record_online_answer(
+            opened,
+            instructor_message_id=uuid4(),
+            responder_email=str(instructor.email),
+            answer_text="Use the course repository linked from the syllabus.",
+            publication="silent_publish",
+            processed_at=now,
+        )
+        assert answer is not None
+        workflow_faqs = InMemoryFaqStore()
+        knowledge = LocalFaqKnowledgeStore(tmp_path / "published-faq.json")
+        mail = RecordingMailAdapter()
+        worker = MailWorker(
+            mail=mail,
+            questions=questions,
+            auth=auth,
+            conversations=conversations,
+            faqs=CoordinatedFaqPublisher(workflow_faqs, knowledge),
+            mailbox_key="course-agent@example.edu",
+            staff_recipient="course-staff@example.edu",
+            clock=lambda: now,
+        )
+
+        await worker.run_once()
+
+        assert [entry.answer for entry in await knowledge.list_active()] == [
+            "Use the course repository linked from the syllabus."
+        ]
+        assert await workflow_faqs.list_all() == []
+        assert len(mail.sent_replies) == 1
+        _, recipients, _, body, headers = mail.sent_replies[0]
+        assert tuple(str(recipient) for recipient in recipients) == ("course-staff@example.edu",)
+        assert "SILENT FAQ" in body
+        assert headers["X-Course-Agent-Resolution"] == "online"
+        candidate = next(iter(questions.faq_candidates.values()))
+        assert candidate.status == "published"
+
+    asyncio.run(scenario())
+
+
 def test_worker_rejects_reply_from_untrusted_sender() -> None:
     async def scenario() -> None:
         now = datetime(2026, 9, 4, 15, 0, tzinfo=UTC)

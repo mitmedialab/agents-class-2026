@@ -28,6 +28,7 @@ def test_migrations_are_discoverable_and_checksummed() -> None:
         "0012_online_question_answers",
         "0013_online_answer_retention",
         "0014_instructor_message_email",
+        "0015_silent_faq_publication",
     ]
     assert all(len(migration.checksum) == 64 for migration in migrations)
 
@@ -160,6 +161,13 @@ def test_online_answer_retention_does_not_depend_on_instructor_conversation() ->
     assert "instructor_messages_source_question_id_fkey" in sql
     assert "on delete cascade" in sql
     assert "drop constraint ta_answers_online_instructor_message_id_fkey" in sql
+
+
+def test_silent_faq_publication_extends_the_durable_decision() -> None:
+    sql = discover_migrations(MIGRATIONS_PATH)[14].sql.lower()
+
+    assert "ta_answers_publication_decision_check" in sql
+    assert "silent_publish" in sql
 
 
 def test_invalid_migration_filename_is_rejected(tmp_path: Path) -> None:

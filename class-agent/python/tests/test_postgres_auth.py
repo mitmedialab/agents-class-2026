@@ -69,6 +69,7 @@ def test_postgres_auth_store_roundtrip() -> None:
             "0012_online_question_answers",
             "0013_online_answer_retention",
             "0014_instructor_message_email",
+            "0015_silent_faq_publication",
         ]
         assert apply_migrations(scoped_url) == []
         assert index_resources(scoped_url) == [
@@ -231,6 +232,36 @@ def test_postgres_auth_store_roundtrip() -> None:
                     read_at=conversation.created_at,
                 )
                 assert await faqs.list_unread(issued.user.id) == []
+                silent_question = await questions.create_question(
+                    student_user_id=issued.user.id,
+                    conversation_id=conversation.id,
+                    subject="Repository",
+                    question_text="Where is the repository?",
+                    context_text=None,
+                    created_at=conversation.created_at,
+                )
+                assert (
+                    await questions.transition_question(
+                        silent_question.id,
+                        expected="pending_confirmation",
+                        status="queued",
+                        changed_at=conversation.created_at,
+                    )
+                    is not None
+                )
+                silent = await faqs.publish(
+                    source_question_id=silent_question.id,
+                    question="Where is the repository?",
+                    answer="Use the course repository linked from the syllabus.",
+                    published_by_user_id=instructor.user.id,
+                    published_at=conversation.created_at,
+                    notify_students=False,
+                )
+                assert {entry.id for entry in await faqs.list_active()} == {
+                    published.id,
+                    silent.id,
+                }
+                assert await faqs.list_unread(issued.user.id) == []
 
                 instructor_conversation = Conversation(user_id=instructor.user.id)
                 await conversations.create_conversation(instructor_conversation)
@@ -331,7 +362,7 @@ def test_postgres_auth_store_roundtrip() -> None:
                 SELECT count(*) FROM faq_entries
                 WHERE source_question_id IS NOT NULL AND active
                 """
-            ).fetchone() == (1,)
+            ).fetchone() == (2,)
 
     finally:
         with psycopg.connect(TEST_DATABASE_URL) as connection:

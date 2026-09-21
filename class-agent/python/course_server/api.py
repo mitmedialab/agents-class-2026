@@ -223,7 +223,7 @@ class InstructorMessageConfirmationRequest(ApiModel):
     action: Literal["send", "cancel"]
     subject: ConfirmationSubject | None = None
     message: ConfirmationMessage | None = None
-    publication_decision: Literal["publish", "private"] | None = None
+    publication_decision: Literal["publish", "silent_publish", "private"] | None = None
     send_email: StrictBool = False
 
     @model_validator(mode="after")

@@ -1994,13 +1994,20 @@ PRIVATE
 `PUBLISH` sends the answer to the student and approves the redacted question and answer for shared
 course knowledge. `PRIVATE` sends the answer only to the student.
 
+The instructor interface may additionally offer **Silently push to FAQ**. It sends the answer to
+the original student and approves the same redacted shared FAQ entry as `PUBLISH`, but deliberately
+does not create a course-wide notification. This is a deterministic platform decision stored with
+the answer; it is not inferred from answer prose.
+
 The platform:
 
 1. derives the candidate from the exact question and staff answer;
 2. excludes private conversation context and redacts the known student name and email;
-3. requires the decision on a standalone line immediately before or after the answer;
+3. requires an email decision on a standalone line immediately before or after the answer, or a
+   bounded platform control in the instructor interface;
 4. requires a reply from an authorized TA, instructor, or admin;
-5. inserts only a `PUBLISH` answer into the public FAQ.
+5. inserts only an explicitly authorized `PUBLISH` or silent-publication answer into the public
+   FAQ.
 
 Email receipt and decision state must be durable and idempotent. A missing or unrecognized decision
 leaves the question open for a corrected staff reply. No model output may publish directly.
@@ -2039,15 +2046,17 @@ course.search
 
 This allows the Course Agent to become more useful throughout the semester.
 
-Publishing also creates an unread course notification for every authenticated student. Read state
-is per user; the published FAQ remains global course knowledge after notifications are dismissed.
+Ordinary publishing also creates an unread course notification for every authenticated student.
+Silent FAQ publication omits that notification. Read state is per user; every published FAQ remains
+global course knowledge whether or not a notification was created or later dismissed.
 
 Keep staff-approved evolving FAQ knowledge in one versioned local JSON file at
-`var/course-knowledge/published-faq.json`. An authorized `PUBLISH` decision updates this file
-automatically and atomically. The Course Agent reads it only through `course://faq`; model-controlled
-input never receives or selects the backing path. The file contains no student identity, private
-context, staff identity, provider metadata, or notification-read state. PostgreSQL retains the
-workflow, idempotency, and notification bookkeeping needed to complete publication safely.
+`var/course-knowledge/published-faq.json`. An authorized ordinary or silent publication decision
+updates this file automatically and atomically. The Course Agent reads it only through
+`course://faq`; model-controlled input never receives or selects the backing path. The file contains
+no student identity, private context, staff identity, provider metadata, or notification-read
+state. PostgreSQL retains the workflow, idempotency, and notification bookkeeping needed to
+complete publication safely.
 
 ---
 

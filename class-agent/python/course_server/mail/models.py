@@ -25,7 +25,7 @@ FaqReviewStatus = Literal[
     "published",
     "declined",
 ]
-PublicationDecision = Literal["publish", "private"]
+PublicationDecision = Literal["publish", "silent_publish", "private"]
 AnswerSource = Literal["email", "online"]
 NonBlank = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 QuestionSubject = Annotated[

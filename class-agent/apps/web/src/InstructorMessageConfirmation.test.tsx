@@ -82,7 +82,9 @@ describe("InstructorMessageConfirmation", () => {
     expect(screen.getByRole("radio", { name: "Private" })).toBeChecked();
     fireEvent.click(screen.getByRole("radio", { name: "Public" }));
     expect(
-      screen.getByText("Share the redacted question and answer with the course."),
+      screen.getByText(
+        "Share the redacted question and answer with the course and notify students.",
+      ),
     ).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
@@ -90,6 +92,39 @@ describe("InstructorMessageConfirmation", () => {
       subject: "Re: Model choice",
       message: "A local model is fine.",
       publicationDecision: "publish",
+    });
+  });
+
+  it("can publish a question reply to the FAQ without notifying students", () => {
+    const onAction = vi.fn();
+    render(
+      <InstructorMessageConfirmation
+        confirmation={{
+          id: "30000000-0000-4000-8000-000000000003",
+          audience: "specific_students",
+          recipients: [{ username: "alice", display_name: "Alice Example" }],
+          recipientCount: 1,
+          subject: "Re: Model choice",
+          message: "A local model is fine.",
+          publicationDecision: "private",
+          status: "pending_confirmation",
+        }}
+        onAction={onAction}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("radio", { name: "Silently push to FAQ" }));
+    expect(
+      screen.getByText(
+        "Add the redacted question and answer to the FAQ without notifying students.",
+      ),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(onAction).toHaveBeenCalledWith("send", {
+      subject: "Re: Model choice",
+      message: "A local model is fine.",
+      publicationDecision: "silent_publish",
     });
   });
 });

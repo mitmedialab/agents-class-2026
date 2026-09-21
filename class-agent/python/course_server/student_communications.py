@@ -41,7 +41,7 @@ class StudentCommunication(BaseModel):
     answer: str | None = Field(default=None, min_length=1, max_length=10_000)
     message: str | None = Field(default=None, min_length=1, max_length=10_000)
     reporter_visibility: Literal["named", "anonymous"] | None = None
-    publication_decision: Literal["publish", "private"] | None = None
+    publication_decision: Literal["publish", "silent_publish", "private"] | None = None
     sender_first_name: str | None = Field(default=None, min_length=1, max_length=200)
     created_at: AwareDatetime
     responded_at: AwareDatetime | None = None

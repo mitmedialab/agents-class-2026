@@ -85,9 +85,11 @@ not restrictions on the instructor's later edits. It also shows the resolved,
 read-only recipient snapshot in the existing preview layout; a response prepared from a pending
 question uses a trusted server-side reply reference instead of making the agent guess the student.
 Anonymous questions display an anonymous recipient label while retaining private delivery to the
-stored owner. A pending-question reply presents **Private** and **Public** as a separate visibility
-choice beside the editable answer; moderation commands are not part of the displayed or submitted
-answer body. Only the answer content is shown back to the student. The composer pauses until Send
+stored owner. A pending-question reply presents **Private**, **Public**, and **Silently push to
+FAQ** as separate visibility choices beside the editable answer. Public creates the shared FAQ and
+notifies students; silent publication creates the same redacted shared FAQ without a course-wide
+notification. Moderation commands are not part of the displayed or submitted answer body. Only the
+answer content is shown back to the student. The composer pauses until Send
 or Cancel. The browser cannot supply
 identity, role, or additional
 recipients. A confirmed message then appears only in each addressed student's Communications stack

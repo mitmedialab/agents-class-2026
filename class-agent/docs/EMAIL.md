@@ -216,10 +216,12 @@ The worker also atomically adds the public question and answer to the local JSON
 `PUBLISHED_FAQ_PATH`; the Course Agent reads that file through `course://faq`. No private email
 workflow fields are written to it.
 
-The online instructor confirmation uses the same two decisions through a separate visibility
-control, while the answer remains command-free. Only the answer content is shown to the student. Online
-answers replace the pending question in the student's Communications stack; they are not also
-projected as a duplicate direct instructor message.
+The online instructor confirmation also offers **Silently push to FAQ** through its separate
+visibility control. It publishes the same redacted shared FAQ knowledge as `PUBLISH` but does not
+create a course-wide notification. Email replies continue to use the two explicit decisions
+`PUBLISH` and `PRIVATE`. The online answer remains command-free, and only its content is shown to
+the student. Online answers replace the pending question in the student's Communications stack;
+they are not also projected as a duplicate direct instructor message.
 
 Students can select **Hide my name from course staff** before sending. The platform still retains
 the authenticated owner so it can route the private answer; the outgoing staff message substitutes
