@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 
 export interface BrowserViewerProps {
   imageUrl: string;
+  liveFrame?: { imageUrl: string; width: number; height: number; scrollY: number };
+  controlsEnabled?: boolean;
   title: string;
   url: string;
   viewportWidth?: number;
@@ -14,6 +16,8 @@ export interface BrowserViewerProps {
 
 export function BrowserViewer({
   imageUrl,
+  liveFrame,
+  controlsEnabled = true,
   title,
   url,
   viewportWidth = 1280,
@@ -28,6 +32,9 @@ export function BrowserViewer({
   const [busy, setBusy] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
+  const live = liveFrame !== undefined;
+  const pendingScroll = useRef(0);
+  const scrolling = useRef(false);
   const resizeTimer = useRef<number | null>(null);
   const lastRequestedSize = useRef<string | null>(null);
   let hostname = url;
@@ -38,14 +45,14 @@ export function BrowserViewer({
   }
 
   useEffect(() => {
-    setLoading(true);
+    setLoading(!live);
     setFailed(false);
-  }, [imageUrl]);
+  }, [imageUrl, live]);
 
   function focusRemotePosition(behavior: ScrollBehavior) {
     const canvas = canvasRef.current;
     const image = imageRef.current;
-    if (!canvas || !image || !image.complete || typeof canvas.scrollTo !== "function") return;
+    if (live || !canvas || !image || !image.complete || typeof canvas.scrollTo !== "function") return;
     const sourceWidth = image.naturalWidth || viewportWidth;
     const scale = sourceWidth > 0 ? image.clientWidth / sourceWidth : 1;
     canvas.scrollTo({ top: focusScrollY * scale, behavior });
@@ -58,7 +65,7 @@ export function BrowserViewer({
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !onResize || typeof ResizeObserver === "undefined") return;
+    if (!controlsEnabled || !canvas || !onResize || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(([entry]) => {
       if (!entry) return;
       const width = Math.round(entry.contentRect.width);
@@ -80,30 +87,66 @@ export function BrowserViewer({
       observer.disconnect();
       if (resizeTimer.current !== null) window.clearTimeout(resizeTimer.current);
     };
-  }, [onResize, viewportHeight, viewportWidth]);
+  }, [controlsEnabled, onResize, viewportHeight, viewportWidth]);
 
   async function scroll(deltaY: number) {
+    if (!controlsEnabled) return;
     const canvas = canvasRef.current;
-    if (!failed && canvas && typeof canvas.scrollBy === "function") {
+    if (!live && !failed && canvas && typeof canvas.scrollBy === "function") {
       canvas.scrollBy({ top: deltaY, behavior: "smooth" });
       return;
     }
-    if (!onScroll || busy) return;
+    if (!onScroll) return;
+    pendingScroll.current = Math.max(-1600, Math.min(1600, pendingScroll.current + deltaY));
+    if (scrolling.current) return;
+    scrolling.current = true;
     setBusy(true);
     try {
-      await onScroll(deltaY);
+      while (pendingScroll.current !== 0) {
+        const delta = pendingScroll.current;
+        pendingScroll.current = 0;
+        await onScroll(delta);
+      }
     } finally {
+      scrolling.current = false;
       setBusy(false);
     }
   }
 
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!controlsEnabled || !canvas || !live) return;
+    const wheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? viewportHeight : 1;
+      void scroll(Math.round(event.deltaY * unit));
+    };
+    let touchY: number | null = null;
+    const start = (event: TouchEvent) => { touchY = event.touches[0]?.clientY ?? null; };
+    const move = (event: TouchEvent) => {
+      const y = event.touches[0]?.clientY;
+      if (touchY === null || y === undefined) return;
+      event.preventDefault();
+      void scroll(Math.round(touchY - y));
+      touchY = y;
+    };
+    canvas.addEventListener("wheel", wheel, { passive: false });
+    canvas.addEventListener("touchstart", start, { passive: true });
+    canvas.addEventListener("touchmove", move, { passive: false });
+    return () => {
+      canvas.removeEventListener("wheel", wheel);
+      canvas.removeEventListener("touchstart", start);
+      canvas.removeEventListener("touchmove", move);
+    };
+  }, [controlsEnabled, live, onScroll, viewportHeight]);
+
   async function activate(event: React.MouseEvent<HTMLImageElement>) {
-    if (!onActivate || busy || failed || loading) return;
+    if (!controlsEnabled || !onActivate || busy || failed || loading) return;
     const image = event.currentTarget;
     const bounds = image.getBoundingClientRect();
     if (bounds.width <= 0 || bounds.height <= 0) return;
-    const sourceWidth = image.naturalWidth || viewportWidth;
-    const sourceHeight = image.naturalHeight || viewportHeight;
+    const sourceWidth = liveFrame?.width ?? (image.naturalWidth || viewportWidth);
+    const sourceHeight = liveFrame?.height ?? (image.naturalHeight || viewportHeight);
     const x = Math.max(
       0,
       Math.min(sourceWidth - 1, Math.round(((event.clientX - bounds.left) / bounds.width) * sourceWidth)),
@@ -114,7 +157,7 @@ export function BrowserViewer({
     );
     setBusy(true);
     try {
-      await onActivate(x, y);
+      await onActivate(x, y + (liveFrame?.scrollY ?? 0));
     } finally {
       setBusy(false);
     }
@@ -130,7 +173,7 @@ export function BrowserViewer({
         <div className="ca-browser-actions">
           <button
             aria-label="Scroll page up"
-            disabled={busy || (failed && !onScroll)}
+            disabled={!controlsEnabled || busy || (failed && !onScroll)}
             onClick={() => void scroll(-640)}
             type="button"
           >
@@ -138,7 +181,7 @@ export function BrowserViewer({
           </button>
           <button
             aria-label="Scroll page down"
-            disabled={busy || (failed && !onScroll)}
+            disabled={!controlsEnabled || busy || (failed && !onScroll)}
             onClick={() => void scroll(640)}
             type="button"
           >
@@ -152,6 +195,7 @@ export function BrowserViewer({
       <div
         aria-label="Scrollable remote browser image"
         className="ca-browser-canvas"
+        data-live={live ? "true" : undefined}
         ref={canvasRef}
         onKeyDown={(event) => {
           if (event.key === "ArrowDown" || event.key === "PageDown") {
@@ -186,12 +230,12 @@ export function BrowserViewer({
             }}
             onClick={(event) => void activate(event)}
             ref={imageRef}
-            src={imageUrl}
+            src={liveFrame?.imageUrl ?? imageUrl}
           />
         )}
       </div>
       <p className="ca-browser-status">
-        Isolated session · click links and controls directly · page state is shared with the agent
+        {live ? "Live Chromium stream" : "Browser snapshot"} · click links and controls directly · page state is shared with the agent
       </p>
     </section>
   );

@@ -184,7 +184,8 @@ browser extension's semantic DOM tools in Phase 14, or an explicit cooperative-p
 `postMessage` protocol; the host does not weaken the iframe sandbox to simulate it.
 
 `browser-viewer` is the preferred visual surface when a public site blocks embedding.
-It displays an authenticated screenshot from an isolated server-side browser session,
+It displays an authenticated live viewport stream from an isolated server-side browser session
+(with a labeled snapshot fallback),
 so Google, the Media Lab, and similarly configured sites do not need to consent to being
 framed. Its session ID is issued by platform code and scoped to one principal and
 conversation. The agent can navigate, scroll, and highlight visible text through the

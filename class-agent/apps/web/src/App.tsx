@@ -1551,6 +1551,7 @@ export default function App() {
         </section>
         {workspaceState.panels.length > 0 ? (
           <Workspace
+            browserControlsReady={!isRunning}
             conversationId={selectedConversationId!}
             onBrowserActivate={handleBrowserActivate}
             onBrowserResize={handleBrowserResize}

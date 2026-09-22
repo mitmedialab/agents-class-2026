@@ -9,7 +9,7 @@ import threading
 from collections.abc import Coroutine
 from concurrent.futures import Future
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, TypeVar
@@ -46,6 +46,7 @@ from .models import (
     BrowserSnapshot,
     BrowserUnavailable,
 )
+from .stream import BrowserFrame, ViewportStream
 
 _DEFAULT_CHROME_PATH = Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
 _ALLOWED_NON_NETWORK_SCHEMES = frozenset({"about", "blob", "data"})
@@ -62,6 +63,7 @@ class _ManagedSession:
     state: BrowserPage
     png: bytes
     operation_lock: asyncio.Lock
+    stream: ViewportStream = field(default_factory=ViewportStream)
 
 
 @dataclass
@@ -166,6 +168,7 @@ class PlaywrightBrowserSessionService:
         self._sessions.clear()
         self._previews.clear()
         for session in sessions:
+            await session.stream.close()
             await session.context.close()
         if self._browser is not None:
             await self._browser.close()
@@ -342,22 +345,33 @@ class PlaywrightBrowserSessionService:
         y: int,
     ) -> BrowserPage:
         session = await self._require(principal, conversation_id, session_id)
-        if not 0 <= x < session.state.viewport_width or not 0 <= y < session.state.document_height:
-            raise BrowserNavigationError("Click coordinates are outside the captured page.")
         async with session.operation_lock:
             page = session.page
-            target_scroll = max(
-                0,
-                min(
-                    y - session.state.viewport_height // 2,
-                    max(0, session.state.document_height - session.state.viewport_height),
-                ),
+            document_height = int(
+                await page.evaluate(
+                    "() => Math.max(document.body.scrollHeight, "
+                    "document.documentElement.scrollHeight)"
+                )
             )
-            await page.evaluate("scrollY => window.scrollTo(0, scrollY)", target_scroll)
-            await page.wait_for_timeout(100)
+            if not 0 <= x < session.state.viewport_width or not 0 <= y < document_height:
+                raise BrowserNavigationError("Click coordinates are outside the page.")
             actual_scroll = int(
                 await page.evaluate("() => Math.max(0, Math.round(window.scrollY))")
             )
+            # Live frames already show the viewport: do not recenter before clicking it.
+            if not session.stream.active:
+                target_scroll = max(
+                    0,
+                    min(
+                        y - session.state.viewport_height // 2,
+                        max(0, document_height - session.state.viewport_height),
+                    ),
+                )
+                await page.evaluate("scrollY => window.scrollTo(0, scrollY)", target_scroll)
+                await page.wait_for_timeout(100)
+                actual_scroll = int(
+                    await page.evaluate("() => Math.max(0, Math.round(window.scrollY))")
+                )
             viewport_y = y - actual_scroll
             if not 0 <= viewport_y < session.state.viewport_height:
                 raise BrowserNavigationError("The selected point could not be brought into view.")
@@ -376,6 +390,8 @@ class PlaywrightBrowserSessionService:
                         await target.wait_for_load_state("domcontentloaded", timeout=3_000)
                     await validate_public_https_url(target.url)
                     session.page = target
+                    if session.stream.active:
+                        await session.stream.attach(target)
                     await page.close()
                 else:
                     with suppress(PlaywrightTimeoutError):
@@ -442,6 +458,47 @@ class PlaywrightBrowserSessionService:
                 )
             return await self._refresh(session_id, session), count
 
+    async def subscribe(
+        self,
+        *,
+        principal: PrincipalContext,
+        conversation_id: UUID,
+        session_id: UUID,
+    ) -> UUID:
+        session = await self._require(principal, conversation_id, session_id)
+        async with session.operation_lock:
+            subscription = session.stream.subscribe()
+            try:
+                if not session.stream.active:
+                    await session.stream.attach(session.page)
+            except PlaywrightError as error:
+                await session.stream.unsubscribe(subscription)
+                raise BrowserUnavailable("The browser stream is unavailable.") from error
+            return subscription
+
+    async def next_frame(
+        self,
+        *,
+        principal: PrincipalContext,
+        conversation_id: UUID,
+        session_id: UUID,
+        subscription_id: UUID,
+    ) -> BrowserFrame | None:
+        session = await self._require(principal, conversation_id, session_id)
+        return await session.stream.next_frame(subscription_id)
+
+    async def unsubscribe(
+        self,
+        *,
+        principal: PrincipalContext,
+        conversation_id: UUID,
+        session_id: UUID,
+        subscription_id: UUID,
+    ) -> None:
+        session = await self._require(principal, conversation_id, session_id)
+        async with session.operation_lock:
+            await session.stream.unsubscribe(subscription_id)
+
     async def snapshot(
         self,
         *,
@@ -462,6 +519,7 @@ class PlaywrightBrowserSessionService:
         session = await self._require(principal, conversation_id, session_id)
         self._sessions.pop(session_id, None)
         async with session.operation_lock:
+            await session.stream.close()
             await session.context.close()
 
     async def _route_public_request(self, route: Route) -> None:
@@ -621,6 +679,7 @@ class PlaywrightBrowserSessionService:
             for preview_id in expired_previews:
                 self._previews.pop(preview_id, None)
         for session in sessions:
+            await session.stream.close()
             await session.context.close()
 
     def _prune_previews_locked(self, principal_session_id: UUID) -> None:
@@ -870,6 +929,55 @@ class ThreadedPlaywrightBrowserSessionService:
                 conversation_id=conversation_id,
                 session_id=session_id,
                 text=text,
+            )
+        )
+
+    async def subscribe(
+        self,
+        *,
+        principal: PrincipalContext,
+        conversation_id: UUID,
+        session_id: UUID,
+    ) -> UUID:
+        return await self._call(
+            self._require_service().subscribe(
+                principal=principal,
+                conversation_id=conversation_id,
+                session_id=session_id,
+            )
+        )
+
+    async def next_frame(
+        self,
+        *,
+        principal: PrincipalContext,
+        conversation_id: UUID,
+        session_id: UUID,
+        subscription_id: UUID,
+    ) -> BrowserFrame | None:
+        return await self._call(
+            self._require_service().next_frame(
+                principal=principal,
+                conversation_id=conversation_id,
+                session_id=session_id,
+                subscription_id=subscription_id,
+            )
+        )
+
+    async def unsubscribe(
+        self,
+        *,
+        principal: PrincipalContext,
+        conversation_id: UUID,
+        session_id: UUID,
+        subscription_id: UUID,
+    ) -> None:
+        await self._call(
+            self._require_service().unsubscribe(
+                principal=principal,
+                conversation_id=conversation_id,
+                session_id=session_id,
+                subscription_id=subscription_id,
             )
         )
 

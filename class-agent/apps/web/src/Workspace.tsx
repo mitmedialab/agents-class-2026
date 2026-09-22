@@ -1,5 +1,4 @@
 import {
-  BrowserViewer,
   Calendar,
   DocumentViewer,
   DraftDocument,
@@ -22,13 +21,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   applicantPhotoUrl,
   browserSnapshotUrl,
+  browserStreamUrl,
   browserPreviewSnapshotUrl,
   courseResourceAssetUrl,
   getCourseResourceContent,
   type CourseResourceContent,
 } from "./api.js";
 
+import { StreamingBrowserViewer } from "./StreamingBrowserViewer.js";
+
 interface WorkspaceProps {
+  browserControlsReady?: boolean;
   conversationId: string;
   state: WorkspaceState;
   onPanelAction: (action: "focus" | "close", panelId: string) => Promise<void>;
@@ -208,6 +211,7 @@ function pageCardItems(
 }
 
 function ResourcePanel({
+  browserControlsReady,
   conversationId,
   panel,
   onBrowserActivate,
@@ -216,6 +220,7 @@ function ResourcePanel({
   onInteraction,
   onSubmitApplication,
 }: {
+  browserControlsReady: boolean;
   conversationId: string;
   panel: WorkspacePanel;
   onBrowserActivate: (
@@ -351,7 +356,9 @@ function ResourcePanel({
       return <p className="workspace-panel-message">The browser session is invalid.</p>;
     }
     return (
-      <BrowserViewer
+      <StreamingBrowserViewer
+        controlsEnabled={browserControlsReady}
+        streamUrl={browserStreamUrl(conversationId, sessionId)}
         imageUrl={browserSnapshotUrl(conversationId, sessionId, revision)}
         onActivate={(x, y) => onBrowserActivate(panel.id, sessionId, x, y)}
         onScroll={(deltaY) => onBrowserScroll(panel.id, sessionId, deltaY)}
@@ -538,6 +545,7 @@ function ResourcePanel({
 }
 
 export function Workspace({
+  browserControlsReady = true,
   conversationId,
   state,
   onPanelAction,
@@ -603,6 +611,7 @@ export function Workspace({
       )}
       <div className="workspace-panel" role="tabpanel">
         <ResourcePanel
+          browserControlsReady={browserControlsReady}
           conversationId={conversationId}
           onBrowserActivate={onBrowserActivate}
           onBrowserResize={onBrowserResize}

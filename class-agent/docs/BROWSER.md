@@ -9,7 +9,7 @@ Course Agent → browser.* tool → BrowserSessionService
                                       ↓
                               Playwright / Chromium
                                       ↓
-                         authenticated PNG snapshot
+                   authenticated live viewport stream
                                       ↓
                             native browser-viewer
 ```
@@ -32,12 +32,22 @@ without changing tool IDs, workspace events, or the frontend component.
 - The user can scroll with the mouse wheel over the image, the keyboard, or the native
   workspace toolbar.
 
-The renderer uses a width-filling full-page capture inside a native overflow container.
-Mouse-wheel and trackpad motion therefore scroll locally at browser-frame rate rather
-than requesting a new remote screenshot for every delta. A `ResizeObserver` reports the
-actual canvas dimensions through the authenticated resize endpoint, and Chromium adopts
-that viewport so responsive layouts match the workspace instead of a fixed 1280×800
-surface. Captures are capped at 16,000 CSS pixels of document height.
+The browser panel subscribes to a same-origin, authenticated SSE endpoint that carries Chromium
+screencast JPEG frames. CSS, scripts and animations execute in the isolated browser, without
+iframe sandbox-origin changes. One screencast serves at most two viewers per browser session;
+each viewer retains only its latest pending frame. Acknowledgements throttle production near
+20 fps. Closing the last viewer stops the screencast, and closing or expiring the browser session
+releases it. Streams reconnect every minute to revalidate HTTP authentication and conversation
+ownership. Frame bytes are ephemeral and never workspace events.
+
+The viewer forwards wheel, touch scrolling and toolbar controls to the existing authorized scroll
+endpoint. Clicks use the displayed frame's viewport dimensions and scroll offset. These controls
+still persist canonical URL/title/panel updates, while frame arrival itself does not. The viewport
+resizes to the panel. This is visual streaming, without audio, text selection, keyboard typing,
+or new form/login capabilities. It retains the existing 16,000-pixel document click bound.
+
+When streaming is unavailable, the panel explicitly labels its snapshot fallback. That fallback
+uses a full-page PNG and local scrolling as before; comparison previews remain static.
 
 Follow-up control tools do not accept a model-provided session ID. Platform code resolves
 the focused browser panel from trusted workspace state. A redundant `browser.open` reuses
@@ -63,7 +73,7 @@ candidate's external HTTPS link.
 ## Isolation and capacity
 
 Every remote-browser session belongs to the trusted `PrincipalContext.session_id` and
-one conversation. The screenshot and scroll routes validate both before accessing the
+one conversation. The stream, screenshot and scroll routes validate both before accessing the
 session. Browser contexts do not share cookies, storage, cache state, or service workers.
 Sessions are ephemeral and expire after 15 minutes by default.
 
@@ -92,7 +102,7 @@ rejected. Redirect targets and browser subrequests are checked again. This is a 
 SSRF defense for the initial deployment; production egress firewall rules should provide
 an additional boundary.
 
-Screenshots and detailed browser state remain in memory and are returned with
+Frames, screenshots and detailed browser state remain in memory and are returned with
 `Cache-Control: private, no-store`. They are not course resources and are not written to
 ordinary logs or canonical event payloads. Workspace history stores the URL, title,
 opaque session ID, dimensions, and revision. Page text is returned to the agent only as
@@ -122,3 +132,15 @@ It does not implement the Phase 14 extension, arbitrary computer use, or agent-d
 browser actions.
 The MCP-aligned tool boundary, registered component protocol, and application-owned
 adapter preserve the intended later architecture.
+
+## Deployment and compatibility
+
+The stream route is `GET /api/v1/conversations/{conversation_id}/browser/{session_id}/stream`.
+It uses existing session cookies and checks both conversation ownership and browser-session ownership.
+Responses use `Cache-Control: private, no-store` and `X-Accel-Buffering: no`. The existing Nginx
+`/api/` location already disables buffering and permits a 300-second response; no iframe CSP
+exception or public Chromium debugging port is needed. Chromium and its sandbox must be available,
+and the API needs restarting after this change. The existing single-controller deployment applies.
+
+This is an additive, ephemeral HTTP transport. No versioned workspace props, schemas, core contracts,
+or persisted records change; no migration is required. Snapshot endpoints remain compatible.
