@@ -1144,6 +1144,16 @@
   width: 100%;
 }
 
+.ca-browser-canvas[data-live="true"] {
+  overflow: hidden;
+  touch-action: none;
+}
+
+.ca-browser-canvas[data-live="true"] img {
+  height: auto;
+  min-height: 0;
+}
+
 .ca-browser-canvas img[data-interactive="true"] {
   cursor: pointer;
 }

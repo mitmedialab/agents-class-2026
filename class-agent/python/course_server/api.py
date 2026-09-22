@@ -82,6 +82,8 @@ from course_server.browser import (
     BrowserUnavailable,
     ThreadedPlaywrightBrowserSessionService,
 )
+from course_server.browser.stream import BrowserStreamService
+from course_server.browser.stream_response import browser_stream_response
 from course_server.browser.tools import browser_page_props
 from course_server.config import AgentSettings
 from course_server.faq import (
@@ -1845,6 +1847,36 @@ def create_app(
             )
         await state.services.conversations.append_events(conversation_id, persisted_events)
         return persisted_events[-1] if payload.action == "draft.change" else event
+
+    @router.get(
+        "/conversations/{conversation_id}/browser/{session_id}/stream",
+        response_model=None,
+    )
+    async def browser_stream(
+        conversation_id: UUID,
+        session_id: UUID,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> Response:
+        state = _get_app_state(request)
+        await _require_owned_conversation(
+            state=state,
+            principal=principal,
+            conversation_id=conversation_id,
+        )
+        assert state.services is not None
+        browser = state.services.browser
+        if not isinstance(browser, BrowserStreamService):
+            raise HTTPException(status_code=503, detail="browser streaming unavailable")
+        try:
+            return await browser_stream_response(
+                browser,
+                principal=principal,
+                conversation_id=conversation_id,
+                session_id=session_id,
+            )
+        except BrowserError as error:
+            raise _browser_http_error(error) from error
 
     @router.get(
         "/conversations/{conversation_id}/browser/{session_id}/snapshot",

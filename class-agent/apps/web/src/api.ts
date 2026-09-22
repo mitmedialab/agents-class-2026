@@ -430,6 +430,10 @@ export function recordWorkspaceInteraction(
   });
 }
 
+export function browserStreamUrl(conversationId: Uuid, sessionId: Uuid): string {
+  return `${API_BASE_URL}/conversations/${conversationId}/browser/${sessionId}/stream`;
+}
+
 export function browserSnapshotUrl(
   conversationId: Uuid,
   sessionId: Uuid,

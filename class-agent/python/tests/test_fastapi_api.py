@@ -2193,3 +2193,70 @@ def test_openapi_documents_only_versioned_routes() -> None:
     assert f"{API_PREFIX}/auth/login" in paths
     assert f"{API_PREFIX}/conversations/{{conversation_id}}/greeting" in paths
     assert "/auth/login" not in paths
+
+
+def test_browser_stream_is_private_scoped_and_releases_subscription() -> None:
+    from course_server.browser.stream import BrowserFrame
+
+    class StreamingBrowser(SnapshotBrowserService):
+        sent = False
+        released = False
+
+        async def subscribe(
+            self,
+            *,
+            principal: PrincipalContext,
+            conversation_id: UUID,
+            session_id: UUID,
+        ) -> UUID:
+            await self.snapshot(
+                principal=principal, conversation_id=conversation_id, session_id=session_id
+            )
+            return uuid4()
+
+        async def next_frame(
+            self,
+            *,
+            principal: PrincipalContext,
+            conversation_id: UUID,
+            session_id: UUID,
+            subscription_id: UUID,
+        ) -> BrowserFrame | None:
+            if self.sent:
+                raise BrowserSessionNotFound("closed")
+            self.sent = True
+            return BrowserFrame(jpeg="YWJj", width=1280, height=800, scroll_y=250)
+
+        async def unsubscribe(
+            self,
+            *,
+            principal: PrincipalContext,
+            conversation_id: UUID,
+            session_id: UUID,
+            subscription_id: UUID,
+        ) -> None:
+            self.released = True
+
+    browser = StreamingBrowser()
+    client, _, _ = _build_client(browser=browser)
+    principal = PrincipalContext.model_validate(client.get("/auth/me").json())
+    conversation_id = _create_conversation(client, title="Stream")
+    other_id = _create_conversation(client, title="Other")
+    page = asyncio.run(
+        browser.open(
+            principal=principal, conversation_id=UUID(conversation_id), url="https://example.com/"
+        )
+    )
+    path = f"/conversations/{conversation_id}/browser/{page.session_id}/stream"
+    assert (
+        client.get(f"/conversations/{other_id}/browser/{page.session_id}/stream").status_code == 404
+    )
+    other = TestClient(client.app, base_url="https://testserver")
+    assert other.get(path).status_code == 404
+    response = client.get(path)
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "private, no-store"
+    assert response.headers["x-accel-buffering"] == "no"
+    assert '"scroll_y":250' in response.text
+    assert "event: unavailable" in response.text
+    assert browser.released
