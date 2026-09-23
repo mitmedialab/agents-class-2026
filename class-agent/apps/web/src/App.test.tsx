@@ -1320,6 +1320,8 @@ describe("Course Agent interface", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "About" }));
 
+    expect(window.location.pathname).toBe("/about");
+
     expect(
       await screen.findByRole("heading", {
         level: 1,
@@ -1337,11 +1339,31 @@ describe("Course Agent interface", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "About" }));
     expect(await screen.findByRole("textbox", { name: "Message" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/");
 
     fireEvent.click(screen.getByRole("button", { name: "About" }));
     await waitFor(() =>
       expect(api.getCourseResourceContent).toHaveBeenCalledTimes(2),
     );
+  });
+
+  it("opens About from its direct URL and follows browser navigation", async () => {
+    window.history.replaceState({}, "", "/about");
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", {
+        level: 1,
+        name: "AI Agents for Cognitive Augmentation",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Message" })).not.toBeInTheDocument();
+
+    window.history.replaceState({}, "", "/");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+
+    expect(await screen.findByRole("textbox", { name: "Message" })).toBeInTheDocument();
   });
 
   it("creates a conversation from the first loosely composed message", async () => {

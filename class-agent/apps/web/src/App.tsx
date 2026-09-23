@@ -80,6 +80,7 @@ import {
 } from "react";
 import { mergeNotificationCenterUpdates } from "./notifications.js";
 import { readStartupQuery, urlWithoutStartupQuery } from "./startupQuery.js";
+import { useAboutRoute } from "./aboutRoute.js";
 
 const CONNECTION_ERROR = "I couldn’t reach the Course Agent. Please try again.";
 const WELCOME_MESSAGE =
@@ -264,7 +265,7 @@ export default function App() {
   const [pendingUploadCount, setPendingUploadCount] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [aboutOpen, setAboutOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useAboutRoute();
   const [syllabusPdfUrl, setSyllabusPdfUrl] = useState<string | undefined>();
   const [syllabusContent, setSyllabusContent] = useState<string | null>(null);
   const [syllabusError, setSyllabusError] = useState<string | null>(null);
@@ -537,6 +538,32 @@ export default function App() {
     );
     return () => window.clearTimeout(timeout);
   }, [isOpening]);
+
+  useEffect(() => {
+    if (!aboutOpen) return;
+    let disposed = false;
+    setSyllabusContent(null);
+    setSyllabusPdfUrl(undefined);
+    setSyllabusError(null);
+    setSyllabusLoading(true);
+    void getCourseResourceContent("course://syllabus")
+      .then((resource) => {
+        if (disposed) return;
+        setSyllabusContent(new TextDecoder().decode(resource.data));
+        setSyllabusPdfUrl(resource.pdfDownloadUrl);
+      })
+      .catch(() => {
+        if (!disposed) {
+          setSyllabusError("The syllabus could not be loaded. Please try again.");
+        }
+      })
+      .finally(() => {
+        if (!disposed) setSyllabusLoading(false);
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [aboutOpen]);
 
   useEffect(() => {
     if (isOpening) return;
@@ -926,19 +953,6 @@ export default function App() {
     setHistoryOpen(false);
     setMobileView("chat");
     setAboutOpen(true);
-    setSyllabusContent(null);
-    setSyllabusPdfUrl(undefined);
-    setSyllabusError(null);
-    setSyllabusLoading(true);
-    try {
-      const resource = await getCourseResourceContent("course://syllabus");
-      setSyllabusContent(new TextDecoder().decode(resource.data));
-      setSyllabusPdfUrl(resource.pdfDownloadUrl);
-    } catch {
-      setSyllabusError("The syllabus could not be loaded. Please try again.");
-    } finally {
-      setSyllabusLoading(false);
-    }
   }
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {

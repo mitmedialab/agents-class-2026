@@ -34,9 +34,10 @@ Other roles and anonymous visitors retain Apply.
 Submitting a new prompt immediately removes the prior answer and resets the
 activity trace, so only the new run's process is visible until its answer begins.
 Canonical history is still persisted as events and is available through the conversation drawer.
-Open the About drawer from the right side of the header. It contains a concise
-description, new/history navigation, and student login or logout without adding
-persistent chrome to the main interface.
+Open the About page from the right side of the header or link directly to `/about`.
+The browser URL and Back/Forward navigation remain synchronized with that page. It
+contains a concise description, new/history navigation, and student login or logout
+without adding persistent chrome to the main interface.
 
 Response typography uses the largest display scale that fits its rendered bounds without
 scrolling. The browser measures actual content overflow and continuously adjusts type size, line
