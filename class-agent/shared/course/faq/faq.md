@@ -25,4 +25,4 @@ Each week, the Course Agent reads what every student built on GitHub and put on 
 - **Cognitive augmentation (25%):** how directly it supports a cognitive outcome, such as helping a person think, remember, learn, focus, or decide while that person stays in charge.
 - **Execution (20%):** whether it works and the website shows the build wholly.
 
-Only what your repository and website show counts. A build needs at least 5 on assignment fit to rank ahead of the rest. Anyone featured in either of the last issue sits out that week. The four highest weighted scores are featured, and a tie goes to assignment fit, then originality.
+Only what your repository and website show counts. A build needs at least 5 on assignment fit to rank ahead of the rest. Anyone featured in the last issue sits out that week. The four highest weighted scores are featured, and a tie goes to assignment fit, then originality.
