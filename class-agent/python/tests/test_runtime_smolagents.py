@@ -829,7 +829,7 @@ def test_toolcalling_adapter_reads_authorized_resource_and_emits_portable_events
         )
         assert COURSE_SYLLABUS_URI in model.message_text
         assert "course://application" not in model.message_text
-        assert [event.type for event in result.events] == [
+        assert [event.type for event in result.events if event.type != "agent.step.completed"] == [
             "agent.run.started",
             "agent.tool.requested",
             "resource.read",
@@ -1083,7 +1083,7 @@ def test_workspace_tool_emits_validated_portable_panel_event() -> None:
             input=AgentInput(conversation_id=conversation_id, text="Show the schedule."),
         )
 
-        assert [event.type for event in result.events] == [
+        assert [event.type for event in result.events if event.type != "agent.step.completed"] == [
             "agent.run.started",
             "agent.tool.requested",
             "agent.tool.completed",
@@ -1309,7 +1309,7 @@ def test_toolcalling_adapter_observes_portable_events_during_the_run() -> None:
         )
 
         assert [event.id for event in observed] == [event.id for event in result.events]
-        assert [event.type for event in observed] == [
+        assert [event.type for event in observed if event.type != "agent.step.completed"] == [
             "agent.run.started",
             "agent.tool.requested",
             "resource.read",
@@ -1356,7 +1356,9 @@ def test_toolcalling_adapter_discards_nonfinal_text_and_streams_final_answer() -
         assert "syllabus before answering" not in "".join(text_deltas)
         assert "one more detail" not in "".join(text_deltas)
         assert all("course_read_syllabus" not in delta for delta in text_deltas)
-        assert [event.type for event in observed_events] == [
+        assert [
+            event.type for event in observed_events if event.type != "agent.step.completed"
+        ] == [
             "agent.run.started",
             "agent.tool.requested",
             "resource.read",

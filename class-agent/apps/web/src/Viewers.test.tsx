@@ -559,6 +559,33 @@ describe("BrowserViewer", () => {
 });
 
 describe("PageCards", () => {
+  it("keeps four names and website links when one thumbnail is unavailable", () => {
+    render(<PageCards presentation="thumbnails" items={["a", "b", "c", "d"].map(id => ({
+      id, title: `Student ${id}`, url: `https://example.com/${id}`,
+      ...(id === "c" ? {} : {imageUrl: `https://example.com/${id}.png`}),
+    }))} />);
+    expect(screen.getAllByRole("link", {name: /Visit website/})).toHaveLength(4);
+    expect(screen.getAllByRole("img")).toHaveLength(3);
+    expect(screen.getByText("Preview unavailable")).toBeInTheDocument();
+    for (const id of ["a", "b", "c", "d"]) {
+      expect(screen.getByText(`Student ${id}`)).toBeInTheDocument();
+    }
+  });
+
+  it("renders image and screenshot thumbnails with website links underneath", () => {
+    render(<PageCards presentation="thumbnails" items={[
+      {id:"image", title:"Build image", url:"https://example.com/week2",
+       imageUrl:"https://example.com/build.png"},
+      {id:"capture", title:"Captured build", url:"https://example.com/interactive",
+       imageUrl:"/protected/preview.png", capture:true},
+    ]} />);
+    expect(screen.getByRole("region", {name:"Thumbnail of Build image"})).toBeInTheDocument();
+    expect(screen.getAllByRole("link", {name:/Visit website/})).toHaveLength(2);
+    expect(screen.getByAltText("Preview of Build image")).toHaveAttribute("referrerpolicy", "no-referrer");
+    expect(screen.getByAltText("Preview of Captured build").parentElement).toHaveAttribute("data-capture", "true");
+    expect(screen.queryByText(/hover a column/)).not.toBeInTheDocument();
+  });
+
   it("renders adjacent preview candidates and records selection", () => {
     const onSelect = vi.fn();
     render(

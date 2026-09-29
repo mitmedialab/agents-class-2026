@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import ClassVar, cast
@@ -159,6 +160,14 @@ class InspectStudentSiteTool:
             raise ToolValidationError("Student project was not found.")
         if project.site_url is None:
             raise ToolValidationError("This student project has no deployed website URL.")
+        cache_key = f"student_site:{project_id}:{project.site_url}"
+        cached = context.transient_state.get(cache_key)
+        if isinstance(cached, dict):
+            return ToolExecutionResult(
+                content=cached,
+                summary=f"Reused website evidence for {project_id}.",
+                storage_policy="server_summary",
+            )
         try:
             raw_page = await asyncio.to_thread(self._visit, project.site_url)
         except Exception as error:
@@ -175,13 +184,15 @@ class InspectStudentSiteTool:
             }
         else:
             raise ToolValidationError("The deployed student website returned invalid content.")
+        content: dict[str, JsonValue] = {
+            "project_id": project.id,
+            "site_url": project.site_url,
+            "page": page,
+            "retrieved_at": datetime.now(UTC).isoformat(),
+        }
+        context.transient_state[cache_key] = content
         return ToolExecutionResult(
-            content={
-                "project_id": project.id,
-                "site_url": project.site_url,
-                "page": page,
-                "retrieved_at": datetime.now(UTC).isoformat(),
-            },
+            content=content,
             summary=f"Inspected the deployed website for {project.id}.",
             storage_policy="server_summary",
         )
@@ -254,6 +265,14 @@ class InspectStudentRepositoryTool:
             raise ToolValidationError("path is accepted only for the file view.")
         if ref is not None and view not in {"tree", "file", "commits"}:
             raise ToolValidationError("ref is accepted only for tree, file, and commits.")
+        cache_key = "student_repository:" + json.dumps(dict(arguments), sort_keys=True)
+        cached = context.transient_state.get(cache_key)
+        if isinstance(cached, dict):
+            return ToolExecutionResult(
+                content=cached,
+                summary=f"Reused {view} evidence for {project_id}.",
+                storage_policy="server_summary",
+            )
         try:
             result = await asyncio.to_thread(
                 self._projects.inspect_repository,
@@ -267,6 +286,7 @@ class InspectStudentRepositoryTool:
         except StudentProjectProviderError as error:
             raise _translate_provider_error(error) from error
         result["retrieved_at"] = datetime.now(UTC).isoformat()
+        context.transient_state[cache_key] = result
         return ToolExecutionResult(
             content=result,
             summary=f"Inspected {view} for {project_id}.",

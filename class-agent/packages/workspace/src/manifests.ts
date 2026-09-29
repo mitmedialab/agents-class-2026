@@ -111,13 +111,14 @@ export const BROWSER_VIEWER_MANIFEST: ComponentManifest = {
 
 export const PAGE_CARDS_MANIFEST: ComponentManifest = {
   id: "page-cards",
-  version: "1.0.0",
+  version: "1.1.2",
   title: "Page Cards",
   description:
-    "Compares several website candidates in adjacent, independently scrollable preview columns.",
+    "Compares website candidates as scrollable previews or a two-column thumbnail gallery with links below. Supports public images or protected browser captures.",
   propsSchema: {
     type: "object",
     properties: {
+      presentation: { type: "string", enum: ["previews", "thumbnails"] },
       heading: { type: "string", minLength: 1, maxLength: 200 },
       description: { type: "string", maxLength: 2_000 },
       selected_id: { type: "string", minLength: 1, maxLength: 100 },
@@ -141,6 +142,13 @@ export const PAGE_CARDS_MANIFEST: ComponentManifest = {
             },
             title: { type: "string", minLength: 1, maxLength: 500 },
             description: { type: "string", maxLength: 2_000 },
+            preview_unavailable: { const: true },
+            image_url: {
+              type: "string",
+              format: "uri",
+              pattern: "^https://[^\\s]+$",
+              maxLength: 2_048,
+            },
             preview_id: { type: "string", format: "uuid" },
             revision: { type: "integer", minimum: 1 },
           },
@@ -151,6 +159,25 @@ export const PAGE_CARDS_MANIFEST: ComponentManifest = {
     },
     required: ["items"],
     additionalProperties: false,
+    anyOf: [
+      { properties: { presentation: { enum: ["previews"] } } },
+      {
+        required: ["presentation"],
+        properties: {
+          presentation: { const: "thumbnails" },
+          items: {
+            type: "array",
+            items: {
+              anyOf: [
+                { required: ["preview_unavailable"] },
+                { required: ["image_url"] },
+                { required: ["preview_id", "revision"] },
+              ],
+            },
+          },
+        },
+      },
+    ],
   },
   supportedOperations: ["open", "update", "focus", "close"],
   defaultSize: { width: 1100, height: 720 },

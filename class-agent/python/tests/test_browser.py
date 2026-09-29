@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
+from pydantic import JsonValue
 
 from agent_core import PrincipalContext
 from course_server.agent import ToolExecutionContext, ToolValidationError
@@ -388,5 +389,232 @@ def test_public_url_policy_rejects_local_and_credential_destinations() -> None:
             await validate_public_https_url("https://user:secret@example.com/")
         with pytest.raises(BrowserSecurityError, match="public HTTPS"):
             await validate_public_https_url("http://example.com/")
+
+    asyncio.run(scenario())
+
+
+def test_thumbnail_gallery_rejects_unverified_images() -> None:
+    async def scenario() -> None:
+        context = ToolExecutionContext(
+            principal=public_principal(),
+            conversation_id=uuid4(),
+            permitted_resource_uris=frozenset(),
+        )
+        service = FakeBrowserSessionService()
+        tool = BrowserCompareTool(service, load_component_registry())
+        with pytest.raises(ToolValidationError, match="image discovery"):
+            await tool.execute(
+                {
+                    "presentation": "thumbnails",
+                    "candidates": [
+                        {
+                            "url": "https://example.com/week2",
+                            "image_url": "https://example.com/unknown.png",
+                        },
+                        {"url": "https://example.com/other"},
+                    ],
+                },
+                context,
+            )
+        assert not service.previews
+
+    asyncio.run(scenario())
+
+
+def test_generic_open_cannot_invent_thumbnail_captures() -> None:
+    from course_server.workspace.tools import WorkspaceOpenComponentTool
+
+    async def scenario() -> None:
+        context = ToolExecutionContext(
+            principal=public_principal(),
+            conversation_id=uuid4(),
+            permitted_resource_uris=frozenset(),
+        )
+        with pytest.raises(ToolValidationError, match=r"browser\.compare"):
+            await WorkspaceOpenComponentTool(load_component_registry()).execute(
+                {
+                    "component_id": "page-cards",
+                    "props": {
+                        "presentation": "thumbnails",
+                        "items": [
+                            {
+                                "id": name,
+                                "title": name,
+                                "url": f"https://example.com/{name}",
+                                "preview_id": str(uuid4()),
+                                "revision": 1,
+                            }
+                            for name in ("one", "two")
+                        ],
+                    },
+                },
+                context,
+            )
+        assert context.workspace_state == {"panels": []}
+
+    asyncio.run(scenario())
+
+
+def test_screenshot_capacity_is_separate_and_bounded() -> None:
+    from course_server.browser.models import BrowserCapacityReached
+    from course_server.browser.playwright_service import PlaywrightBrowserSessionService
+
+    async def scenario() -> None:
+        service = PlaywrightBrowserSessionService(max_sessions=2, max_sessions_per_principal=2)
+        owner = uuid4()
+        # Both live-browser slots reserved by inspection; screenshots still work.
+        await service._reserve(owner)
+        await service._reserve(owner)
+        await service._reserve_capture(owner)
+        with pytest.raises(BrowserCapacityReached):
+            await service._reserve_capture(owner)
+        await service._reserve_capture(uuid4())
+        with pytest.raises(BrowserCapacityReached):
+            await service._reserve_capture(uuid4())
+        with pytest.raises(BrowserCapacityReached):
+            await service._reserve(owner)
+
+    asyncio.run(scenario())
+
+
+def test_showcase_gallery_survives_capture_failure_and_cannot_be_replaced() -> None:
+    from course_server.browser.models import BrowserCapacityReached
+    from course_server.workspace.tools import WorkspaceReviewPresentationTool
+
+    class FailingCapture(FakeBrowserSessionService):
+        async def create_preview(
+            self, *, principal: PrincipalContext, conversation_id: UUID, url: str
+        ) -> BrowserPreview:
+            if url.endswith("/c/week2"):
+                raise BrowserCapacityReached("Temporary capacity")
+            return await super().create_preview(
+                principal=principal, conversation_id=conversation_id, url=url
+            )
+
+    async def scenario() -> None:
+        context = ToolExecutionContext(
+            principal=public_principal(),
+            conversation_id=uuid4(),
+            permitted_resource_uris=frozenset(),
+        )
+        context.transient_state["showcase_selection_sites"] = [
+            f"https://example.edu/{n}/" for n in "abcd"
+        ]
+        review = WorkspaceReviewPresentationTool()
+        with pytest.raises(ToolValidationError, match="gallery is not displayed"):
+            await review.execute({"decision": "no_visual"}, context)
+        tool = BrowserCompareTool(FailingCapture(), load_component_registry())
+        args: dict[str, JsonValue] = {
+            "presentation": "thumbnails",
+            "candidates": [{"url": f"https://example.edu/{n}/week2", "title": n} for n in "abcd"],
+        }
+        result = await tool.execute(args, context)
+        assert isinstance(result.content, dict)
+        assert result.content["status"] == "partial_images"
+        assert result.content["capture_failures"] == [
+            {"url": "https://example.edu/c/week2", "reason_code": "browser_capacityreached"}
+        ]
+        panel = WorkspaceState.model_validate(context.workspace_state).panels[0]
+        items = panel.props["items"]
+        assert isinstance(items, list) and len(items) == 4
+        assert isinstance(items[2], dict) and items[2]["preview_unavailable"] is True
+        context.transient_state["workspace_changed_this_turn"] = True
+        await review.execute({"decision": "workspace_ready"}, context)
+        with pytest.raises(ToolValidationError, match="exactly once"):
+            await tool.execute(
+                {**args, "candidates": [{"url": "https://example.edu/abc/week2"}] * 4}, context
+            )
+        context.workspace_state.clear()
+        context.workspace_state.update({"panels": []})
+        with pytest.raises(ToolValidationError, match="gallery is not displayed"):
+            await review.execute({"decision": "no_visual"}, context)
+
+    asyncio.run(scenario())
+
+
+def test_capture_releases_reservation_when_browser_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from course_server.browser.models import BrowserUnavailable
+    from course_server.browser.playwright_service import PlaywrightBrowserSessionService
+
+    async def safe_url(url: str) -> str:
+        return url
+
+    monkeypatch.setattr(
+        "course_server.browser.playwright_service.validate_public_https_url", safe_url
+    )
+
+    async def scenario() -> None:
+        service = PlaywrightBrowserSessionService()
+        owner = public_principal()
+        for _ in range(2):
+            with pytest.raises(BrowserUnavailable):
+                await service.create_preview(
+                    principal=owner, conversation_id=uuid4(), url="https://example.com"
+                )
+            assert service._captures_by_principal == {}
+
+    asyncio.run(scenario())
+
+
+def test_comparison_security_failure_does_not_become_a_placeholder() -> None:
+    class UnsafeCapture(FakeBrowserSessionService):
+        async def create_preview(
+            self, *, principal: PrincipalContext, conversation_id: UUID, url: str
+        ) -> BrowserPreview:
+            raise BrowserSecurityError("Private destination blocked")
+
+    async def scenario() -> None:
+        context = ToolExecutionContext(
+            principal=public_principal(),
+            conversation_id=uuid4(),
+            permitted_resource_uris=frozenset(),
+        )
+        with pytest.raises(ToolValidationError, match="Private destination") as failure:
+            await BrowserCompareTool(UnsafeCapture(), load_component_registry()).execute(
+                {
+                    "presentation": "thumbnails",
+                    "candidates": [
+                        {"url": "https://example.com/a"},
+                        {"url": "https://example.com/b"},
+                    ],
+                },
+                context,
+            )
+        assert getattr(failure.value, "reason_code", None) == "browser_securityerror"
+        assert context.workspace_state == {"panels": []}
+
+    asyncio.run(scenario())
+
+
+def test_legacy_comparison_still_fails_when_capture_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from unittest.mock import AsyncMock
+
+    from course_server.browser.models import BrowserUnavailable
+
+    async def scenario() -> None:
+        service = FakeBrowserSessionService()
+        monkeypatch.setattr(
+            service, "create_preview", AsyncMock(side_effect=BrowserUnavailable("Unavailable"))
+        )
+        context = ToolExecutionContext(
+            principal=public_principal(),
+            conversation_id=uuid4(),
+            permitted_resource_uris=frozenset(),
+        )
+        with pytest.raises(ToolValidationError, match="Unavailable"):
+            await BrowserCompareTool(service, load_component_registry()).execute(
+                {
+                    "candidates": [
+                        {"url": "https://example.com/a"},
+                        {"url": "https://example.com/b"},
+                    ]
+                },
+                context,
+            )
+        assert context.workspace_state == {"panels": []}
 
     asyncio.run(scenario())

@@ -242,3 +242,24 @@ Application sharing update: authenticated students may use the existing applicat
 tools and photo route only for accepted application UUIDs explicitly shared in the private
 `student-access.json` registry. Instructor access remains unrestricted. See
 [STORAGE.md](STORAGE.md) for authorization, provisioning, and revocation details.
+
+
+### Page Cards thumbnail gallery (manifest 1.1.2)
+
+The additive `presentation` prop accepts `previews` (legacy/default) or `thumbnails`
+(two columns on desktop, one on narrow screens). A thumbnail item requires a public HTTPS
+`image_url`, a protected `preview_id` and `revision`, or an explicit
+`preview_unavailable: true` fallback. The fallback retains the student name and website link.
+The frontend derives authenticated capture URLs; the model cannot supply endpoint URLs.
+
+`browser.compare` validates discovered image references and captures weekly pages when an
+image is absent. A failed thumbnail capture preserves the other cards and reports a safe
+reason code. Security failures remain fatal. Generic workspace open/update tools cannot
+invent thumbnail captures or bypass image validation; they direct the agent to `browser.compare`.
+After a showcase selection, presentation review requires its four-student gallery to remain
+visible. An empty workspace or a subsequently opened single webpage cannot pass that review.
+
+Python and TypeScript manifests are synchronized. Legacy preview props remain valid;
+incomplete thumbnail props without an image, capture or explicit fallback must be regenerated.
+There is no core wire-schema change or database migration. Deploy backend and frontend together
+so both validators accept the new props. Protected capture ownership and expiry are unchanged.

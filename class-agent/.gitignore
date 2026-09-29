@@ -27,3 +27,5 @@ data/instructors/*
 
 # Private accepted-student roster, regardless of its local location.
 accepted-applicants.json
+
+var/student-showcase/

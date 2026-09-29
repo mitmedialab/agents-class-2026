@@ -144,3 +144,17 @@ and the API needs restarting after this change. The existing single-controller d
 
 This is an additive, ephemeral HTTP transport. No versioned workspace props, schemas, core contracts,
 or persisted records change; no migration is required. Snapshot endpoints remain compatible.
+
+### Temporary capture capacity and partial comparisons
+
+Temporary screenshots use a separate bounded pool from retained inspection sessions: one
+capture per principal, with `BROWSER_MAX_SESSIONS` concurrent captures globally. The live
+session limits remain unchanged. Thus peak contexts can reach twice `BROWSER_MAX_SESSIONS`,
+including live sessions and temporary captures. Capture reservations are released even when
+navigation or context cleanup fails. Preview ownership, expiry, network checks and retained
+PNG limits are unchanged.
+
+A comparison preserves successful cards if another capture fails, adding an explicit
+`preview_unavailable: true` card and returning `capture_failures` reason codes. Security
+violations still fail closed. Browser tool failures now include safe typed reason codes
+instead of only generic `invalid_request` in tool events.

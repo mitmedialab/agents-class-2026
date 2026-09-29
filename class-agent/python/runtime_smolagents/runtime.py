@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import re
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import replace
@@ -40,6 +41,10 @@ from course_server.workspace.constants import (
     WORKSPACE_CHANGED_STATE_KEY,
     WORKSPACE_VISIBLE_STATE_KEY,
 )
+
+from .run_control import BoundedToolCallingAgent, RunStopped
+
+_LOGGER = logging.getLogger(__name__)
 
 _JSON_OBJECT = TypeAdapter(dict[str, JsonValue])
 _TOOL_NAME_CHARACTER = re.compile(r"[^A-Za-z0-9_]")
@@ -779,7 +784,20 @@ class SmolagentsRuntime:
                 )
             return True
 
-        agent = ToolCallingAgent(
+        def record_diagnostic(details: dict[str, Any]) -> None:
+            _LOGGER.info("agent step diagnostic: %s", details)
+            collector.add(
+                Event(
+                    type="agent.step.completed",
+                    actor=self._agent_id,
+                    conversation_id=context.conversation_id,
+                    payload=_JSON_OBJECT.validate_python(details),
+                    **_event_principal_fields(context),
+                )
+            )
+
+        agent = BoundedToolCallingAgent(
+            diagnostic=record_diagnostic,
             tools=runtime_tools,
             model=model,
             prompt_templates=_TOOL_CALLING_PROMPT_TEMPLATES,
@@ -812,23 +830,45 @@ class SmolagentsRuntime:
         if event_observer is not None:
             event_observer(started)
 
-        if text_delta_observer is None:
-            output = await asyncio.to_thread(agent.run, input.text, reset=False)
-        else:
-            should_emit_final_answer = (
-                run_tool_state.presentation_reviewed
-                if presentation_review_required
-                else lambda: True
+        termination_reason: str | None = None
+        try:
+            if text_delta_observer is None:
+                output = await asyncio.to_thread(agent.run, input.text, reset=False)
+            else:
+                should_emit_final_answer = (
+                    run_tool_state.presentation_reviewed
+                    if presentation_review_required
+                    else lambda: True
+                )
+                output = await asyncio.to_thread(
+                    _run_streaming_agent,
+                    agent,
+                    input.text,
+                    text_delta_observer,
+                    should_emit_final_answer,
+                )
+            if presentation_review_required and not run_tool_state.presentation_reviewed():
+                raise RunStopped("presentation_review_missing")
+        except RunStopped as error:
+            termination_reason = error.reason
+            explanations = {
+                "repeated_tool_calls": "repeated tool calls were not making progress",
+                "step_limit": "the review reached this run's step limit",
+                "presentation_review_missing": "the final presentation check was not completed",
+            }
+            output = (
+                "I stopped because " + explanations[error.reason] + ". The task is incomplete. "
+                "Any workspace shown is progress, not a confirmed final result. "
+                "Completed tool activity has been saved, but uncaptured source details may need "
+                "to be read again. We can continue with a smaller batch."
             )
-            output = await asyncio.to_thread(
-                _run_streaming_agent,
-                agent,
-                input.text,
-                text_delta_observer,
-                should_emit_final_answer,
+            collector.add(
+                Event(
+                    type="agent.run.interrupted",
+                    payload={"input_id": str(input.id), "reason": error.reason},
+                    **event_fields,
+                )
             )
-        if presentation_review_required and not run_tool_state.presentation_reviewed():
-            raise RuntimeError("agent completed without the required presentation review")
         collected_events = collector.snapshot()
         output_text = str(output)
         agent_message = Event(
@@ -838,7 +878,10 @@ class SmolagentsRuntime:
         )
         completed = Event(
             type="agent.run.completed",
-            payload={"input_id": str(input.id)},
+            payload={
+                "input_id": str(input.id),
+                "outcome": "incomplete" if termination_reason else "complete",
+            },
             metadata={"runtime": "smolagents-toolcalling"},
             **event_fields,
         )
@@ -854,5 +897,6 @@ class SmolagentsRuntime:
                 "runtime": "smolagents-toolcalling",
                 "provider": self._model_provider.provider_id,
                 "model": self._model_provider.model_id,
+                "termination_reason": termination_reason,
             },
         )

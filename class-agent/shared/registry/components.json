@@ -106,15 +106,33 @@
     },
     {
       "id": "page-cards",
-      "version": "1.0.0",
+      "version": "1.1.2",
       "title": "Page Cards",
-      "description": "Compares several website candidates in adjacent, independently scrollable preview columns.",
+      "description": "Compares website candidates as scrollable previews or a two-column thumbnail gallery with links below. Supports public images or protected browser captures.",
       "props_schema": {
         "type": "object",
         "properties": {
-          "heading": { "type": "string", "minLength": 1, "maxLength": 200 },
-          "description": { "type": "string", "maxLength": 2000 },
-          "selected_id": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "presentation": {
+            "type": "string",
+            "enum": [
+              "previews",
+              "thumbnails"
+            ]
+          },
+          "heading": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "selected_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
           "items": {
             "type": "array",
             "minItems": 2,
@@ -133,21 +151,95 @@
                   "pattern": "^https://[^\\s]+$",
                   "maxLength": 2048
                 },
-                "title": { "type": "string", "minLength": 1, "maxLength": 500 },
-                "description": { "type": "string", "maxLength": 2000 },
-                "preview_id": { "type": "string", "format": "uuid" },
-                "revision": { "type": "integer", "minimum": 1 }
+                "title": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                },
+                "description": {
+                  "type": "string",
+                  "maxLength": 2000
+                },
+                "preview_unavailable": {"const": true},
+                "image_url": {
+                  "type": "string",
+                  "format": "uri",
+                  "pattern": "^https://[^\\s]+$",
+                  "maxLength": 2048
+                },
+                "preview_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "revision": {
+                  "type": "integer",
+                  "minimum": 1
+                }
               },
-              "required": ["id", "url", "title"],
+              "required": [
+                "id",
+                "url",
+                "title"
+              ],
               "additionalProperties": false
             }
           }
         },
-        "required": ["items"],
-        "additionalProperties": false
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false,
+        "anyOf": [
+          {
+            "properties": {
+              "presentation": {
+                "enum": [
+                  "previews"
+                ]
+              }
+            }
+          },
+          {
+            "required": [
+              "presentation"
+            ],
+            "properties": {
+              "presentation": {
+                "const": "thumbnails"
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {"required": ["preview_unavailable"]},
+                    {
+                      "required": [
+                        "image_url"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "preview_id",
+                        "revision"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        ]
       },
-      "supported_operations": ["open", "update", "focus", "close"],
-      "default_size": { "width": 1100, "height": 720 }
+      "supported_operations": [
+        "open",
+        "update",
+        "focus",
+        "close"
+      ],
+      "default_size": {
+        "width": 1100,
+        "height": 720
+      }
     },
     {
       "id": "visual-composition",

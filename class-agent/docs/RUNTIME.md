@@ -349,3 +349,34 @@ The Phase 3 additions to the stable application boundary are `Conversation` and 
 ## Deviations
 
 There are no architecture deviations. `Conversation` was added to schema v1 additively because it was already named as an `agent_core` type in the constitution and no existing v1 document changed. MCP server transport remains deferred to its specified phase. Skill loading uses the constitution's standard directory shape and existing `AgentContext` fields and metadata, so it adds no wire-contract version or persistence migration. Phase 5 reports the concrete adapter's portable run/tool/resource events live through an optional application observer without changing `AgentRuntime`. The same adapter can optionally run smolagents in streaming mode and expose decoded final-answer text through one application callback. Private reasoning, non-final model content, full skill contents, and non-final tool arguments are discarded; non-streaming runtimes retain the ordinary `run` path, and no provider object becomes a core or persistence contract.
+
+## Bounded runs and incomplete results
+
+The adapter uses `BoundedToolCallingAgent` to distinguish normal final answers from stalled or
+exhausted runs. Three consecutive tool batches with identical arguments and observations stop the
+run; changing observations (for example, scrolling to new content) do not count as a stall. After
+the second identical batch the model receives a recovery notice. Within the last three available
+steps it receives a notice to checkpoint useful progress, review presentation, and finish honestly.
+
+The framework's extra model-generated answer at its step limit is disabled. It bypasses normal
+presentation review and must not be treated as a completed answer. A repeated-call stop, step limit,
+or missing final review returns an explicit application-authored incomplete status instead of
+raising the generic unavailable/connection error. This status makes no substantive selection or
+completion claim; ordinary model-authored answers still require the existing presentation check.
+
+Each model step adds a portable `agent.step.completed` diagnostic with only the step number,
+registered runtime tool names, and exception class, if any. Arguments, raw observations and model
+reasoning are never included in these diagnostics. Unregistered names are replaced with a fixed
+label. Interrupted results include `agent.run.interrupted` with a bounded reason, followed by the
+status message and `agent.run.completed` with `outcome: incomplete`. Normal runs use
+`outcome: complete`. Result metadata includes `termination_reason`. The conversation service saves
+these returned events, including already-validated workspace changes and ordinary redacted tool
+activity. A completed checkpoint is therefore reconstructed on a later turn; raw ephemeral source
+text is not promoted to durable history.
+
+These event types and optional JSON payload/metadata fields use the existing extensible v1 Event
+and AgentResult contracts; no schema revision or database migration is required. Existing consumers
+may ignore diagnostics. This is not automatic background continuation or an unlimited task runner.
+The model must actually write a workspace checkpoint to retain detailed review progress, and may
+need to re-read details it did not capture. Unexpected provider or internal exceptions retain their
+existing error path; the incomplete-result handling is limited to the bounded runtime conditions.

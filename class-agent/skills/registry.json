@@ -35,6 +35,11 @@
       "id": "instructor-messaging",
       "directory": "instructor-messaging",
       "audience": "instructors"
+    },
+    {
+      "id": "weekly-build-showcase",
+      "directory": "weekly-build-showcase",
+      "audience": "instructors"
     }
   ]
 }

@@ -137,6 +137,7 @@ class PlaywrightBrowserSessionService:
         self._sessions: dict[UUID, _ManagedSession] = {}
         self._previews: dict[UUID, _ManagedPreview] = {}
         self._opening_by_principal: dict[UUID, int] = {}
+        self._captures_by_principal: dict[UUID, int] = {}
         self._lock = asyncio.Lock()
 
     async def start(self) -> None:
@@ -236,7 +237,7 @@ class PlaywrightBrowserSessionService:
 
         safe_url = await validate_public_https_url(url)
         await self._cleanup_expired()
-        await self._reserve(principal.session_id)
+        await self._reserve_capture(principal.session_id)
         context: BrowserContext | None = None
         try:
             browser = self._browser
@@ -281,9 +282,12 @@ class PlaywrightBrowserSessionService:
         except Exception:
             raise
         finally:
-            if context is not None:
-                await context.close()
-            await self._release_reservation(principal.session_id)
+            try:
+                if context is not None:
+                    await context.close()
+            finally:
+                async with self._lock:
+                    self._captures_by_principal.pop(principal.session_id, None)
 
     async def preview_snapshot(
         self,
@@ -638,6 +642,18 @@ class PlaywrightBrowserSessionService:
             update={"expires_at": datetime.now(UTC) + self._ttl}
         )
         return session
+
+    async def _reserve_capture(self, principal_session_id: UUID) -> None:
+        # Temporary captures have their own bounded pool. Retained inspection tabs must
+        # not prevent a comparison; one capture per principal bounds peak page memory.
+        async with self._lock:
+            if principal_session_id in self._captures_by_principal:
+                raise BrowserCapacityReached(
+                    "A screenshot is already being captured; retry shortly."
+                )
+            if len(self._captures_by_principal) >= self._max_sessions:
+                raise BrowserCapacityReached("The screenshot service is currently at capacity.")
+            self._captures_by_principal[principal_session_id] = 1
 
     async def _reserve(self, principal_session_id: UUID) -> None:
         async with self._lock:

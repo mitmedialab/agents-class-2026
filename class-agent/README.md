@@ -160,6 +160,11 @@ development metadata tools. The credential remains server-side and the configure
 prefix, and exclusions are enforced in platform code. See
 [docs/STUDENT_PROJECTS.md](docs/STUDENT_PROJECTS.md).
 
+Weekly showcase selection is available to staff through the read-only project integration:
+two rubric-ranked builds plus two weighted random draws, with a two-issue cooldown and reduced
+weight for older appearances. Enter actual Week 1 presenters in
+`var/student-showcase/history.json`; see [the setup and policy](docs/STUDENT_PROJECTS.md#weekly-build-showcase).
+
 Staff-published FAQ knowledge is kept separately from maintained course files in one local,
 versioned JSON file at `var/course-knowledge/published-faq.json`. The mail worker updates it
 automatically after an authorized `PUBLISH` reply, and the Course Agent reads it through

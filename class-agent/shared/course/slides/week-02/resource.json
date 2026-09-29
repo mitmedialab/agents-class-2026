@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "resource": {
+    "uri": "course://slides/week-02",
+    "title": "Tools, MCPs and Skills",
+    "description": "Slides for the second course meeting.",
+    "media_type": "application/pdf",
+    "file": "week-02-slides.pdf",
+    "visibility": "public",
+    "status": "published",
+    "order": 61
+  }
+}

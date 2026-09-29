@@ -198,7 +198,9 @@ function pageCardItems(
     }
     const item: PageCardItem = { id: raw.id, url: raw.url, title: raw.title };
     if (typeof raw.description === "string") item.description = raw.description;
+    if (typeof raw.image_url === "string") item.imageUrl = raw.image_url;
     if (typeof raw.preview_id === "string" && typeof raw.revision === "number") {
+      item.capture = true;
       item.imageUrl = browserPreviewSnapshotUrl(
         conversationId,
         raw.preview_id,
@@ -394,6 +396,7 @@ function ResourcePanel({
     }
     return (
       <PageCards
+        presentation={panel.props.presentation === "thumbnails" ? "thumbnails" : "previews"}
         items={items}
         onSelect={(id) => void onInteraction(panel.id, "page_cards.select", id)}
         {...(description === undefined ? {} : { description })}
