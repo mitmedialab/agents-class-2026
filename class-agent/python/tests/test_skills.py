@@ -70,6 +70,7 @@ def test_skill_catalog_scans_metadata_and_filters_before_disclosure() -> None:
     assert student_ids == public_ids | {"student-course-resources"}
     assert instructor_ids == public_ids | {
         "instructor-messaging",
+        "weekly-build-showcase",
         "student-course-resources",
         "instructor-application-review",
     }

@@ -68,6 +68,22 @@ describe("component registry", () => {
     );
   });
 
+  it("accepts explicit failed captures while rejecting missing thumbnail state", () => {
+    const registry = new ComponentRegistry(BUILT_IN_COMPONENT_MANIFESTS);
+    const command = {
+      type: "open", panel: {
+        id: panelId, component_id: "page-cards", title: "Showcase", state: {},
+        props: {presentation: "thumbnails", items: [
+          {id: "a", title: "A", url: "https://example.com/a", image_url: "https://example.com/a.png"},
+          {id: "b", title: "B", url: "https://example.com/b", preview_unavailable: true},
+        ]},
+      },
+    };
+    expect(registry.apply(emptyWorkspaceState(), command).panels).toHaveLength(1);
+    command.panel.props.items[1]!.preview_unavailable = false;
+    expect(() => registry.apply(emptyWorkspaceState(), command)).toThrow();
+  });
+
   it("applies valid open, update, focus, and close commands", () => {
     const registry = new ComponentRegistry(BUILT_IN_COMPONENT_MANIFESTS);
     const opened = registry.apply(emptyWorkspaceState(), openCalendar());
@@ -367,5 +383,44 @@ describe("component registry", () => {
     expect(() =>
       registry.apply(emptyWorkspaceState(), { ...openCalendar(), script: "alert(1)" }),
     ).toThrow(WorkspaceValidationError);
+  });
+});
+
+describe("thumbnail gallery transitions", () => {
+  it("replaces an inspected browser page with four mixed thumbnails", () => {
+    const registry = new ComponentRegistry(BUILT_IN_COMPONENT_MANIFESTS);
+    const browser = registry.apply(emptyWorkspaceState(), {
+      type: "open", panel: {
+        id: panelId, component_id: "browser-viewer", props: {
+          session_id: "40000000-0000-4000-8000-000000000003",
+          url: "https://example.com/week2", title: "Week 2",
+          revision: 1, viewport_width: 1280, viewport_height: 800,
+        }, state: {},
+      },
+    });
+    const galleryId = "40000000-0000-4000-8000-000000000002";
+    const items = ["a", "b", "c", "d"].map((id, index) => ({
+      id, title: id, url: `https://example.com/${id}?id=week02`,
+      ...(index < 2 ? {image_url: `https://example.com/${id}.png`} :
+        {preview_id: "40000000-0000-4000-8000-000000000004", revision: 1}),
+    }));
+    const gallery = registry.apply(browser, {
+      type: "open", panel: {
+        id: galleryId, component_id: "page-cards",
+        props: {presentation: "thumbnails", items}, state: {},
+      },
+    });
+    expect(gallery.panels).toHaveLength(1);
+    expect(gallery.focusedPanelId).toBe(galleryId);
+    expect(gallery.panels[0]?.componentId).toBe("page-cards");
+    expect(() => registry.apply(browser, {
+      type: "open", panel: {
+        id: galleryId, component_id: "page-cards",
+        props: {presentation: "thumbnails", items: [
+          {id:"a",title:"A",url:"https://example.com/a"},
+          {id:"b",title:"B",url:"https://example.com/b"},
+        ]}, state: {},
+      },
+    })).toThrow(WorkspaceValidationError);
   });
 });

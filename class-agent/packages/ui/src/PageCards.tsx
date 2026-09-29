@@ -6,6 +6,7 @@ export interface PageCardItem {
   title: string;
   description?: string;
   imageUrl?: string;
+  capture?: boolean;
 }
 
 export interface PageCardsProps {
@@ -13,6 +14,7 @@ export interface PageCardsProps {
   heading?: string;
   description?: string;
   selectedId?: string;
+  presentation?: "previews" | "thumbnails";
   onSelect?: (id: string) => void;
 }
 
@@ -41,6 +43,7 @@ function PagePreview({ item }: { item: PageCardItem }) {
       alt={`Preview of ${item.title}`}
       draggable={false}
       onError={() => setFailed(true)}
+      referrerPolicy="no-referrer"
       src={item.imageUrl}
     />
   );
@@ -51,12 +54,13 @@ export function PageCards({
   heading = "Website candidates",
   description,
   selectedId,
+  presentation = "previews",
   onSelect,
 }: PageCardsProps) {
   const [activeId, setActiveId] = useState(selectedId);
   useEffect(() => setActiveId(selectedId), [selectedId]);
   return (
-    <section aria-label={heading} className="ca-page-cards">
+    <section aria-label={heading} className="ca-page-cards" data-presentation={presentation}>
       <header className="ca-page-cards-heading">
         <div>
           <strong>{heading}</strong>
@@ -74,8 +78,9 @@ export function PageCards({
               key={item.id}
             >
               <div
-                aria-label={`Scrollable preview of ${item.title}`}
+                aria-label={`${presentation === "thumbnails" ? "Thumbnail" : "Scrollable preview"} of ${item.title}`}
                 className="ca-page-card-preview"
+                data-capture={item.capture || undefined}
                 role="region"
                 tabIndex={0}
               >
@@ -95,7 +100,7 @@ export function PageCards({
                 </button>
                 {item.description ? <p>{item.description}</p> : null}
                 <a href={item.url} rel="noreferrer" target="_blank">
-                  Open externally <span aria-hidden="true">↗</span>
+                  {presentation === "thumbnails" ? "Visit website" : "Open externally"} <span aria-hidden="true">↗</span>
                 </a>
               </footer>
             </article>
@@ -103,7 +108,7 @@ export function PageCards({
         })}
       </div>
       <p className="ca-page-cards-status">
-        Independent read-only previews · hover a column to scroll it
+        {presentation === "thumbnails" ? "Build images and page screenshots" : "Independent read-only previews · hover a column to scroll it"}
       </p>
     </section>
   );

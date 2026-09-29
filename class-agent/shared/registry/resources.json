@@ -78,6 +78,18 @@
       "assets": {
         "first_slide": "registry/slide-thumbnails/dd4d5c4926e7810e111aba74a12280533fb18f4c4f9205b2a1c640ae385277ef.png"
       }
+    },
+    {
+      "uri": "course://slides/week-02",
+      "title": "Tools, MCPs and Skills",
+      "description": "Slides for the second course meeting.",
+      "media_type": "application/pdf",
+      "path": "course/slides/week-02/week-02-slides.pdf",
+      "visibility": "public",
+      "status": "published",
+      "assets": {
+        "first_slide": "registry/slide-thumbnails/e4d2625270828cb070c070181a2e6d395f79e71cc6b47ca6b06ccdf0543a30c7.png"
+      }
     }
   ]
 }

@@ -93,6 +93,9 @@ from course_server.student_projects import (
     ListStudentProjectsTool,
     StudentProjectCatalog,
 )
+from course_server.student_projects.images import DiscoverShowcaseImagesTool
+from course_server.student_projects.screening import ScreenShowcaseTool
+from course_server.student_projects.showcase import ReadShowcaseHistoryTool, SelectShowcaseTool
 from course_server.uploads import (
     FileTemporaryUploadStore,
     TemporaryUploadStore,
@@ -302,6 +305,14 @@ def build_runtime(
                 ListStudentProjectsTool(project_catalog),
                 InspectStudentSiteTool(project_catalog, fetch_public_webpage),
                 InspectStudentRepositoryTool(project_catalog),
+                ReadShowcaseHistoryTool(settings.showcase_history_path),
+                SelectShowcaseTool(project_catalog, settings.showcase_history_path),
+                DiscoverShowcaseImagesTool(
+                    project_catalog, fetch_public_webpage, probe_public_image_url
+                ),
+                ScreenShowcaseTool(
+                    project_catalog, fetch_public_webpage, settings.showcase_history_path
+                ),
             ]
         )
     tools = ToolCatalog(executable_tools)

@@ -13,6 +13,10 @@ DEFAULT_PUBLISHED_FAQ_PATH = (
     Path(__file__).resolve().parents[2] / "var/course-knowledge/published-faq.json"
 )
 
+DEFAULT_SHOWCASE_HISTORY_PATH = (
+    Path(__file__).resolve().parents[2] / "var/student-showcase/history.json"
+)
+
 
 class ConfigurationError(RuntimeError):
     """Required runtime configuration is absent or unsupported."""
@@ -136,6 +140,7 @@ class AgentSettings(BaseModel):
     anonymous_max_upload_bytes: int = Field(default=20 * 1024 * 1024, ge=1, le=100 * 1024 * 1024)
     workspace_strict_visual_policy: bool = True
     mail_enabled: bool = False
+    showcase_history_path: Path = DEFAULT_SHOWCASE_HISTORY_PATH
     github_student_projects_enabled: bool = False
     github_token: SecretStr | None = Field(default=None, repr=False)
     github_organization: str = Field(default="mitmedialab", pattern=r"^[A-Za-z0-9_.-]{1,100}$")
@@ -304,6 +309,12 @@ class AgentSettings(BaseModel):
             workspace_strict_visual_policy=strict_visual_policy in {"true", "1", "yes"},
             mail_enabled=mail_enabled in {"true", "1", "yes"},
             github_student_projects_enabled=github_projects_enabled in {"true", "1", "yes"},
+            showcase_history_path=Path(
+                values.get(
+                    "SHOWCASE_HISTORY_PATH",
+                    str(DEFAULT_SHOWCASE_HISTORY_PATH),
+                )
+            ),
             github_token=SecretStr(github_token) if github_token else None,
             github_organization=github_organization,
             github_repository_prefix=github_repository_prefix,

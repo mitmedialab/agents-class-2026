@@ -525,6 +525,20 @@ def _apply_command(
         state = registry.apply(_current_state(context), command)
     except WorkspaceValidationError as error:
         raise ToolValidationError(str(error)) from error
+    if isinstance(command, (OpenWorkspaceCommand, UpdateWorkspaceCommand)):
+        panel_id = (
+            command.panel.id if isinstance(command, OpenWorkspaceCommand) else command.panel_id
+        )
+        panel = next((panel for panel in state.panels if panel.id == panel_id), None)
+        if (
+            panel is not None
+            and panel.component_id == "page-cards"
+            and panel.props.get("presentation") == "thumbnails"
+        ):
+            raise ToolValidationError(
+                "Use browser.compare with presentation=thumbnails to create this gallery; "
+                "it validates image candidates and captures real screenshots for missing images."
+            )
     _enforce_chart_data_contract(command=command, state=state)
     _enforce_registered_course_assets(command=command, state=state, resources=resources)
     _enforce_private_application_images(command=command, state=state, context=context)
@@ -633,6 +647,21 @@ class WorkspaceReviewPresentationTool:
                 "decision must be keep_current, workspace_ready, or no_visual",
                 reason_code="presentation_review_invalid",
             )
+
+        if context.transient_state.get("showcase_selection_sites") is not None:
+            expected = context.transient_state.get("showcase_gallery_props")
+            panels = _current_state(context).panels
+            if (
+                not isinstance(expected, dict)
+                or len(panels) != 1
+                or panels[0].component_id != "page-cards"
+                or panels[0].props != expected
+            ):
+                raise _WorkspaceValidationError(
+                    "The selected four-student gallery is not displayed. Use browser.compare "
+                    "with presentation=thumbnails and all four selected sites before finishing.",
+                    reason_code="showcase_gallery_missing",
+                )
 
         persisted_workspace_open = bool(_current_state(context).panels)
         workspace_open = context.transient_state.get(WORKSPACE_VISIBLE_STATE_KEY)

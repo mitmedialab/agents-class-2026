@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from contextlib import suppress
 from typing import ClassVar, cast
+from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
 from pydantic import JsonValue, ValidationError
@@ -14,6 +15,7 @@ from course_server.agent.capabilities import (
     ToolExecutionContext,
     ToolExecutionResult,
     ToolValidationError,
+    _https_result_url,
 )
 from course_server.workspace import (
     ComponentRegistry,
@@ -34,7 +36,13 @@ from .constants import (
     BROWSER_SCROLL_TOOL_ID,
     PAGE_CARDS_COMPONENT_ID,
 )
-from .models import BrowserError, BrowserPage, BrowserSessionNotFound, BrowserSessionService
+from .models import (
+    BrowserError,
+    BrowserPage,
+    BrowserSecurityError,
+    BrowserSessionNotFound,
+    BrowserSessionService,
+)
 
 
 def browser_page_props(page: BrowserPage) -> dict[str, JsonValue]:
@@ -171,8 +179,14 @@ def _reject_unknown(arguments: Mapping[str, JsonValue], allowed: frozenset[str])
         raise ToolValidationError(f"unexpected arguments: {', '.join(sorted(unknown))}")
 
 
-def _browser_error(error: BrowserError) -> ToolValidationError:
-    return ToolValidationError(str(error))
+class _BrowserToolError(ToolValidationError):
+    def __init__(self, error: BrowserError) -> None:
+        super().__init__(str(error))
+        self.reason_code = "browser_" + type(error).__name__.removeprefix("Browser").lower()
+
+
+def _browser_error(error: BrowserError) -> _BrowserToolError:
+    return _BrowserToolError(error)
 
 
 def _updated_result(
@@ -360,11 +374,16 @@ class BrowserCompareTool:
         "Capture and display two to four public HTTPS pages as adjacent website cards. "
         "Use this whenever several websites, projects, sources, or options are being "
         "presented as candidates so the user can compare them visually. Each column scrolls "
-        "independently. Use browser.open instead when showing only one page."
+        "independently. Set presentation=thumbnails for a 2x2 gallery: supply a verified "
+        "image_url from staff.discover_showcase_images when available; otherwise the tool "
+        "captures the supplied weekly-page URL as a screenshot automatically. Use the actual "
+        "weekly build URL discovered from website navigation or repository documentation. "
+        "Use browser.open instead when showing only one page."
     )
     input_schema: ClassVar[dict[str, JsonValue]] = {
         "type": "object",
         "properties": {
+            "presentation": {"type": "string", "enum": ["previews", "thumbnails"]},
             "heading": {"type": "string", "minLength": 1, "maxLength": 200},
             "description": {"type": "string", "maxLength": 2_000},
             "candidates": {
@@ -380,6 +399,7 @@ class BrowserCompareTool:
                             "pattern": "^https://[^\\s]+$",
                             "maxLength": 2_048,
                         },
+                        "image_url": {"type": "string", "maxLength": 2048},
                         "title": {"type": "string", "minLength": 1, "maxLength": 500},
                         "description": {"type": "string", "maxLength": 2_000},
                     },
@@ -401,7 +421,9 @@ class BrowserCompareTool:
         arguments: Mapping[str, JsonValue],
         context: ToolExecutionContext,
     ) -> ToolExecutionResult:
-        _reject_unknown(arguments, frozenset({"heading", "description", "candidates"}))
+        _reject_unknown(
+            arguments, frozenset({"heading", "description", "candidates", "presentation"})
+        )
         raw_candidates = arguments.get("candidates")
         if not isinstance(raw_candidates, list) or not 2 <= len(raw_candidates) <= 4:
             raise ToolValidationError("candidates must contain two to four pages")
@@ -412,12 +434,45 @@ class BrowserCompareTool:
         if description_value is not None and not isinstance(description_value, str):
             raise ToolValidationError("description must be text")
 
+        presentation = arguments.get("presentation", "previews")
+        if not isinstance(presentation, str) or presentation not in {"previews", "thumbnails"}:
+            raise ToolValidationError("presentation must be previews or thumbnails")
+        selected_sites = context.transient_state.get("showcase_selection_sites")
+        if isinstance(selected_sites, list):
+            # Each selected site must appear exactly once; path boundaries distinguish
+            # student repositories hosted under the same GitHub Pages origin.
+            remaining = list(selected_sites)
+            for candidate in raw_candidates:
+                if not isinstance(candidate, dict) or not isinstance(candidate.get("url"), str):
+                    raise ToolValidationError("Showcase candidates require website URLs.")
+                parsed = urlsplit(str(candidate["url"]))
+                matches = [
+                    site
+                    for site in remaining
+                    if isinstance(site, str)
+                    and urlsplit(site).netloc == parsed.netloc
+                    and (
+                        parsed.path.rstrip("/") == urlsplit(site).path.rstrip("/")
+                        or parsed.path.startswith(urlsplit(site).path.rstrip("/") + "/")
+                    )
+                ]
+                if len(matches) != 1:
+                    raise ToolValidationError(
+                        "Display each selected student's registered site exactly once."
+                    )
+                remaining.remove(matches[0])
+            if remaining or presentation != "thumbnails":
+                raise ToolValidationError(
+                    "Showcase requires all four selected students in a thumbnail gallery."
+                )
         items: list[dict[str, JsonValue]] = []
+        capture_failures: list[JsonValue] = []
+        captured_pages: list[JsonValue] = []
         try:
             for index, raw_candidate in enumerate(raw_candidates, start=1):
                 if not isinstance(raw_candidate, dict):
                     raise ToolValidationError("each candidate must be an object")
-                unknown = set(raw_candidate) - {"url", "title", "description"}
+                unknown = set(raw_candidate) - {"url", "title", "description", "image_url"}
                 if unknown:
                     raise ToolValidationError(
                         f"unexpected candidate arguments: {', '.join(sorted(unknown))}"
@@ -433,20 +488,76 @@ class BrowserCompareTool:
                     not isinstance(description, str) or len(description) > 2_000
                 ):
                     raise ToolValidationError("candidate description is invalid")
-                preview = await self._service.create_preview(
-                    principal=context.principal,
-                    conversation_id=context.conversation_id,
-                    url=url,
-                )
-                item: dict[str, JsonValue] = {
-                    "id": f"candidate-{index}",
-                    "url": preview.url,
-                    "title": title.strip() if isinstance(title, str) else preview.title,
-                    "preview_id": str(preview.preview_id),
-                    "revision": preview.revision,
-                }
+                if _https_result_url(url) is None:
+                    raise ToolValidationError("Candidate URL must be credential-free public HTTPS.")
+                image_url = raw_candidate.get("image_url")
+                if image_url is not None:
+                    known = context.transient_state.get("page_image_candidates", [])
+                    if (
+                        presentation != "thumbnails"
+                        or not isinstance(image_url, str)
+                        or _https_result_url(image_url) is None
+                        or not isinstance(known, list)
+                        or image_url not in known
+                    ):
+                        raise ToolValidationError(
+                            "Thumbnail images must come from image discovery in this run."
+                        )
+                    item: dict[str, JsonValue] = {
+                        "id": f"candidate-{index}",
+                        "url": url,
+                        "title": title.strip() if isinstance(title, str) else url,
+                        "image_url": image_url,
+                    }
+                else:
+                    try:
+                        preview = await self._service.create_preview(
+                            principal=context.principal,
+                            conversation_id=context.conversation_id,
+                            url=url,
+                        )
+                    except BrowserSecurityError:
+                        raise
+                    except BrowserError as error:
+                        if presentation != "thumbnails":
+                            raise
+                        # Preserve other students when one public page cannot be captured.
+                        items.append(
+                            {
+                                "id": f"candidate-{index}",
+                                "url": url,
+                                "title": title.strip() if isinstance(title, str) else url,
+                                "preview_unavailable": True,
+                                "description": (
+                                    ((description + " · ") if description else "")
+                                    + "Screenshot unavailable; use the website link."
+                                )[:2000],
+                            }
+                        )
+                        capture_failures.append(
+                            {"url": url, "reason_code": _browser_error(error).reason_code}
+                        )
+                        continue
+                    captured_pages.append(
+                        {
+                            "url": preview.url,
+                            "title": preview.title,
+                            "text_excerpt": preview.text_excerpt,
+                        }
+                    )
+                    item = {
+                        "id": f"candidate-{index}",
+                        "url": preview.url,
+                        "title": title.strip() if isinstance(title, str) else preview.title,
+                        "preview_id": str(preview.preview_id),
+                        "revision": preview.revision,
+                    }
+                    if presentation == "thumbnails":
+                        description = (
+                            (description + " · ") if description else ""
+                        ) + "Build-page screenshot"
                 if isinstance(description, str) and description.strip():
-                    item["description"] = description.strip()
+                    item["description"] = description.strip()[:2000]
                 items.append(item)
         except BrowserError as error:
             raise _browser_error(error) from error
@@ -457,6 +568,7 @@ class BrowserCompareTool:
             raise ToolValidationError("The browser workspace state is invalid.") from error
         existing_panel = _active_page_cards_panel(current)
         props: dict[str, JsonValue] = {
+            "presentation": presentation,
             "heading": heading_value.strip()[:200],
             "items": cast(JsonValue, items),
         }
@@ -500,15 +612,33 @@ class BrowserCompareTool:
             raise ToolValidationError("The page cards could not be opened.") from error
         context.workspace_state.clear()
         context.workspace_state.update(updated.model_dump(mode="json", exclude_none=True))
+        if isinstance(selected_sites, list):
+            context.transient_state["showcase_gallery_props"] = props
         return ToolExecutionResult(
             content={
+                "capture_failures": capture_failures,
+                "status": "partial_images" if capture_failures else "ready",
                 "heading": heading_value.strip()[:200],
                 "candidate_count": len(items),
+                "captured_pages": captured_pages,
+                "review_instruction": "Check captured page evidence for the intended weekly build. "
+                "If it shows an error or the wrong page, resolve the exact URL from sources and "
+                "repair the gallery before reporting completion.",
                 "candidates": [
                     {"id": item["id"], "url": item["url"], "title": item["title"]} for item in items
                 ],
             },
-            summary=f"Displayed {len(items)} website candidates for comparison.",
+            summary=f"Displayed {len(items)} website candidates for comparison."
+            + (
+                " Unavailable previews: "
+                + ", ".join(
+                    str(failure["reason_code"])
+                    for failure in capture_failures
+                    if isinstance(failure, dict)
+                )
+                if capture_failures
+                else ""
+            ),
             storage_policy="server_summary",
             emitted_events=[
                 ToolEmittedEvent(

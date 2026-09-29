@@ -255,3 +255,17 @@ confirmation and private event payload additions are optional and default to in-
 ## PostgreSQL integration tests
 
 Set `TEST_DATABASE_URL` to a disposable development PostgreSQL database and run `uv run pytest -m postgres`. Tests create a random isolated schema and drop that schema afterward. They do not modify the database's public schema.
+
+## Weekly presentation history
+
+Weekly presentation history lives in the private, Git-ignored
+`var/student-showcase/history.json` (`SHOWCASE_HISTORY_PATH` override). Staff maintain the
+version-1 issue list manually; showcase tools only read it. Back up and restore this file with
+other private course state. Missing or invalid history blocks selection. See
+[STUDENT_PROJECTS.md](STUDENT_PROJECTS.md#enter-week-1-selections-here) for the Week 1 entry format.
+
+The adjacent private `selections/week-NN.json` files store version-1 reviewed pools, evidence,
+scores and draws for consistent retries. They are written atomically under a file lock and
+must be included in protected backups. Staff explicitly archive a week's snapshot to request
+a fresh review; presentation history stays intact. See
+[STUDENT_PROJECTS.md](STUDENT_PROJECTS.md#saved-reviews-and-display-retries).
