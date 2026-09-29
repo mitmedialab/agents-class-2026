@@ -39,6 +39,12 @@ export interface CalendarProps {
 
 type CalendarView = "month" | "agenda";
 
+interface CalendarReading {
+  title: string;
+  detail?: string;
+  href?: string;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -54,6 +60,86 @@ function textList(value: unknown): string[] | undefined {
     return normalized ? [normalized] : [];
   });
   return values.length ? values : undefined;
+}
+
+function cleanReadingMarkdown(value: string): string {
+  return value
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/__([^_]+)__/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/_([^_]+)_/g, "$1")
+    .replace(/\\([\\`*{}[\]()#+\-.!_>|+])/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function safeReadingHref(value: string): string | undefined {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password
+      ? url.toString()
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function readingDetailPart(value: string): string {
+  return cleanReadingMarkdown(value).replace(/^[,;:\s]+|[,;:\s]+$/g, "");
+}
+
+function compactReadingDetail(authorValue: string, citationValue: string): string {
+  const optional = /^optional:\s*/i.test(authorValue);
+  const author = authorValue.replace(/^optional:\s*/i, "").trim();
+  const years = citationValue.match(/\b(?:19|20)\d{2}\b/g);
+  const year = years?.at(-1);
+  if (!author) return year ? `(${year})` : "";
+
+  const multipleAuthors = /\bet al\.|,|\band\b|&/i.test(author);
+  let authorLabel = author;
+  if (year || multipleAuthors) {
+    const tokens = author.split(/\s+/).filter(Boolean);
+    const first = tokens[0] ?? author;
+    const lead = /^[A-Z]\.$/.test(first)
+      ? (tokens.at(-1)?.replace(/[,;:]$/, "") ?? first)
+      : first.replace(/[,;:]$/, "");
+    authorLabel = `${lead}${multipleAuthors ? " et al." : ""}`;
+  }
+
+  return [
+    optional ? "Optional ·" : "",
+    authorLabel,
+    year ? `(${year})` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function parseCalendarReadings(value: string): CalendarReading[] {
+  return value
+    .split(/<br\s*\/?\s*>/i)
+    .map((item) => item.trim().replace(/^\d+\.\s*/, ""))
+    .filter(Boolean)
+    .map((item) => {
+      const link = /\[([^\]]+)]\(([^)\s]+)\)/.exec(item);
+      if (!link || link.index === undefined) {
+        return { title: cleanReadingMarkdown(item) };
+      }
+      const label = link[1] ?? "";
+      const target = link[2] ?? "";
+      const before = readingDetailPart(item.slice(0, link.index));
+      const after = readingDetailPart(item.slice(link.index + link[0].length));
+      const detail = compactReadingDetail(before, after);
+      const title = cleanReadingMarkdown(label).replace(/^[“‘\"']|[”’\"']$/g, "");
+      const href = safeReadingHref(target);
+      return {
+        title,
+        ...(detail ? { detail } : {}),
+        ...(href ? { href } : {}),
+      };
+    })
+    .filter((item) => item.title);
 }
 
 function weekNumber(value: unknown): number | undefined {
@@ -204,6 +290,47 @@ function monthCells(focus: Date): Date[] {
     date.setDate(start.getDate() + index);
     return date;
   });
+}
+
+function AgendaReadings({ event }: { event: CalendarEvent }) {
+  const value = event.readings;
+  if (
+    !value ||
+    /^no assigned readings\.?$/i.test(cleanReadingMarkdown(value))
+  ) {
+    return null;
+  }
+  const readings = parseCalendarReadings(value);
+  if (!readings.length) return null;
+  return (
+    <section
+      aria-label={`Suggested readings for ${event.title}`}
+      className="ca-calendar-agenda-readings"
+    >
+      <div className="ca-calendar-agenda-readings-inner">
+        <div className="ca-calendar-agenda-readings-heading">
+          <b>Suggested readings</b>
+        </div>
+        <ol className="ca-calendar-reading-list">
+          {readings.map((reading, index) => (
+            <li key={`${reading.href ?? reading.title}-${index}`}>
+              {reading.href ? (
+                <a href={reading.href} rel="noreferrer" target="_blank">
+                  <span>{reading.title}</span>
+                  <span aria-hidden="true">↗</span>
+                </a>
+              ) : (
+                <span className="ca-calendar-reading-title">{reading.title}</span>
+              )}
+              {reading.detail ? (
+                <span className="ca-calendar-reading-detail">{reading.detail}</span>
+              ) : null}
+            </li>
+          ))}
+        </ol>
+      </div>
+    </section>
+  );
 }
 
 export function Calendar({
@@ -358,7 +485,11 @@ export function Calendar({
         <ol className="ca-calendar-agenda">
           {data.events.map((event) => (
             <li data-selected={event.id === selectedId} key={event.id}>
-              <button onClick={() => chooseEvent(event)} type="button">
+              <button
+                className="ca-calendar-agenda-summary"
+                onClick={() => chooseEvent(event)}
+                type="button"
+              >
                 <span className="ca-calendar-agenda-meta">
                   {event.week ? <b>Week {event.week}</b> : null}
                   <time dateTime={event.start}>{formatEventDate(event)}</time>
@@ -389,14 +520,9 @@ export function Calendar({
                       ) : null}
                     </span>
                   ) : null}
-                  {event.readings ? (
-                    <span className="ca-calendar-agenda-readings">
-                      <b>Suggested readings</b>
-                      <span>{event.readings}</span>
-                    </span>
-                  ) : null}
                 </span>
               </button>
+              <AgendaReadings event={event} />
             </li>
           ))}
         </ol>

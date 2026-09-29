@@ -198,6 +198,13 @@ function supplementalText(value: string): string | undefined {
   return normalized;
 }
 
+function supplementalMarkdown(value: string): string | undefined {
+  const normalized = cleanInlineMarkdown(value);
+  if (!normalized || /^(?:n\/?a|—|-|no class)$/i.test(normalized)) return undefined;
+  const markdown = value.trim();
+  return markdown || undefined;
+}
+
 function parseNotices(lines: string[]): CalendarNotice[] {
   const notices: CalendarNotice[] = [];
   for (const rawLine of lines) {
@@ -267,7 +274,7 @@ export function parseScheduleMarkdown(markdown: string): CalendarData {
     if (activity) event.activity = activity;
     if (tutorialBlock.speakers) event.tutorialSpeakers = tutorialBlock.speakers;
 
-    const readings = supplementalText(columnValue(row, table.columns, "readings"));
+    const readings = supplementalMarkdown(columnValue(row, table.columns, "readings"));
     if (readings) event.readings = readings;
     events.push(event);
   }

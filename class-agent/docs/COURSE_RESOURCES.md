@@ -12,6 +12,7 @@ course://faq
 course://instructors
 course://application
 course://slides/week-01
+course://slides/week-02
 ```
 
 Each published file has a `resource.json` sidecar under `shared/course/`. The sidecars
@@ -124,7 +125,7 @@ Public indexing copies these optional fields into the generated registry. Protec
 retain them only in their server-owned sidecars.
 
 Structured course assignments do not live in resource manifests. Their canonical records are one
-validated JSON file each under `ASSIGNMENT_DATA_PATH`, defaulting to `var/assignments/`. They have
+validated JSON file each in a dedicated directory under `ASSIGNMENT_DATA_PATH`. They have
 their own agent read/authoring tools and independently drive release and upcoming notifications. See
 [ASSIGNMENTS.md](ASSIGNMENTS.md). Manifest deadlines remain useful for non-assignment course events
 and for deployments that already maintain generic resource deadline metadata.

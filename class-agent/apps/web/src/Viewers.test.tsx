@@ -10,7 +10,7 @@ import {
   normalizeVisualElements,
   resolveTextAnchor,
 } from "@class-agent/ui";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -102,6 +102,42 @@ describe("DocumentViewer", () => {
     );
     expect(screen.getByRole("list")).toHaveTextContent("Build an agent");
     expect(screen.getByText("Be creative!")).toBeInTheDocument();
+  });
+
+  it("renders GFM tables without changing their text or allowing raw HTML", () => {
+    const content = [
+      "| Name | Email | Website | Project Idea |",
+      "| --- | --- | --- | --- |",
+      "| Meiri Anto | [meiri@mit.edu](mailto:meiri@mit.edu) | [Website](https://example.com) | Preserve this exact project idea. |",
+      "",
+      "<script>window.compromised = true</script>",
+    ].join("\n");
+
+    const { container } = render(
+      <DocumentViewer
+        resource={{
+          uri: "course://students/registered-projects",
+          title: "Registered Student Projects",
+          mediaType: "text/markdown",
+          data: new TextEncoder().encode(content),
+        }}
+      />,
+    );
+
+    const table = screen.getByRole("table");
+    expect(within(table).getByRole("columnheader", { name: "Name" })).toBeInTheDocument();
+    expect(within(table).getByRole("cell", { name: "Meiri Anto" })).toBeInTheDocument();
+    expect(within(table).getByRole("link", { name: "meiri@mit.edu" })).toHaveAttribute(
+      "href",
+      "mailto:meiri@mit.edu",
+    );
+    expect(within(table).getByRole("link", { name: "Website" })).toHaveAttribute(
+      "href",
+      "https://example.com",
+    );
+    expect(table).toHaveTextContent("Preserve this exact project idea.");
+    expect(container.querySelector("script")).toBeNull();
+    expect(screen.queryByText("window.compromised = true")).not.toBeInTheDocument();
   });
 
   it("contain-fits PDF pages in width- and height-constrained workspaces", () => {
@@ -277,20 +313,29 @@ describe("Calendar", () => {
       week: 7,
       tutorialSpeakers: ["Wazeer Zulfikar", "Yasith Samaradivakara"],
     });
+    expect(data.events[12]).toMatchObject({
+      week: 13,
+      dateLabel: "12/8",
+    });
     expect(data.events.at(-1)).toMatchObject({
       week: 14,
-      dateLabel: "TBD",
+      dateLabel: "12/14",
       title: "Final project presentations",
+      description:
+        "Monday, 1:30–4:30 PM in E15-341. Live demo + paper-style presentation + failure analysis",
     });
-    expect(data.events.every((event) => event.readings === undefined)).toBe(true);
-    expect(data.notices).toContainEqual({
-      label: "Application deadline",
-      text: "September 4, midnight",
-    });
-    expect(data.notices).toContainEqual({
-      label: "Acceptance notification",
-      text: "September 9, midnight",
-    });
+    expect(data.events.at(-1)?.activity).toBeUndefined();
+    expect(data.events[0]?.readings).toContain(
+      "ReAct: Synergizing Reasoning and Acting in Language Models",
+    );
+    expect(data.events[4]?.readings).toBe("No assigned readings.");
+    expect(data.events[12]?.readings).toContain("AgentDojo");
+    expect(data.notices).not.toContainEqual(
+      expect.objectContaining({ label: "Application deadline" }),
+    );
+    expect(data.notices).not.toContainEqual(
+      expect.objectContaining({ label: "Acceptance notification" }),
+    );
 
     render(<Calendar data={data} focusDate="2025-09-15" view="month" />);
     expect(screen.getByRole("heading", { name: "September 2026" })).toBeInTheDocument();
@@ -300,6 +345,25 @@ describe("Calendar", () => {
     expect(
       screen.getByRole("button", { name: "Course introduction: What is an AI agent?" }),
     ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Agenda" }));
+    const readingsSection = screen.getByRole("region", {
+      name: "Suggested readings for Course introduction: What is an AI agent?",
+    });
+    const readingLink = within(readingsSection).getByRole("link", {
+      name: /Agents that Reduce Work and Information Overload/,
+    });
+    expect(readingLink).toHaveAttribute(
+      "href",
+      "https://explore.metascienceobservatory.org/papers/W2113609601",
+    );
+    expect(readingLink).toHaveAttribute("target", "_blank");
+    expect(readingLink).toHaveAttribute("rel", "noreferrer");
+    expect(readingLink.closest("button")).toBeNull();
+    expect(within(readingsSection).queryByText("4 readings")).not.toBeInTheDocument();
+    expect(
+      within(readingsSection).getByText("Pattie (1994)"),
+    ).toBeVisible();
+    expect(screen.getByText("Kenneth et al. (2026)")).toBeVisible();
   });
 
   it("parses the editable Markdown schedule into complete calendar events", () => {
@@ -333,7 +397,7 @@ describe("Calendar", () => {
         dateLabel: "9/15",
         activity: "Build a minimal agent loop.",
         tutorialSpeakers: ["Wazeer Zulfikar"],
-        readings: "ReAct; MCP (https://modelcontextprotocol.io/specification)",
+        readings: "ReAct; [MCP](https://modelcontextprotocol.io/specification)",
       },
       {
         id: "week-5",
@@ -360,6 +424,12 @@ describe("Calendar", () => {
     );
     expect(screen.getByText("The history of AI agents.")).toBeInTheDocument();
     expect(screen.getByText("Tutorial lead: Wazeer Zulfikar")).toBeInTheDocument();
+    const mcpLink = screen.getByRole("link", { name: /MCP/ });
+    expect(mcpLink).toHaveAttribute(
+      "href",
+      "https://modelcontextprotocol.io/specification",
+    );
+    expect(mcpLink.closest("button")).toBeNull();
   });
 
   it("normalizes the course schedule without inventing missing dates", () => {

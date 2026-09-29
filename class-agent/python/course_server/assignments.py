@@ -327,9 +327,22 @@ class FileAssignmentStore:
                 raise AssignmentStoreError("assignment storage directory is invalid")
             self._directory.mkdir(parents=True, exist_ok=True, mode=0o700)
             self._directory.chmod(0o700)
-            destination = self._directory / f"{assignment.assignment_id}.json"
-            if destination.exists():
+            assignment_directory = self._directory / assignment.assignment_id
+            if assignment_directory.is_symlink() or (
+                assignment_directory.exists() and not assignment_directory.is_dir()
+            ):
+                raise AssignmentStoreError("assignment storage directory is invalid")
+            destination = assignment_directory / f"{assignment.assignment_id}.json"
+            legacy_destination = self._directory / f"{assignment.assignment_id}.json"
+            if (
+                destination.exists()
+                or destination.is_symlink()
+                or legacy_destination.exists()
+                or legacy_destination.is_symlink()
+            ):
                 raise AssignmentStoreError(f"assignment {assignment.assignment_id} already exists")
+            assignment_directory.mkdir(mode=0o700, exist_ok=True)
+            assignment_directory.chmod(0o700)
             descriptor = os.open(
                 destination,
                 os.O_WRONLY | os.O_CREAT | os.O_EXCL,
@@ -348,17 +361,26 @@ class FileAssignmentStore:
             return []
         if not self._directory.is_dir() or self._directory.is_symlink():
             raise AssignmentStoreError("assignment storage directory is invalid")
-        paths = sorted(self._directory.glob("*.json"))
+        paths = sorted([*self._directory.glob("*.json"), *self._directory.glob("*/*.json")])
         if len(paths) > MAX_ASSIGNMENTS:
             raise AssignmentStoreError("assignment storage exceeds its record limit")
         assignments = [self._read(path) for path in paths]
+        assignment_ids = [assignment.assignment_id for assignment in assignments]
+        if len(set(assignment_ids)) != len(assignment_ids):
+            raise AssignmentStoreError("assignment storage contains duplicate record IDs")
         assignments.sort(key=lambda assignment: (assignment.due_at, assignment.assignment_id))
         return assignments
 
     def _read(self, path: Path) -> Assignment:
         root = self._directory.resolve()
         resolved = path.resolve()
-        if path.is_symlink() or not resolved.is_relative_to(root) or not resolved.is_file():
+        nested = path.parent != self._directory
+        if (
+            path.is_symlink()
+            or (nested and (path.parent.is_symlink() or path.parent.parent != self._directory))
+            or not resolved.is_relative_to(root)
+            or not resolved.is_file()
+        ):
             raise AssignmentStoreError("stored assignment path is invalid")
         try:
             if resolved.stat().st_size > MAX_ASSIGNMENT_BYTES:
@@ -383,6 +405,8 @@ class FileAssignmentStore:
             raise AssignmentStoreError("stored assignment is malformed or unavailable") from error
         if resolved.name != f"{assignment.assignment_id}.json":
             raise AssignmentStoreError("stored assignment ID does not match its filename")
+        if nested and path.parent.name != assignment.assignment_id:
+            raise AssignmentStoreError("stored assignment ID does not match its directory")
         return assignment
 
 

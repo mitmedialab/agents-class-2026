@@ -94,8 +94,8 @@ normally belongs in protected production backups. See
 [docs/COURSE_RESOURCES.md](docs/COURSE_RESOURCES.md) for resource manifests, automatic
 indexing, uploads, and application-storage operations.
 
-Course assignments are one validated JSON file each under `ASSIGNMENT_DATA_PATH` (default
-`var/assignments/`). Released assignments are available to logged-in students and TAs through the
+Course assignments are one validated JSON file each in a dedicated directory under
+`ASSIGNMENT_DATA_PATH` (default `var/assignments/`). Released assignments are available to logged-in students and TAs through the
 agent and drive the notification center's release and fourteen-day deadline items; reading one opens
 the exact posted Markdown in the workspace. The application does not expose an assignment-authoring
 tool or editor. See

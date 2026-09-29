@@ -7,6 +7,8 @@ import {
   useRef,
   useState,
 } from "react";
+import Markdown, { type Components } from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { createPdfLoadingTask } from "./pdfRuntime.js";
 
 export interface DocumentResource {
@@ -139,177 +141,90 @@ function markedText(text: string, offset: number, activeRange: TextRange | null)
   );
 }
 
-function plainMarkdown(text: string): string {
-  return text.replaceAll(/\\([\\`*{}\[\]()#+\-.!_>])/g, "$1");
+interface PositionedMarkdownNode {
+  type?: string;
+  tagName?: string;
+  value?: string;
+  children?: PositionedMarkdownNode[];
+  properties?: Record<string, unknown>;
+  position?: {
+    start?: { offset?: number };
+    end?: { offset?: number };
+  };
 }
 
-function safeMarkdownHref(value: string): string | null {
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.href : null;
-  } catch {
-    return null;
-  }
+function markdownHighlightPlugin(range: TextRange | null) {
+  return () => (tree: PositionedMarkdownNode) => {
+    if (!range) return;
+
+    const visit = (parent: PositionedMarkdownNode) => {
+      if (!parent.children) return;
+
+      const children: PositionedMarkdownNode[] = [];
+      for (const child of parent.children) {
+        const start = child.position?.start?.offset;
+        const end = child.position?.end?.offset;
+        if (
+          child.type !== "text" ||
+          child.value === undefined ||
+          start === undefined ||
+          end === undefined ||
+          range.end <= start ||
+          range.start >= end
+        ) {
+          visit(child);
+          children.push(child);
+          continue;
+        }
+
+        const highlightStart = Math.max(0, range.start - start);
+        const highlightEnd = Math.min(child.value.length, range.end - start);
+        if (highlightStart > 0) {
+          children.push({ type: "text", value: child.value.slice(0, highlightStart) });
+        }
+        if (highlightEnd > highlightStart) {
+          children.push({
+            type: "element",
+            tagName: "mark",
+            properties: { dataDocumentHighlight: "true" },
+            children: [{ type: "text", value: child.value.slice(highlightStart, highlightEnd) }],
+          });
+        }
+        if (highlightEnd < child.value.length) {
+          children.push({ type: "text", value: child.value.slice(highlightEnd) });
+        }
+      }
+      parent.children = children;
+    };
+
+    visit(tree);
+  };
 }
 
-function inlineMarkdown(
-  text: string,
-  offset: number,
-  range: TextRange | null,
-  keyPrefix: string,
-): ReactNode[] {
-  const pattern = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[[^\]]+\]\([^)]+\))/g;
-  const nodes: ReactNode[] = [];
-  let cursor = 0;
-  let partIndex = 0;
-
-  for (const match of text.matchAll(pattern)) {
-    const start = match.index;
-    if (start > cursor) {
-      const plain = text.slice(cursor, start);
-      nodes.push(
-        <span key={`${keyPrefix}-${partIndex++}`}>
-          {markedText(plainMarkdown(plain), offset + cursor, range)}
-        </span>,
-      );
-    }
-    const raw = match[0];
-    const key = `${keyPrefix}-${partIndex++}`;
-    if (raw.startsWith("**") && raw.endsWith("**")) {
-      const value = plainMarkdown(raw.slice(2, -2));
-      nodes.push(<strong key={key}>{markedText(value, offset + start + 2, range)}</strong>);
-    } else if (raw.startsWith("*") && raw.endsWith("*")) {
-      const value = plainMarkdown(raw.slice(1, -1));
-      nodes.push(<em key={key}>{markedText(value, offset + start + 1, range)}</em>);
-    } else if (raw.startsWith("`") && raw.endsWith("`")) {
-      const value = raw.slice(1, -1);
-      nodes.push(<code key={key}>{markedText(value, offset + start + 1, range)}</code>);
-    } else {
-      const link = /^\[([^\]]+)]\(([^)]+)\)$/.exec(raw);
-      const label = plainMarkdown(link?.[1] ?? raw);
-      const href = link?.[2] ? safeMarkdownHref(link[2]) : null;
-      nodes.push(
-        href ? (
-          <a href={href} key={key} rel="noreferrer" target="_blank">
-            {markedText(label, offset + start + 1, range)}
-          </a>
-        ) : (
-          <span key={key}>{markedText(label, offset + start, range)}</span>
-        ),
-      );
-    }
-    cursor = start + raw.length;
-  }
-  if (cursor < text.length) {
-    const plain = text.slice(cursor);
-    nodes.push(
-      <span key={`${keyPrefix}-${partIndex}`}>
-        {markedText(plainMarkdown(plain), offset + cursor, range)}
-      </span>,
-    );
-  }
-  return nodes;
-}
+const markdownComponents: Components = {
+  a: ({ node: _node, ...props }) => <a {...props} rel="noreferrer" target="_blank" />,
+  table: ({ node: _node, ...props }) => (
+    <div className="ca-markdown-table-scroll">
+      <table {...props} />
+    </div>
+  ),
+};
 
 function MarkdownDocument({ content, range }: { content: string; range: TextRange | null }) {
-  const lines = content.split("\n");
-  const offsets: number[] = [];
-  let offset = 0;
-  for (const line of lines) {
-    offsets.push(offset);
-    offset += line.length + 1;
-  }
-  const blocks: ReactNode[] = [];
-  let index = 0;
-  while (index < lines.length) {
-    const line = lines[index] ?? "";
-    const trimmed = line.trim();
-    if (!trimmed) {
-      index += 1;
-      continue;
-    }
-    const lineOffset = (offsets[index] ?? 0) + line.indexOf(trimmed);
-    const heading = /^(#{1,3})\s+(.+)$/.exec(trimmed);
-    if (heading?.[2]) {
-      const level = heading[1]?.length ?? 2;
-      const bodyOffset = lineOffset + level + 1;
-      const value = inlineMarkdown(heading[2], bodyOffset, range, `heading-${index}`);
-      blocks.push(
-        level === 1 ? (
-          <h1 key={`heading-${index}`}>{value}</h1>
-        ) : level === 2 ? (
-          <h2 key={`heading-${index}`}>{value}</h2>
-        ) : (
-          <h3 key={`heading-${index}`}>{value}</h3>
-        ),
-      );
-      index += 1;
-      continue;
-    }
-    if (/^[-*]\s+/.test(trimmed)) {
-      const items: ReactNode[] = [];
-      while (index < lines.length) {
-        const candidate = lines[index] ?? "";
-        const candidateTrimmed = candidate.trim();
-        const item = /^[-*]\s+(.+)$/.exec(candidateTrimmed);
-        if (!item?.[1]) break;
-        const candidateOffset =
-          (offsets[index] ?? 0) + candidate.indexOf(candidateTrimmed) + 2;
-        items.push(
-          <li key={`bullet-${index}`}>
-            {inlineMarkdown(item[1], candidateOffset, range, `bullet-${index}`)}
-          </li>,
-        );
-        index += 1;
-      }
-      blocks.push(<ul key={`bullets-${index}`}>{items}</ul>);
-      continue;
-    }
-    if (/^\d+[.)]\s+/.test(trimmed)) {
-      const items: ReactNode[] = [];
-      while (index < lines.length) {
-        const candidate = lines[index] ?? "";
-        const candidateTrimmed = candidate.trim();
-        const item = /^(\d+[.)]\s+)(.+)$/.exec(candidateTrimmed);
-        if (!item?.[2]) break;
-        const candidateOffset =
-          (offsets[index] ?? 0) + candidate.indexOf(candidateTrimmed) + (item[1]?.length ?? 0);
-        items.push(
-          <li key={`number-${index}`}>
-            {inlineMarkdown(item[2], candidateOffset, range, `number-${index}`)}
-          </li>,
-        );
-        index += 1;
-      }
-      blocks.push(<ol key={`numbers-${index}`}>{items}</ol>);
-      continue;
-    }
-    const paragraph: ReactNode[] = [];
-    while (index < lines.length) {
-      const candidate = lines[index] ?? "";
-      const candidateTrimmed = candidate.trim();
-      if (
-        !candidateTrimmed ||
-        /^#{1,3}\s+/.test(candidateTrimmed) ||
-        /^[-*]\s+/.test(candidateTrimmed) ||
-        /^\d+[.)]\s+/.test(candidateTrimmed)
-      ) {
-        break;
-      }
-      if (paragraph.length) paragraph.push(" ");
-      paragraph.push(
-        ...inlineMarkdown(
-          candidateTrimmed,
-          (offsets[index] ?? 0) + candidate.indexOf(candidateTrimmed),
-          range,
-          `paragraph-${index}`,
-        ),
-      );
-      index += 1;
-    }
-    blocks.push(<p key={`paragraph-${index}`}>{paragraph}</p>);
-  }
-  return <div className="ca-document-markdown">{blocks}</div>;
+  const highlightPlugin = useMemo(() => markdownHighlightPlugin(range), [range]);
+
+  return (
+    <div className="ca-document-markdown">
+      <Markdown
+        components={markdownComponents}
+        rehypePlugins={[highlightPlugin]}
+        remarkPlugins={[remarkGfm]}
+        skipHtml
+      >
+        {content}
+      </Markdown>
+    </div>
+  );
 }
 
 function SearchBar({

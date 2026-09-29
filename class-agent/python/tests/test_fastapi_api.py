@@ -514,6 +514,7 @@ def test_public_course_resource_catalog_marks_schedule_provisional() -> None:
         "course://instructors",
         "course://application",
         "course://slides/week-01",
+        "course://slides/week-02",
     ]
     schedule = next(
         resource for resource in response.json() if resource["uri"] == "course://schedule"
@@ -708,7 +709,9 @@ def test_authorized_resource_content_is_served_by_uri_without_exposing_paths() -
     assert response.headers["content-type"].startswith("text/markdown")
     assert response.headers["x-class-agent-resource-uri"] == "course://schedule"
     assert "| Week 1 (9/15) |" in response.text
-    assert "| Week 14 TBD |" in response.text
+    assert "| Week 13 (12/8) |" in response.text
+    assert "| Week 14 (12/14) |" in response.text
+    assert "Monday, 1:30–4:30 PM in E15-341" in response.text
     assert "shared/course" not in response.text
     assert (
         client.get(

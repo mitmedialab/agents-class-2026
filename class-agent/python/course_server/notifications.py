@@ -173,14 +173,17 @@ class NotificationCenterService:
         user = await self._active_user(principal)
         now = self._clock()
         assignments = await self._released_assignments(principal, now)
+        lecture_slides = self._lecture_slides(principal)
         history_items = [
             *await self._course_updates(principal, user, now, assignments),
             *await self._communications(principal, user),
             *self._upcoming(principal, now, assignments),
-            *self._lecture_slides(principal),
+            *lecture_slides,
         ]
         history_items.sort(key=_history_item_sort_key)
         items = [item for item in history_items if _is_active(item, now)]
+        if lecture_slides:
+            items.append(lecture_slides[0])
         items.sort(key=_item_sort_key)
         return NotificationCenter(
             generated_at=now,

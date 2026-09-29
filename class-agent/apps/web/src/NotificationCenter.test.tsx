@@ -310,7 +310,7 @@ describe("NotificationCenter", () => {
   });
 });
 
-it("shows lecture slides only after See more and invokes their resource action", () => {
+it("shows the newest lecture after assignments and keeps all lectures in history", () => {
   const onAction = vi.fn();
   const slides = [10, 2, 1].map((number) => ({
     ...data.items[0]!,
@@ -330,7 +330,12 @@ it("shows lecture slides only after See more and invokes their resource action",
     return (
       <NotificationCenter
         busy={false}
-        data={{ ...data, unread_count: 0, items: [], history_items: slides }}
+        data={{
+          ...data,
+          unread_count: 0,
+          items: [...data.items, slides[0]!],
+          history_items: [...data.items, ...slides],
+        }}
         historyExpanded={expanded}
         onAction={onAction}
         onHistoryExpandedChange={setExpanded}
@@ -339,9 +344,18 @@ it("shows lecture slides only after See more and invokes their resource action",
     );
   }
   render(<Preview />);
-  expect(screen.queryByRole("region", { name: "Lecture Slides" })).not.toBeInTheDocument();
+  let section = screen.getByRole("region", { name: "Lecture Slides" });
+  const center = screen.getByRole("complementary", { name: "Notification center" });
+  expect(
+    within(center)
+      .getAllByRole("list")
+      .map((list) => list.getAttribute("aria-label")),
+  ).toEqual(["Updates", "Communications", "Upcoming", "Lecture Slides"]);
+  expect(within(section).getAllByRole("listitem")).toHaveLength(1);
+  expect(screen.getByText("Lecture 10")).toBeVisible();
+  expect(screen.queryByText("Lecture 2")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "See more" }));
-  const section = screen.getByRole("region", { name: "Lecture Slides" });
+  section = screen.getByRole("region", { name: "Lecture Slides" });
   const thumbnail = section.querySelector(".notification-slide-thumbnail img");
   expect(thumbnail).toHaveAttribute("src", expect.stringContaining("first_slide"));
   fireEvent.error(thumbnail!);
@@ -359,5 +373,7 @@ it("shows lecture slides only after See more and invokes their resource action",
   ).not.toBeInTheDocument();
   expect(screen.getByText("Lecture 10")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Show current" }));
-  expect(screen.queryByRole("region", { name: "Lecture Slides" })).not.toBeInTheDocument();
+  section = screen.getByRole("region", { name: "Lecture Slides" });
+  expect(within(section).getAllByRole("listitem")).toHaveLength(1);
+  expect(screen.getByText("Lecture 10")).toBeVisible();
 });

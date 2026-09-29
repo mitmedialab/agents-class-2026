@@ -72,6 +72,9 @@ def test_stored_assignment_is_available_through_role_scoped_read_tools(tmp_path:
             clock=lambda: now,
             id_factory=lambda: FIXED_ASSIGNMENT_IDENTITY,
         )
+        authoring_directory = tmp_path / f"assignments/{GENERATED_ASSIGNMENT_ID}"
+        authoring_directory.mkdir(parents=True)
+        (authoring_directory / "assignment.md").write_text("# Authoring source\n")
         instructor = principal("instructor")
         assert instructor.user_id is not None
         assignment = await store.create(
@@ -80,10 +83,12 @@ def test_stored_assignment_is_available_through_role_scoped_read_tools(tmp_path:
         )
 
         assert assignment.assignment_id == GENERATED_ASSIGNMENT_ID
-        path = tmp_path / f"assignments/{GENERATED_ASSIGNMENT_ID}.json"
+        path = authoring_directory / f"{GENERATED_ASSIGNMENT_ID}.json"
         record = json.loads(path.read_text(encoding="utf-8"))
         assert record["schema_version"] == 3
         assert record["summary"] == "Build and document one small cognitive agent."
+        assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
+        assert (authoring_directory / "assignment.md").read_text() == "# Authoring source\n"
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
         student_context = context("student")

@@ -1365,6 +1365,7 @@ export default function App() {
     !isOpening && latestResponse === WELCOME_MESSAGE && isPresentingWelcome;
   const hasOpenWorkspace = workspaceState.panels.length > 0;
   const notificationCenterVisible =
+    !aboutOpen &&
     principal?.authenticated === true &&
     (notificationCenter.items.length > 0 ||
       (notificationCenter.history_items?.length ?? 0) > 0) &&

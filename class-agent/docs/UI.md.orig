@@ -317,9 +317,8 @@ response content length when available and remains indeterminate when the server
 It is not the default for knowledge extracted from documents: the agent synthesizes that knowledge
 into a VisualComposition. Calendar provides agenda and
 month views over a normalized resource without embedding schedule data in component
-code. Agenda readings preserve authored HTTPS links as a responsive numbered citation
-list outside the event-selection control, so links remain independently accessible.
-Panel focus and close use semantic operations rather than arbitrary DOM or JavaScript.
+code. Panel focus and close use semantic operations rather than arbitrary DOM or
+JavaScript.
 
 VisualComposition treats its workspace as the detailed answer, so chat provides only a
 short handoff instead of repeating the same facts. Fractional media widths do not shrink

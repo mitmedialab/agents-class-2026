@@ -137,7 +137,9 @@ conversations; it does not weaken the resource-content endpoint's authorization.
 ## Built-in components
 
 `document-viewer` opens a specific Markdown, plain-text, or PDF artifact when the user
-wants to navigate, search, or discuss its particular content. PDF pages are contain-fitted to
+wants to navigate, search, or discuss its particular content. Markdown uses a maintained
+CommonMark/GFM pipeline, including GFM tables, and skips raw HTML. Authorized resource bytes
+remain canonical: the viewer creates a rendered projection without rewriting the source. PDF pages are contain-fitted to
 the viewer's current usable width and height and rerender when that surface resizes.
 The PDF toolbar includes a **Download PDF** icon immediately left of Find, matching the
 workspace close icon in size and the Find placeholder in color, retaining both on the About page, which saves the already-authorized original bytes

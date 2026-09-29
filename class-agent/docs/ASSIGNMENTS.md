@@ -1,9 +1,21 @@
 # Course assignments
 
 Course assignments are server-owned, validated JSON records. `ASSIGNMENT_DATA_PATH` defaults to
-`var/assignments/`, and each assignment occupies exactly one file named
-`<assignment_id>.json`. The directory is ignored by Git so each deployment can maintain its own
-course state. Include it in protected production backups.
+`var/assignments/`, and each assignment occupies a directory named for its ID with one canonical
+JSON record of the same name:
+
+```text
+var/assignments/
+└── week-1/
+    ├── week-1.json
+    └── week-1.md
+```
+
+The optional Markdown file is useful as an authoring copy, but the backend reads only the validated
+JSON record and its embedded `content_markdown`. A Markdown file by itself is not a published
+assignment. Flat `<assignment_id>.json` records remain readable for migration compatibility; new
+records are written to assignment directories. The root directory is ignored by Git so each
+deployment can maintain its own course state. Include it in protected production backups.
 
 ## Stored schema
 
@@ -26,7 +38,7 @@ Current JSON files are validated as schema version 3 and must contain exactly th
 }
 ```
 
-`assignment_id` is an internal record identifier and must match the filename. `summary` is a bounded plain-text projection of
+`assignment_id` is an internal record identifier and must match the directory and filename. `summary` is a bounded plain-text projection of
 the first useful paragraph in `content_markdown` for notification cards, not a second authored
 copy. `status` is either `draft` or `published`; `revision` is a positive integer. Every timestamp
 must include a timezone, and `due_at` must be later than `release_at`. Unknown fields, malformed

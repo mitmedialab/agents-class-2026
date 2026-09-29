@@ -1314,6 +1314,54 @@ describe("Course Agent interface", () => {
     expect(screen.queryByRole("dialog", { name: "Chat history" })).not.toBeInTheDocument();
   });
 
+  it.each(["navigation", "direct URL"])(
+    "hides notifications on About via %s and restores them on return",
+    async (entry) => {
+      vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
+      vi.mocked(api.getNotificationCenter).mockResolvedValue({
+        generated_at: "2026-09-05T12:00:00Z",
+        unread_count: 0,
+        items: [{
+          id: "60000000-0000-4000-8000-000000000021",
+          section: "communications",
+          kind: "pending_message",
+          state: "pending",
+          title: "Model choice",
+          detail: "May I use a local model?",
+          timestamp: "2026-09-05T10:00:00Z",
+          due_at: null,
+          action_label: "Check status",
+          action_prompt: "Check my question.",
+          unread: false,
+          dismissible: false,
+          sender: null,
+        }],
+      });
+      if (entry === "direct URL") window.history.replaceState({}, "", "/about");
+      const { container } = render(<App />);
+      if (entry === "navigation") {
+        expect(await screen.findByRole("complementary", { name: "Notification center" }))
+          .toBeInTheDocument();
+        fireEvent.click(screen.getByRole("button", { name: "About" }));
+      }
+      expect(await screen.findByRole("heading", {
+        level: 1, name: "AI Agents for Cognitive Augmentation",
+      })).toBeInTheDocument();
+      await waitFor(() => expect(api.getNotificationCenter).toHaveBeenCalled());
+      expect(screen.queryByRole("complementary", { name: "Notification center" }))
+        .not.toBeInTheDocument();
+      expect(container.querySelector(".course-agent"))
+        .toHaveAttribute("data-notifications-open", "false");
+      expect(container.querySelector(".course-agent"))
+        .toHaveAttribute("data-mobile-notifications-open", "false");
+      fireEvent.click(screen.getByRole("button", { name: "About" }));
+      expect(await screen.findByRole("complementary", { name: "Notification center" }))
+        .toBeInTheDocument();
+      expect(container.querySelector(".course-agent"))
+        .toHaveAttribute("data-notifications-open", "true");
+    },
+  );
+
   it("loads About directly from the registered syllabus resource", async () => {
     render(<App />);
     await openExistingConversation();

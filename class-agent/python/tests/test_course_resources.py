@@ -235,6 +235,7 @@ def test_public_resource_registry_includes_provisional_schedule() -> None:
         "course://instructors",
         "course://application",
         "course://slides/week-01",
+        "course://slides/week-02",
     ]
     instructors = next(summary for summary in summaries if summary.uri == COURSE_INSTRUCTORS_URI)
     assert instructors.title == "Course Staff"
@@ -245,7 +246,9 @@ def test_public_resource_registry_includes_provisional_schedule() -> None:
     schedule_contents = asyncio.run(resources.read(COURSE_SCHEDULE_URI))
     assert schedule_contents.media_type == "text/markdown"
     assert "| Week 1 (9/15) |" in schedule_contents.text
-    assert "| Week 14 TBD |" in schedule_contents.text
+    assert "| Week 13 (12/8) |" in schedule_contents.text
+    assert "| Week 14 (12/14) |" in schedule_contents.text
+    assert "Monday, 1:30–4:30 PM in E15-341" in schedule_contents.text
     assert "Browser and computer use agents" in schedule_contents.text
 
     schedule_definition = next(

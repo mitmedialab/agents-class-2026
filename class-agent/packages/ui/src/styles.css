@@ -1771,6 +1771,54 @@
   padding: 0.08em 0.25em;
 }
 
+.ca-document-markdown:has(.ca-markdown-table-scroll) {
+  max-width: 100%;
+}
+
+.ca-markdown-table-scroll {
+  border-bottom: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-border);
+  margin: 1rem 0;
+  overflow-x: auto;
+  scrollbar-color: var(--color-border) transparent;
+  white-space: normal;
+}
+
+.ca-document-markdown table {
+  border-collapse: collapse;
+  min-width: 100%;
+  width: max-content;
+}
+
+.ca-document-markdown th,
+.ca-document-markdown td {
+  border-bottom: 1px solid var(--color-border);
+  max-width: 28rem;
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  vertical-align: top;
+}
+
+.ca-document-markdown th {
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 0.625rem;
+  letter-spacing: 0.08em;
+  position: sticky;
+  text-transform: uppercase;
+  top: 0;
+  z-index: 1;
+}
+
+.ca-document-markdown td {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.ca-document-markdown tbody tr:last-child td {
+  border-bottom: 0;
+}
+
 .ca-document-content mark,
 .ca-pdf-text mark {
   background: color-mix(in srgb, var(--color-accent) 28%, transparent);
@@ -1991,19 +2039,19 @@
   scrollbar-color: var(--color-border) transparent;
 }
 
-.ca-calendar-agenda li {
+.ca-calendar-agenda > li {
   border-top: 1px solid var(--color-border);
 }
 
-.ca-calendar-agenda li[data-selected="true"] {
+.ca-calendar-agenda > li[data-selected="true"] {
   background: color-mix(in srgb, var(--color-text) 5%, transparent);
 }
 
-.ca-calendar-agenda button {
+.ca-calendar-agenda-summary {
   display: grid;
   gap: clamp(1.25rem, 3vw, 3.5rem);
   grid-template-columns: minmax(6rem, 8rem) minmax(0, 1fr);
-  padding: 1.35rem var(--space-2);
+  padding: 1.1rem var(--space-2);
   text-align: left;
   width: 100%;
 }
@@ -2031,7 +2079,7 @@
 
 .ca-calendar-agenda-content {
   display: grid;
-  gap: 0.65rem;
+  gap: 0.5rem;
 }
 
 .ca-calendar-agenda-content > strong {
@@ -2045,8 +2093,7 @@
   line-height: 1.5;
 }
 
-.ca-calendar-agenda-activity,
-.ca-calendar-agenda-readings {
+.ca-calendar-agenda-activity {
   color: var(--color-text-muted);
   display: grid;
   font-size: 0.75rem;
@@ -2054,8 +2101,7 @@
   line-height: 1.5;
 }
 
-.ca-calendar-agenda-activity b,
-.ca-calendar-agenda-readings b {
+.ca-calendar-agenda-activity b {
   color: var(--color-text);
   font-size: 0.625rem;
   font-weight: 500;
@@ -2064,8 +2110,90 @@
 }
 
 .ca-calendar-agenda-readings {
+  display: grid;
+  gap: clamp(1.25rem, 3vw, 3.5rem);
+  grid-template-columns: minmax(6rem, 8rem) minmax(0, 1fr);
+  padding: 0 var(--space-2) 1.1rem;
+}
+
+.ca-calendar-agenda-readings-inner {
   border-top: 1px solid color-mix(in srgb, var(--color-border) 55%, transparent);
+  container-type: inline-size;
+  grid-column: 2;
   padding-top: 0.65rem;
+}
+
+.ca-calendar-agenda-readings-heading b {
+  color: var(--color-text);
+  font-size: 0.625rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+
+.ca-calendar-reading-list {
+  display: block;
+  list-style: decimal;
+  margin: 0.65rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.ca-calendar-reading-list li {
+  break-inside: avoid;
+  margin-bottom: 0.65rem;
+  min-width: 0;
+  padding-left: var(--space-1);
+}
+
+.ca-calendar-reading-list li:last-child {
+  margin-bottom: 0;
+}
+
+.ca-calendar-reading-list li::marker {
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+}
+
+.ca-calendar-reading-list a,
+.ca-calendar-reading-title {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.ca-calendar-reading-list a {
+  display: inline;
+  text-decoration-color: var(--color-text-muted);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+.ca-calendar-reading-list a:hover {
+  color: var(--color-text);
+  text-decoration-color: currentColor;
+}
+
+.ca-calendar-reading-list a > span:last-child {
+  color: var(--color-text-muted);
+  font-size: 0.7em;
+  margin-left: var(--space-1);
+}
+
+.ca-calendar-reading-detail {
+  color: var(--color-text-muted);
+  display: inline;
+  font-size: 0.625rem;
+  line-height: 1.35;
+  margin-left: var(--space-2);
+}
+
+@container (min-width: 46rem) {
+  .ca-calendar-reading-list {
+    column-count: 2;
+    column-gap: clamp(2rem, 6cqi, 4rem);
+  }
 }
 
 @media (max-width: 640px) {
@@ -2100,7 +2228,7 @@
     padding-inline: var(--space-3);
   }
 
-  .ca-calendar-agenda button {
+  .ca-calendar-agenda-summary {
     gap: 0.75rem;
     grid-template-columns: 1fr;
     padding-block: 1rem;
@@ -2110,6 +2238,16 @@
     align-items: baseline;
     display: flex;
     justify-content: space-between;
+  }
+
+  .ca-calendar-agenda-readings {
+    gap: 0;
+    grid-template-columns: 1fr;
+    padding-bottom: 1rem;
+  }
+
+  .ca-calendar-agenda-readings-inner {
+    grid-column: 1;
   }
 
 }

@@ -65,13 +65,14 @@ draft while keeping the durable answer independent from later instructor-convers
 
 ## Course assignments
 
-`ASSIGNMENT_DATA_PATH` defaults to `var/assignments/`. Each assignment is a separately validated
-`<assignment_id>.json` file; the ID must match its filename. The store creates the directory with
-mode `0700` and tool-created files with mode `0600`, rejects path indirection and unknown fields,
-and refuses to overwrite an existing ID. Validated updates require the reviewed current revision,
-atomically replace that one record, and preserve its original creator and creation time. Student
-and TA reads expose only released published records; instructor reads may also include drafts and scheduled records. See
-[ASSIGNMENTS.md](ASSIGNMENTS.md) for the complete schema and authoring workflow.
+`ASSIGNMENT_DATA_PATH` defaults to `var/assignments/`. Each assignment directory contains a
+separately validated `<assignment_id>.json` file; the ID must match its directory and filename.
+Flat JSON records remain readable for migration compatibility. The store creates root and assignment
+directories with mode `0700` and tool-created files with mode `0600`, rejects path indirection and
+unknown fields, and refuses to overwrite an existing ID. Validated updates require the reviewed
+current revision, atomically replace that one record, and preserve its original creator and creation
+time. Student and TA reads expose only released published records; instructor reads may also include
+drafts and scheduled records. See [ASSIGNMENTS.md](ASSIGNMENTS.md) for the complete schema and workflow.
 
 Current writes use assignment schema version 3 and store the full student-facing document as
 Markdown. Platform code generates the assignment ID and derives a short notification summary. The

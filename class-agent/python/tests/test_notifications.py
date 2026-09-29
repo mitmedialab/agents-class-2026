@@ -428,7 +428,8 @@ def test_lecture_slides_are_authorized_persistent_and_sorted_numerically(tmp_pat
         assert center.history_items[0].thumbnail is not None
         assert center.history_items[0].thumbnail.resource_uri == "course://slides/week-10"
         assert center.history_items[0].thumbnail.asset_id == "first_slide"
-        assert center.items == []
+        assert [item.title for item in center.items] == ["Lecture 10"]
+        assert center.items[0] == center.history_items[0]
         assert center.unread_count == 0
         assert all(not item.dismissible for item in center.history_items)
         assert "course://slides/week-10" in center.history_items[0].action_prompt
