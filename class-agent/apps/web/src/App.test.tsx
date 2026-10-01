@@ -619,7 +619,14 @@ describe("Course Agent interface", () => {
     expect(api.createConversation).not.toHaveBeenCalled();
     expect(api.generatePageGreeting).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    const composerForm = screen.getByRole("form", {
+      name: "Message Course Agent",
+    });
+    const discardDraft = within(composerForm).getByRole("button", {
+      name: "Discard draft",
+    });
+    expect(discardDraft).toBeVisible();
+    fireEvent.click(discardDraft);
 
     await waitFor(() =>
       expect(api.confirmInstructorMessage).toHaveBeenCalledWith(
@@ -1568,6 +1575,21 @@ describe("Course Agent interface", () => {
       vi.clearAllTimers();
       vi.useRealTimers();
     }
+  });
+
+  it("clears an unfinished composer draft without sending it", async () => {
+    render(<App />);
+    await openExistingConversation();
+
+    const composer = screen.getByRole("textbox", { name: "Message" });
+    fireEvent.change(composer, { target: { value: "An unfinished thought" } });
+    fireEvent.click(screen.getByRole("button", { name: "Clear draft" }));
+
+    expect(composer).toHaveValue("");
+    expect(api.streamAgentRun).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole("button", { name: "Clear draft" }),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps inspectable agent activity visually separate and expandable", async () => {

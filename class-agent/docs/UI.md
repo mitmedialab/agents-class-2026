@@ -64,8 +64,10 @@ runtime preserves the agent's final wording instead of substituting a platform-a
 Optional context needed by staff remains part of the prepared request but is not rendered as a
 second explanation in the student interface. Internal tracking codes, subject lines, greetings,
 sign-offs, and transport formatting stay out of the student interface. The composer pauses
-until the student chooses **Send** or **Cancel**. The Course Agent is instructed not to repeat the
-detailed question already visible in the confirmation. Send only queues the dedicated mail worker;
+until the student chooses **Send** or **Cancel**. A persistent **Discard draft** action remains in
+the composer while a confirmation is pending, so a restored draft can always be cancelled even
+when its preview is taller than the available response area. The Course Agent is instructed not to
+repeat the detailed question already visible in the confirmation. Send only queues the dedicated mail worker;
 the UI closes the confirmation and asks the Course Agent to continue from the trusted action event.
 The agent receives the completed action and exact submitted question and decides what to say next,
 including whether to acknowledge the send or continue other unfinished work. The browser contains
@@ -237,7 +239,8 @@ PDF resources with page navigation and document search.
 
 Press Enter to send and Shift+Enter for a newline. The composer is an ordinary
 accessible textarea despite having no visible input box. Typing a printable key
-while the page itself is focused moves focus into the composer.
+while the page itself is focused moves focus into the composer. **Clear draft** removes
+ordinary unsent text and attachments without starting an agent run.
 
 ## Data flow
 

@@ -1919,11 +1919,13 @@ textarea {
 
 .composer-actions {
   display: flex;
+  gap: var(--space-4);
   justify-content: center;
   margin-top: 1rem;
 }
 
 .attachment-button,
+.composer-draft-action,
 .upload-list button {
   appearance: none;
   background: transparent;
@@ -1952,17 +1954,20 @@ textarea {
   width: 0.875rem;
 }
 
-.attachment-button:disabled {
+.attachment-button:disabled,
+.composer-draft-action:disabled {
   cursor: default;
   opacity: 0.35;
 }
 
 .attachment-button:hover:not(:disabled),
+.composer-draft-action:hover:not(:disabled),
 .upload-list button:hover {
   color: var(--color-text);
 }
 
 .attachment-button:focus-visible,
+.composer-draft-action:focus-visible,
 .upload-list button:focus-visible {
   outline: 1px solid var(--color-text);
   outline-offset: 3px;
