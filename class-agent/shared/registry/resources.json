@@ -90,6 +90,27 @@
       "assets": {
         "first_slide": "registry/slide-thumbnails/e4d2625270828cb070c070181a2e6d395f79e71cc6b47ca6b06ccdf0543a30c7.png"
       }
+    },
+    {
+      "uri": "course://slides/week-03",
+      "title": "Designing Human-Agent Interaction for Cognitive Augmentation",
+      "description": "Slides for the third course meeting.",
+      "media_type": "application/pdf",
+      "path": "course/slides/week-03/week-3-slides.pdf",
+      "visibility": "public",
+      "status": "published",
+      "assets": {
+        "first_slide": "registry/slide-thumbnails/74ea9df3e264de91502bd0989849cdbd41618140300d473432f5e5e19b785dec.png"
+      }
+    },
+    {
+      "uri": "course://readings/software-agents-bradshaw",
+      "title": "An Introduction to Software Agents",
+      "description": "Week 1 assigned reading by Jeffrey M. Bradshaw on the history, definitions, motivations, and attributes of software agents.",
+      "media_type": "application/pdf",
+      "path": "course/readings/software-agents-bradshaw/software-agents-bradshaw.pdf",
+      "visibility": "public",
+      "status": "published"
     }
   ]
 }

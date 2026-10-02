@@ -10,7 +10,9 @@ includes:
 - Markdown and JSON repository overviews;
 - Markdown and JSON FAQ documents;
 - instructor and teaching-assistant profiles;
-- the public application guide.
+- the public application guide;
+- the published weekly lecture slide decks;
+- the Week 1 Bradshaw reading on software agents.
 
 Only the file selected by each public manifest and assets explicitly named in that
 manifest are exposed to the Course Agent. Registered asset IDs, rather than repository

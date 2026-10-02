@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "resource": {
+    "uri": "course://slides/week-03",
+    "title": "Designing Human-Agent Interaction for Cognitive Augmentation",
+    "description": "Slides for the third course meeting.",
+    "media_type": "application/pdf",
+    "file": "week-3-slides.pdf",
+    "visibility": "public",
+    "status": "published",
+    "order": 62
+  }
+}

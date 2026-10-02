@@ -515,6 +515,8 @@ def test_public_course_resource_catalog_marks_schedule_provisional() -> None:
         "course://application",
         "course://slides/week-01",
         "course://slides/week-02",
+        "course://slides/week-03",
+        "course://readings/software-agents-bradshaw",
     ]
     schedule = next(
         resource for resource in response.json() if resource["uri"] == "course://schedule"

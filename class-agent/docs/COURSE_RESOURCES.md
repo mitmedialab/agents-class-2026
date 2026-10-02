@@ -13,6 +13,8 @@ course://instructors
 course://application
 course://slides/week-01
 course://slides/week-02
+course://slides/week-03
+course://readings/software-agents-bradshaw
 ```
 
 Each published file has a `resource.json` sidecar under `shared/course/`. The sidecars
@@ -80,6 +82,10 @@ and the agent can inspect the focused page visually on demand through the author
 `document.inspect_page` tool, but they require a separate OCR workflow before their contents are
 searchable. The renderer receives only registered course bytes or a principal-owned temporary
 upload; rendered PNG bytes are ephemeral and are not stored in conversation history.
+
+Public course readings use a dedicated directory per artifact under
+`shared/course/readings/` and a `course://readings/<reading-id>` URI. PDF readings are
+indexed for agent reads and search and open as the registered artifact in DocumentViewer.
 
 `course_server.index_resources` regenerates the catalog from every sidecar manifest,
 then synchronizes the searchable PostgreSQL copy. Production API and Course Agent CLI
