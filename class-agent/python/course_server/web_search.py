@@ -7,9 +7,10 @@ import ipaddress
 import socket
 import time
 from collections.abc import Callable
+from functools import lru_cache
 from threading import Lock
 from typing import Any, cast
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import httpx
 from bs4 import BeautifulSoup
@@ -21,6 +22,7 @@ _MAX_IMAGE_REDIRECTS = 3
 _MAX_WEBPAGE_REDIRECTS = 5
 _MAX_WEBPAGE_BYTES = 2 * 1024 * 1024
 _MAX_PAGE_IMAGES = 20
+_MAX_FAVICON_BYTES = 64 * 1024
 _BRAVE_WEB_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search"
 _BRAVE_RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 _IMAGE_PROBE_HEADERS = {
@@ -30,6 +32,83 @@ _IMAGE_PROBE_HEADERS = {
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
     ),
 }
+
+
+def _favicon_media_type(content: bytes) -> str | None:
+    if content.startswith(b"\x00\x00\x01\x00"):
+        return "image/x-icon"
+    if content.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if content.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if content.startswith((b"GIF87a", b"GIF89a")):
+        return "image/gif"
+    if len(content) >= 12 and content[:4] == b"RIFF" and content[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
+def _fetch_public_favicon(
+    favicon_url: str,
+    *,
+    transport: httpx.BaseTransport | None = None,
+) -> tuple[bytes, str] | None:
+    current_url = favicon_url
+    try:
+        with httpx.Client(
+            follow_redirects=False,
+            timeout=6.0,
+            transport=transport,
+            trust_env=False,
+        ) as client:
+            for _ in range(_MAX_IMAGE_REDIRECTS + 1):
+                if not _is_public_https_url(current_url):
+                    return None
+                with client.stream("GET", current_url, headers=_IMAGE_PROBE_HEADERS) as response:
+                    if response.status_code in {301, 302, 303, 307, 308}:
+                        location = response.headers.get("location")
+                        if not location:
+                            return None
+                        current_url = urljoin(current_url, location)
+                        continue
+                    if response.status_code != 200:
+                        return None
+                    content = bytearray()
+                    for chunk in response.iter_bytes():
+                        content.extend(chunk)
+                        if len(content) > _MAX_FAVICON_BYTES:
+                            return None
+                    media_type = _favicon_media_type(bytes(content))
+                    return (bytes(content), media_type) if media_type else None
+    except (httpx.HTTPError, OSError, ValueError):
+        return None
+    return None
+
+
+@lru_cache(maxsize=256)
+def _cached_public_favicon(favicon_url: str) -> tuple[bytes, str] | None:
+    return _fetch_public_favicon(favicon_url)
+
+
+def fetch_public_favicon(
+    destination_url: str,
+    *,
+    transport: httpx.BaseTransport | None = None,
+) -> tuple[bytes, str] | None:
+    """Fetch one bounded origin favicon without exposing the user's browser to that origin."""
+
+    parsed = urlsplit(destination_url)
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        return None
+    favicon_url = urlunsplit(("https", parsed.netloc, "/favicon.ico", "", ""))
+    if transport is not None:
+        return _fetch_public_favicon(favicon_url, transport=transport)
+    return _cached_public_favicon(favicon_url)
 
 
 class BraveWebSearchClient:

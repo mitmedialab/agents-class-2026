@@ -34,6 +34,7 @@ def test_registry_fails_closed_and_revocation_is_immediate(tmp_path: Path) -> No
         with pytest.raises(PermissionError):
             policy.scope(public_principal(), accepted_only=accepted_only)
     path.write_text(json.dumps({"schema_version": 1, "application_ids": [str(accepted)]}))
+    assert policy.shared_application_ids() == frozenset({accepted})
     policy.require(student, accepted)
     with pytest.raises(PermissionError):
         policy.require(student, uuid4())

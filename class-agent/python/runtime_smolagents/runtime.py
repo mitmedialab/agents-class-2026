@@ -594,7 +594,12 @@ def _conversation_history(context: AgentContext) -> str:
     for event in context.recent_events:
         if event.type == "instructor.message.confirmation_requested":
             subject = event.payload.get("subject")
-            if isinstance(subject, str):
+            message = event.payload.get("message")
+            if isinstance(subject, str) and isinstance(message, str):
+                lines.append(
+                    f"Instructor message draft awaiting confirmation ({subject}):\n{message}"
+                )
+            elif isinstance(subject, str):
                 lines.append(f"Instructor message prepared for confirmation: {subject}")
             continue
         if event.type in {"instructor.message.sent", "instructor.message.cancelled"}:

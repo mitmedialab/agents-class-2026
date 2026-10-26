@@ -4,7 +4,10 @@ import {
   confirmTAQuestion,
   continueAgentAfterEvent,
   getCourseResourceContent,
+  getInstructorMessageEmailDelivery,
   getPendingActionConversation,
+  linkFaviconUrl,
+  notificationSenderImageUrl,
   listConversations,
   recordWorkspaceInteraction,
   streamAgentRun,
@@ -13,6 +16,20 @@ import {
 } from "./api.js";
 
 describe("conversation history", () => {
+  it("builds a same-origin favicon proxy URL", () => {
+    expect(linkFaviconUrl("https://docs.example.edu/guide")).toBe(
+      "/api/v1/link-favicon?url=https%3A%2F%2Fdocs.example.edu%2Fguide",
+    );
+  });
+
+  it("builds the staff-only notification sender image URL", () => {
+    expect(
+      notificationSenderImageUrl("10000000-0000-4000-8000-000000000006"),
+    ).toBe(
+      "/api/v1/notification-center/10000000-0000-4000-8000-000000000006/sender-image",
+    );
+  });
+
   it("requests bounded pages and the dedicated pending-action lookup", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -99,6 +116,26 @@ describe("message confirmation", () => {
           message: "Bring the revised prototype.",
         }),
       }),
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it("reads instructor email delivery from the owned message route", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({ state: "queued" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getInstructorMessageEmailDelivery(
+      "20000000-0000-4000-8000-000000000001",
+      "50000000-0000-4000-8000-000000000002",
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/conversations/20000000-0000-4000-8000-000000000001/instructor-messages/50000000-0000-4000-8000-000000000002/email-delivery",
+      expect.objectContaining({ credentials: "include" }),
     );
     vi.unstubAllGlobals();
   });

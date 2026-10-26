@@ -19,6 +19,7 @@ const data = {
       due_at: null,
       action_label: "Review with agent",
       action_prompt: "Review assignment one.",
+      submission_check_prompt: "Check assignment one submission.",
       unread: true,
       dismissible: true,
       sender: null,
@@ -68,6 +69,7 @@ const data = {
       due_at: "2026-09-17T12:00:00Z",
       action_label: "Plan with agent",
       action_prompt: "Plan assignment one.",
+      submission_check_prompt: "Check assignment one submission.",
       unread: false,
       dismissible: false,
       sender: null,
@@ -95,8 +97,75 @@ const data = {
 };
 
 describe("NotificationCenter", () => {
+  it("shows named student senders and falls back safely when their image is unavailable", () => {
+    const namedQuestion = {
+      id: "10000000-0000-4000-8000-000000000006",
+      section: "communications" as const,
+      kind: "pending_student_question" as const,
+      state: "pending" as const,
+      title: "Extension request",
+      detail: "May I have one more day?",
+      timestamp: "2026-09-05T11:50:00Z",
+      due_at: null,
+      action_label: "View question",
+      action_prompt: "Show the question.",
+      unread: false,
+      dismissible: false,
+      sender: {
+        first_name: "Alice",
+        display_name: "Alice Example",
+        resource_uri: null,
+        image_asset_id: null,
+      },
+    };
+    const { rerender } = render(
+      <NotificationCenter
+        busy={false}
+        data={{ ...data, items: [namedQuestion] }}
+        historyExpanded={false}
+        onAction={vi.fn()}
+        onHistoryExpandedChange={vi.fn()}
+        onMarkRead={vi.fn()}
+      />,
+    );
+
+    const portrait = screen.getByRole("complementary", {
+      name: "Notification center",
+    }).querySelector<HTMLImageElement>(".notification-card-portrait img");
+    expect(portrait).toHaveAttribute(
+      "src",
+      "/api/v1/notification-center/10000000-0000-4000-8000-000000000006/sender-image",
+    );
+    expect(screen.getByText("Alice Example")).toHaveClass("notification-card-sender");
+    fireEvent.error(portrait!);
+    expect(
+      screen
+        .getByRole("complementary", { name: "Notification center" })
+        .querySelector("[data-notification-icon='pending_student_question']"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Alice Example")).toBeVisible();
+
+    rerender(
+      <NotificationCenter
+        busy={false}
+        data={{ ...data, items: [{ ...namedQuestion, sender: null }] }}
+        historyExpanded={false}
+        onAction={vi.fn()}
+        onHistoryExpandedChange={vi.fn()}
+        onMarkRead={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText("Alice Example")).not.toBeInTheDocument();
+    expect(
+      screen
+        .getByRole("complementary", { name: "Notification center" })
+        .querySelector(".notification-card-portrait"),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders updates first with communication and upcoming card groups", () => {
     const onAction = vi.fn();
+    const onSubmissionCheck = vi.fn();
     render(
       <NotificationCenter
         busy={false}
@@ -105,6 +174,7 @@ describe("NotificationCenter", () => {
         onAction={onAction}
         onHistoryExpandedChange={vi.fn()}
         onMarkRead={vi.fn()}
+        onSubmissionCheck={onSubmissionCheck}
       />,
     );
 
@@ -157,6 +227,11 @@ describe("NotificationCenter", () => {
     expect(
       assignmentCard?.querySelector(".notification-assignment-date"),
     ).toBeInTheDocument();
+    const submissionChecks = screen.getAllByRole("button", {
+      name: /Review my progress:/,
+    });
+    expect(submissionChecks).toHaveLength(2);
+    expect(submissionChecks[1]).toHaveClass("notification-submission-check");
 
     const scrollSurface = center.querySelector(".notification-center-scroll");
     expect(center).toHaveAttribute("data-scrolled", "false");
@@ -167,6 +242,8 @@ describe("NotificationCenter", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Plan with agent: Assignment one" }));
     expect(onAction).toHaveBeenCalledWith(data.items[3]);
+    fireEvent.click(submissionChecks[1]!);
+    expect(onSubmissionCheck).toHaveBeenCalledWith(data.items[3]);
     expect(center).toBeVisible();
   });
 

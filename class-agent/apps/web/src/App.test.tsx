@@ -22,6 +22,7 @@ vi.mock("./api.js", () => ({
   generatePageGreeting: vi.fn(),
   getCourseResourceContent: vi.fn(),
   getConversation: vi.fn(),
+  getInstructorMessageEmailDelivery: vi.fn(),
   getNotificationCenter: vi.fn(),
   getPendingActionConversation: vi.fn(),
   getPrincipal: vi.fn(),
@@ -113,6 +114,16 @@ beforeEach(() => {
   vi.mocked(api.getConversation).mockResolvedValue({
     conversation,
     events: [previousEvent],
+  });
+  vi.mocked(api.getInstructorMessageEmailDelivery).mockResolvedValue({
+    message_id: "30000000-0000-4000-8000-000000000001",
+    state: "sent",
+    total_recipients: 1,
+    sent_recipients: 1,
+    remaining_recipients: 0,
+    failed_recipients: 0,
+    deferred_recipients: 0,
+    total_attempts: 1,
   });
   vi.mocked(api.createConversation).mockResolvedValue(conversation);
   vi.mocked(api.applyWorkspacePanelAction).mockResolvedValue(previousEvent);
@@ -549,7 +560,7 @@ describe("Course Agent interface", () => {
     expect(screen.getByRole("textbox", { name: "Message" })).toBeEnabled();
   });
 
-  it("restores a pending student message instead of starting a fresh page greeting", async () => {
+  it("restores a pending question reply with visibility choices and agent revisions", async () => {
     const instructorConversation = {
       ...conversation,
       user_id: instructorPrincipal.user_id,
@@ -570,6 +581,8 @@ describe("Course Agent interface", () => {
         recipient_count: 1,
         subject: "Studio reminder",
         message: "Bring your prototype.",
+        source_question_id: "4e1b74b6-b3cd-4012-b96a-6c57c634b3e1",
+        publication_decision: "private",
         status: "pending_confirmation",
       },
     };
@@ -610,23 +623,35 @@ describe("Course Agent interface", () => {
     expect(
       within(confirmation).getByRole("textbox", { name: "Subject" }),
     ).toHaveValue("Studio reminder");
+    expect(within(confirmation).getByRole("radio", { name: "Private" })).toBeChecked();
+    expect(within(confirmation).getByRole("radio", { name: "Public" })).toBeEnabled();
+    expect(
+      within(confirmation).getByRole("radio", { name: "Silently push to FAQ" }),
+    ).toBeEnabled();
     expect(
       within(screen.getByRole("form", { name: "Message Course Agent" })).getByRole(
         "textbox",
         { name: "Message" },
       ),
-    ).toBeDisabled();
+    ).toBeEnabled();
     expect(api.createConversation).not.toHaveBeenCalled();
     expect(api.generatePageGreeting).not.toHaveBeenCalled();
 
     const composerForm = screen.getByRole("form", {
       name: "Message Course Agent",
     });
-    const discardDraft = within(composerForm).getByRole("button", {
-      name: "Discard draft",
+    expect(
+      within(composerForm).queryByRole("button", { name: "Discard draft" }),
+    ).not.toBeInTheDocument();
+    const send = within(confirmation).getByRole("button", { name: "Send" });
+    const cancel = within(confirmation).getByRole("button", { name: "Cancel" });
+    expect(send.parentElement).toBe(cancel.parentElement);
+    const composer = within(composerForm).getByRole("textbox", { name: "Message" });
+    expect(composer).toHaveAttribute("placeholder", "Ask the agent to revise this draft");
+    fireEvent.change(composer, {
+      target: { value: "Make the message warmer and keep the same recipients." },
     });
-    expect(discardDraft).toBeVisible();
-    fireEvent.click(discardDraft);
+    fireEvent.submit(composerForm);
 
     await waitFor(() =>
       expect(api.confirmInstructorMessage).toHaveBeenCalledWith(
@@ -634,6 +659,14 @@ describe("Course Agent interface", () => {
         messageId,
         "cancel",
         undefined,
+      ),
+    );
+    await waitFor(() =>
+      expect(api.streamAgentRun).toHaveBeenCalledWith(
+        instructorConversation.id,
+        "Make the message warmer and keep the same recipients.",
+        expect.any(Function),
+        expect.any(AbortSignal),
       ),
     );
     await waitFor(() =>
@@ -680,7 +713,9 @@ describe("Course Agent interface", () => {
     ).toBeVisible();
     const mobileView = screen.getByRole("group", { name: "Mobile view" });
     const chatView = within(mobileView).getByRole("button", { name: "Chat" });
-    const updatesView = within(mobileView).getByRole("button", { name: /Updates/ });
+    const updatesView = within(mobileView).getByRole("button", {
+      name: /Notifications/,
+    });
     expect(chatView).toHaveAttribute("aria-pressed", "true");
     expect(updatesView).toHaveAttribute("aria-pressed", "false");
     fireEvent.click(updatesView);
@@ -697,9 +732,6 @@ describe("Course Agent interface", () => {
       "data-notifications-open",
       "true",
     );
-    expect(
-      screen.queryByRole("button", { name: /Notifications/ }),
-    ).not.toBeInTheDocument();
     expect(screen.getByText("Which assignments use groups?")).toBeVisible();
     expect(
       await screen.findByText(
@@ -814,7 +846,53 @@ describe("Course Agent interface", () => {
     }
   });
 
-  it("keeps resolved communication history available without pre-solving it", async () => {
+  it("starts the bounded submission check from an assignment notification", async () => {
+    const submissionPrompt =
+      "Rigorously check my assignment. Follow the assignment-submission-check skill.";
+    vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
+    vi.mocked(api.listConversations).mockResolvedValue([]);
+    vi.mocked(api.getNotificationCenter).mockResolvedValue({
+      generated_at: "2026-09-05T12:00:00Z",
+      unread_count: 0,
+      items: [
+        {
+          id: "60000000-0000-4000-8000-000000000041",
+          section: "upcoming",
+          kind: "assignment_deadline",
+          state: "upcoming",
+          title: "Assignment one",
+          detail: "Build and deploy the assignment.",
+          timestamp: null,
+          due_at: "2026-09-17T12:00:00Z",
+          action_label: "View details",
+          action_prompt: "Open assignment one.",
+          submission_check_prompt: submissionPrompt,
+          unread: false,
+          dismissible: false,
+          sender: null,
+        },
+      ],
+    });
+
+    render(<App />);
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Review my progress: Assignment one",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(api.streamAgentRun).toHaveBeenCalledWith(
+        conversation.id,
+        submissionPrompt,
+        expect.any(Function),
+        expect.any(AbortSignal),
+      ),
+    );
+  });
+
+  it("opens a communication without running the agent and waits for an explicit query", async () => {
     const actionPrompt =
       "Show me any additional information available about the instructor message titled “Studio reminder”. Do not solve it or recommend an action. Ask what I want to do next.";
     const agentResponse = "What would you like to do with this message?";
@@ -864,7 +942,7 @@ describe("Course Agent interface", () => {
       "data-notifications-open",
       "true",
     );
-    fireEvent.click(screen.getByRole("button", { name: /Updates/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Notifications/ }));
     expect(screen.getByTestId("course-agent-interface").parentElement).toHaveAttribute(
       "data-mobile-notifications-open",
       "true",
@@ -873,14 +951,7 @@ describe("Course Agent interface", () => {
       screen.getByRole("button", { name: "View details: Studio reminder" }),
     );
 
-    await waitFor(() =>
-      expect(api.streamAgentRun).toHaveBeenCalledWith(
-        conversation.id,
-        actionPrompt,
-        expect.any(Function),
-        expect.any(AbortSignal),
-      ),
-    );
+    expect(api.streamAgentRun).not.toHaveBeenCalled();
     const presentedCard = await screen.findByRole("article", {
       name: "Communication: Studio reminder",
     });
@@ -895,11 +966,64 @@ describe("Course Agent interface", () => {
       within(presentedCard).getByText("Bring your prototype to class."),
     ).toBeVisible();
     expect(within(presentedCard).queryByText("View details")).not.toBeInTheDocument();
+    const composer = screen.getByRole("textbox", { name: "Message" });
+    expect(composer).toHaveAttribute("placeholder", "Ask the agent about this message");
+    fireEvent.click(
+      within(presentedCard).getByRole("button", { name: "Close message" }),
+    );
+
+    expect(
+      screen.queryByRole("article", { name: "Communication: Studio reminder" }),
+    ).not.toBeInTheDocument();
+    expect(api.streamAgentRun).not.toHaveBeenCalled();
+    expect(composer).toHaveAttribute(
+      "placeholder",
+      "Start typing to interact with the agent",
+    );
+    expect(
+      screen.getByRole("complementary", { name: "Notification center" }),
+    ).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "See more" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "View details: Studio reminder" }),
+    );
+    const reopenedCard = await screen.findByRole("article", {
+      name: "Communication: Studio reminder",
+    });
+    fireEvent.change(composer, {
+      target: { value: "Help me draft a brief reply." },
+    });
+    fireEvent.keyDown(composer, { key: "Enter" });
+
+    await waitFor(() =>
+      expect(api.streamAgentRun).toHaveBeenCalledWith(
+        conversation.id,
+        expect.stringContaining(actionPrompt),
+        expect.any(Function),
+        expect.any(AbortSignal),
+      ),
+    );
+    expect(vi.mocked(api.streamAgentRun).mock.calls.at(-1)?.[1]).toContain(
+      "Help me draft a brief reply.",
+    );
+    expect(reopenedCard).toBeVisible();
     const response = await screen.findByText(agentResponse);
     expect(
-      presentedCard.compareDocumentPosition(response) &
+      reopenedCard.compareDocumentPosition(response) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+    fireEvent.click(
+      within(reopenedCard).getByRole("button", { name: "Close message" }),
+    );
+    expect(
+      screen.queryByRole("article", { name: "Communication: Studio reminder" }),
+    ).not.toBeInTheDocument();
+    expect(response).toBeVisible();
+    expect(composer).toHaveAttribute(
+      "placeholder",
+      "Start typing to interact with the agent",
+    );
   });
 
   it("asks the agent for a caught-up greeting on authenticated page load", async () => {
@@ -1271,7 +1395,7 @@ describe("Course Agent interface", () => {
     );
   });
 
-  it("shows streamed deltas immediately while newly arrived characters fade in", async () => {
+  it("shows frame-coalesced streamed text with an active cursor", async () => {
     let releaseStream = () => {};
     vi.mocked(api.streamAgentRun).mockImplementation(async (_id, _text, onEvent) => {
       onEvent({ kind: "text", text: "Now." });
@@ -1291,7 +1415,21 @@ describe("Course Agent interface", () => {
     await waitFor(() =>
       expect(document.querySelector(".latest-response")).toHaveTextContent("Now."),
     );
-    expect(document.querySelectorAll(".response-character")).toHaveLength(4);
+    expect(document.querySelector(".response-character")).not.toBeInTheDocument();
+    expect(document.querySelector(".latest-response")).toHaveAttribute(
+      "data-streaming",
+      "true",
+    );
+    expect(screen.getByTestId("response-agent-line").parentElement).toHaveClass(
+      "response-stage-header",
+    );
+    const responseStage = screen.getByTestId("response-agent-line").parentElement
+      ?.parentElement;
+    expect(responseStage).toHaveAttribute("data-scrolled", "false");
+    fireEvent.scroll(responseStage!, { target: { scrollTop: 24 } });
+    expect(responseStage).toHaveAttribute("data-scrolled", "true");
+    fireEvent.scroll(responseStage!, { target: { scrollTop: 0 } });
+    expect(responseStage).toHaveAttribute("data-scrolled", "false");
     expect(screen.getByTestId("morphing-line-figure")).toHaveAttribute(
       "data-active",
       "true",
@@ -1841,7 +1979,7 @@ describe("Course Agent interface", () => {
       "aria-pressed",
       "true",
     );
-    expect(screen.getByRole("button", { name: /Updates/ })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: /Notifications/ })).toHaveAttribute(
       "aria-pressed",
       "false",
     );

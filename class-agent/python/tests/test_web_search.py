@@ -21,6 +21,53 @@ def _allow_public_web_test_hosts(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
+def test_public_favicon_fetch_is_origin_scoped_bounded_and_typed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        web_search,
+        "_is_public_https_url",
+        lambda url: url.startswith("https://docs.example.org/"),
+    )
+    requests: list[httpx.Request] = []
+    png = b"\x89PNG\r\n\x1a\nsmall-icon"
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, content=png, headers={"Content-Type": "image/png"})
+
+    favicon = web_search.fetch_public_favicon(
+        "https://docs.example.org/guide?week=3",
+        transport=httpx.MockTransport(respond),
+    )
+
+    assert favicon == (png, "image/png")
+    assert [str(request.url) for request in requests] == ["https://docs.example.org/favicon.ico"]
+
+
+def test_public_favicon_fetch_rejects_unsafe_redirects_and_non_https_urls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        web_search,
+        "_is_public_https_url",
+        lambda url: url.startswith("https://docs.example.org/"),
+    )
+    transport = httpx.MockTransport(
+        lambda _request: httpx.Response(302, headers={"Location": "https://127.0.0.1/icon"})
+    )
+
+    assert (
+        web_search.fetch_public_favicon(
+            "https://docs.example.org/guide",
+            transport=transport,
+        )
+        is None
+    )
+    assert web_search.fetch_public_favicon("http://docs.example.org/guide") is None
+    assert web_search.fetch_public_favicon("https://user:pass@docs.example.org/guide") is None
+
+
 def test_brave_web_search_uses_authenticated_api_and_formats_results() -> None:
     requests: list[httpx.Request] = []
 

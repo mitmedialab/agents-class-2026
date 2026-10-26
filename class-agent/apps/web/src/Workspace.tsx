@@ -36,6 +36,7 @@ interface WorkspaceProps {
   state: WorkspaceState;
   onPanelAction: (action: "focus" | "close", panelId: string) => Promise<void>;
   onCloseWorkspace: () => Promise<void>;
+  onCheckAssignment?: ((resourceUri: string) => void) | undefined;
   onSubmitApplication: () => void;
   onInteraction: (panelId: string, action: string, value: JsonValue) => Promise<void>;
   onBrowserScroll: (panelId: string, sessionId: string, deltaY: number) => Promise<void>;
@@ -56,6 +57,7 @@ interface WorkspaceProps {
 const DEFAULT_COMPONENT_RESOURCES: Readonly<Record<string, string>> = {
   calendar: "course://schedule",
 };
+const ASSIGNMENT_RESOURCE_URI = /^course:\/\/assignment\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 function CloseIcon() {
   return (
@@ -220,6 +222,7 @@ function ResourcePanel({
   onBrowserScroll,
   onBrowserResize,
   onInteraction,
+  onCheckAssignment,
   onSubmitApplication,
 }: {
   browserControlsReady: boolean;
@@ -239,6 +242,7 @@ function ResourcePanel({
     height: number,
   ) => Promise<void>;
   onInteraction: (panelId: string, action: string, value: JsonValue) => Promise<void>;
+  onCheckAssignment?: ((resourceUri: string) => void) | undefined;
   onSubmitApplication: () => void;
 }) {
   const [resource, setResource] = useState<CourseResourceContent | null>(null);
@@ -255,6 +259,11 @@ function ResourcePanel({
   const isApplicationPanel =
     panel.resourceUri === "course://application" ||
     panel.state.document_kind === "course-application";
+  const assignmentResourceUri =
+    typeof resourceUri === "string" && ASSIGNMENT_RESOURCE_URI.test(resourceUri)
+      ? resourceUri
+      : undefined;
+  const isAssignmentPanel = assignmentResourceUri !== undefined;
   const applicationFields =
     isApplicationPanel && draftFields ? draftFields : null;
   const applicationProgress = applicationFields
@@ -446,6 +455,10 @@ function ResourcePanel({
     return (
       <>
         <DraftDocument
+          actionDisabled={!browserControlsReady}
+          actionLabel={
+            isAssignmentPanel && onCheckAssignment ? "Review my progress" : undefined
+          }
           description={stringProp(panel.props, "description")}
           content={draftContent}
           fields={draftFields}
@@ -456,6 +469,11 @@ function ResourcePanel({
               : "draft"
           }
           title={stringProp(panel.props, "title") ?? panel.title ?? "Draft document"}
+          onAction={
+            isAssignmentPanel && onCheckAssignment
+              ? () => onCheckAssignment(assignmentResourceUri)
+              : undefined
+          }
         />
         {applicationFields && applicationProgress !== null ? (
           <footer className="workspace-application-submit">
@@ -515,16 +533,18 @@ function ResourcePanel({
   }
   if (panel.componentId === "document-viewer" && documentResource) {
     return (
-      <DocumentViewer
-        findText={stringProp(panel.props, "find_text")}
-        highlight={highlightProp(panel.props.highlight)}
-        page={numberProp(panel.props, "page")}
-        resource={documentResource}
-        onFind={(query) => void onInteraction(panel.id, "document.find_text", query)}
-        onPageChange={(page) =>
-          void onInteraction(panel.id, "document.change_page", page)
-        }
-      />
+      <>
+        <DocumentViewer
+          findText={stringProp(panel.props, "find_text")}
+          highlight={highlightProp(panel.props.highlight)}
+          page={numberProp(panel.props, "page")}
+          resource={documentResource}
+          onFind={(query) => void onInteraction(panel.id, "document.find_text", query)}
+          onPageChange={(page) =>
+            void onInteraction(panel.id, "document.change_page", page)
+          }
+        />
+      </>
     );
   }
   if (panel.componentId === "calendar" && calendarData) {
@@ -553,6 +573,7 @@ export function Workspace({
   state,
   onPanelAction,
   onCloseWorkspace,
+  onCheckAssignment,
   onSubmitApplication,
   onInteraction,
   onBrowserScroll,
@@ -620,6 +641,7 @@ export function Workspace({
           onBrowserResize={onBrowserResize}
           onBrowserScroll={onBrowserScroll}
           onInteraction={onInteraction}
+          onCheckAssignment={onCheckAssignment}
           onSubmitApplication={onSubmitApplication}
           panel={focused}
         />

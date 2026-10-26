@@ -12,7 +12,7 @@ Platform code filters tools before the model sees them and each tool checks the 
 | Principal | Project list and deployed sites | Repository source and metadata |
 | --- | --- | --- |
 | Anonymous | No | No |
-| Student | All course project sites | No |
+| Student | All course project sites | Own repository only |
 | Instructor | All course project sites | All course repositories |
 | TA | All course project sites | All course repositories |
 | Admin | All course project sites | All course repositories |
@@ -33,6 +33,20 @@ read secrets, repository settings, collaborators, or perform writes. Full fetche
 ephemeral to the current model turn; durable history stores only a generic completion summary.
 Obvious committed credential and private-key paths are refused before GitHub file content is read.
 
+Students also receive `course.inspect_my_student_site` and
+`course.inspect_my_student_repository` for their own project only. These tools accept no project
+ID: the platform forms the expected ID from `GITHUB_REPOSITORY_PREFIX` plus the trusted account
+username and requires an exact roster match. Deployments must therefore provision each student
+account username to match that student's repository suffix. A missing match fails closed. The
+repository tool exposes the same bounded read-only views as the staff tool, but cannot be redirected
+to a classmate's repository by model arguments.
+
+Deployment-owned aliases may deliberately link non-student test accounts to a course repository.
+`GITHUB_STUDENT_PROJECT_ALIASES` is a comma-separated list of explicit
+`username=agents2026-project` mappings. Alias targets must remain inside the configured organization,
+repository prefix, exclusions, and live enumerated roster. The mapping never becomes a model or
+browser argument; ordinary student accounts continue to use the username-derived fail-closed rule.
+
 ## Configuration
 
 Enable the integration only after installing a credential with read access to the private course
@@ -44,6 +58,7 @@ GITHUB_TOKEN=replace-with-protected-read-only-token
 GITHUB_ORGANIZATION=mitmedialab
 GITHUB_REPOSITORY_PREFIX=agents2026-
 GITHUB_EXCLUDED_REPOSITORIES=agents2026-test
+GITHUB_STUDENT_PROJECT_ALIASES=test-student=agents2026-example,test-student2=agents2026-example
 GITHUB_ROSTER_CACHE_TTL_SECONDS=300
 ```
 

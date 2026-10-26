@@ -30,6 +30,9 @@ export interface DraftDocumentProps {
   status?: DraftDocumentStatus | undefined;
   content?: string | undefined;
   fields?: readonly DraftDocumentField[] | undefined;
+  actionLabel?: string | undefined;
+  actionDisabled?: boolean | undefined;
+  onAction?: (() => void) | undefined;
   onChange?: ((id: string, value: string) => void | Promise<void>) | undefined;
 }
 
@@ -45,6 +48,7 @@ function normalizedHeadingText(value: string): string {
     .replaceAll(/\[([^\]]+)]\([^)]+\)/g, "$1")
     .replaceAll(/[*_`]+/g, "")
     .replaceAll(/\\([\\`*{}\[\]()#+\-.!_>])/g, "$1")
+    .replaceAll(/[‐‑‒–—―]/g, "-")
     .replaceAll(/\s+/g, " ")
     .trim()
     .toLocaleLowerCase();
@@ -187,6 +191,9 @@ export function DraftDocument({
   status = "draft",
   content,
   fields = [],
+  actionLabel,
+  actionDisabled = false,
+  onAction,
   onChange,
 }: DraftDocumentProps) {
   const fieldSignature = useMemo(
@@ -235,6 +242,16 @@ export function DraftDocument({
             <p className="ca-draft-document-deadline">Due {deadline}</p>
           ) : description ? (
             <p>{description}</p>
+          ) : null}
+          {actionLabel && onAction ? (
+            <button
+              className="ca-draft-document-action"
+              disabled={actionDisabled}
+              onClick={onAction}
+              type="button"
+            >
+              {actionLabel}
+            </button>
           ) : null}
         </div>
         {fields.length ? (

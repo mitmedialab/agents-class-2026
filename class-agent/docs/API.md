@@ -17,6 +17,7 @@ GET  /api/v1/notifications
 POST /api/v1/notifications/{notification_id}/read
 GET  /api/v1/notification-center
 POST /api/v1/notification-center/{item_id}/read
+GET  /api/v1/notification-center/{item_id}/sender-image
 
 GET  /api/v1/course/resources
 GET  /api/v1/course/resources/content?uri={resource_uri}
@@ -32,6 +33,7 @@ POST /api/v1/conversations/{conversation_id}/workspace/actions
 POST /api/v1/conversations/{conversation_id}/workspace/interactions
 POST /api/v1/conversations/{conversation_id}/ta-questions/{question_id}/confirmation
 POST /api/v1/conversations/{conversation_id}/instructor-messages/{message_id}/confirmation
+GET  /api/v1/conversations/{conversation_id}/instructor-messages/{message_id}/email-delivery
 POST /api/v1/conversations/{conversation_id}/continue
 POST /api/v1/conversations/{conversation_id}/greeting
 
@@ -80,6 +82,13 @@ online answer uses its linked message ID as an idempotency key before completing
 confirmation preview includes `email_available` and each ordinary recipient's account `email`, and the sent event includes `email_queued`.
 Queued does not mean that the provider has delivered the email. A missing, foreign, or previously resolved
 message fails closed.
+
+The instructor-owned email-delivery route projects the durable recipient outbox as aggregate
+`queued`, `sending`, `failed`, `deferred`, `sent`, or `not_requested` state. It reports total,
+sent, remaining, failed, and currently ineligible recipient counts plus aggregate attempts. It
+never exposes recipient addresses, provider IDs, or provider error text. Missing and foreign
+messages fail closed; the browser polls only messages whose trusted sent event recorded
+`email_queued=true`.
 
 The continuation route accepts only a server-issued `trigger_event_id` from the owned
 conversation. Platform code permits the Course Agent to continue only from explicitly allowlisted
@@ -135,15 +144,23 @@ Students see their own sent question threads and
 confirmed instructor messages addressed to them; an answer replaces its pending question item. TAs and instructors see queued/open student questions; other roles do
 not. Course releases come from authorized resource metadata and released structured assignments;
 upcoming assignment deadlines come from the same role-filtered assignment store used by the agent.
+Structured assignment release and deadline items include a student-only
+`submission_check_prompt`. The browser can submit only that bounded prompt; staff projections and
+unrelated notifications receive `null`. The review prompt requires the registered
+`assignment-submission-check` skill and the identity-scoped project tools.
 Only unread course updates, staff replies, and delivered instructor messages are dismissible.
 Historical items are derived from the same durable source records and acknowledgement state; the
 browser does not create a second canonical history. Mark-read first verifies that the
 item exists in the caller's current authorized projection; it never accepts a user ID or arbitrary
 resource path. Staff replies and instructor messages may include a `sender` object containing only
 the active staff account's first name. Its opaque `course://instructors` resource URI and registered
-portrait asset ID are included only when that portrait resolves. The response never exposes the
-responder's email, an arbitrary image URL, or a filesystem path; `sender` is `null` only when the
-staff account itself cannot be resolved and authorized.
+portrait asset ID are included only when that portrait resolves. A named student question similarly
+includes the active student's display name. Its question-scoped `sender-image` route resolves an
+exact account-email match against the deployment-approved accepted-application UUID registry and
+returns that representative image to TAs or instructors with `private, no-store` caching. Anonymous
+questions expose neither sender metadata nor an image, and missing or ambiguous profile links fail
+closed with `404`. Responses never expose email addresses, applicant UUIDs, arbitrary image URLs, or
+filesystem paths.
 
 There is intentionally no general assignment filesystem route. Assignment records are available
 through the Course Agent's role-scoped `course.list_assignments` and `course.get_assignment` tools,
@@ -151,6 +168,18 @@ while the notification-center route exposes only their bounded path-free project
 assignment authoring route or tool. `course.get_assignment` emits a validated read-only workspace
 panel containing the exact authorized Markdown record. Stored assignment paths and private records
 remain outside the browser contract.
+
+Students additionally receive read-only `course.inspect_my_student_repository` and
+`course.inspect_my_student_site` tools when project integration is enabled. Neither accepts a
+project ID. Platform code derives the only eligible repository as the configured repository prefix
+plus the trusted session username, or an explicit deployment-owned test-account alias, and verifies
+that exact ID against the GitHub roster. The mapping is never accepted from the browser or model.
+
+`GET /api/v1/link-favicon?url=...` is available only to authenticated course members. It returns a
+small, bounded favicon fetched by the server from the validated public HTTPS origin, so rendering an
+agent-provided link does not make the student's browser contact that destination. Private-network
+targets, credentials in URLs, unsafe redirects, unsupported image formats, oversized responses,
+and missing icons return `404`. Responses are private and cached briefly by the browser.
 
 `GET /api/v1/course/resources` returns path-free metadata for resources authorized to the
 current principal. Anonymous visitors receive the six public resources. Students also

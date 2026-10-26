@@ -13,6 +13,8 @@ from agent_core import PrincipalContext
 from course_server.agent import ToolExecutionContext, ToolValidationError
 from course_server.student_projects import (
     GitHubStudentProjectCatalog,
+    InspectMyStudentRepositoryTool,
+    InspectMyStudentSiteTool,
     InspectStudentRepositoryTool,
     InspectStudentSiteTool,
     ListStudentProjectsTool,
@@ -136,6 +138,72 @@ def test_repository_inspection_requires_staff_and_validates_arguments() -> None:
             )
             assert isinstance(staff_result.content, dict)
             assert staff_result.content["view"] == "summary"
+
+    asyncio.run(scenario())
+
+
+def test_students_inspect_only_their_identity_derived_site_and_repository() -> None:
+    async def scenario() -> None:
+        projects = FakeStudentProjects()
+        ada = context("student")
+        ada = ToolExecutionContext(
+            principal=ada.principal.model_copy(update={"username": "ada"}),
+            conversation_id=ada.conversation_id,
+            permitted_resource_uris=ada.permitted_resource_uris,
+        )
+        site = await InspectMyStudentSiteTool(
+            projects,
+            lambda url: {"url": url, "text": "Ada's deployed project", "images": []},
+            "agents2026-",
+        ).execute({}, ada)
+        repository = await InspectMyStudentRepositoryTool(
+            projects,
+            "agents2026-",
+        ).execute({"view": "file", "path": "src/App.tsx"}, ada)
+
+        assert isinstance(site.content, dict)
+        assert site.content["project_id"] == "agents2026-ada"
+        assert isinstance(repository.content, dict)
+        assert repository.content["project_id"] == "agents2026-ada"
+        properties = InspectMyStudentRepositoryTool.input_schema["properties"]
+        assert isinstance(properties, dict)
+        assert "project_id" not in properties
+
+        with pytest.raises(ToolValidationError, match="unexpected arguments"):
+            await InspectMyStudentRepositoryTool(projects, "agents2026-").execute(
+                {"project_id": "agents2026-grace", "view": "summary"},
+                ada,
+            )
+        with pytest.raises(ToolValidationError, match="active student"):
+            await InspectMyStudentSiteTool(
+                projects,
+                lambda url: url,
+                "agents2026-",
+            ).execute({}, context("ta"))
+        with pytest.raises(ToolValidationError, match="No course project repository"):
+            await InspectMyStudentRepositoryTool(projects, "agents2026-").execute(
+                {"view": "summary"},
+                context("student"),
+            )
+
+        test_account = context("student")
+        aliases = {"test-student": "agents2026-grace"}
+        aliased_site = await InspectMyStudentSiteTool(
+            projects,
+            lambda url: {"url": url, "text": "Grace's deployed project", "images": []},
+            "agents2026-",
+            aliases,
+        ).execute({}, test_account)
+        aliased_repository = await InspectMyStudentRepositoryTool(
+            projects,
+            "agents2026-",
+            aliases,
+        ).execute({"view": "summary"}, test_account)
+
+        assert isinstance(aliased_site.content, dict)
+        assert aliased_site.content["project_id"] == "agents2026-grace"
+        assert isinstance(aliased_repository.content, dict)
+        assert aliased_repository.content["project_id"] == "agents2026-grace"
 
     asyncio.run(scenario())
 

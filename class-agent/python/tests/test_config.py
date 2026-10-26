@@ -47,6 +47,9 @@ def test_settings_load_read_only_github_student_project_scope_without_exposing_t
             "GITHUB_ORGANIZATION": "mitmedialab",
             "GITHUB_REPOSITORY_PREFIX": "agents2026-",
             "GITHUB_EXCLUDED_REPOSITORIES": "agents2026-test,agents2026-demo",
+            "GITHUB_STUDENT_PROJECT_ALIASES": (
+                "test-student=agents2026-ada,test-student2=agents2026-ada"
+            ),
             "GITHUB_ROSTER_CACHE_TTL_SECONDS": "120",
         }
     )
@@ -55,6 +58,10 @@ def test_settings_load_read_only_github_student_project_scope_without_exposing_t
     assert settings.github_token is not None
     assert settings.github_token.get_secret_value() == "github-secret"
     assert settings.github_excluded_repositories == ("agents2026-test", "agents2026-demo")
+    assert settings.github_student_project_aliases == (
+        ("test-student", "agents2026-ada"),
+        ("test-student2", "agents2026-ada"),
+    )
     assert settings.github_roster_cache_ttl_seconds == 120
     assert "github-secret" not in repr(settings)
 
@@ -67,6 +74,27 @@ def test_settings_require_github_token_only_when_student_projects_are_enabled() 
                 "OPENAI_API_KEY": "test-secret-value",
                 "BRAVE_API_KEY": "test-brave-value",
                 "GITHUB_STUDENT_PROJECTS_ENABLED": "true",
+            }
+        )
+
+
+@pytest.mark.parametrize(
+    "aliases",
+    [
+        "missing-separator",
+        "test-student=other-repository",
+        "test-student=agents2026-test",
+        "test-student=agents2026-ada,test-student=agents2026-grace",
+    ],
+)
+def test_settings_reject_invalid_student_project_aliases(aliases: str) -> None:
+    with pytest.raises(ConfigurationError, match="GITHUB_STUDENT_PROJECT_ALIASES"):
+        AgentSettings.from_environment(
+            {
+                "DATABASE_URL": "postgresql://example",
+                "OPENAI_API_KEY": "test-secret-value",
+                "BRAVE_API_KEY": "test-brave-value",
+                "GITHUB_STUDENT_PROJECT_ALIASES": aliases,
             }
         )
 

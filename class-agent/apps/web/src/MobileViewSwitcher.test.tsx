@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { MobileViewSwitcher } from "./MobileViewSwitcher.js";
 
 describe("MobileViewSwitcher", () => {
-  it("switches accessibly between Chat and Updates", () => {
+  it("switches accessibly between Chat and Notifications", () => {
     const onViewChange = vi.fn();
     render(
       <MobileViewSwitcher
@@ -20,11 +20,13 @@ describe("MobileViewSwitcher", () => {
       "aria-pressed",
       "true",
     );
-    const updates = within(group).getByRole("button", { name: /Updates/ });
-    expect(updates).toHaveAttribute("aria-pressed", "false");
-    expect(updates).toHaveAccessibleName("Updates, 3 active items");
+    const notifications = within(group).getByRole("button", {
+      name: /Notifications/,
+    });
+    expect(notifications).toHaveAttribute("aria-pressed", "false");
+    expect(notifications).toHaveAccessibleName("Notifications, 3 active items");
 
-    fireEvent.click(updates);
+    fireEvent.click(notifications);
     expect(onViewChange).toHaveBeenCalledWith("updates");
   });
 

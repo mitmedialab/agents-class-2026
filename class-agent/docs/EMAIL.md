@@ -248,7 +248,11 @@ success. Failures retry on subsequent worker cycles without repeating successful
 row locks prevent concurrent cycles from sending the same recipient simultaneously. Provider
 acceptance followed by a crash before recording success can still result in a duplicate on retry.
 These adapters do not provide a shared exactly-once delivery guarantee. Queue acceptance is
-reported separately from email delivery; there is no instructor delivery-status UI in this change.
+reported separately from email delivery. The instructor-owned conversation UI polls a
+role-checked aggregate of these durable recipient rows and shows queued, sending, failed,
+deferred, or provider-accepted completion counts. It does not expose addresses, provider IDs, or
+raw provider errors. Failed rows continue retrying; recipients with inactive accounts or a
+non-student role remain explicitly deferred until eligible again.
 
 Apply migration `0014_instructor_message_email` and restart the API and mail worker. Existing
 messages default to in-app only and are not emailed retroactively. No additional credentials or

@@ -39,6 +39,7 @@ from course_server.mail.store import TAQuestionStore
 
 MessageAudience = Literal["all_students", "specific_students"]
 MessageStatus = Literal["pending_confirmation", "sent", "cancelled"]
+EmailDeliveryState = Literal["not_requested", "queued", "sending", "failed", "deferred", "sent"]
 PENDING_QUESTION_RECIPIENT_PREFIX = "pending-question:"
 StudentIdentifier = Annotated[
     str,
@@ -111,6 +112,61 @@ class InstructorMessage(InstructorMessageModel):
         return self
 
 
+class InstructorMessageEmailDelivery(InstructorMessageModel):
+    message_id: UUID
+    state: EmailDeliveryState
+    total_recipients: int = Field(ge=0)
+    sent_recipients: int = Field(ge=0)
+    remaining_recipients: int = Field(ge=0)
+    failed_recipients: int = Field(ge=0)
+    deferred_recipients: int = Field(ge=0)
+    total_attempts: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def validate_counts(self) -> InstructorMessageEmailDelivery:
+        if self.sent_recipients + self.remaining_recipients != self.total_recipients:
+            raise ValueError("sent and remaining recipients must equal total recipients")
+        if self.failed_recipients > self.remaining_recipients:
+            raise ValueError("failed recipients must be a subset of remaining recipients")
+        if self.deferred_recipients > self.remaining_recipients:
+            raise ValueError("deferred recipients must be a subset of remaining recipients")
+        return self
+
+
+def _email_delivery(
+    *,
+    message: InstructorMessage,
+    total_recipients: int,
+    sent_recipients: int = 0,
+    failed_recipients: int = 0,
+    deferred_recipients: int = 0,
+    total_attempts: int = 0,
+) -> InstructorMessageEmailDelivery:
+    remaining_recipients = total_recipients - sent_recipients
+    if not message.send_email:
+        state: EmailDeliveryState = "not_requested"
+    elif total_recipients > 0 and sent_recipients == total_recipients:
+        state = "sent"
+    elif failed_recipients > 0:
+        state = "failed"
+    elif remaining_recipients > 0 and remaining_recipients == deferred_recipients:
+        state = "deferred"
+    elif total_attempts > 0 or sent_recipients > 0:
+        state = "sending"
+    else:
+        state = "queued"
+    return InstructorMessageEmailDelivery(
+        message_id=message.id,
+        state=state,
+        total_recipients=total_recipients,
+        sent_recipients=sent_recipients,
+        remaining_recipients=remaining_recipients,
+        failed_recipients=failed_recipients,
+        deferred_recipients=deferred_recipients,
+        total_attempts=total_attempts,
+    )
+
+
 @dataclass(frozen=True)
 class StoredInstructorMessage:
     message: InstructorMessage
@@ -150,6 +206,10 @@ class InstructorMessageStore(Protocol):
     ) -> None: ...
 
     async def get(self, message_id: UUID) -> StoredInstructorMessage | None: ...
+
+    async def get_email_delivery(
+        self, message_id: UUID
+    ) -> InstructorMessageEmailDelivery | None: ...
 
     async def transition(
         self,
@@ -197,6 +257,15 @@ class InMemoryInstructorMessageStore:
 
     async def get(self, message_id: UUID) -> StoredInstructorMessage | None:
         return self.messages.get(message_id)
+
+    async def get_email_delivery(self, message_id: UUID) -> InstructorMessageEmailDelivery | None:
+        stored = self.messages.get(message_id)
+        if stored is None:
+            return None
+        return _email_delivery(
+            message=stored.message,
+            total_recipients=len(stored.recipient_user_ids),
+        )
 
     async def transition(
         self,
@@ -322,6 +391,45 @@ class PostgresInstructorMessageStore:
         return StoredInstructorMessage(
             message=InstructorMessage.model_validate(row),
             recipient_user_ids=tuple(UUID(str(item["student_user_id"])) for item in recipients),
+        )
+
+    async def get_email_delivery(self, message_id: UUID) -> InstructorMessageEmailDelivery | None:
+        stored = await self.get(message_id)
+        if stored is None:
+            return None
+        async with self._pool.connection() as connection:
+            row = await (
+                await connection.execute(
+                    """
+                    SELECT count(*) AS total_recipients,
+                           count(*) FILTER (WHERE email_sent_at IS NOT NULL)
+                               AS sent_recipients,
+                           count(*) FILTER (
+                               WHERE r.email_sent_at IS NULL
+                                 AND r.email_last_error IS NOT NULL
+                                 AND u.active AND u.role = 'student'
+                           ) AS failed_recipients,
+                           count(*) FILTER (
+                               WHERE r.email_sent_at IS NULL
+                                 AND (NOT u.active OR u.role <> 'student')
+                           ) AS deferred_recipients,
+                           coalesce(sum(r.email_attempts), 0) AS total_attempts
+                    FROM instructor_message_recipients AS r
+                    JOIN users AS u ON u.id = r.student_user_id
+                    WHERE r.message_id = %s
+                    """,
+                    (message_id,),
+                )
+            ).fetchone()
+        if row is None:
+            raise InstructorMessageStoreError("email delivery state is unavailable")
+        return _email_delivery(
+            message=stored.message,
+            total_recipients=int(row["total_recipients"]),
+            sent_recipients=int(row["sent_recipients"]),
+            failed_recipients=int(row["failed_recipients"]),
+            deferred_recipients=int(row["deferred_recipients"]),
+            total_attempts=int(row["total_attempts"]),
         )
 
     async def transition(
@@ -496,6 +604,28 @@ class InstructorMessageService:
             message_id=message_id,
             status="cancelled",
         )
+
+    async def get_email_delivery(
+        self,
+        *,
+        principal: PrincipalContext,
+        conversation_id: UUID,
+        message_id: UUID,
+    ) -> InstructorMessageEmailDelivery:
+        instructor = await self._active_instructor(principal)
+        stored = await self._messages.get(message_id)
+        if (
+            stored is None
+            or stored.message.conversation_id != conversation_id
+            or stored.message.sender_user_id != instructor.id
+        ):
+            raise InstructorMessageAccessDenied("message not found")
+        if stored.message.status != "sent" or stored.message.source_question_id is not None:
+            raise InstructorMessageStateError("email delivery status is unavailable")
+        delivery = await self._messages.get_email_delivery(message_id)
+        if delivery is None:
+            raise InstructorMessageStateError("email delivery status is unavailable")
+        return delivery
 
     async def _transition(
         self,

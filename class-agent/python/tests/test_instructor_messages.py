@@ -585,6 +585,62 @@ def test_email_unavailable_keeps_message_pending() -> None:
     asyncio.run(scenario())
 
 
+def test_email_delivery_status_is_queued_and_owner_scoped() -> None:
+    async def scenario() -> None:
+        auth = InMemoryAuthStore()
+        instructor = await create_principal(
+            auth, username="prof", display_name="Prof", role="instructor"
+        )
+        other = await create_principal(
+            auth, username="other-prof", display_name="Other", role="instructor"
+        )
+        await create_principal(auth, username="alice", display_name="Alice", role="student")
+        store = InMemoryInstructorMessageStore()
+        service = InstructorMessageService(messages=store, auth=auth, email_enabled=True)
+        conversation_id = uuid4()
+        prepared = await service.prepare(
+            principal=instructor,
+            conversation_id=conversation_id,
+            draft=InstructorMessageDraft(
+                greeting="Hello,",
+                sign_off="Best,\nProf",
+                audience="all_students",
+                subject="Reminder",
+                message="Please review the form.",
+            ),
+        )
+        await service.confirm(
+            principal=instructor,
+            conversation_id=conversation_id,
+            message_id=prepared.message.id,
+            content=InstructorMessageContent(
+                subject="Reminder",
+                message="Please review the form.",
+                send_email=True,
+            ),
+        )
+
+        delivery = await service.get_email_delivery(
+            principal=instructor,
+            conversation_id=conversation_id,
+            message_id=prepared.message.id,
+        )
+        assert delivery.state == "queued"
+        assert delivery.total_recipients == 1
+        assert delivery.remaining_recipients == 1
+        assert delivery.sent_recipients == 0
+        assert delivery.deferred_recipients == 0
+
+        with pytest.raises(InstructorMessageAccessDenied):
+            await service.get_email_delivery(
+                principal=other,
+                conversation_id=conversation_id,
+                message_id=prepared.message.id,
+            )
+
+    asyncio.run(scenario())
+
+
 @pytest.mark.parametrize(
     "payload",
     [

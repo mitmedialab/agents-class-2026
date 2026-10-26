@@ -23,6 +23,7 @@ textarea {
 }
 
 .course-agent {
+  --mobile-interface-header-height: 5rem;
   --notification-center-edge: clamp(1rem, 2vw, 1.75rem);
   --notification-center-width: min(23rem, calc(100vw - 2rem));
   --notification-featured-tile-width: 3.75rem;
@@ -99,6 +100,7 @@ textarea {
   align-items: center;
   display: flex;
   gap: 1.25rem;
+  transition: opacity 160ms ease;
 }
 
 .institutional-marks {
@@ -318,6 +320,8 @@ textarea {
 }
 
 .workspace-shell {
+  --composer-overlay-height: clamp(9rem, 18dvh, 13rem);
+
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) auto;
@@ -363,8 +367,8 @@ textarea {
 }
 
 .course-agent[data-workspace-open="true"] .latest-response {
-  flex: 0 1 auto;
-  max-height: calc(100dvh - 15rem);
+  flex: none;
+  max-height: none;
   min-height: 0;
 }
 
@@ -590,6 +594,12 @@ textarea {
   padding-right: 3.25rem;
 }
 
+.workspace-pane[data-tabbed="false"]
+  .ca-draft-document[data-content-only="true"]
+  .ca-draft-document-action {
+  width: calc(100% + 3.25rem);
+}
+
 .workspace-pane[data-tabbed="false"] .ca-viewer-toolbar {
   padding-right: 4.5rem;
 }
@@ -681,6 +691,16 @@ textarea {
   width: 100%;
 }
 
+.response-stage-header {
+  align-items: center;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  position: relative;
+  width: 100%;
+  z-index: 4;
+}
+
 .morphing-line-figure {
   aspect-ratio: 1;
   flex: none;
@@ -760,6 +780,12 @@ textarea {
   width: 100%;
 }
 
+/* Editable messaging surfaces use one stable scroll layout while text streams. */
+.response-stage:has(.latest-response[data-response-stable-scroll="true"]),
+.latest-response[data-response-stable-scroll="true"] {
+  transition: none;
+}
+
 .response-agent-line:has(.activity-trace[open]) {
   padding-bottom: min(28dvh, 11rem);
 }
@@ -783,11 +809,11 @@ textarea {
   font-weight: 400;
   letter-spacing: var(--response-letter-spacing);
   line-height: var(--response-line-height);
-  flex: 0 1 auto;
-  max-height: min(44dvh, 30rem);
+  flex: none;
+  max-height: none;
   max-width: min(100%, var(--response-max-width));
   min-height: 0;
-  overflow-y: auto;
+  overflow: visible;
   overflow-wrap: anywhere;
   padding: 0.25rem var(--response-padding-inline) var(--response-padding-bottom);
   scrollbar-color: var(--color-border) transparent;
@@ -811,17 +837,49 @@ textarea {
 }
 
 .ta-question-confirmation {
+  box-sizing: border-box;
   border-bottom: 1px solid var(--color-border);
   border-top: 1px solid var(--color-border);
   display: grid;
-  gap: var(--space-4);
+  flex: none;
+  grid-template-rows: minmax(0, 1fr) auto;
   margin-top: var(--space-6);
+  max-height: min(62dvh, 42rem);
   max-width: 42rem;
+  min-height: 0;
+  overflow: hidden;
   padding: var(--space-6) 0;
   position: relative;
   text-align: left;
   width: 100%;
   z-index: 1;
+}
+
+.instructor-email-delivery {
+  border-bottom: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-border);
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-6);
+  max-width: 42rem;
+  padding: var(--space-4) 0;
+  text-align: left;
+  width: 100%;
+}
+
+.instructor-email-delivery > p {
+  line-height: 1.4;
+  margin: 0;
+}
+
+.ta-question-confirmation-body {
+  display: grid;
+  gap: var(--space-4);
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: var(--space-2);
+  scrollbar-color: var(--color-border) transparent;
+  scrollbar-width: thin;
 }
 
 /* Keep the complete email, including its sign-off, in one visible editor. */
@@ -979,6 +1037,7 @@ textarea {
   align-items: center;
   display: flex;
   gap: var(--space-4);
+  padding-top: var(--space-4);
 }
 
 .ta-question-actions .ca-button {
@@ -1093,6 +1152,27 @@ textarea {
   width: 2rem;
 }
 
+.notification-submission-check.ca-button {
+  background: color-mix(in srgb, var(--color-text) 9%, var(--color-surface-raised));
+  color: color-mix(in srgb, var(--color-text) 82%, var(--color-text-muted));
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin: 0 var(--space-4) var(--space-4);
+  padding: 0.65rem 0.8rem;
+  text-align: center;
+  width: calc(100% - (2 * var(--space-4)));
+}
+
+.notification-submission-check.ca-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-text) 14%, var(--color-surface-raised));
+}
+
+.notification-submission-check.ca-button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
 .notification-card-dismiss:hover {
   color: var(--color-text-muted);
 }
@@ -1202,11 +1282,12 @@ textarea {
 }
 
 .communication-detail-card {
-  flex: 0 1 auto;
+  flex: none;
   margin-bottom: var(--space-6);
   max-height: min(34dvh, 22rem);
   max-width: 42rem;
   overflow-y: auto;
+  position: relative;
   scrollbar-color: var(--color-border) transparent;
   scrollbar-width: thin;
   text-align: left;
@@ -1216,7 +1297,14 @@ textarea {
 
 .communication-detail-card-body {
   cursor: default;
-  padding: 1.15rem 1.25rem 1.25rem;
+  padding: 1.15rem 3.75rem 1.25rem 1.25rem;
+}
+
+.communication-detail-close.notification-card-dismiss {
+  opacity: 1;
+  pointer-events: auto;
+  transform: scale(1);
+  z-index: 2;
 }
 
 .communication-detail-card .notification-card-detail {
@@ -1603,6 +1691,31 @@ textarea {
   margin-bottom: 0;
 }
 
+.latest-response a {
+  color: inherit;
+  text-decoration-color: color-mix(in srgb, currentColor 52%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.14em;
+}
+
+.latest-response a:hover {
+  text-decoration-color: currentColor;
+}
+
+.latest-response a:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: 3px;
+}
+
+.response-link-favicon {
+  border-radius: 0.14em;
+  height: 0.82em;
+  margin-right: 0.22em;
+  object-fit: contain;
+  vertical-align: -0.06em;
+  width: 0.82em;
+}
+
 .latest-response h2 {
   font: inherit;
   font-weight: 600;
@@ -1800,7 +1913,7 @@ textarea {
   grid-column: 1;
   grid-row: 2;
   justify-content: center;
-  padding: 0 0 clamp(8rem, 15dvh, 12rem);
+  padding: 0 0 clamp(2rem, 5dvh, 4rem);
   position: relative;
   z-index: 10;
 }
@@ -2051,6 +2164,169 @@ textarea {
 
 .composer-text:focus::placeholder {
   opacity: 0;
+}
+
+/* Measure the complete presentation with ordinary chrome before deciding to scroll. */
+.workspace-shell:has(.latest-response[data-response-measuring])
+  .response-stage {
+  justify-content: flex-start;
+  overflow: hidden;
+  transform: none;
+}
+
+/* If standard chrome is the only obstruction, reclaim it before enabling scroll. */
+.workspace-shell:has(
+    .latest-response[data-response-measuring="expanded"]
+  ),
+.workspace-shell:not(:has(.latest-response[data-response-measuring])):has(
+    .latest-response[data-response-layout="expanded"]
+  ) {
+  padding-top: 0;
+}
+
+.workspace-shell:has(
+    .latest-response[data-response-measuring="expanded"]
+  )
+  .response-stage,
+.workspace-shell:not(:has(.latest-response[data-response-measuring])):has(
+    .latest-response[data-response-layout="expanded"]
+  )
+  .response-stage {
+  padding-top: clamp(1.5rem, 3dvh, 2.5rem);
+  transform: none;
+}
+
+.course-agent:has(.latest-response[data-response-layout="expanded"])
+  .header-left {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/*
+ * Only presentations that still exceed the expanded viewport become one scroll
+ * surface. The composer remains in place while the figure and trace move with text.
+ */
+.workspace-shell:not(:has(.latest-response[data-response-measuring])):has(
+    .latest-response[data-response-overflow="true"]
+  ) {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.workspace-shell:not(:has(.latest-response[data-response-measuring])):has(
+    .latest-response[data-response-overflow="true"]
+  )
+  .response-stage {
+  justify-content: flex-start;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-bottom: calc(var(--composer-overlay-height) + 6rem);
+  padding-top: 0;
+  scrollbar-color: var(--color-border) transparent;
+  scrollbar-width: thin;
+  transform: none;
+}
+
+.workspace-shell:not(:has(.latest-response[data-response-measuring])):has(
+    .latest-response[data-response-overflow="true"]
+  )
+  .response-stage-header {
+  background: var(--color-background);
+  flex-direction: row;
+  gap: 0.9rem;
+  justify-content: center;
+  margin-top: clamp(4rem, 8dvh, 6rem);
+  min-height: 4.75rem;
+  padding: 0.75rem var(--space-4);
+  position: sticky;
+  top: 0;
+  transition: padding-bottom 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  z-index: 8;
+}
+
+.workspace-shell:not(:has(.latest-response[data-response-measuring])):has(
+    .latest-response[data-response-overflow="true"]
+  )
+  .response-stage-header:has(.activity-trace[open]) {
+  padding-bottom: calc(0.75rem + min(28dvh, 11rem));
+}
+
+.workspace-shell:not(:has(.latest-response[data-response-measuring])):has(
+    .latest-response[data-response-overflow="true"]
+  )
+  .response-stage-header::after {
+  background: linear-gradient(to bottom, var(--color-background), transparent);
+  content: "";
+  height: 3rem;
+  left: 0;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  transition: opacity 160ms ease;
+  z-index: 0;
+}
+
+.workspace-shell:not(:has(.latest-response[data-response-measuring])):has(
+    .latest-response[data-response-overflow="true"]
+  )
+  .response-stage[data-scrolled="true"]
+  .response-stage-header::after {
+  opacity: 1;
+}
+
+.workspace-shell:not(:has(.latest-response[data-response-measuring])):has(
+    .latest-response[data-response-overflow="true"]
+  )
+  .response-stage-header
+  .morphing-line-figure {
+  margin: 0;
+  opacity: 0.62;
+  width: 3.25rem;
+}
+
+.workspace-shell:not(:has(.latest-response[data-response-measuring])):has(
+    .latest-response[data-response-overflow="true"]
+  )
+  .response-stage-header
+  .response-agent-line {
+  margin: 0;
+  padding-bottom: 0;
+  width: auto;
+}
+
+.workspace-shell:not(:has(.latest-response[data-response-measuring])):has(
+    .latest-response[data-response-overflow="true"]
+  )
+  :where(.composer) {
+  align-self: end;
+  background: var(--color-background);
+  grid-row: 1;
+}
+
+.workspace-shell:not(:has(.latest-response[data-response-measuring])):has(
+    .latest-response[data-response-overflow="true"]
+  )
+  :where(.composer)::before {
+  background: linear-gradient(to bottom, transparent, var(--color-background));
+  bottom: 100%;
+  content: "";
+  height: 6rem;
+  left: 0;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+}
+
+@media (min-width: 901px) {
+  .course-agent[data-workspace-open="true"]
+    .workspace-shell:not(:has(.latest-response[data-response-measuring])):has(
+      .latest-response[data-response-overflow="true"]
+    )
+    .response-stage {
+    padding-bottom: calc(var(--composer-overlay-height) + 6rem);
+    padding-top: 0;
+  }
 }
 
 .visually-hidden {
@@ -2337,15 +2613,33 @@ textarea {
 }
 
 @media (max-width: 900px) {
+  .course-agent:has(.mobile-view-switcher) .agent-header {
+    background: var(--color-background);
+    z-index: 29;
+  }
+
+  .course-agent:has(.mobile-view-switcher) .header-actions {
+    opacity: 0;
+    pointer-events: none;
+    visibility: hidden;
+  }
+
+  .course-agent[data-mobile-notifications-open="true"]:has(.mobile-view-switcher)
+    .header-left {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
   .mobile-view-switcher {
     align-items: center;
     background: var(--color-background);
     display: flex;
     gap: 1.25rem;
+    height: var(--mobile-interface-header-height);
     left: 50%;
     padding: 0.35rem 0;
     position: fixed;
-    top: 5rem;
+    top: 0;
     transform: translateX(-50%);
     z-index: 30;
   }
@@ -2388,7 +2682,7 @@ textarea {
   }
 
   .notification-center-scroll {
-    padding: 8.25rem 1rem 2rem;
+    padding: calc(var(--mobile-interface-header-height) + 1rem) 1rem 2rem;
   }
 
   .course-agent[data-mobile-notifications-open="true"] .notification-center {
@@ -2428,7 +2722,7 @@ textarea {
   }
 
   .course-agent[data-workspace-open="true"] .latest-response {
-    max-height: 44dvh;
+    max-height: none;
     text-align: center;
   }
 
@@ -2443,7 +2737,7 @@ textarea {
   .course-agent[data-workspace-open="true"] .composer {
     background: var(--color-background);
     grid-row: 2;
-    padding: 0 0 clamp(5rem, 12dvh, 7rem);
+    padding: 0 0 clamp(2rem, 5dvh, 4rem);
   }
 
   .course-agent[data-mobile-workspace-open="true"] .workspace-shell {
@@ -2488,14 +2782,65 @@ textarea {
   }
 
   .course-agent[data-mobile-workspace-open="true"] .composer {
+    align-self: auto;
     background: var(--color-background);
     grid-row: 2;
     min-height: 7rem;
     padding: 1.25rem 1.5rem 2rem;
   }
+
+  .course-agent[data-mobile-workspace-open="true"] .composer::before {
+    content: none;
+  }
+
+  .course-agent[data-mobile-workspace-open="true"] .header-left {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .workspace-shell:not(:has(.latest-response[data-response-measuring])):has(
+      .latest-response[data-response-overflow="true"]
+    )
+    .response-stage-header {
+    top: var(--mobile-interface-header-height);
+  }
 }
 
 @media (max-width: 640px) {
+  .course-agent {
+    --mobile-interface-header-height: 4rem;
+  }
+
+  .course-agent:has(.latest-response[data-response-layout="expanded"])
+    .header-actions {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .workspace-shell:not(:has(.latest-response[data-response-measuring])):has(
+      .latest-response[data-response-overflow="true"]
+    )
+    .response-stage-header {
+    gap: 0.55rem;
+    padding-inline: 0.75rem;
+  }
+
+  .workspace-shell:not(:has(.latest-response[data-response-measuring])):has(
+      .latest-response[data-response-overflow="true"]
+    )
+    .response-stage-header
+    .morphing-line-figure {
+    width: 2.5rem;
+  }
+
+  .workspace-shell:not(:has(.latest-response[data-response-measuring])):has(
+      .latest-response[data-response-overflow="true"]
+    )
+    .response-stage-header
+    .activity-trace {
+    max-width: 9rem;
+  }
+
   .message-visibility-options {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2517,11 +2862,11 @@ textarea {
   }
 
   .notification-center-scroll {
-    padding: 7.5rem 1rem 2rem;
+    padding: calc(var(--mobile-interface-header-height) + 1rem) 1rem 2rem;
   }
 
   .mobile-view-switcher {
-    top: 4.25rem;
+    top: 0;
   }
 
   .course-agent[data-workspace-open="true"] .workspace-shell {
@@ -2628,7 +2973,7 @@ textarea {
       var(--response-mobile-fluid),
       var(--response-mobile-max)
     );
-    max-height: 44dvh;
+    max-height: none;
     max-width: 100%;
     padding-inline: min(var(--response-padding-inline), 0.75rem);
   }
@@ -2639,7 +2984,7 @@ textarea {
   }
 
   .composer {
-    padding: 0 0 clamp(5rem, 12dvh, 7rem);
+    padding: 0 0 clamp(2rem, 5dvh, 3rem);
   }
 
   .composer-inner {
@@ -2663,6 +3008,7 @@ textarea {
   .notification-card-action,
   .notification-card-meta time,
   .notification-card-dismiss,
+  .header-left,
   .header-actions,
   .workspace-shell,
   .composer,
@@ -2670,6 +3016,7 @@ textarea {
   .activity-list,
   .response-agent-line,
   .response-stage,
+  .response-stage-header,
   .response-character,
   .response-character::after,
   .morphing-line-figure,

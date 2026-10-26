@@ -51,6 +51,7 @@ from course_server.auth import InMemoryAuthStore
 from course_server.browser import BROWSER_TOOL_IDS
 from course_server.student_projects import (
     INSPECT_STUDENT_REPOSITORY_TOOL_ID,
+    OWN_STUDENT_PROJECT_TOOL_IDS,
     STUDENT_PROJECT_TOOL_IDS,
 )
 from course_server.uploads import FileTemporaryUploadStore
@@ -307,12 +308,16 @@ def test_student_project_tools_grant_sites_to_members_and_repositories_to_staff(
 
     assert not set(STUDENT_PROJECT_TOOL_IDS) & set(public.tool_ids)
     assert set(STUDENT_PROJECT_TOOL_IDS) <= set(student.tool_ids)
+    assert set(OWN_STUDENT_PROJECT_TOOL_IDS) <= set(student.tool_ids)
     assert INSPECT_STUDENT_REPOSITORY_TOOL_ID not in student.tool_ids
     assert set(STUDENT_PROJECT_TOOL_IDS) <= set(instructor.tool_ids)
+    assert not set(OWN_STUDENT_PROJECT_TOOL_IDS) & set(instructor.tool_ids)
     assert INSPECT_STUDENT_REPOSITORY_TOOL_ID in instructor.tool_ids
     assert set(STUDENT_PROJECT_TOOL_IDS) <= set(ta.tool_ids)
+    assert not set(OWN_STUDENT_PROJECT_TOOL_IDS) & set(ta.tool_ids)
     assert INSPECT_STUDENT_REPOSITORY_TOOL_ID in ta.tool_ids
     assert set(STUDENT_PROJECT_TOOL_IDS) <= set(admin.tool_ids)
+    assert not set(OWN_STUDENT_PROJECT_TOOL_IDS) & set(admin.tool_ids)
     assert INSPECT_STUDENT_REPOSITORY_TOOL_ID in admin.tool_ids
 
 

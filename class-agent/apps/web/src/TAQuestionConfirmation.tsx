@@ -39,35 +39,36 @@ export function TAQuestionConfirmation({
       aria-label="Course staff question confirmation"
       className="ta-question-confirmation"
     >
-      <div className="ta-question-content">
-        <textarea
-          aria-label="Question"
-          className="message-confirmation-inline message-confirmation-body"
-          disabled={busy}
-          maxLength={5_000}
-          onChange={(event) => setQuestion(event.target.value)}
-          required
-          rows={1}
-          value={question}
-        />
+      <div className="ta-question-confirmation-body">
+        <div className="ta-question-content">
+          <textarea
+            aria-label="Question"
+            className="message-confirmation-inline message-confirmation-body"
+            disabled={busy}
+            maxLength={5_000}
+            onChange={(event) => setQuestion(event.target.value)}
+            required
+            rows={1}
+            value={question}
+          />
+        </div>
+        {status ? (
+          <p aria-live="polite" className="ta-question-status" role="status">
+            {status}
+          </p>
+        ) : null}
+        <label className="ta-question-identity">
+          <input
+            checked={anonymous}
+            disabled={busy}
+            onChange={(event) => setAnonymous(event.target.checked)}
+            type="checkbox"
+          />
+          Hide my name from course staff
+        </label>
       </div>
-      {status ? (
-        <p aria-live="polite" className="ta-question-status" role="status">
-          {status}
-        </p>
-      ) : null}
-      <label className="ta-question-identity">
-        <input
-          checked={anonymous}
-          disabled={busy}
-          onChange={(event) => setAnonymous(event.target.checked)}
-          type="checkbox"
-        />
-        Hide my name from course staff
-      </label>
       <div className="ta-question-actions">
         <Button
-          autoFocus
           disabled={sendDisabled}
           onClick={() =>
             onAction("send", anonymous ? "anonymous" : "named", {

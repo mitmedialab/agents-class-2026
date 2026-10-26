@@ -181,27 +181,41 @@ describe("DocumentViewer", () => {
 
 describe("DraftDocument", () => {
   it("uses one title and readable metadata for a finished assignment", () => {
+    const onAction = vi.fn();
     render(
       <DraftDocument
         content={
-          "# Agent observation\n\nObserve one agent interaction.\n\n## Submission\n\nShare a link."
+          "# Week 3: Designing Human–Agent Interfaces\n\nObserve one agent interaction.\n\n## Submission\n\nShare a link."
         }
         description="Due Friday, September 18, 2026 · 3:00 PM -04:00"
+        actionLabel="Review my progress"
+        onAction={onAction}
         status="final"
-        title="Agent observation"
+        title="Week 3: Designing Human-Agent Interfaces"
       />,
     );
 
-    expect(screen.getByRole("heading", { level: 1, name: "Agent observation" })).toBeVisible();
+    expect(
+      screen.getAllByRole("heading", {
+        name: "Week 3: Designing Human-Agent Interfaces",
+      }),
+    ).toHaveLength(1);
     const deadline = screen.getByText("Due Friday, September 18, 2026 · 3:00 PM");
+    const action = screen.getByRole("button", { name: "Review my progress" });
     expect(deadline.tagName).toBe("P");
     expect(deadline).not.toHaveTextContent("-04:00");
+    expect(deadline.compareDocumentPosition(action)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    fireEvent.click(action);
+    expect(onAction).toHaveBeenCalledOnce();
     expect(screen.getByRole("heading", { name: "Submission" })).toBeVisible();
     expect(screen.queryByText("final")).not.toBeInTheDocument();
-    expect(screen.getByRole("article", { name: "Agent observation" })).toHaveAttribute(
-      "data-content-only",
-      "true",
-    );
+    expect(
+      screen.getByRole("article", {
+        name: "Week 3: Designing Human-Agent Interfaces",
+      }),
+    ).toHaveAttribute("data-content-only", "true");
   });
 
   it("uses semantic field controls and renders validation guidance inline", () => {

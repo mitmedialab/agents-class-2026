@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 
 type Point = readonly [number, number];
 
@@ -158,7 +158,9 @@ export interface MorphingLineFigureProps {
   active: boolean;
 }
 
-export function MorphingLineFigure({ active }: MorphingLineFigureProps) {
+export const MorphingLineFigure = memo(function MorphingLineFigure({
+  active,
+}: MorphingLineFigureProps) {
   const reducedMotion = useReducedMotion();
 
   return (
@@ -208,4 +210,4 @@ export function MorphingLineFigure({ active }: MorphingLineFigureProps) {
       </svg>
     </div>
   );
-}
+});

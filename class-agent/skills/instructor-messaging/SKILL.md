@@ -46,6 +46,11 @@ the exact message and resolved recipients in a confirmation surface. That Send o
 is the sole review and approval step, and delivery occurs only after the instructor presses Send.
 Accurately report cancellation or delivery based on the trusted platform result.
 
+If the instructor asks for another change while that confirmation is pending, the platform cancels
+the unsent confirmation before starting the new agent turn. Use the exact prior draft supplied in
+trusted conversation context, apply the requested changes, and call the tool again to prepare a new
+confirmation. Preserve unchanged wording and recipients unless the instructor asks to change them.
+
 For ordinary student messages, the confirmation also offers an optional **Also send by email**
 checkbox when email is configured. Only the instructor's explicit Send action can select email;
 do not add email options to tool arguments. A trusted result with `email_queued` means the mail

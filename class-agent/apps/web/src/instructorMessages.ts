@@ -37,6 +37,30 @@ export interface InstructorMessageEdit {
   publicationDecision?: InstructorMessagePublicationDecision;
 }
 
+export interface InstructorEmailDeliveryReference {
+  messageId: string;
+  recipientCount: number;
+}
+
+export type InstructorEmailDeliveryState =
+  | "not_requested"
+  | "queued"
+  | "sending"
+  | "failed"
+  | "deferred"
+  | "sent";
+
+export interface InstructorEmailDeliveryStatus {
+  message_id: string;
+  state: InstructorEmailDeliveryState;
+  total_recipients: number;
+  sent_recipients: number;
+  remaining_recipients: number;
+  failed_recipients: number;
+  deferred_recipients: number;
+  total_attempts: number;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -140,6 +164,35 @@ export function projectInstructorMessageEvents(
   );
 }
 
+export function instructorEmailDeliveryFromEvent(
+  event: Pick<Event, "type" | "payload">,
+): InstructorEmailDeliveryReference | null {
+  const messageId = event.payload.message_id;
+  const recipientCount = event.payload.recipient_count;
+  if (
+    event.type !== "instructor.message.sent" ||
+    event.payload.email_queued !== true ||
+    typeof messageId !== "string" ||
+    typeof recipientCount !== "number" ||
+    !Number.isInteger(recipientCount) ||
+    recipientCount < 1
+  ) {
+    return null;
+  }
+  return { messageId, recipientCount };
+}
+
+export function latestInstructorEmailDelivery(
+  events: Event[],
+): InstructorEmailDeliveryReference | null {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    const reference = event ? instructorEmailDeliveryFromEvent(event) : null;
+    if (reference) return reference;
+  }
+  return null;
+}
+
 export function pendingInstructorMessageContinuation(events: Event[]): Event | null {
   const completed = new Set(
     events.flatMap((event) => {
@@ -149,15 +202,20 @@ export function pendingInstructorMessageContinuation(events: Event[]): Event | n
         : [];
     }),
   );
+  let hasLaterUserTurn = false;
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index];
+    if (event?.type === "user.message") {
+      hasLaterUserTurn = true;
+      continue;
+    }
     if (
       event &&
       (event.type === "instructor.message.sent" ||
         event.type === "instructor.message.cancelled") &&
       !completed.has(event.id)
     ) {
-      return event;
+      return hasLaterUserTurn ? null : event;
     }
   }
   return null;

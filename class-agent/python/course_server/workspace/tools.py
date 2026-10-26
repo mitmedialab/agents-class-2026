@@ -77,6 +77,7 @@ _APPLICANT_PHOTO_URI = re.compile(
     r"^applicant://[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-"
     r"[89ab][0-9a-f]{3}-[0-9a-f]{12}/photo$"
 )
+_ASSIGNMENT_RESOURCE_URI = re.compile(r"^course://assignment/[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
 class _WorkspacePermissionError(PermissionError):
@@ -768,6 +769,12 @@ class WorkspaceOpenComponentTool:
                 resource_uri = default_resource_uri
         title = _optional_string(arguments, "title")
         props = _optional_object(arguments, "props") or {}
+        if resource_uri is not None and _ASSIGNMENT_RESOURCE_URI.fullmatch(resource_uri):
+            raise _WorkspaceValidationError(
+                "Assignments use the canonical presentation opened by course.get_assignment; "
+                "do not reopen them with a generic workspace component.",
+                reason_code="assignment_presentation_managed",
+            )
         manifest = self._registry.get(component_id)
         if manifest is None:
             raise _WorkspaceValidationError(

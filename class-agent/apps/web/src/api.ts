@@ -7,6 +7,7 @@ import {
 } from "./taQuestions.js";
 import {
   instructorMessageFromPayload,
+  type InstructorEmailDeliveryStatus,
   type InstructorMessageConfirmation,
   type InstructorMessageEdit,
 } from "./instructorMessages.js";
@@ -20,6 +21,15 @@ const APPLICANT_PHOTO_URI =
 export function courseResourceAssetUrl(resourceUri: string, assetId: string): string {
   const query = new URLSearchParams({ uri: resourceUri, asset_id: assetId }).toString();
   return `${API_BASE_URL}/course/resources/asset?${query}`;
+}
+
+export function notificationSenderImageUrl(itemId: Uuid): string {
+  return `${API_BASE_URL}/notification-center/${encodeURIComponent(itemId)}/sender-image`;
+}
+
+export function linkFaviconUrl(destinationUrl: string): string {
+  const query = new URLSearchParams({ url: destinationUrl }).toString();
+  return `${API_BASE_URL}/link-favicon?${query}`;
 }
 
 export function applicantPhotoUrl(resourceUri: string): string | null {
@@ -74,6 +84,7 @@ export type NotificationCenterItemKind =
 
 export interface NotificationSender {
   first_name: string;
+  display_name?: string | null;
   resource_uri: string | null;
   image_asset_id: string | null;
 }
@@ -89,6 +100,7 @@ export interface NotificationCenterItem {
   due_at: string | null;
   action_label: string;
   action_prompt: string;
+  submission_check_prompt?: string | null;
   unread: boolean;
   dismissible: boolean;
   sender: NotificationSender | null;
@@ -282,6 +294,15 @@ export function confirmInstructorMessage(
           : {}),
       }),
     },
+  );
+}
+
+export function getInstructorMessageEmailDelivery(
+  conversationId: Uuid,
+  messageId: string,
+): Promise<InstructorEmailDeliveryStatus> {
+  return requestJson<InstructorEmailDeliveryStatus>(
+    `/conversations/${conversationId}/instructor-messages/${encodeURIComponent(messageId)}/email-delivery`,
   );
 }
 

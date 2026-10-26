@@ -46,6 +46,7 @@ from course_server.course_application import (
 from course_server.resource_text import ResourceTextExtractionError, extract_resource_text
 from course_server.student_project_tool_ids import (
     INSPECT_STUDENT_REPOSITORY_TOOL_ID,
+    OWN_STUDENT_PROJECT_TOOL_IDS,
     SHOWCASE_TOOL_IDS,
     STUDENT_PROJECT_TOOL_IDS,
 )
@@ -2720,6 +2721,13 @@ class CourseCapabilityPolicy:
             and ({"student", "ta", "instructor", "admin"} & set(principal.roles))
             else ()
         )
+        own_student_project_tools = (
+            OWN_STUDENT_PROJECT_TOOL_IDS
+            if self._student_projects_enabled
+            and principal.authenticated
+            and "student" in principal.roles
+            else ()
+        )
         staff_project_tools = (
             (INSPECT_STUDENT_REPOSITORY_TOOL_ID, *SHOWCASE_TOOL_IDS)
             if self._student_projects_enabled
@@ -2781,6 +2789,7 @@ class CourseCapabilityPolicy:
                     else ()
                 ),
                 *course_member_project_tools,
+                *own_student_project_tools,
                 *staff_project_tools,
                 *(BROWSER_TOOL_IDS if self._browser_enabled else ()),
                 *(

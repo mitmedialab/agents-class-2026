@@ -98,6 +98,7 @@ from course_server.index_resources import index_resources
 from course_server.instructor_messages import (
     InstructorMessageAccessDenied,
     InstructorMessageContent,
+    InstructorMessageEmailDelivery,
     InstructorMessageEmailUnavailable,
     InstructorMessageService,
     InstructorMessageStateError,
@@ -110,6 +111,7 @@ from course_server.mail import (
     TAQuestionStateError,
 )
 from course_server.migrations import apply_migrations
+from course_server.notification_portraits import StudentNotificationPortraitRegistry
 from course_server.notifications import (
     NotificationCenter,
     NotificationCenterAccessDenied,
@@ -126,6 +128,7 @@ from course_server.uploads import (
     TemporaryUploadStore,
     UploadError,
 )
+from course_server.web_search import fetch_public_favicon
 from course_server.workspace import (
     CloseWorkspaceCommand,
     ComponentRegistry,
@@ -337,6 +340,7 @@ class AppServices:
     anonymous_quota_policy: AnonymousQuotaPolicy = dataclass_field(
         default_factory=AnonymousQuotaPolicy
     )
+    favicon_fetcher: Callable[[str], tuple[bytes, str] | None] = fetch_public_favicon
 
 
 @dataclass
@@ -865,6 +869,12 @@ def create_app(
         await initialize_student_application_access(
             applicant_store, resolved_settings.applicant_data_path
         )
+        application_access = ApplicationAccessPolicy(
+            resolved_settings.applicant_data_path / "student-access.json"
+        )
+        student_portraits = StudentNotificationPortraitRegistry.from_path(
+            resolved_settings.applicant_data_path / "student-notification-portraits.json"
+        )
         assignment_store = FileAssignmentStore(resolved_settings.assignment_data_path)
         instructor_message_store = PostgresInstructorMessageStore(pool)
         instructor_message_service = InstructorMessageService(
@@ -892,6 +902,9 @@ def create_app(
             reads=PostgresNotificationItemReadStore(pool),
             auth=auth_store,
             resources=course_resources,
+            applicants=applicant_store,
+            application_access=application_access,
+            student_portraits=student_portraits,
             assignments=assignment_store,
             instructor_messages=instructor_message_store,
             questions=question_store,
@@ -946,9 +959,7 @@ def create_app(
             ),
             conversations=conversation_store,
             applicants=applicant_store,
-            application_access=ApplicationAccessPolicy(
-                resolved_settings.applicant_data_path / "student-access.json"
-            ),
+            application_access=application_access,
             course_resources=course_resources,
             uploads=upload_store,
             workspace_registry=component_registry,
@@ -999,6 +1010,31 @@ def create_app(
     @router.get("/health")
     async def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @router.get("/link-favicon", response_model=None)
+    async def link_favicon(
+        url: Annotated[str, Query(min_length=1, max_length=2_048)],
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> Response:
+        if not principal.authenticated or not (
+            {"student", "ta", "instructor", "admin"} & set(principal.roles)
+        ):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+        state = _get_app_state(request)
+        assert state.services is not None
+        favicon = await asyncio.to_thread(state.services.favicon_fetcher, url)
+        if favicon is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+        content, media_type = favicon
+        return Response(
+            content=content,
+            media_type=media_type,
+            headers={
+                "Cache-Control": "private, max-age=3600",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
 
     @router.post("/auth/login", response_model=PrincipalResponse)
     async def login(
@@ -1128,6 +1164,38 @@ def create_app(
         if not marked:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
         return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    @router.get(
+        "/notification-center/{item_id}/sender-image",
+        response_model=None,
+    )
+    async def read_notification_sender_image(
+        item_id: UUID,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> Response:
+        state = _get_app_state(request)
+        assert state.services is not None
+        service = state.services.notification_center
+        if service is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+        try:
+            photo = await service.student_question_sender_image(principal, item_id)
+        except NotificationCenterAccessDenied as error:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="course staff login required",
+            ) from error
+        if photo is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+        return Response(
+            content=photo.data,
+            media_type=photo.media_type,
+            headers={
+                "Cache-Control": "private, no-store",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
 
     @router.get("/course/resources", response_model=list[ResourceSummary])
     async def list_course_resources(
@@ -1566,6 +1634,43 @@ def create_app(
         )
         await state.services.conversations.append_events(conversation_id, [event])
         return event
+
+    @router.get(
+        "/conversations/{conversation_id}/instructor-messages/{message_id}/email-delivery",
+        response_model=InstructorMessageEmailDelivery,
+    )
+    async def get_instructor_message_email_delivery(
+        conversation_id: UUID,
+        message_id: UUID,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> InstructorMessageEmailDelivery:
+        state = _get_app_state(request)
+        await _require_owned_conversation(
+            state=state,
+            principal=principal,
+            conversation_id=conversation_id,
+        )
+        assert state.services is not None
+        service = state.services.instructor_messages
+        if service is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+        try:
+            return await service.get_email_delivery(
+                principal=principal,
+                conversation_id=conversation_id,
+                message_id=message_id,
+            )
+        except InstructorMessageAccessDenied as error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="not found",
+            ) from error
+        except InstructorMessageStateError as error:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="email delivery status is unavailable",
+            ) from error
 
     @router.post(
         "/conversations/{conversation_id}/instructor-messages/{message_id}/confirmation",

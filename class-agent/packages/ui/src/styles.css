@@ -1250,6 +1250,11 @@
   padding-bottom: var(--space-6);
 }
 
+.ca-draft-document[data-content-only="true"] .ca-draft-document-header > div {
+  flex: 1;
+  width: 100%;
+}
+
 .ca-draft-document[data-content-only="true"] .ca-draft-document-header p {
   color: color-mix(in srgb, var(--color-text) 74%, var(--color-text-muted));
   font-variant-numeric: tabular-nums;
@@ -1261,6 +1266,39 @@
   color: color-mix(in srgb, var(--color-notification-deadline) 76%, var(--color-text));
   font-weight: 500;
   letter-spacing: -0.01em;
+}
+
+.ca-draft-document-action {
+  align-self: flex-start;
+  appearance: none;
+  background: color-mix(in srgb, var(--color-text) 9%, var(--color-surface-raised));
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: color-mix(in srgb, var(--color-text) 82%, var(--color-text-muted));
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin-top: var(--space-1);
+  padding: 0.55rem 0.8rem;
+}
+
+.ca-draft-document[data-content-only="true"] .ca-draft-document-action {
+  width: 100%;
+}
+
+.ca-draft-document-action:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-text) 14%, var(--color-surface-raised));
+}
+
+.ca-draft-document-action:focus-visible {
+  outline: 1px solid var(--color-text);
+  outline-offset: 3px;
+}
+
+.ca-draft-document-action:disabled {
+  cursor: default;
+  opacity: 0.5;
 }
 
 .ca-draft-fields {

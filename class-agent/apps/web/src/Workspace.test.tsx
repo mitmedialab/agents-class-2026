@@ -4,6 +4,55 @@ import { describe, expect, it, vi } from "vitest";
 import { Workspace } from "./Workspace.js";
 
 describe("Workspace", () => {
+  it("shows a progress review after the due date in an open assignment", async () => {
+    const onCheckAssignment = vi.fn();
+
+    render(
+      <Workspace
+        browserControlsReady
+        conversationId="20000000-0000-4000-8000-000000000001"
+        onBrowserActivate={vi.fn(async () => undefined)}
+        onBrowserResize={vi.fn(async () => undefined)}
+        onBrowserScroll={vi.fn(async () => undefined)}
+        onCheckAssignment={onCheckAssignment}
+        onCloseWorkspace={vi.fn(async () => undefined)}
+        onInteraction={vi.fn()}
+        onPanelAction={vi.fn(async () => undefined)}
+        onSubmitApplication={vi.fn()}
+        state={{
+          focusedPanelId: "40000000-0000-4000-8000-000000000004",
+          panels: [
+            {
+              id: "40000000-0000-4000-8000-000000000004",
+              componentId: "draft-document",
+              resourceUri: "course://assignment/assignment-one",
+              props: {
+                title: "Assignment one",
+                description: "Due Monday, October 5, 2026 · 11:59 PM",
+                content: "# Assignment one\n\nBuild a thing.",
+              },
+              state: {
+                document_kind: "course-assignment-view",
+                assignment_id: "assignment-one",
+              },
+            },
+          ],
+        }}
+      />,
+    );
+
+    const deadline = screen.getByText("Due Monday, October 5, 2026 · 11:59 PM");
+    const check = screen.getByRole("button", { name: "Review my progress" });
+    expect(deadline.compareDocumentPosition(check)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(screen.getAllByRole("heading", { name: "Assignment one" })).toHaveLength(1);
+    fireEvent.click(check);
+    expect(onCheckAssignment).toHaveBeenCalledWith(
+      "course://assignment/assignment-one",
+    );
+  });
+
   it("centers an accessible loading bar with resource download progress", async () => {
     const read = vi
       .fn()

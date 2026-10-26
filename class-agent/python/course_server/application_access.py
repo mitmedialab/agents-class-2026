@@ -24,6 +24,11 @@ class ApplicationAccessPolicy:
             raise PermissionError("Instructor access or student access is required.")
         if "instructor" in principal.roles and not accepted_only:
             return None
+        return self.shared_application_ids()
+
+    def shared_application_ids(self) -> frozenset[UUID]:
+        """Read the deployment-approved UUID snapshot without granting record access."""
+
         if self.path is None or not self.path.exists():
             return frozenset()
         try:

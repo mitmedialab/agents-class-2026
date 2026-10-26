@@ -107,7 +107,8 @@ set of specific students through the instructor-only messaging skill. The platfo
 resolved recipients, shows the exact subject, message, and audience, and requires a separate Send
 or Cancel action before delivery. In the same preview, **Also send by email** optionally queues
 a separate email copy for each student through the configured mail worker. This defaults to off;
-in-app delivery always occurs. Confirmed messages remain in each recipient's Communications
+in-app delivery always occurs. After an opted-in Send, the instructor conversation shows aggregate
+queued, sent, failed, and account-deferred email counts from the durable outbox. Confirmed messages remain in each recipient's Communications
 stack and authorized agent context until the student marks them read.
 
 Students can use the application-review tools for accepted applicants explicitly shared by
@@ -156,8 +157,9 @@ ongoing Communications and Upcoming items remain until their own state changes.
 An optional read-only GitHub integration connects the agent directly to the real
 `mitmedialab/agents2026-*` course repositories. All authenticated course roles can inspect every
 deployed student website; TAs, instructors, and admins also receive repository source and
-development metadata tools. The credential remains server-side and the configured organization,
-prefix, and exclusions are enforced in platform code. See
+development metadata tools. Students receive source and development metadata only for the exact
+repository derived from their trusted account username. The credential remains server-side and the
+configured organization, prefix, and exclusions are enforced in platform code. See
 [docs/STUDENT_PROJECTS.md](docs/STUDENT_PROJECTS.md).
 
 Weekly showcase selection is available to staff through the read-only project integration:

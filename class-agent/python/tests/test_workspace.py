@@ -215,6 +215,34 @@ def test_presentation_review_validates_bounded_choice_against_workspace_state() 
     asyncio.run(scenario())
 
 
+def test_generic_workspace_tool_cannot_replace_canonical_assignment_presentation() -> None:
+    async def scenario() -> None:
+        registry = load_component_registry()
+        base_context = execution_context()
+        context = ToolExecutionContext(
+            principal=base_context.principal,
+            conversation_id=base_context.conversation_id,
+            permitted_resource_uris=frozenset(
+                {*base_context.permitted_resource_uris, "course://assignment/week-3"}
+            ),
+        )
+
+        with pytest.raises(ToolValidationError, match="canonical presentation") as error:
+            await WorkspaceOpenComponentTool(registry).execute(
+                {
+                    "component_id": "document-viewer",
+                    "resource_uri": "course://assignment/week-3",
+                    "title": "Week 3 assignment",
+                },
+                context,
+            )
+
+        assert getattr(error.value, "reason_code", None) == "assignment_presentation_managed"
+        assert WorkspaceState.model_validate(context.workspace_state).panels == []
+
+    asyncio.run(scenario())
+
+
 def test_application_draft_allows_one_atomic_update_per_user_turn() -> None:
     async def scenario() -> None:
         registry = load_component_registry()

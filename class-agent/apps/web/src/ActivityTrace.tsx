@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 
 import type { AgentActivity, AgentActivityKind } from "./api.js";
 
@@ -54,7 +54,10 @@ export interface ActivityTraceProps {
   currentLabel: string | null;
 }
 
-export function ActivityTrace({ activities, currentLabel }: ActivityTraceProps) {
+export const ActivityTrace = memo(function ActivityTrace({
+  activities,
+  currentLabel,
+}: ActivityTraceProps) {
   const [expanded, setExpanded] = useState(false);
   const latest = activities.at(-1);
   const presenting =
@@ -124,4 +127,4 @@ export function ActivityTrace({ activities, currentLabel }: ActivityTraceProps) 
       </ol>
     </details>
   );
-}
+});

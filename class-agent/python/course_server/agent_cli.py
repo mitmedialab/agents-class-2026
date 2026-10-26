@@ -88,6 +88,8 @@ from course_server.student_communications import (
 )
 from course_server.student_projects import (
     GitHubStudentProjectCatalog,
+    InspectMyStudentRepositoryTool,
+    InspectMyStudentSiteTool,
     InspectStudentRepositoryTool,
     InspectStudentSiteTool,
     ListStudentProjectsTool,
@@ -304,6 +306,17 @@ def build_runtime(
             [
                 ListStudentProjectsTool(project_catalog),
                 InspectStudentSiteTool(project_catalog, fetch_public_webpage),
+                InspectMyStudentSiteTool(
+                    project_catalog,
+                    fetch_public_webpage,
+                    settings.github_repository_prefix,
+                    dict(settings.github_student_project_aliases),
+                ),
+                InspectMyStudentRepositoryTool(
+                    project_catalog,
+                    settings.github_repository_prefix,
+                    dict(settings.github_student_project_aliases),
+                ),
                 InspectStudentRepositoryTool(project_catalog),
                 ReadShowcaseHistoryTool(settings.showcase_history_path),
                 SelectShowcaseTool(project_catalog, settings.showcase_history_path),

@@ -129,6 +129,24 @@ The deployment-owned `APPLICANT_DATA_PATH/student-access.json` is the sharing au
 {"schema_version": 1, "application_ids": []}
 ```
 
+`APPLICANT_DATA_PATH/student-notification-portraits.json` may assign an authenticated
+student account UUID to an existing registered `course://instructors` portrait asset for
+notification-center testing or an explicit deployment override. The file is validated at
+server startup, is never sent to the browser, and applies only to named questions shown to
+course staff. Anonymous questions never expose the assignment. Example:
+
+```json
+{
+  "schema_version": 1,
+  "portraits": [
+    {
+      "user_id": "11111111-1111-4111-8111-111111111111",
+      "asset_id": "valdemar_danry_portrait"
+    }
+  ]
+}
+```
+
 The server-local `APPLICANT_DATA_PATH/accepted-applicants.json` is the instructor-approved
 roster used for initial server provisioning. It contains private student information: never
 commit it or register it as a public course resource. The filename is ignored by Git in any
@@ -246,6 +264,9 @@ content under `shared/course/faq/` is unaffected.
 Migration `0014_instructor_message_email` adds a default-false confirmed email choice to
 `instructor_messages` and per-recipient attempt/error/provider/timestamp fields to
 `instructor_message_recipients`. These existing private rows form the mail outbox and retain
+the aggregate delivery state shown to the owning instructor. The projection derives queued,
+sending, failed, deferred, and sent counts from these rows and current recipient eligibility;
+it requires no second status table and exposes no provider IDs or addresses.
 their existing cascade deletion behavior. Recipient addresses appear only in the instructor-owned
 private preview event; outbox records continue to reference accounts rather than copying addresses.
 Existing messages are not backfilled for delivery. Apply before deploying the API and

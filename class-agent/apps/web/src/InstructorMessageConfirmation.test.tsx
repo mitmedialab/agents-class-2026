@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { InstructorMessageConfirmation } from "./InstructorMessageConfirmation.js";
@@ -248,5 +248,15 @@ it.each(["all_students", "specific_students"] as const)(
       fireEvent.click(screen.getByText("Recipient email addresses"));
     }
     expect(screen.getByText(/alice@example.com/)).toBeVisible();
+    const confirmation = screen.getByRole("region", {
+      name: "Student message confirmation",
+    });
+    const scrollingBody = confirmation.querySelector<HTMLElement>(
+      ".ta-question-confirmation-body",
+    );
+    const actions = within(confirmation)
+      .getByRole("button", { name: "Send" })
+      .closest<HTMLElement>(".ta-question-actions");
+    expect(scrollingBody).not.toContainElement(actions);
   },
 );

@@ -80,12 +80,17 @@ def test_postgres_auth_store_roundtrip() -> None:
             "course://instructors",
             "course://application",
             "course://slides/week-01",
+            "course://slides/week-02",
+            "course://slides/week-03",
+            "course://slides/week-04",
+            "course://slides/week-06",
+            "course://readings/software-agents-bradshaw",
         ]
         with psycopg.connect(scoped_url) as connection:
-            assert connection.execute("SELECT count(*) FROM course_resources").fetchone() == (7,)
+            assert connection.execute("SELECT count(*) FROM course_resources").fetchone() == (12,)
             assert connection.execute(
                 "SELECT count(*) FROM faq_entries WHERE active"
-            ).fetchone() == (6,)
+            ).fetchone() == (8,)
 
         async def scenario() -> None:
             pool = create_auth_pool(scoped_url)
@@ -474,6 +479,14 @@ def test_instructor_email_outbox_retries_only_failed_recipients() -> None:
                 ]
                 await delivery.run_once()
                 assert adapter.send_message.call_count == 2
+                partial = await service.get_email_delivery(
+                    principal=principal,
+                    conversation_id=conversation.id,
+                    message_id=prepared.message.id,
+                )
+                assert partial.state == "failed"
+                assert partial.sent_recipients == 1
+                assert partial.failed_recipients == 1
                 first_calls = [call.args[0] for call in adapter.send_message.call_args_list]
                 assert {str(mail.to[0]) for mail in first_calls} == {"alice@mit.edu", "bob@mit.edu"}
                 assert all(
@@ -491,6 +504,15 @@ def test_instructor_email_outbox_retries_only_failed_recipients() -> None:
                 assert adapter.send_message.call_args.args[0].to == first_calls[0].to
                 await delivery.run_once()
                 assert adapter.send_message.call_count == 3
+                complete = await service.get_email_delivery(
+                    principal=principal,
+                    conversation_id=conversation.id,
+                    message_id=prepared.message.id,
+                )
+                assert complete.state == "deferred"
+                assert complete.sent_recipients == 2
+                assert complete.remaining_recipients == 1
+                assert complete.deferred_recipients == 1
                 for action in ("cancel", "in_app"):
                     pending = await service.prepare(
                         principal=principal,

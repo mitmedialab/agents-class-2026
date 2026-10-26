@@ -217,7 +217,7 @@ class ConfirmationTool:
         )
 
 
-ISSUED_RESOURCE_URI = "course://assignment/runtime-issued"
+ISSUED_RESOURCE_URI = "course://runtime-issued/assignment-ideas"
 ISSUE_RESOURCE_TOOL_ID = "course.issue_resource"
 
 
@@ -266,6 +266,36 @@ def test_runtime_presents_the_exact_confirmed_question_as_trusted_context() -> N
 
     assert "submitted to course staff" in history
     assert "Which assignments are group work?" in history
+
+
+def test_runtime_presents_the_exact_pending_instructor_draft_as_trusted_context() -> None:
+    principal = PrincipalContext(
+        authenticated=True,
+        user_id=uuid4(),
+        username="instructor",
+        roles=["public", "instructor"],
+        session_id=uuid4(),
+    )
+    context = AgentContext(
+        principal=principal,
+        conversation_id=uuid4(),
+        recent_events=[
+            Event(
+                type="instructor.message.confirmation_requested",
+                actor="course-agent",
+                principal_user_id=principal.user_id,
+                payload={
+                    "subject": "Studio reminder",
+                    "message": "Hello everyone,\n\nBring your prototype.\n\nBest,\nInstructor",
+                },
+            )
+        ],
+    )
+
+    history = _conversation_history(context)
+
+    assert "Instructor message draft awaiting confirmation (Studio reminder)" in history
+    assert "Bring your prototype" in history
 
 
 def test_runtime_preserves_application_tool_constraints() -> None:

@@ -6,11 +6,23 @@ import {
   type ReactNode,
 } from "react";
 
+import { linkFaviconUrl } from "./api.js";
+
 const MIN_CONTENT_LOAD = 40;
 const MAX_CONTENT_LOAD = 900;
 const RESPONSE_FIT_ITERATIONS = 9;
 const RESPONSE_FIT_TOLERANCE_PX = 1;
 export const RESPONSE_CHARACTER_STAGGER_MS = 14;
+const INLINE_MARKUP_PATTERN = /(\[[^\]\n]+\]\([^\s)]+\)|\*\*[^*\n]+\*\*|\*[^*\n]+\*)/g;
+
+function safeResponseHref(value: string): string | null {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.href : null;
+  } catch {
+    return null;
+  }
+}
 
 export function responseScale(text: string): number {
   const visibleLines = text.split("\n").filter((line) => line.trim()).length;
@@ -44,6 +56,7 @@ function responseStyle(scale: number): CSSProperties {
 }
 
 interface ResponseFit {
+  expanded: boolean;
   fits: boolean | null;
   measured: boolean;
   scale: number;
@@ -58,33 +71,59 @@ function applyResponseScale(element: HTMLElement, scale: number): void {
 
 function fitResponseElement(
   element: HTMLElement,
-): Pick<ResponseFit, "fits" | "scale"> | null {
+  preferredScale?: number,
+): Pick<ResponseFit, "expanded" | "fits" | "scale"> | null {
+  const stage = element.parentElement;
+  if (!stage) return null;
   const previousStyle = element.getAttribute("style");
+  const previousMeasuringState = element.getAttribute("data-response-measuring");
   element.style.transition = "none";
 
   try {
-    const fitsAtScale = (scale: number): boolean => {
-      applyResponseScale(element, scale);
-      return element.scrollHeight <= element.clientHeight + RESPONSE_FIT_TOLERANCE_PX;
+    const fittingScale = (layout: "standard" | "expanded"): number | null => {
+      element.dataset.responseMeasuring = layout;
+      const fitsAtScale = (scale: number): boolean => {
+        applyResponseScale(element, scale);
+        return stage.scrollHeight <= stage.clientHeight + RESPONSE_FIT_TOLERANCE_PX;
+      };
+
+      if (stage.clientHeight <= 0) return null;
+      if (preferredScale !== undefined) {
+        return fitsAtScale(preferredScale) ? preferredScale : null;
+      }
+      if (fitsAtScale(1)) return 1;
+      if (!fitsAtScale(0)) return null;
+
+      let fitting = 0;
+      let overflowing = 1;
+      for (let index = 0; index < RESPONSE_FIT_ITERATIONS; index += 1) {
+        const candidate = (fitting + overflowing) / 2;
+        if (fitsAtScale(candidate)) {
+          fitting = candidate;
+        } else {
+          overflowing = candidate;
+        }
+      }
+      return fitting;
     };
 
-    applyResponseScale(element, 1);
-    if (element.clientHeight <= 0) return null;
-    if (fitsAtScale(1)) return { fits: true, scale: 1 };
-    if (!fitsAtScale(0)) return { fits: false, scale: 0 };
-
-    let fittingScale = 0;
-    let overflowingScale = 1;
-    for (let index = 0; index < RESPONSE_FIT_ITERATIONS; index += 1) {
-      const candidate = (fittingScale + overflowingScale) / 2;
-      if (fitsAtScale(candidate)) {
-        fittingScale = candidate;
-      } else {
-        overflowingScale = candidate;
-      }
+    element.dataset.responseMeasuring = "standard";
+    if (stage.clientHeight <= 0) return null;
+    const standardScale = fittingScale("standard");
+    if (standardScale !== null) {
+      return { expanded: false, fits: true, scale: standardScale };
     }
-    return { fits: true, scale: fittingScale };
+
+    const expandedScale = fittingScale("expanded");
+    return expandedScale === null
+      ? { expanded: true, fits: false, scale: preferredScale ?? 0 }
+      : { expanded: true, fits: true, scale: expandedScale };
   } finally {
+    if (previousMeasuringState === null) {
+      delete element.dataset.responseMeasuring;
+    } else {
+      element.dataset.responseMeasuring = previousMeasuringState;
+    }
     if (previousStyle === null) {
       element.removeAttribute("style");
     } else {
@@ -96,11 +135,11 @@ function fitResponseElement(
 function characterNodes(
   text: string,
   keyPrefix: string,
-  streaming: boolean,
+  _streaming: boolean,
   staggerCharacters: boolean,
   initialCharacterDelayMs: number,
 ): ReactNode {
-  if (!streaming && !staggerCharacters) return text;
+  if (!staggerCharacters) return text;
   const characterCount = Array.from(text).length;
   let characterIndex = 0;
 
@@ -151,7 +190,39 @@ function inlineMarkup(
   staggerCharacters: boolean,
   initialCharacterDelayMs: number,
 ): ReactNode[] {
-  return text.split(/(\*\*[^*\n]+\*\*)/g).map((part, index) => {
+  return text.split(INLINE_MARKUP_PATTERN).map((part, index) => {
+    const link = /^\[([^\]\n]+)]\(([^\s)]+)\)$/.exec(part);
+    if (link?.[1] && link[2]) {
+      const href = safeResponseHref(link[2]);
+      if (href) {
+        return (
+          <a
+            href={href}
+            key={`${keyPrefix}-link-${index}`}
+            rel="noreferrer"
+            target="_blank"
+          >
+            <img
+              alt=""
+              aria-hidden="true"
+              className="response-link-favicon"
+              loading="lazy"
+              onError={(event) => {
+                event.currentTarget.hidden = true;
+              }}
+              src={linkFaviconUrl(href)}
+            />
+            {characterNodes(
+              link[1],
+              `${keyPrefix}-link-${index}`,
+              streaming,
+              staggerCharacters,
+              initialCharacterDelayMs,
+            )}
+          </a>
+        );
+      }
+    }
     if (part.startsWith("**") && part.endsWith("**")) {
       return (
         <strong key={`${keyPrefix}-strong-${index}`}>
@@ -163,6 +234,19 @@ function inlineMarkup(
             initialCharacterDelayMs,
           )}
         </strong>
+      );
+    }
+    if (part.startsWith("*") && part.endsWith("*")) {
+      return (
+        <em key={`${keyPrefix}-emphasis-${index}`}>
+          {characterNodes(
+            part.slice(1, -1),
+            `${keyPrefix}-emphasis-${index}`,
+            streaming,
+            staggerCharacters,
+            initialCharacterDelayMs,
+          )}
+        </em>
       );
     }
     return characterNodes(
@@ -287,6 +371,7 @@ function responseBlocks(
 export interface AgentResponseProps {
   initialCharacterDelayMs?: number;
   staggerCharacters?: boolean;
+  stableScroll?: boolean;
   streaming?: boolean;
   text: string;
 }
@@ -294,33 +379,54 @@ export interface AgentResponseProps {
 export function AgentResponse({
   initialCharacterDelayMs = 0,
   staggerCharacters = false,
+  stableScroll = false,
   streaming = false,
   text,
 }: AgentResponseProps) {
   const responseRef = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState<ResponseFit>(() => ({
+    expanded: false,
     fits: null,
     measured: false,
     scale: responseScale(text),
     text,
   }));
-  const currentFit =
-    fit.text === text
+  const currentFit = stableScroll
+    ? {
+        expanded: true,
+        fits: false,
+        measured: true,
+        scale: 0,
+        text,
+      }
+    : fit.text === text
       ? fit
-      : { fits: null, measured: false, scale: responseScale(text), text };
+      : {
+          expanded: false,
+          fits: null,
+          measured: false,
+          scale: responseScale(text),
+          text,
+        };
 
   useLayoutEffect(() => {
+    if (stableScroll) return;
     const element = responseRef.current;
-    if (!element) return;
+    const stage = element?.parentElement;
+    if (!element || !stage) return;
     let animationFrame = 0;
 
     const measure = () => {
-      const result = fitResponseElement(element);
+      const result = fitResponseElement(
+        element,
+        streaming ? responseScale(text) : undefined,
+      );
       if (!result) return;
       setFit((existing) => {
         if (
           existing.text === text &&
           existing.measured &&
+          existing.expanded === result.expanded &&
           existing.fits === result.fits &&
           Math.abs(existing.scale - result.scale) < 0.001
         ) {
@@ -339,15 +445,26 @@ export function AgentResponse({
       typeof ResizeObserver === "undefined"
         ? null
         : new ResizeObserver(scheduleMeasure);
-    if (element.parentElement) observer?.observe(element.parentElement);
+    // The response layout itself compacts the header when scrolling is needed.
+    // Observing that header would turn each temporary fit measurement into a
+    // new resize notification and continuously restart the measurement.
+    observer?.observe(stage);
+    const mutationObserver =
+      typeof MutationObserver === "undefined"
+        ? null
+        : new MutationObserver(() => {
+            scheduleMeasure();
+          });
+    mutationObserver?.observe(stage, { childList: true });
     window.addEventListener("resize", scheduleMeasure);
 
     return () => {
       window.cancelAnimationFrame(animationFrame);
       window.removeEventListener("resize", scheduleMeasure);
+      mutationObserver?.disconnect();
       observer?.disconnect();
     };
-  }, [text]);
+  }, [stableScroll, streaming, text]);
 
   return (
     <div
@@ -355,8 +472,10 @@ export function AgentResponse({
       className="latest-response"
       data-character-delay={initialCharacterDelayMs}
       data-response-fit={currentFit.measured ? "measured" : "estimated"}
+      data-response-layout={currentFit.expanded ? "expanded" : "standard"}
       data-response-overflow={currentFit.fits === false}
       data-response-scale={currentFit.scale.toFixed(3)}
+      data-response-stable-scroll={stableScroll}
       data-staggered={staggerCharacters}
       data-streaming={streaming}
       style={responseStyle(currentFit.scale)}

@@ -20,6 +20,8 @@ var/assignments/
 var/course-knowledge/
 var/log/
 var/uploads/
+# Private current class roster and participation status.
+var/active-roster.json
 data/students/*
 !data/students/.gitkeep
 data/instructors/*

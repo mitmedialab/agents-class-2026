@@ -104,6 +104,30 @@
       }
     },
     {
+      "uri": "course://slides/week-04",
+      "title": "Agent Evaluation & Environments",
+      "description": "Slides for the fourth course meeting.",
+      "media_type": "application/pdf",
+      "path": "course/slides/week-04/week-4-slides.pdf",
+      "visibility": "public",
+      "status": "published",
+      "assets": {
+        "first_slide": "registry/slide-thumbnails/adb96cf3441e5588302b4d5145eb4e171950a8f42dd6b6442b5dd83e49f4c033.png"
+      }
+    },
+    {
+      "uri": "course://slides/week-06",
+      "title": "Computer-Use Agents & Beyond",
+      "description": "Slides for the sixth course meeting.",
+      "media_type": "application/pdf",
+      "path": "course/slides/week-06/week-6-slides.pdf",
+      "visibility": "public",
+      "status": "published",
+      "assets": {
+        "first_slide": "registry/slide-thumbnails/d8933a9b3bfffea9a466312f265b060f08b379626e3910f823de2240961cb46d.png"
+      }
+    },
+    {
       "uri": "course://readings/software-agents-bradshaw",
       "title": "An Introduction to Software Agents",
       "description": "Week 1 assigned reading by Jeffrey M. Bradshaw on the history, definitions, motivations, and attributes of software agents.",

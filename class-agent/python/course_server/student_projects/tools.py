@@ -19,6 +19,8 @@ from course_server.agent.capabilities import (
     WebVisitRunner,
 )
 from course_server.student_project_tool_ids import (
+    INSPECT_MY_STUDENT_REPOSITORY_TOOL_ID,
+    INSPECT_MY_STUDENT_SITE_TOOL_ID,
     INSPECT_STUDENT_REPOSITORY_TOOL_ID,
     INSPECT_STUDENT_SITE_TOOL_ID,
     LIST_STUDENT_PROJECTS_TOOL_ID,
@@ -26,6 +28,7 @@ from course_server.student_project_tool_ids import (
 
 from .client import (
     RepositoryView,
+    StudentProject,
     StudentProjectCatalog,
     StudentProjectNotFound,
     StudentProjectProviderError,
@@ -54,6 +57,35 @@ def _require_course_member(principal: PrincipalContext) -> None:
 def _require_course_staff(principal: PrincipalContext) -> None:
     if not principal.authenticated or not ({"ta", "instructor", "admin"} & set(principal.roles)):
         raise ToolValidationError("An active TA, instructor, or admin login is required.")
+
+
+def _require_student(principal: PrincipalContext) -> None:
+    if not principal.authenticated or "student" not in principal.roles:
+        raise ToolValidationError("An active student login is required.")
+
+
+async def _own_project(
+    projects: StudentProjectCatalog,
+    principal: PrincipalContext,
+    repository_prefix: str,
+    student_project_aliases: Mapping[str, str],
+) -> StudentProject:
+    _require_student(principal)
+    assert principal.username is not None
+    expected_id = student_project_aliases.get(
+        principal.username.casefold(),
+        f"{repository_prefix}{principal.username}",
+    )
+    try:
+        roster = await asyncio.to_thread(projects.list_projects)
+    except StudentProjectProviderError as error:
+        raise _translate_provider_error(error) from error
+    project = next((item for item in roster if item.id.casefold() == expected_id.casefold()), None)
+    if project is None:
+        raise ToolValidationError(
+            "No course project repository is linked to the active student username."
+        )
+    return project
 
 
 def _project_id(arguments: Mapping[str, JsonValue], allowed: frozenset[str]) -> str:
@@ -198,6 +230,49 @@ class InspectStudentSiteTool:
         )
 
 
+class InspectMyStudentSiteTool:
+    id = INSPECT_MY_STUDENT_SITE_TOOL_ID
+    description = (
+        "Read the deployed public website belonging to the active student account. The platform "
+        "derives the exact course project from trusted login identity and deployment-owned "
+        "project mapping; no project identifier is accepted from the model. Use this when a "
+        "student asks for their own assignment submission to be checked. This returns current "
+        "website content, not repository source."
+    )
+    input_schema: ClassVar[dict[str, JsonValue]] = {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": False,
+    }
+
+    def __init__(
+        self,
+        projects: StudentProjectCatalog,
+        visit: WebVisitRunner,
+        repository_prefix: str,
+        student_project_aliases: Mapping[str, str] | None = None,
+    ) -> None:
+        self._projects = projects
+        self._repository_prefix = repository_prefix
+        self._student_project_aliases = dict(student_project_aliases or {})
+        self._site_tool = InspectStudentSiteTool(projects, visit)
+
+    async def execute(
+        self,
+        arguments: Mapping[str, JsonValue],
+        context: ToolExecutionContext,
+    ) -> ToolExecutionResult:
+        if arguments:
+            raise ToolValidationError("This tool accepts no arguments.")
+        project = await _own_project(
+            self._projects,
+            context.principal,
+            self._repository_prefix,
+            self._student_project_aliases,
+        )
+        return await self._site_tool.execute({"project_id": project.id}, context)
+
+
 class InspectStudentRepositoryTool:
     id = INSPECT_STUDENT_REPOSITORY_TOOL_ID
     description = (
@@ -246,6 +321,13 @@ class InspectStudentRepositoryTool:
         context: ToolExecutionContext,
     ) -> ToolExecutionResult:
         _require_course_staff(context.principal)
+        return await self._execute_authorized(arguments, context)
+
+    async def _execute_authorized(
+        self,
+        arguments: Mapping[str, JsonValue],
+        context: ToolExecutionContext,
+    ) -> ToolExecutionResult:
         project_id = _project_id(
             arguments,
             frozenset({"project_id", "view", "path", "ref"}),
@@ -291,4 +373,66 @@ class InspectStudentRepositoryTool:
             content=result,
             summary=f"Inspected {view} for {project_id}.",
             storage_policy="server_summary",
+        )
+
+
+class InspectMyStudentRepositoryTool:
+    id = INSPECT_MY_STUDENT_REPOSITORY_TOOL_ID
+    description = (
+        "Inspect the real GitHub repository belonging to the active student account. Read its "
+        "summary, tree, one UTF-8 file, commits, branches, pull requests, issues, or workflow "
+        "runs using several focused calls. The platform derives the repository from trusted "
+        "login identity and deployment-owned project mapping; the model cannot choose another "
+        "project. Use this for rigorous checks of the student's own assignment code. It is "
+        "read-only and cannot access secrets, settings, collaborators, or perform writes."
+    )
+    input_schema: ClassVar[dict[str, JsonValue]] = {
+        "type": "object",
+        "properties": {
+            "view": {"type": "string", "enum": list(_REPOSITORY_VIEWS)},
+            "path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500,
+                "description": "Repository-relative path, required only for the file view.",
+            },
+            "ref": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "description": "Optional branch, tag, or commit for tree, file, and commits.",
+            },
+        },
+        "required": ["view"],
+        "additionalProperties": False,
+    }
+
+    def __init__(
+        self,
+        projects: StudentProjectCatalog,
+        repository_prefix: str,
+        student_project_aliases: Mapping[str, str] | None = None,
+    ) -> None:
+        self._projects = projects
+        self._repository_prefix = repository_prefix
+        self._student_project_aliases = dict(student_project_aliases or {})
+        self._repository_tool = InspectStudentRepositoryTool(projects)
+
+    async def execute(
+        self,
+        arguments: Mapping[str, JsonValue],
+        context: ToolExecutionContext,
+    ) -> ToolExecutionResult:
+        unknown = set(arguments) - {"view", "path", "ref"}
+        if unknown:
+            raise ToolValidationError(f"unexpected arguments: {', '.join(sorted(unknown))}")
+        project = await _own_project(
+            self._projects,
+            context.principal,
+            self._repository_prefix,
+            self._student_project_aliases,
+        )
+        return await self._repository_tool._execute_authorized(
+            {"project_id": project.id, **arguments},
+            context,
         )

@@ -6,7 +6,7 @@ import type {
   NotificationCenterItem,
   NotificationCenterSection,
 } from "./api.js";
-import { courseResourceAssetUrl } from "./api.js";
+import { courseResourceAssetUrl, notificationSenderImageUrl } from "./api.js";
 
 const SECTIONS: ReadonlyArray<{
   id: NotificationCenterSection;
@@ -41,6 +41,7 @@ interface NotificationCenterProps {
   data: NotificationCenterData;
   historyExpanded: boolean;
   onAction: (item: NotificationCenterItem) => void;
+  onSubmissionCheck?: ((item: NotificationCenterItem) => void) | undefined;
   onHistoryExpandedChange: (expanded: boolean) => void;
   onMarkRead: (itemId: string) => void;
 }
@@ -112,6 +113,7 @@ function NotificationKindIcon({ kind }: { kind: NotificationCenterItem["kind"] }
 
 function NotificationTile({ item }: { item: NotificationCenterItem }) {
   const [failedThumbnail, setFailedThumbnail] = useState<string | null>(null);
+  const [failedPortrait, setFailedPortrait] = useState<string | null>(null);
   const thumbnailUrl = item.thumbnail
     ? courseResourceAssetUrl(item.thumbnail.resource_uri, item.thumbnail.asset_id)
     : null;
@@ -123,15 +125,20 @@ function NotificationTile({ item }: { item: NotificationCenterItem }) {
       </span>
     );
   }
-  if (item.sender?.resource_uri && item.sender.image_asset_id) {
+  const portraitUrl =
+    item.sender?.resource_uri && item.sender.image_asset_id
+      ? courseResourceAssetUrl(item.sender.resource_uri, item.sender.image_asset_id)
+      : item.kind === "pending_student_question" && item.sender
+        ? notificationSenderImageUrl(item.id)
+        : null;
+  if (portraitUrl && failedPortrait !== portraitUrl) {
     return (
       <span className="notification-card-icon notification-card-portrait">
         <img
           alt=""
-          src={courseResourceAssetUrl(
-            item.sender.resource_uri,
-            item.sender.image_asset_id,
-          )}
+          loading="lazy"
+          onError={() => setFailedPortrait(portraitUrl)}
+          src={portraitUrl}
         />
       </span>
     );
@@ -139,14 +146,18 @@ function NotificationTile({ item }: { item: NotificationCenterItem }) {
   return <NotificationKindIcon kind={item.kind} />;
 }
 
-function senderFirstName(item: NotificationCenterItem): string | null {
+function senderName(item: NotificationCenterItem): string | null {
   if (
     !item.sender ||
-    (item.kind !== "instructor_message" && item.kind !== "staff_reply")
+    item.kind !== "instructor_message" &&
+    item.kind !== "staff_reply" &&
+    item.kind !== "pending_student_question"
   ) {
     return null;
   }
-  return item.sender.first_name;
+  return item.kind === "pending_student_question"
+    ? (item.sender.display_name ?? item.sender.first_name)
+    : item.sender.first_name;
 }
 
 function DismissButton({
@@ -164,6 +175,28 @@ function DismissButton({
       onClick={() => onMarkRead(item.id)}
     >
       <CloseIcon />
+    </Button>
+  );
+}
+
+function SubmissionCheckButton({
+  busy,
+  item,
+  onSubmissionCheck,
+}: {
+  busy: boolean;
+  item: NotificationCenterItem;
+  onSubmissionCheck?: ((item: NotificationCenterItem) => void) | undefined;
+}) {
+  if (!item.submission_check_prompt || !onSubmissionCheck) return null;
+  return (
+    <Button
+      aria-label={`Review my progress: ${item.title}`}
+      className="notification-submission-check"
+      disabled={busy}
+      onClick={() => onSubmissionCheck(item)}
+    >
+      Review my progress
     </Button>
   );
 }
@@ -242,7 +275,7 @@ function StandardNotificationCardContent({
   item: NotificationCenterItem;
   showAction: boolean;
 }) {
-  const senderName = senderFirstName(item);
+  const trustedSenderName = senderName(item);
   return (
     <span className="notification-card-layout">
       <NotificationTile item={item} />
@@ -250,10 +283,10 @@ function StandardNotificationCardContent({
         <span className="notification-card-meta">
           <span>
             {item.section === "lecture_slides" ? "Slides" : STATE_LABELS[item.state]}
-            {senderName ? (
+            {trustedSenderName ? (
               <span className="notification-card-sender">
                 <span aria-hidden="true"> · </span>
-                {senderName}
+                {trustedSenderName}
               </span>
             ) : null}
           </span>
@@ -277,9 +310,11 @@ function StandardNotificationCardContent({
 export function CommunicationDetailCard({
   generatedAt,
   item,
+  onClose,
 }: {
   generatedAt: string;
   item: NotificationCenterItem;
+  onClose: () => void;
 }) {
   if (item.section !== "communications") return null;
   return (
@@ -289,6 +324,13 @@ export function CommunicationDetailCard({
       data-kind={item.kind}
       data-state={item.state}
     >
+      <Button
+        aria-label="Close message"
+        className="notification-card-dismiss communication-detail-close"
+        onClick={onClose}
+      >
+        <CloseIcon />
+      </Button>
       <div className="notification-card-primary communication-detail-card-body">
         <StandardNotificationCardContent
           generatedAt={generatedAt}
@@ -306,12 +348,14 @@ function NotificationCard({
   item,
   onAction,
   onMarkRead,
+  onSubmissionCheck,
 }: {
   busy: boolean;
   generatedAt: string;
   item: NotificationCenterItem;
   onAction: (item: NotificationCenterItem) => void;
   onMarkRead: (itemId: string) => void;
+  onSubmissionCheck?: ((item: NotificationCenterItem) => void) | undefined;
 }) {
   const deadline = item.due_at
     ? item.state === "past"
@@ -358,6 +402,11 @@ function NotificationCard({
               <span className="notification-card-action">{item.action_label}</span>
             </span>
           </button>
+          <SubmissionCheckButton
+            busy={busy}
+            item={item}
+            onSubmissionCheck={onSubmissionCheck}
+          />
         </article>
       </li>
     );
@@ -383,6 +432,11 @@ function NotificationCard({
             showAction
           />
         </button>
+        <SubmissionCheckButton
+          busy={busy}
+          item={item}
+          onSubmissionCheck={onSubmissionCheck}
+        />
         <DismissButton item={item} onMarkRead={onMarkRead} />
       </article>
     </li>
@@ -396,6 +450,7 @@ export function NotificationCenter({
   onAction,
   onHistoryExpandedChange,
   onMarkRead,
+  onSubmissionCheck,
 }: NotificationCenterProps) {
   const [hasScrolled, setHasScrolled] = useState(false);
   const [expandedSections, setExpandedSections] = useState<
@@ -465,6 +520,7 @@ export function NotificationCenter({
                     key={item.id}
                     onAction={onAction}
                     onMarkRead={onMarkRead}
+                    onSubmissionCheck={onSubmissionCheck}
                   />
                 ))}
               </ol>

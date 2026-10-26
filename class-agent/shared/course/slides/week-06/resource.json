@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "resource": {
+    "uri": "course://slides/week-06",
+    "title": "Computer-Use Agents & Beyond",
+    "description": "Slides for the sixth course meeting.",
+    "media_type": "application/pdf",
+    "file": "week-6-slides.pdf",
+    "visibility": "public",
+    "status": "published",
+    "order": 65
+  }
+}

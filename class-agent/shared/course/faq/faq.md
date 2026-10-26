@@ -14,6 +14,12 @@
 
 Use a downloaded LLM whose inference runs in Google Colab or on your computer. Hosted model APIs such as Anthropic or OpenAI do not satisfy the assignment. Implement the agent loop yourself without agent frameworks or SDKs such as the Claude Agent SDK. The application may be in any domain, but it must use an LLM-based agent loop; an image generator may be a tool or output, but cannot replace that loop.
 
+## Weekly assignment deadlines
+
+### What is the late policy for weekly assignments?
+
+Each student may use two extensions during the semester, each for up to three days. You do not need to provide a reason. When possible, let the course staff know before the deadline so the assignment is not marked missing. Regular deadlines remain important because submissions are used for in-class demos and help everyone progress through the builds together, but the extensions provide flexibility for illness, travel, conferences, or particularly busy weeks. If a serious or unexpected circumstance requires flexibility beyond the two extensions, contact the course staff so it can be handled individually.
+
 ## Newsletter highlights
 
 ### What criteria does the Course Agent use to choose the newsletter highlights?

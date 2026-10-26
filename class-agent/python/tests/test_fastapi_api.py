@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
@@ -48,6 +49,7 @@ from course_server.notifications import (
     NotificationCenterService,
 )
 from course_server.uploads import FileTemporaryUploadStore, TemporaryUploadStore
+from course_server.web_search import fetch_public_favicon
 
 
 class RecordingRuntime:
@@ -327,6 +329,7 @@ def _build_client(
     ta_question_store: TAQuestionStore | None = None,
     faq_store: FaqStore | None = None,
     assignment_store: AssignmentStore | None = None,
+    favicon_fetcher: Callable[[str], tuple[bytes, str] | None] | None = None,
 ) -> tuple[TestClient, str, RecordingRuntime]:
     auth_store = InMemoryAuthStore()
     conversations = InMemoryConversationStore()
@@ -371,6 +374,7 @@ def _build_client(
         ),
         notification_center=notification_center,
         anonymous_quota_policy=anonymous_quota_policy or AnonymousQuotaPolicy(),
+        favicon_fetcher=favicon_fetcher or fetch_public_favicon,
     )
     return (
         TestClient(create_app(services=services), base_url="https://testserver"),
@@ -385,6 +389,31 @@ def _login(client: TestClient, access_code: str, *, prefix: str = "") -> None:
         json={"username": "alice", "access_code": access_code},
     )
     assert response.status_code == 200
+
+
+def test_link_favicon_is_an_authenticated_same_origin_proxy() -> None:
+    requests: list[str] = []
+    png = b"\x89PNG\r\n\x1a\nicon"
+
+    def favicon_fetcher(url: str) -> tuple[bytes, str] | None:
+        requests.append(url)
+        return (png, "image/png") if url == "https://docs.example.edu/guide" else None
+
+    client, access_code, _ = _build_client(favicon_fetcher=favicon_fetcher)
+    endpoint = f"{API_PREFIX}/link-favicon"
+
+    assert client.get(endpoint, params={"url": "https://docs.example.edu/guide"}).status_code == 404
+    assert requests == []
+
+    _login(client, access_code, prefix=API_PREFIX)
+    response = client.get(endpoint, params={"url": "https://docs.example.edu/guide"})
+
+    assert response.status_code == 200
+    assert response.content == png
+    assert response.headers["content-type"] == "image/png"
+    assert response.headers["cache-control"] == "private, max-age=3600"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert requests == ["https://docs.example.edu/guide"]
 
 
 def _create_conversation(
@@ -516,6 +545,8 @@ def test_public_course_resource_catalog_marks_schedule_provisional() -> None:
         "course://slides/week-01",
         "course://slides/week-02",
         "course://slides/week-03",
+        "course://slides/week-04",
+        "course://slides/week-06",
         "course://readings/software-agents-bradshaw",
     ]
     schedule = next(
@@ -713,7 +744,7 @@ def test_authorized_resource_content_is_served_by_uri_without_exposing_paths() -
     assert "| Week 1 (9/15) |" in response.text
     assert "| Week 13 (12/8) |" in response.text
     assert "| Week 14 (12/14) |" in response.text
-    assert "Monday, 1:30–4:30 PM in E15-341" in response.text
+    assert "Monday, 1:30\N{EN DASH}4:30 PM in E15-341" in response.text
     assert "shared/course" not in response.text
     assert (
         client.get(
@@ -1955,6 +1986,14 @@ def test_instructor_message_confirmation_delivers_only_after_send(send_email: bo
     assert sent.json()["type"] == "instructor.message.sent"
     assert sent.json()["payload"]["subject"] == "Updated studio reminder"
     assert sent.json()["payload"]["message"] == "Bring your revised prototype to class."
+    delivery = instructor_client.get(
+        f"{API_PREFIX}/conversations/{conversation_id}/instructor-messages/"
+        f"{prepared.message.id}/email-delivery"
+    )
+    assert delivery.status_code == 200
+    assert delivery.json()["state"] == ("queued" if send_email else "not_requested")
+    assert delivery.json()["total_recipients"] == 1
+    assert delivery.json()["sent_recipients"] == 0
     items = student_client.get(f"{API_PREFIX}/notification-center").json()["items"]
     assert len(items) == 1
     assert items[0]["kind"] == "instructor_message"
@@ -1966,6 +2005,11 @@ def test_instructor_message_confirmation_delivers_only_after_send(send_email: bo
         json={"action": "send"},
     )
     assert foreign_confirmation.status_code == 404
+    foreign_delivery = student_client.get(
+        f"{API_PREFIX}/conversations/{conversation_id}/instructor-messages/"
+        f"{prepared.message.id}/email-delivery"
+    )
+    assert foreign_delivery.status_code == 404
 
 
 def test_student_confirmation_can_resume_the_agent_without_a_fake_user_message() -> None:

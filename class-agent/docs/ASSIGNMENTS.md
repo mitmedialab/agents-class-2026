@@ -71,7 +71,17 @@ A published assignment creates an unread release item once `release_at` has pass
 under Upcoming from fourteen days before `due_at` until the deadline, with its countdown computed
 by the server. The release item ID includes the assignment revision, so an intentional revision can
 produce a fresh notification. The notification action asks the Course Agent to read the same
-authorized assignment record before explaining it or suggesting a plan.
+authorized assignment record before explaining it or suggesting a plan. Student release and
+deadline cards also keep **Review my progress** visible. The same action appears directly below the
+due date in an assignment opened in the workspace. It loads the student-only submission-check
+workflow, compares the official criteria with current identity-scoped repository/code and
+deployed-site evidence, and returns evidence-backed strengths, gaps, learning topics, and learning
+resources—never implementation steps, code, hints, or a solved example.
+Interactive behavior that the inspection tools cannot render or operate is reported separately as
+an agent inspection limitation that may still work for human users, never as evidence that the
+feature is missing.
+Learning resources appear only as safe Markdown links inline with the specific gap or concept they
+support. Reviews do not append a separate resource section or general reading list.
 
 Restart the API after changing Python code or `ASSIGNMENT_DATA_PATH`. Assignment JSON contents are
 read from disk for each projection and tool call, so ordinary content edits do not otherwise require

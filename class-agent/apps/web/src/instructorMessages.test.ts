@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   applyInstructorMessageEvent,
+  instructorEmailDeliveryFromEvent,
   instructorMessageFromPayload,
+  latestInstructorEmailDelivery,
   pendingInstructorMessageContinuation,
   projectInstructorMessageEvents,
 } from "./instructorMessages.js";
@@ -107,6 +109,49 @@ describe("instructor message events", () => {
     );
     completed.metadata.trigger_event_id = sent.id;
     expect(pendingInstructorMessageContinuation([sent, completed])).toBeNull();
+
+    const cancelled = event(
+      "instructor.message.cancelled",
+      { message_id: confirmationPayload.message_id },
+      "40000000-0000-4000-8000-000000000004",
+    );
+    const revision = event(
+      "user.message",
+      { text: "Make the draft warmer." },
+      "40000000-0000-4000-8000-000000000005",
+    );
+    expect(pendingInstructorMessageContinuation([cancelled, revision])).toBeNull();
+  });
+
+  it("projects only explicitly queued instructor email delivery", () => {
+    const inAppOnly = event(
+      "instructor.message.sent",
+      {
+        message_id: confirmationPayload.message_id,
+        recipient_count: 1,
+        email_queued: false,
+      },
+      "40000000-0000-4000-8000-000000000006",
+    );
+    const emailed = event(
+      "instructor.message.sent",
+      {
+        message_id: confirmationPayload.message_id,
+        recipient_count: 1,
+        email_queued: true,
+      },
+      "40000000-0000-4000-8000-000000000007",
+    );
+
+    expect(instructorEmailDeliveryFromEvent(inAppOnly)).toBeNull();
+    expect(instructorEmailDeliveryFromEvent(emailed)).toEqual({
+      messageId: confirmationPayload.message_id,
+      recipientCount: 1,
+    });
+    expect(latestInstructorEmailDelivery([emailed, inAppOnly])).toEqual({
+      messageId: confirmationPayload.message_id,
+      recipientCount: 1,
+    });
   });
 });
 

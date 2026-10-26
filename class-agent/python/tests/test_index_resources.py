@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from course_server.index_resources import (
+    DEFAULT_FAQ_PATH,
     load_faq_document,
     normalize_resource_text,
     refresh_resource_registry,
@@ -17,6 +18,25 @@ def test_seed_faq_has_stable_unique_entries() -> None:
 
     assert len(faq.entries) >= 4
     assert len({entry.id for entry in faq.entries}) == len(faq.entries)
+
+
+def test_seed_faq_documents_weekly_assignment_extension_policy() -> None:
+    faq = load_faq_document()
+
+    policy = next(
+        entry
+        for entry in faq.entries
+        if entry.question == "What is the late policy for weekly assignments?"
+    )
+    assert "two extensions during the semester" in policy.answer
+    assert "each for up to three days" in policy.answer
+    assert "do not need to provide a reason" in policy.answer
+    assert "before the deadline" in policy.answer
+    assert "handled individually" in policy.answer
+
+    faq_markdown = DEFAULT_FAQ_PATH.with_suffix(".md").read_text(encoding="utf-8")
+    assert f"### {policy.question}" in faq_markdown
+    assert policy.answer in faq_markdown
 
 
 def test_resource_registry_is_generated_from_sidecar_manifests(tmp_path: Path) -> None:

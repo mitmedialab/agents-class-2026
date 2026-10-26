@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Literal, Self
@@ -17,9 +18,46 @@ DEFAULT_SHOWCASE_HISTORY_PATH = (
     Path(__file__).resolve().parents[2] / "var/student-showcase/history.json"
 )
 
+_STUDENT_PROJECT_ALIAS_USERNAME = re.compile(r"^[a-z][a-z0-9._-]{1,63}$")
+
 
 class ConfigurationError(RuntimeError):
     """Required runtime configuration is absent or unsupported."""
+
+
+def _student_project_aliases(
+    raw_value: str,
+    *,
+    repository_prefix: str,
+    excluded_repositories: tuple[str, ...],
+) -> tuple[tuple[str, str], ...]:
+    aliases: list[tuple[str, str]] = []
+    seen_usernames: set[str] = set()
+    for raw_entry in raw_value.split(","):
+        entry = raw_entry.strip()
+        if not entry:
+            continue
+        username, separator, project_id = entry.partition("=")
+        username = username.strip().casefold()
+        project_id = project_id.strip()
+        if not separator or not _STUDENT_PROJECT_ALIAS_USERNAME.fullmatch(username):
+            raise ConfigurationError(
+                "GITHUB_STUDENT_PROJECT_ALIASES must contain username=project_id entries"
+            )
+        if (
+            not project_id.startswith(repository_prefix)
+            or len(project_id) > 100
+            or not re.fullmatch(r"[A-Za-z0-9_.-]+", project_id)
+            or project_id in excluded_repositories
+        ):
+            raise ConfigurationError(
+                "GITHUB_STUDENT_PROJECT_ALIASES targets must be non-excluded course project IDs"
+            )
+        if username in seen_usernames:
+            raise ConfigurationError(f"GITHUB_STUDENT_PROJECT_ALIASES repeats username {username}")
+        seen_usernames.add(username)
+        aliases.append((username, project_id))
+    return tuple(aliases)
 
 
 class MailSettings(BaseModel):
@@ -146,6 +184,7 @@ class AgentSettings(BaseModel):
     github_organization: str = Field(default="mitmedialab", pattern=r"^[A-Za-z0-9_.-]{1,100}$")
     github_repository_prefix: str = Field(default="agents2026-", pattern=r"^[A-Za-z0-9_.-]{1,100}$")
     github_excluded_repositories: tuple[str, ...] = ("agents2026-test",)
+    github_student_project_aliases: tuple[tuple[str, str], ...] = ()
     github_roster_cache_ttl_seconds: int = Field(default=300, ge=0, le=3_600)
 
     @classmethod
@@ -278,6 +317,11 @@ class AgentSettings(BaseModel):
             for name in values.get("GITHUB_EXCLUDED_REPOSITORIES", "agents2026-test").split(",")
             if name.strip()
         )
+        github_student_project_aliases = _student_project_aliases(
+            values.get("GITHUB_STUDENT_PROJECT_ALIASES", ""),
+            repository_prefix=github_repository_prefix,
+            excluded_repositories=github_excluded_repositories,
+        )
 
         return cls(
             model_provider="openai",
@@ -319,6 +363,7 @@ class AgentSettings(BaseModel):
             github_organization=github_organization,
             github_repository_prefix=github_repository_prefix,
             github_excluded_repositories=github_excluded_repositories,
+            github_student_project_aliases=github_student_project_aliases,
             github_roster_cache_ttl_seconds=int(
                 values.get("GITHUB_ROSTER_CACHE_TTL_SECONDS", "300")
             ),

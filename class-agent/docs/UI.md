@@ -39,18 +39,25 @@ The browser URL and Back/Forward navigation remain synchronized with that page. 
 contains a concise description, new/history navigation, and student login or logout
 without adding persistent chrome to the main interface.
 
-Response typography uses the largest display scale that fits its rendered bounds without
-scrolling. The browser measures actual content overflow and continuously adjusts type size, line
-height, measure, spacing, and padding when text or the surrounding notification/workspace layout
-changes. A length-based estimate prevents an oversized first paint before measurement; scrolling
-remains only when the smallest reading scale still cannot fit. Responses are capped at the smaller
-of 44 percent of the viewport or 30rem. The renderer safely handles basic headings, lists, numbered
-lists, and bold text without injecting model-provided HTML.
+Response typography uses the largest display scale that lets the complete conversation presentation
+fit without scrolling. The browser measures the animated figure, activity trace, response, and any
+confirmation together, and continuously adjusts type size, line height, measure, spacing, and padding
+when that content or the surrounding notification/workspace layout changes. A length-based estimate
+prevents an oversized first paint before measurement. If the presentation cannot fit at the minimum
+reading scale, it first reclaims the fixed header area and hides the MIT marks. Only content that
+still exceeds that expanded usable viewport becomes one shared scroll surface; it is never clipped
+inside a response-only box. The composer remains pinned above a black fade while content passes
+beneath it, with enough trailing space to bring the final response line fully into view. The renderer
+safely handles basic headings, lists, numbered lists, bold text, and validated HTTP(S) links without
+injecting model-provided HTML. Authenticated course members see a small origin favicon before a
+link when one is safely available through the same-origin bounded proxy; failed icons disappear
+without changing the link text.
 
-The borderless composer sits roughly 15 percent of the viewport above the bottom edge
-on larger screens and uses the native system text face for a quieter writing surface. It occupies
-an auto-sized layout row: multiline drafts and attachment receipts grow that row while the response
-row yields the same amount of space, so the two surfaces never overlap.
+The borderless composer sits close to the bottom edge and uses the native system text face for a
+quieter writing surface. For responses within the viewport, it occupies an auto-sized layout row:
+multiline drafts and attachment receipts grow that row while the response row yields the same amount
+of space. For overflowing responses, its measured height instead reserves the end of the shared
+scroll surface while the composer stays pinned above it.
 While empty, muted placeholder text invites the visitor to start typing to interact
 with the agent. An attachment control uploads supported files before sending; removable
 filename chips show which principal-scoped temporary upload receipts will accompany the
@@ -64,9 +71,9 @@ runtime preserves the agent's final wording instead of substituting a platform-a
 Optional context needed by staff remains part of the prepared request but is not rendered as a
 second explanation in the student interface. Internal tracking codes, subject lines, greetings,
 sign-offs, and transport formatting stay out of the student interface. The composer pauses
-until the student chooses **Send** or **Cancel**. A persistent **Discard draft** action remains in
-the composer while a confirmation is pending, so a restored draft can always be cancelled even
-when its preview is taller than the available response area. The Course Agent is instructed not to
+until the student chooses **Send** or **Cancel**. The confirmation body scrolls independently when
+needed so its persistent Send/Cancel footer remains available after reload and with long content.
+The Course Agent is instructed not to
 repeat the detailed question already visible in the confirmation. Send only queues the dedicated mail worker;
 the UI closes the confirmation and asks the Course Agent to continue from the trusted action event.
 The agent receives the completed action and exact submitted question and decides what to say next,
@@ -76,6 +83,9 @@ The confirmation also offers **Hide my name from course staff**. This substitute
 staff-facing label and redacts the account's known name and email from the question/context;
 platform code retains the authenticated owner for private reply delivery. Staff FAQ review remains
 in the original email thread.
+When a source communication or confirmation is present, the presentation enters the shared scroll
+surface at a stable reading scale immediately; streamed text does not repeatedly resize the trusted
+message or editable confirmation around it.
 
 Ordinary instructor message confirmations include an unchecked **Also send by email** checkbox
 above Send/Cancel, using the existing checkbox treatment. It is disabled while submitting or when
@@ -85,6 +95,14 @@ an expandable recipient-address list. These addresses are supplied only in the i
 confirmation, never in student notifications or anonymous-question reply previews.
 The choice travels only with Send and the complete edited content. Pending-question replies
 retain their separate Private/Public control and do not show this email option.
+
+After an opted-in message is confirmed, a compact instructor-only delivery status replaces the
+preview and follows the durable recipient outbox. It distinguishes queued, actively sending,
+retrying failure, account-deferred, and provider-accepted completion states, including aggregate
+recipient counts. Failure text is sanitized and points the instructor to mailbox authorization;
+provider IDs, recipient addresses, and raw provider errors are not displayed. The status is
+restored from the trusted sent event when its conversation is reopened and polls until it reaches
+a terminal sent or deferred state.
 
 
 An instructor-authored student message uses the same platform-owned confirmation pattern without
@@ -101,8 +119,11 @@ stored owner. A pending-question reply presents **Private**, **Public**, and **S
 FAQ** as separate visibility choices beside the editable answer. Public creates the shared FAQ and
 notifies students; silent publication creates the same redacted shared FAQ without a course-wide
 notification. Moderation commands are not part of the displayed or submitted answer body. Only the
-answer content is shown back to the student. The composer pauses until Send
-or Cancel. The browser cannot supply
+answer content is shown back to the student. Pending-question replies continue to pause the
+composer until Send or Cancel. For ordinary instructor drafts, the composer remains available:
+sending a revision request cancels the unsent confirmation, supplies its exact trusted content to
+the agent, and lets the agent prepare a replacement confirmation in the same conversation. The
+browser cannot supply
 identity, role, or additional
 recipients. A confirmed message then appears only in each addressed student's Communications stack
 and authorized Course Agent context. A confirmed question reply instead replaces that student's
@@ -132,6 +153,9 @@ TAs and instructors instead see questions that still
 need a staff reply. Upcoming contains authorized structured assignments only during the fourteen
 days before their stored deadline and computes the countdown from the server projection time. Course
 updates and replies can be marked read; pending threads and deadlines remain visible while active.
+Each released structured-assignment update and deadline card gives students an always-visible
+**Review my progress** action in addition to **View details**. The review starts the bounded
+submission-review workflow; it does not turn the notification card into a grading surface.
 After a successful authenticated page welcome, the Updates visible for that opening are
 acknowledged so they do not reappear on the next visit. The current browser snapshot remains visible
 for that opening, while Communications and Upcoming continue to reflect their active state.
@@ -148,20 +172,25 @@ deadlines; Updates tiles use those same dimensions. Existing card spacing and in
 **View slides** action asks the Course Agent to open the registered deck in the workspace.
 Slides remain available in history after viewing and are excluded from unread counts and greeting reminders.
 
-Every notification other than a lecture slide has a bounded details action that starts an ordinary
-Course Agent turn. That turn may
-retrieve additional facts from an authorized source, but it must not solve the issue, draft a
-response, recommend or take an action, or infer the user's intent. It ends by asking what the user
-wants to do. Selecting a Communications item also presents that complete trusted card in the
-conversation, without its stack truncation or repeated action control, with the Course Agent's
-streamed response immediately underneath. The notification stack yields its presentation slot while
-that communication is in the conversation so it cannot cover the full card at narrow widths or
-duplicate it at desktop widths. A later ordinary message or different notification action clears
-that transient presentation and restores the stack; durable communication data remains server-owned.
+Every non-communication notification other than a lecture slide has a bounded details action that
+starts an ordinary Course Agent turn. That turn may retrieve additional facts from an authorized
+source, but it must not solve the issue, draft a response, recommend or take an action, or infer the
+user's intent. It ends by asking what the user wants to do. Selecting a Communications item instead
+performs no agent run: it presents the complete trusted card in the conversation without its stack
+truncation or repeated action control and focuses the composer. The selected card remains visible and
+becomes trusted context only when the user explicitly sends a query about it. Its source text remains
+data rather than instructions, and existing authorization and confirmation boundaries still apply.
+The notification stack yields its presentation slot while that communication is selected so it cannot
+cover the full card at narrow widths or duplicate it at desktop widths. A different notification
+action or the detail card's close control clears that transient presentation and restores the main
+chat and notification surfaces; durable communication data and any completed agent reply remain
+available.
 Ordinary cards are borderless and use a large, semantic color tile for their trusted type
 icon beside the site's sans-serif text treatment. Staff replies and instructor messages show only
 the trusted sender's first name in the muted metadata row. They use the sender's registered course
-portrait in the tile when its asset resolves; otherwise the semantic message icon remains. Upcoming assignments use a distinct calendar-date
+portrait in the tile when its asset resolves. Named student questions shown to staff likewise use
+the student's display name and approved representative image; anonymous questions show neither.
+Unavailable images fall back to the semantic message icon. Upcoming assignments use a distinct calendar-date
 layout with the countdown and exact due time. Dismiss controls appear on pointer hover or keyboard
 focus and remain visible on touch-only devices. Details actions follow the same hover/focus rule
 and appear as compact, brighter button-shaped controls without directional arrows, with a persistent
@@ -187,7 +216,10 @@ retried once against the idempotent greeting route.
 At desktop widths, opening the notification stack transitions both the agent response and composer
 into the horizontal space that remains to its left, centered within that region in the same manner
 as the workspace transition. At widths of 900 pixels or less, the notification stack is hidden by
-default and an explicit **Chat / Updates** switch presents only one opaque surface at a time. Chat is
+default and an explicit **Chat / Notifications** switch presents only one opaque surface at a time.
+The switch shares the compact mobile site-header row with the institutional marks; an overflowing
+conversation pins its compact agent and trace row immediately below, so neither control floats over
+response content. The Notifications list begins below the same persistent header. Chat is
 the default whenever the page opens, a prompt starts, or a notification action begins. This switch
 controls browser presentation only and does not create or persist workspace state. When a registered
 workspace opens at the same narrow widths, the control becomes **Chat / Workspace**, selects
@@ -212,11 +244,14 @@ context, a brief handoff, or the next question. Application code does not inspec
 agent's response text.
 
 Final-answer text originates incrementally from native model-provider deltas and is
-projected as soon as each fragment arrives. A small block cursor marks the active edge,
-and newly arrived characters use a short opacity fade while stable characters retain
-their keyed DOM nodes. Length-aware typography transitions as the answer grows. The
-canonical `agent.text.done` value reconciles the displayed answer; reduced-motion
-preferences disable character and cursor animations.
+projected at most once per animation frame, coalescing faster provider bursts without delaying
+visible output. A small block cursor marks the active edge. Ordinary streamed text remains native
+text instead of creating one animated DOM node per character; the deliberately staged opening
+welcome retains its character treatment. Response Markdown renders headings, lists, bold text, and
+single-asterisk emphasis as semantic elements. Rendered-fit checks use the length estimate while
+streaming and perform the exact bounded search when the answer completes. The canonical `agent.text.done`
+value reconciles the displayed answer; reduced-motion preferences disable character and cursor
+animations.
 
 Run activity appears immediately above the response, after the white
 `Course Agent` label, as a muted icon-led monospace disclosure. Its expanded
@@ -228,8 +263,14 @@ complete` rather than substituting a generic process label. It is deliberately s
 as a process trace rather than an agent message. The trace does not claim to show or
 expose hidden chain-of-thought; it shows inspectable platform operations that actually
 occurred. Expanding the trace does not alter the horizontal center of its summary; the
-independently centered list fades into reserved space while the response stage
-transitions upward.
+independently centered list expands reserved header space and pushes the response below it rather
+than painting over response content.
+When the complete presentation requires scrolling, the animated mark shrinks into a compact sticky
+conversation header beside `Course Agent` and the trace disclosure. That header remains at the top
+of the shared scroll surface so verified activity stays inspectable while the response moves beneath
+it. Once that shared surface has actually scrolled, a short black-to-transparent scrim appears below
+the header so moving response text fades beneath it instead of ending at a hard clipping edge. The
+scrim remains absent at the top of the response.
 
 Non-final model prose is not shown in chat. While a run is active, the interface
 shows only verified platform activity; decoded final-answer fragments replace
@@ -284,6 +325,11 @@ picture receipts remain internal; the field directs applicants to the existing m
 attachment control.
 Authorized assignment reads open the exact stored Markdown assignment in the workspace. No
 assignment editor is registered.
+For students, an always-visible **Review my progress** button follows the due date in the open
+assignment and starts the same evidence-based review as the assignment notification action. It is
+disabled while another agent run is active and is not shown to staff roles or on non-assignment
+documents. The action spans the assignment header's full content width at desktop and narrow
+layouts.
 The read-only surface presents the assignment title once, omitting only an equivalent leading
 Markdown H1 from the rendered body. It shows no internal document-status label. The complete
 **Due** line uses the assignment-deadline color for the authored local date and time without exposing

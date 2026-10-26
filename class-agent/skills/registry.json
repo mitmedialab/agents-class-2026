@@ -27,6 +27,11 @@
       "audience": "students"
     },
     {
+      "id": "assignment-submission-check",
+      "directory": "assignment-submission-check",
+      "audience": "students"
+    },
+    {
       "id": "instructor-application-review",
       "directory": "instructor-application-review",
       "audience": "instructors"

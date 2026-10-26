@@ -50,6 +50,9 @@ receive the repository inspection tool; students do not. Anonymous principals re
 these tools. Execution re-checks the same trusted principal, and the configured organization,
 repository prefix, and exclusions are never accepted as model arguments. See
 [STUDENT_PROJECTS.md](STUDENT_PROJECTS.md).
+Student own-project tools also bind the trusted username to exactly one repository. Explicit
+deployment-owned aliases may support test accounts, but neither the browser nor model can select or
+override an alias target.
 
 Agent Skill metadata follows the same pre-model boundary. Public skills are visible to every
 principal, authenticated skills only after login, student skills to students and instructors,

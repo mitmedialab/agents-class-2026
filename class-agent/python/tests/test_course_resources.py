@@ -237,6 +237,8 @@ def test_public_resource_registry_includes_provisional_schedule() -> None:
         "course://slides/week-01",
         "course://slides/week-02",
         "course://slides/week-03",
+        "course://slides/week-04",
+        "course://slides/week-06",
         "course://readings/software-agents-bradshaw",
     ]
     instructors = next(summary for summary in summaries if summary.uri == COURSE_INSTRUCTORS_URI)
@@ -264,7 +266,14 @@ def test_public_resource_registry_includes_provisional_schedule() -> None:
     assert week_three_contents.media_type == "application/pdf"
     assert "Designing Human-Agent" in week_three_contents.text
     assert week_three_file.data.startswith(b"%PDF-")
-    assert "Monday, 1:30–4:30 PM in E15-341" in schedule_contents.text
+
+    week_six_uri = "course://slides/week-06"
+    week_six_contents = asyncio.run(resources.read(week_six_uri))
+    week_six_file = asyncio.run(resources.read_file(week_six_uri))
+    assert week_six_contents.media_type == "application/pdf"
+    assert "Computer-Use Agents" in week_six_contents.text
+    assert week_six_file.data.startswith(b"%PDF-")
+    assert "Monday, 1:30\N{EN DASH}4:30 PM in E15-341" in schedule_contents.text
     assert "Browser and computer use agents" in schedule_contents.text
 
     schedule_definition = next(

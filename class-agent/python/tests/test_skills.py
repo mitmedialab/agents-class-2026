@@ -67,10 +67,14 @@ def test_skill_catalog_scans_metadata_and_filters_before_disclosure() -> None:
     assert "course-help" in public_ids
     assert "student-course-resources" not in public_ids
     assert "instructor-application-review" not in public_ids
-    assert student_ids == public_ids | {"student-course-resources"}
+    assert student_ids == public_ids | {
+        "assignment-submission-check",
+        "student-course-resources",
+    }
     assert instructor_ids == public_ids | {
         "instructor-messaging",
         "weekly-build-showcase",
+        "assignment-submission-check",
         "student-course-resources",
         "instructor-application-review",
     }
@@ -171,6 +175,30 @@ def test_course_help_skill_prioritizes_faq_and_offers_authorized_escalation() ->
         assert "take precedence" in instructions
         assert "offer to contact course staff on the student's behalf" in instructions
         assert "do not merely tell the student to contact staff themselves" in instructions
+
+    asyncio.run(scenario())
+
+
+def test_assignment_submission_check_withholds_solutions_and_requires_real_evidence() -> None:
+    async def scenario() -> None:
+        skills = SkillCatalog.from_registry(SKILLS_ROOT)
+        result = await ReadSkillTool(skills).execute(
+            {"skill_id": "assignment-submission-check"},
+            execution_context(authenticated_principal("student")),
+        )
+
+        instructions = str(result.content)
+        assert "course.inspect_my_student_repository" in instructions
+        assert "course.inspect_my_student_site" in instructions
+        assert "Do not provide code, pseudocode, implementation steps" in instructions
+        assert "Do not use an AI detector" in instructions
+        assert "primary technical reference" in instructions
+        assert "Not verified — agent inspection limitation" in instructions
+        assert "feature may still be available" in instructions
+        assert "Never convert an inability to access" in instructions
+        assert "one concise Markdown" in instructions
+        assert "separate resources section" in instructions
+        assert "Every resource must be directly tied" in instructions
 
     asyncio.run(scenario())
 

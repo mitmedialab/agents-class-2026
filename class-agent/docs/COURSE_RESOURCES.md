@@ -14,6 +14,8 @@ course://application
 course://slides/week-01
 course://slides/week-02
 course://slides/week-03
+course://slides/week-04
+course://slides/week-06
 course://readings/software-agents-bradshaw
 ```
 

@@ -15,7 +15,8 @@ export function MobileViewSwitcher({
   onViewChange,
   secondaryView,
 }: MobileViewSwitcherProps) {
-  const secondaryLabel = secondaryView === "updates" ? "Updates" : "Workspace";
+  const secondaryLabel =
+    secondaryView === "updates" ? "Notifications" : "Workspace";
   const secondaryAccessibleLabel =
     secondaryView === "updates" && count > 0
       ? `${secondaryLabel}, ${count} active items`

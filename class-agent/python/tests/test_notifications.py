@@ -1,17 +1,25 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest.mock import AsyncMock
 from uuid import uuid4
+
+import pytest
 
 from agent_core import PrincipalContext
 from course_server.agent import (
+    ApplicantStore,
+    ApplicationPhoto,
     FileResourceProvider,
     ResourceAnnouncement,
     ResourceDeadline,
     ResourceDefinition,
 )
+from course_server.agent.capabilities import ApplicationSummary
+from course_server.application_access import ApplicationAccessPolicy
 from course_server.assignments import AssignmentDraft, FileAssignmentStore
 from course_server.auth import InMemoryAuthStore, UserAdminService
 from course_server.faq import InMemoryFaqStore
@@ -21,8 +29,10 @@ from course_server.instructor_messages import (
     InstructorMessageService,
 )
 from course_server.mail import InboundMail, InMemoryTAQuestionStore, SentMail
+from course_server.notification_portraits import StudentNotificationPortraitRegistry
 from course_server.notifications import (
     InMemoryNotificationItemReadStore,
+    NotificationCenterAccessDenied,
     NotificationCenterService,
 )
 
@@ -209,12 +219,21 @@ def test_student_center_composes_updates_communications_and_upcoming_work(
     asyncio.run(scenario())
 
 
-def test_staff_center_exposes_only_questions_that_still_need_a_reply() -> None:
+def test_staff_center_identifies_named_students_and_uses_their_approved_image(
+    tmp_path: Path,
+) -> None:
     async def scenario() -> None:
         now = datetime(2026, 9, 5, 12, tzinfo=UTC)
         auth = InMemoryAuthStore()
-        student = await _course_member(auth, username="alice", role="student")
+        student = await _course_member(
+            auth,
+            username="alice",
+            display_name="Alice Example",
+            email="alice@mit.edu",
+            role="student",
+        )
         instructor = await _course_member(auth, username="prof", role="instructor")
+        ta = await _course_member(auth, username="course-ta", role="ta")
         assert student.user_id is not None
         questions = InMemoryTAQuestionStore()
         question = await questions.create_question(
@@ -239,10 +258,52 @@ def test_staff_center_exposes_only_questions_that_still_need_a_reply() -> None:
             ),
             sent_at=now,
         )
+        application_id = uuid4()
+        access_path = tmp_path / "student-access.json"
+        access_path.write_text(
+            json.dumps({"schema_version": 1, "application_ids": [str(application_id)]}),
+            encoding="utf-8",
+        )
+        applicants = AsyncMock(spec=ApplicantStore)
+        applicants.list_applications.return_value = [
+            ApplicationSummary(
+                application_id=application_id,
+                submitted_at=now,
+                name="Alice Example",
+                email="alice@mit.edu",
+            )
+        ]
+        applicants.read_application_photo.return_value = ApplicationPhoto(
+            application_id=application_id,
+            filename="photo.jpg",
+            media_type="image/jpeg",
+            data=b"student portrait",
+        )
+        course_file = tmp_path / "instructors.md"
+        course_file.write_text("# Course Staff", encoding="utf-8")
+        portrait_file = tmp_path / "valdemar.jpg"
+        portrait_file.write_bytes(b"registered portrait")
+        resources = FileResourceProvider(
+            [
+                ResourceDefinition(
+                    uri="course://instructors",
+                    title="Course Staff",
+                    media_type="text/markdown",
+                    path=course_file,
+                    assets={"valdemar_danry_portrait": portrait_file},
+                )
+            ]
+        )
         center = NotificationCenterService(
             faqs=InMemoryFaqStore(),
             reads=InMemoryNotificationItemReadStore(),
             auth=auth,
+            resources=resources,
+            applicants=applicants,
+            application_access=ApplicationAccessPolicy(access_path),
+            student_portraits=StudentNotificationPortraitRegistry(
+                {student.user_id: "valdemar_danry_portrait"}
+            ),
             questions=questions,
             clock=lambda: now,
         )
@@ -252,6 +313,17 @@ def test_staff_center_exposes_only_questions_that_still_need_a_reply() -> None:
         assert len(result.items) == 1
         assert result.items[0].kind == "pending_student_question"
         assert result.items[0].detail == "May I have a one-day extension?"
+        assert result.items[0].sender is not None
+        assert result.items[0].sender.first_name == "Alice"
+        assert result.items[0].sender.display_name == "Alice Example"
+        assert result.items[0].sender.resource_uri == "course://instructors"
+        assert result.items[0].sender.image_asset_id == "valdemar_danry_portrait"
+        portrait = await center.student_question_sender_image(instructor, question.id)
+        assert portrait is not None
+        assert portrait.data == b"student portrait"
+        assert await center.student_question_sender_image(ta, question.id) == portrait
+        with pytest.raises(NotificationCenterAccessDenied):
+            await center.student_question_sender_image(student, question.id)
         attention = await center.agent_attention(instructor)
         assert attention[0]["suggested_action"] == result.items[0].action_prompt
         assert attention[0]["reply_reference"] == f"pending-question:{question.id}"
@@ -275,6 +347,57 @@ def test_staff_center_exposes_only_questions_that_still_need_a_reply() -> None:
         assert answered.items == []
         assert len(answered.history_items) == 1
         assert answered.history_items[0].state == "responded"
+
+    asyncio.run(scenario())
+
+
+def test_staff_center_keeps_anonymous_student_identity_and_image_private() -> None:
+    async def scenario() -> None:
+        now = datetime(2026, 9, 5, 12, tzinfo=UTC)
+        auth = InMemoryAuthStore()
+        student = await _course_member(
+            auth,
+            username="alice",
+            display_name="Alice Example",
+            email="alice@mit.edu",
+            role="student",
+        )
+        instructor = await _course_member(auth, username="prof", role="instructor")
+        assert student.user_id is not None
+        questions = InMemoryTAQuestionStore()
+        question = await questions.create_question(
+            student_user_id=student.user_id,
+            conversation_id=uuid4(),
+            subject="Private question",
+            question_text="Can I ask without sharing my identity?",
+            context_text=None,
+            created_at=now,
+        )
+        await questions.transition_question(
+            question.id,
+            expected="pending_confirmation",
+            status="queued",
+            reporter_visibility="anonymous",
+            changed_at=now,
+        )
+        applicants = AsyncMock(spec=ApplicantStore)
+        center = NotificationCenterService(
+            faqs=InMemoryFaqStore(),
+            reads=InMemoryNotificationItemReadStore(),
+            auth=auth,
+            applicants=applicants,
+            application_access=ApplicationAccessPolicy(),
+            questions=questions,
+            clock=lambda: now,
+        )
+
+        result = await center.get(instructor)
+
+        assert len(result.items) == 1
+        assert result.items[0].sender is None
+        assert "Alice" not in result.items[0].model_dump_json()
+        assert await center.student_question_sender_image(instructor, question.id) is None
+        applicants.list_applications.assert_not_awaited()
 
     asyncio.run(scenario())
 
@@ -316,7 +439,17 @@ def test_published_assignment_drives_release_and_two_week_deadline_items(
         assert [item.section for item in result.items] == ["notifications", "upcoming"]
         assert result.items[0].title == "Agent observation is available"
         assert "course.get_assignment" in result.items[0].action_prompt
+        assert result.items[0].submission_check_prompt is not None
+        assert "assignment-submission-check" in result.items[0].submission_check_prompt
+        assert result.items[1].submission_check_prompt is not None
+        assert "Do not provide implementation steps" in result.items[1].submission_check_prompt
+        assert "may still work for human users" in result.items[1].submission_check_prompt
+        assert "never report it as missing" in result.items[1].submission_check_prompt
+        assert "Markdown link inline" in result.items[1].submission_check_prompt
+        assert "do not add a separate resources section" in result.items[1].submission_check_prompt
         assert result.items[1].due_at == now + timedelta(days=12)
+        instructor_result = await center.get(instructor)
+        assert all(item.submission_check_prompt is None for item in instructor_result.history_items)
         attention = await center.agent_attention(student)
         assert {item["kind"] for item in attention} == {
             "course_update",
