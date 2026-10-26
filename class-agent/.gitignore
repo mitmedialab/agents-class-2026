@@ -19,6 +19,7 @@ var/applicants/
 var/assignments/
 var/course-knowledge/
 var/log/
+var/newsletter/
 var/uploads/
 data/students/*
 !data/students/.gitkeep

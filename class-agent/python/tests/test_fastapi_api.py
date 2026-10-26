@@ -513,6 +513,7 @@ def test_public_course_resource_catalog_marks_schedule_provisional() -> None:
         "course://faq",
         "course://instructors",
         "course://application",
+        "course://newsletter-highlights",
         "course://slides/week-01",
         "course://slides/week-02",
         "course://slides/week-03",

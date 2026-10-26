@@ -43,6 +43,7 @@ from course_server.course_application import (
     SCHOOL_OPTIONS,
     CourseApplication,
 )
+from course_server.newsletter_tool_ids import NEWSLETTER_TOOL_IDS
 from course_server.resource_text import ResourceTextExtractionError, extract_resource_text
 from course_server.student_project_tool_ids import (
     INSPECT_STUDENT_REPOSITORY_TOOL_ID,
@@ -2669,6 +2670,7 @@ class CourseCapabilityPolicy:
         student_communications_enabled: bool = False,
         faq_updates_enabled: bool = False,
         student_projects_enabled: bool = False,
+        newsletter_enabled: bool = False,
     ) -> None:
         self._resources = resources
         self._browser_enabled = browser_enabled
@@ -2678,6 +2680,7 @@ class CourseCapabilityPolicy:
         self._student_communications_enabled = student_communications_enabled
         self._faq_updates_enabled = faq_updates_enabled
         self._student_projects_enabled = student_projects_enabled
+        self._newsletter_enabled = newsletter_enabled
 
     def authorize(self, principal: PrincipalContext) -> AuthorizedCapabilities:
         if self._resources is None:
@@ -2782,6 +2785,13 @@ class CourseCapabilityPolicy:
                 ),
                 *course_member_project_tools,
                 *staff_project_tools,
+                *(
+                    NEWSLETTER_TOOL_IDS
+                    if self._newsletter_enabled
+                    and principal.authenticated
+                    and "instructor" in principal.roles
+                    else ()
+                ),
                 *(BROWSER_TOOL_IDS if self._browser_enabled else ()),
                 *(
                     (ASK_TA_TOOL_ID,)

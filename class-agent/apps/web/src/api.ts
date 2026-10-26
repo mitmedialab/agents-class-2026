@@ -1,5 +1,6 @@
 import type { Conversation, Event, PrincipalContext, Uuid } from "@class-agent/protocol";
 import type { JsonValue } from "@class-agent/workspace";
+import { newsletterFromPayload, type NewsletterConfirmation } from "./newsletter.js";
 import {
   confirmationFromPayload,
   type TAQuestionConfirmation,
@@ -20,6 +21,16 @@ const APPLICANT_PHOTO_URI =
 export function courseResourceAssetUrl(resourceUri: string, assetId: string): string {
   const query = new URLSearchParams({ uri: resourceUri, asset_id: assetId }).toString();
   return `${API_BASE_URL}/course/resources/asset?${query}`;
+}
+
+/**
+ * Where an image inside a course document loads from. A bare name is a registered asset id of
+ * that resource, resolved through the authorized asset route (which validates it); an https URL
+ * is used as is; anything else is dropped.
+ */
+export function courseDocumentImageUrl(resourceUri: string, source: string): string | null {
+  if (/^https:\/\//.test(source)) return source;
+  return /^[^\s/:?#]+$/.test(source) ? courseResourceAssetUrl(resourceUri, source) : null;
 }
 
 export function applicantPhotoUrl(resourceUri: string): string | null {
@@ -134,6 +145,7 @@ export type AgentStreamEvent =
       kind: "instructor_message_confirmation";
       confirmation: InstructorMessageConfirmation;
     }
+  | { kind: "newsletter_confirmation"; confirmation: NewsletterConfirmation }
   | { kind: "done" }
   | { kind: "error" };
 
@@ -252,6 +264,21 @@ export function confirmTAQuestion(
         reporter_visibility: reporterVisibility,
         ...(action === "send" && edit ? edit : {}),
       }),
+    },
+  );
+}
+
+export function confirmNewsletter(
+  conversationId: Uuid,
+  issueId: string,
+  confirmationId: string,
+  action: "send" | "cancel",
+): Promise<Event> {
+  return requestJson<Event>(
+    `/conversations/${conversationId}/newsletter/${encodeURIComponent(issueId)}/confirmation`,
+    {
+      method: "POST",
+      body: JSON.stringify({ action, confirmation_id: confirmationId }),
     },
   );
 }
@@ -561,10 +588,16 @@ const RESOURCE_ACTIVITY_LABELS: Record<string, string> = {
   "course://application": "application information",
   "course://faq": "course information index",
   "course://instructors": "course staff",
+  "course://newsletter": "the class newsletter",
   "course://repositories": "student repositories",
   "course://schedule": "course schedule",
   "course://syllabus": "course syllabus",
 };
+
+function resourceActivityLabel(uri: string): string | null {
+  if (uri.startsWith("course://newsletter/")) return "a newsletter issue";
+  return RESOURCE_ACTIVITY_LABELS[uri] ?? null;
+}
 
 const TOOL_ACTIVITY_LABELS: Record<string, string> = {
   "course.get_application": "Reading application information",
@@ -659,7 +692,7 @@ function platformActivity(data: Record<string, unknown>): AgentActivity | null {
   }
   if (type === "resource.read") {
     const uri = payload && typeof payload.uri === "string" ? payload.uri : null;
-    const resourceLabel = uri ? RESOURCE_ACTIVITY_LABELS[uri] : null;
+    const resourceLabel = uri ? resourceActivityLabel(uri) : null;
     return activity(
       "resource",
       resourceLabel ? `Reading ${resourceLabel}` : "Reading course information",
@@ -754,6 +787,13 @@ function emitSseEvent(
       const confirmation = instructorMessageFromPayload(payload);
       if (confirmation) {
         onEvent({ kind: "instructor_message_confirmation", confirmation });
+      }
+      return;
+    }
+    if (type === "instructor.newsletter.confirmation_requested" && payload) {
+      const confirmation = newsletterFromPayload(payload);
+      if (confirmation) {
+        onEvent({ kind: "newsletter_confirmation", confirmation });
       }
       return;
     }

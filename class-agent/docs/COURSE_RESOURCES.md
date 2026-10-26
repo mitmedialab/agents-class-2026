@@ -150,6 +150,12 @@ agent-facing `course://faq` overlay and lexical search read staff-approved updat
 local `PUBLISHED_FAQ_PATH` JSON file. Resource indexing never edits or imports that file. It does
 not use embeddings.
 
+Sent issues of the weekly newsletter are a second request-time overlay: `course://newsletter`
+and `course://newsletter/<issue_id>` come from `NEWSLETTER_DATA_PATH` through
+`NewsletterResourceCatalog`, with each issue's highlight images and PDF export as its assets. They
+are never indexed into PostgreSQL; the catalog's own search covers them. See
+[NEWSLETTER.md](NEWSLETTER.md).
+
 The public FAQ capability distinguishes browsing from search. The Course Agent can list recent
 staff-approved Q&A additions and read one by its opaque public entry ID without supplying a topic;
 `course.search_faq` remains available for topic-specific retrieval. Only active entries from the

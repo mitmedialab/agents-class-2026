@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
 from email.policy import SMTP
 from email.utils import make_msgid, parseaddr
-from typing import Any
+from typing import Any, cast
 
 import httpx
 from pydantic import EmailStr
@@ -176,6 +176,20 @@ class GoogleGmailMailAdapter:
             if name.lower().startswith("x-") and name.isascii() and value.isascii():
                 mime[name] = value
         mime.set_content(message.text)
+        if message.html is not None:
+            mime.add_alternative(message.html, subtype="html")
+            if message.inline_images:
+                html_part = cast(list[EmailMessage], mime.get_payload())[-1]
+                for image in message.inline_images:
+                    maintype, subtype = image.media_type.split("/", 1)
+                    html_part.add_related(
+                        image.data,
+                        maintype=maintype,
+                        subtype=subtype,
+                        cid=f"<{image.content_id}>",
+                        filename=image.attachment_name,
+                        disposition="inline",
+                    )
         return await self._send_mime(mime)
 
     async def reply_to_message(

@@ -25,6 +25,14 @@ safe default when no decision was requested. If the original question email was 
 mail worker replies to that staff thread with the online resolution, its decision, and its exact
 answer. A question resolved while it is still queued has no external email thread to update.
 
+`OutboundMail` carries a canonical plain-text body, an optional `html` alternative, and optional
+`inline_images` referenced from that HTML as `cid:<content_id>`. Gmail sends the text and HTML as
+`multipart/alternative` with images as `multipart/related` parts; Microsoft Graph sends the HTML
+body with inline file attachments. Only platform
+rendering code produces HTML, and it escapes every model- or repository-derived string. The
+instructor-run weekly newsletter is currently the only sender that uses it; see
+[NEWSLETTER.md](NEWSLETTER.md).
+
 The worker has a provider-neutral boundary. Set `MAIL_PROVIDER=google_gmail` for Gmail or
 `MAIL_PROVIDER=microsoft_graph` for Microsoft 365. A cloned deployment owns its mailbox,
 provider credentials, and staff destination; neither provider is a platform-wide assumption.
@@ -63,6 +71,19 @@ mailbox or put OAuth credentials in Git.
 5. Put every individual staff address that may reply in `MAIL_AUTHORIZED_REPLY_SENDERS`, or create
    an active Class Agent account for that address with role `ta`, `instructor`, or `admin`. Other
    senders, including students, are recorded as rejected and cannot create an answer.
+
+When the refresh token expires or is revoked (the worker and the newsletter command then fail
+with `Google identity authentication failed`, and Google reports `invalid_grant`), mint a new one
+with the bundled loopback flow, signed in as the dedicated mailbox:
+
+```bash
+uv run python -m course_server.mail_authorize
+```
+
+It prints a consent URL, receives the code on `http://127.0.0.1:8766/`, and prints the new
+`MAIL_REFRESH_TOKEN` once. The OAuth client must allow that loopback redirect (a **Desktop app**
+client does; a **Web application** client needs the URI added under its authorized redirect URIs).
+Update `.env` or `.env.mail` and restart the mail worker.
 
 The adapter follows Google's documented [OAuth 2.0 offline-access
 flow](https://developers.google.com/identity/protocols/oauth2/web-server), sends RFC 2822 MIME via

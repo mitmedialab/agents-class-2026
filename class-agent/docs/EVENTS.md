@@ -64,6 +64,19 @@ conversation events. Publication creates a global `faq_entries` record and a
 `course_notifications` record; it does not copy the originating student's identity into the public
 FAQ.
 
+## Private newsletter payloads
+
+- `instructor.newsletter.confirmation_requested`: issue ID, confirmation ID, fixed audience
+  (`all_students` or `test`), recipient count, the test recipients when applicable, subject,
+  headline, week, a bounded plain-text preview, and `awaiting_confirmation` status;
+- `instructor.newsletter.approved` / `instructor.newsletter.cancelled`: issue ID, confirmation ID,
+  subject, recipient count, and the new status from the instructor's explicit UI action. Approval
+  queues delivery for the mail worker; it is not a delivery receipt.
+
+These events belong only to the instructor's owned conversation. The authoritative state is the
+issue record under `var/newsletter/`, which carries the recipient snapshot and per-recipient
+delivery results.
+
 ## Private instructor-message payloads
 
 - `instructor.message.confirmation_requested`: private message ID, fixed audience and resolved

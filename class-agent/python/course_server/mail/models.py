@@ -139,11 +139,42 @@ class FaqReviewCandidate(MailModel):
     created_at: AwareDatetime
 
 
+class InlineImage(MailModel):
+    """An image embedded in the HTML alternative and referenced as `cid:<content_id>`."""
+
+    content_id: Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9._-]{1,120}$")]
+    media_type: Literal["image/jpeg", "image/png"]
+    data: bytes = Field(min_length=1, max_length=2_000_000, repr=False)
+    # Shown by clients that list inline parts; without it Gmail labels the part "noname".
+    filename: Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9._-]{1,120}$")] | None = None
+
+    @property
+    def attachment_name(self) -> str:
+        return self.filename or f"{self.content_id}.{self.media_type.split('/', 1)[1]}"
+
+
 class OutboundMail(MailModel):
     to: tuple[EmailStr, ...] = Field(min_length=1, max_length=20)
     subject: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=998)]
     text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50_000)]
+    # Optional rendered alternative; the plain text above remains the canonical body.
+    html: (
+        Annotated[
+            str,
+            StringConstraints(strip_whitespace=True, min_length=1, max_length=200_000),
+        ]
+        | None
+    ) = None
+    inline_images: tuple[InlineImage, ...] = Field(default=(), max_length=20)
     headers: dict[str, str] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_inline_images(self) -> OutboundMail:
+        if self.inline_images and self.html is None:
+            raise ValueError("inline images require an HTML body")
+        if len({image.content_id for image in self.inline_images}) != len(self.inline_images):
+            raise ValueError("inline image content ids must be unique")
+        return self
 
 
 class SentMail(MailModel):

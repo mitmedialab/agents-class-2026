@@ -68,6 +68,15 @@
       "status": "published"
     },
     {
+      "uri": "course://newsletter-highlights",
+      "title": "How The Class Runtime Chooses Its Highlights",
+      "description": "How the Course Agent scores each week's builds and picks the four highlights in the weekly newsletter.",
+      "media_type": "text/markdown",
+      "path": "course/newsletter/highlights.md",
+      "visibility": "public",
+      "status": "published"
+    },
+    {
       "uri": "course://slides/week-01",
       "title": "AI Agents for Cognitive Augmentation",
       "description": "Slides for the first course meeting.",

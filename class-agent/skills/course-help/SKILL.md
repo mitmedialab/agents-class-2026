@@ -15,4 +15,8 @@ Use official course resources as the source of truth.
    staff-question capability is available, offer to contact course staff on the student's behalf;
    do not merely tell the student to contact staff themselves. If the student has already asked
    you to seek clarification, prepare the platform confirmation directly.
-5. Use the workspace-presentation skill when a registered workspace view would materially improve the answer.
+5. For the weekly newsletter, *The Class Runtime*, or what the class built in a given week, read
+   the public `course://newsletter` resource for the list of sent issues and the issue's own
+   resource for its full text; open an issue in the document viewer when the user wants to read it.
+   Only sent issues exist there; do not speculate about unsent ones.
+6. Use the workspace-presentation skill when a registered workspace view would materially improve the answer.

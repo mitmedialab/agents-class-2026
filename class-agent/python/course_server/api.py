@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
@@ -85,7 +86,7 @@ from course_server.browser import (
 from course_server.browser.stream import BrowserStreamService
 from course_server.browser.stream_response import browser_stream_response
 from course_server.browser.tools import browser_page_props
-from course_server.config import AgentSettings
+from course_server.config import AgentSettings, ConfigurationError
 from course_server.faq import (
     CourseNotification,
     LocalFaqKnowledgeStore,
@@ -110,6 +111,16 @@ from course_server.mail import (
     TAQuestionStateError,
 )
 from course_server.migrations import apply_migrations
+from course_server.newsletter import (
+    NEWSLETTER_CONFIRMATION_EVENT,
+    FileNewsletterStore,
+    NewsletterResourceCatalog,
+    NewsletterService,
+    NewsletterSettings,
+    NewsletterStateError,
+)
+from course_server.newsletter.assembly import build_newsletter_tools
+from course_server.newsletter.tools import NewsletterTools
 from course_server.notifications import (
     NotificationCenter,
     NotificationCenterAccessDenied,
@@ -221,6 +232,11 @@ class TAQuestionConfirmationRequest(ApiModel):
         return self
 
 
+class NewsletterConfirmationRequest(ApiModel):
+    action: Literal["send", "cancel"]
+    confirmation_id: UUID
+
+
 class InstructorMessageConfirmationRequest(ApiModel):
     action: Literal["send", "cancel"]
     subject: ConfirmationSubject | None = None
@@ -329,6 +345,7 @@ class AppServices:
     browser: BrowserSessionService | None = None
     ta_questions: TAQuestionService | None = None
     instructor_messages: InstructorMessageService | None = None
+    newsletter: NewsletterService | None = None
     notifications: StudentNotificationService | None = None
     notification_center: NotificationCenterService | None = None
     anonymous_quotas: AnonymousQuotaStore = dataclass_field(
@@ -793,6 +810,7 @@ async def _stream_agent_run(
             "workspace.panel.closed",
             "email.ta_question.confirmation_requested",
             "instructor.message.confirmation_requested",
+            NEWSLETTER_CONFIRMATION_EVENT,
         }:
             yield _sse(
                 event="platform",
@@ -878,12 +896,35 @@ def create_app(
             questions=question_store,
             instructor_messages=instructor_message_store,
         )
-        course_resources = PublishedFaqResourceCatalog(
+        newsletter_settings: NewsletterSettings | None = None
+        try:
+            newsletter_settings = NewsletterSettings.from_environment(os.environ)
+        except ConfigurationError as error:
+            logger.warning("Newsletter disabled (%s)", type(error).__name__)
+        newsletter_tools: NewsletterTools | None = None
+        if resolved_settings.github_student_projects_enabled and newsletter_settings is not None:
+            try:
+                newsletter_tools = build_newsletter_tools(
+                    resolved_settings, newsletter_settings, auth=auth_store
+                )
+            except (ConfigurationError, OSError, ValueError) as error:
+                logger.warning("Newsletter tools disabled (%s)", type(error).__name__)
+        course_resources: CourseResourceCatalog = PublishedFaqResourceCatalog(
             FileResourceProvider.from_registry(
                 protected_data_path=resolved_settings.course_data_path
             ),
             faq_knowledge,
         )
+        if newsletter_settings is not None:
+            # Sent issues are public course resources: the site's Newsletters pages and the
+            # Course Agent read them even when drafting (GitHub) is not configured here.
+            course_resources = NewsletterResourceCatalog(
+                course_resources,
+                FileNewsletterStore(
+                    newsletter_settings.data_path, logo_path=newsletter_settings.logo_path
+                ),
+                branding=newsletter_settings.branding,
+            )
         skills = SkillCatalog.from_registry(resolved_settings.skills_path)
         upload_store = FileTemporaryUploadStore(resolved_settings.upload_data_path)
         component_registry = load_component_registry()
@@ -927,6 +968,7 @@ def create_app(
                     instructor_messages=instructor_message_service,
                     student_communications=student_communication_service,
                     faq_updates=faq_knowledge,
+                    newsletter=newsletter_tools,
                 ),
                 conversations=conversation_store,
                 capability_policy=CourseCapabilityPolicy(
@@ -938,6 +980,7 @@ def create_app(
                     student_communications_enabled=True,
                     faq_updates_enabled=True,
                     student_projects_enabled=(resolved_settings.github_student_projects_enabled),
+                    newsletter_enabled=newsletter_tools is not None,
                 ),
                 skills=skills,
                 workspace_registry=component_registry,
@@ -955,6 +998,7 @@ def create_app(
             browser=browser_service,
             ta_questions=ta_question_service,
             instructor_messages=instructor_message_service,
+            newsletter=newsletter_tools.service if newsletter_tools is not None else None,
             notifications=StudentNotificationService(faqs=faq_store, auth=auth_store),
             notification_center=notification_center,
             anonymous_quotas=PostgresAnonymousQuotaStore(pool),
@@ -1561,6 +1605,76 @@ def create_app(
                 "question": question.question_text,
                 **({"context": question.context_text} if question.context_text else {}),
                 "status": question.status,
+            },
+            metadata={"visibility": "private"},
+        )
+        await state.services.conversations.append_events(conversation_id, [event])
+        return event
+
+    @router.post(
+        "/conversations/{conversation_id}/newsletter/{issue_id}/confirmation",
+        response_model=Event,
+    )
+    async def confirm_newsletter(
+        conversation_id: UUID,
+        issue_id: str,
+        payload: NewsletterConfirmationRequest,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> Event:
+        state = _get_app_state(request)
+        await _require_owned_conversation(
+            state=state,
+            principal=principal,
+            conversation_id=conversation_id,
+        )
+        assert state.services is not None
+        service = state.services.newsletter
+        if (
+            service is None
+            or not principal.authenticated
+            or "instructor" not in principal.roles
+            or principal.user_id is None
+        ):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+        try:
+            issue = (
+                service.confirm_send(
+                    issue_id,
+                    confirmation_id=payload.confirmation_id,
+                    conversation_id=conversation_id,
+                    user_id=principal.user_id,
+                )
+                if payload.action == "send"
+                else service.cancel_send(
+                    issue_id,
+                    confirmation_id=payload.confirmation_id,
+                    conversation_id=conversation_id,
+                    user_id=principal.user_id,
+                )
+            )
+        except NewsletterStateError as error:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="newsletter is no longer awaiting confirmation",
+            ) from error
+        event = Event(
+            type=(
+                "instructor.newsletter.approved"
+                if payload.action == "send"
+                else "instructor.newsletter.cancelled"
+            ),
+            actor="user",
+            principal_user_id=principal.user_id,
+            conversation_id=conversation_id,
+            payload={
+                "issue_id": issue.issue_id,
+                "confirmation_id": str(payload.confirmation_id),
+                "subject": issue.subject,
+                "recipient_count": (
+                    len(issue.approval.recipients) if issue.approval is not None else 0
+                ),
+                "status": issue.status,
             },
             metadata={"visibility": "private"},
         )

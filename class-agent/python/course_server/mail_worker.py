@@ -12,44 +12,52 @@ from dotenv import load_dotenv
 
 from course_server.config import ConfigurationError, MailSettings
 from course_server.faq import CoordinatedFaqPublisher, LocalFaqKnowledgeStore, PostgresFaqStore
-from course_server.mail import (
-    GoogleGmailMailAdapter,
-    MailWorker,
-    MicrosoftGraphMailAdapter,
-    PostgresTAQuestionStore,
-)
+from course_server.mail import MailWorker, PostgresTAQuestionStore
+from course_server.mail.adapters import create_mail_adapter
 from course_server.mail.instructor_delivery import InstructorEmailDelivery
 from course_server.migrations import apply_migrations
+from course_server.newsletter import (
+    FileNewsletterStore,
+    NewsletterService,
+    NewsletterSettings,
+    load_schedule,
+)
 from course_server.postgres.auth_store import PostgresAuthStore, create_auth_pool
 from course_server.postgres.conversation_store import PostgresConversationStore
 
 logger = logging.getLogger(__name__)
 
 
-async def run_worker(*, database_url: str, settings: MailSettings, once: bool = False) -> None:
+def _newsletter_outbox(settings: NewsletterSettings | None) -> NewsletterService | None:
+    """Approved newsletter issues are an outbox this worker drains; drafting stays elsewhere."""
+
+    if settings is None:
+        return None
+    try:
+        weeks = load_schedule(settings.schedule_path, timezone=settings.timezone)
+    except Exception as error:  # a missing schedule must not stop student email delivery
+        logger.warning("Newsletter outbox disabled (%s)", type(error).__name__)
+        return None
+    return NewsletterService(
+        settings=settings,
+        weeks=weeks,
+        store=FileNewsletterStore(settings.data_path, logo_path=settings.logo_path),
+        log=logger.info,
+    )
+
+
+async def run_worker(
+    *,
+    database_url: str,
+    settings: MailSettings,
+    once: bool = False,
+    newsletter_settings: NewsletterSettings | None = None,
+) -> None:
     apply_migrations(database_url)
     pool = create_auth_pool(database_url)
     await pool.open()
     await pool.wait()
-    adapter: MicrosoftGraphMailAdapter | GoogleGmailMailAdapter
-    if settings.provider == "microsoft_graph":
-        if settings.tenant_id is None:
-            raise ConfigurationError("MAIL_TENANT_ID is required for Microsoft Graph")
-        adapter = MicrosoftGraphMailAdapter(
-            tenant_id=settings.tenant_id,
-            client_id=settings.client_id,
-            client_secret=settings.client_secret.get_secret_value(),
-            mailbox_address=str(settings.mailbox_address),
-        )
-    else:
-        if settings.refresh_token is None:
-            raise ConfigurationError("MAIL_REFRESH_TOKEN is required for Google Gmail")
-        adapter = GoogleGmailMailAdapter(
-            client_id=settings.client_id,
-            client_secret=settings.client_secret.get_secret_value(),
-            refresh_token=settings.refresh_token.get_secret_value(),
-            mailbox_address=str(settings.mailbox_address),
-        )
+    adapter = create_mail_adapter(settings)
     worker = MailWorker(
         mail=adapter,
         questions=PostgresTAQuestionStore(pool),
@@ -64,10 +72,14 @@ async def run_worker(*, database_url: str, settings: MailSettings, once: bool = 
         authorized_reply_senders=(str(value) for value in settings.authorized_reply_senders),
     )
     instructor_delivery = InstructorEmailDelivery(pool, adapter)
+    newsletter = _newsletter_outbox(newsletter_settings)
     try:
         while True:
             try:
                 await instructor_delivery.run_once()
+                if newsletter is not None:
+                    for issue in await newsletter.deliver_approved(adapter):
+                        logger.info("Delivered newsletter %s (%s)", issue.issue_id, issue.status)
                 await worker.run_once()
             except Exception as error:
                 logger.error("Mail worker cycle failed (%s)", type(error).__name__)
@@ -97,7 +109,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     if settings is None:
         raise ConfigurationError("MAIL_ENABLED=true is required for the mail worker")
     logging.basicConfig(level=logging.INFO)
-    asyncio.run(run_worker(database_url=database_url, settings=settings, once=arguments.once))
+    asyncio.run(
+        run_worker(
+            database_url=database_url,
+            settings=settings,
+            once=arguments.once,
+            newsletter_settings=NewsletterSettings.from_environment(os.environ),
+        )
+    )
     return 0
 
 

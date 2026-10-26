@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
+import os
 import re
 from collections.abc import Sequence
 
@@ -79,6 +81,12 @@ from course_server.instructor_messages import (
 )
 from course_server.mail import CourseAskTATool, TAQuestionService
 from course_server.migrations import apply_migrations
+from course_server.newsletter import (
+    FileNewsletterStore,
+    NewsletterResourceCatalog,
+    NewsletterSettings,
+)
+from course_server.newsletter.tools import NewsletterTools
 from course_server.postgres.auth_store import PostgresAuthStore, create_auth_pool
 from course_server.postgres.conversation_store import PostgresConversationStore
 from course_server.student_communications import (
@@ -119,6 +127,8 @@ from course_server.workspace.tools import (
     WorkspaceUpdateComponentTool,
 )
 from runtime_smolagents import OpenAIModelProvider, SmolagentsRuntime
+
+logger = logging.getLogger(__name__)
 
 _SAFE_PROVIDER_FIELD = re.compile(r"^[A-Za-z0-9_.\[\]-]{1,120}$")
 
@@ -167,6 +177,7 @@ def build_runtime(
     student_communications: StudentCommunicationService | None = None,
     faq_updates: FaqKnowledgeStore | None = None,
     student_projects: StudentProjectCatalog | None = None,
+    newsletter: NewsletterTools | None = None,
 ) -> SmolagentsRuntime:
     course_resources = (
         resources
@@ -315,6 +326,8 @@ def build_runtime(
                 ),
             ]
         )
+    if newsletter is not None:
+        executable_tools.extend(newsletter.tools())
     tools = ToolCatalog(executable_tools)
     provider = OpenAIModelProvider(
         model_id=settings.model_id,
@@ -343,10 +356,22 @@ async def _run_postgres_turn(
         faq_knowledge = LocalFaqKnowledgeStore(settings.published_faq_path)
         applicant_store = FileApplicantStore(settings.applicant_data_path)
         await initialize_student_application_access(applicant_store, settings.applicant_data_path)
-        course_resources = PublishedFaqResourceCatalog(
+        course_resources: CourseResourceCatalog = PublishedFaqResourceCatalog(
             FileResourceProvider.from_registry(protected_data_path=settings.course_data_path),
             faq_knowledge,
         )
+        try:
+            newsletter_settings = NewsletterSettings.from_environment(os.environ)
+        except ConfigurationError as error:
+            logger.warning("Newsletter disabled (%s)", type(error).__name__)
+        else:
+            course_resources = NewsletterResourceCatalog(
+                course_resources,
+                FileNewsletterStore(
+                    newsletter_settings.data_path, logo_path=newsletter_settings.logo_path
+                ),
+                branding=newsletter_settings.branding,
+            )
         skills = SkillCatalog.from_registry(settings.skills_path)
         return await run_cli_turn(
             text,

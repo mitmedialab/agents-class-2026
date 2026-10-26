@@ -23,6 +23,7 @@ import {
   browserSnapshotUrl,
   browserStreamUrl,
   browserPreviewSnapshotUrl,
+  courseDocumentImageUrl,
   courseResourceAssetUrl,
   getCourseResourceContent,
   type CourseResourceContent,
@@ -518,6 +519,7 @@ function ResourcePanel({
       <DocumentViewer
         findText={stringProp(panel.props, "find_text")}
         highlight={highlightProp(panel.props.highlight)}
+        imageSource={(source) => courseDocumentImageUrl(documentResource.uri, source)}
         page={numberProp(panel.props, "page")}
         resource={documentResource}
         onFind={(query) => void onInteraction(panel.id, "document.find_text", query)}

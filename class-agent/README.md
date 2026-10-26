@@ -160,6 +160,11 @@ development metadata tools. The credential remains server-side and the configure
 prefix, and exclusions are enforced in platform code. See
 [docs/STUDENT_PROJECTS.md](docs/STUDENT_PROJECTS.md).
 
+Instructors can produce the weekly class newsletter, *The Class Runtime*, with the command line
+described under [Newsletter](#newsletter) below. Every sent issue is a public course resource:
+the site lists them under **Newsletters** (`/newsletter`, one issue at `/newsletter/<issue_id>`)
+and the Course Agent reads, searches, and opens them like any other public course file.
+
 Weekly showcase selection is available to staff through the read-only project integration:
 two rubric-ranked builds plus two weighted random draws, with a two-issue cooldown and reduced
 weight for older appearances. Enter actual Week 1 presenters in
@@ -177,6 +182,59 @@ Run the real PostgreSQL integration test with:
 export TEST_DATABASE_URL=postgresql://class_agent:class_agent_dev@127.0.0.1:5432/class_agent
 uv run pytest -m postgres
 ```
+
+## Newsletter
+
+*The Class Runtime* is a weekly email of the best student builds. Instructors can ask the Course
+Agent to draft, review, and send it (the `instructor-newsletter` skill and three instructor-only
+tools; Send is a platform confirmation card and the mail worker delivers approved issues), or run
+the same pipeline from the command line below. Nothing runs on a schedule and nothing is sent
+until an instructor approves it. Run everything from `class-agent/` with the same `.env` the server uses (read-only GitHub
+token, OpenAI key, Gmail credentials). If your shell exports a stale `OPENAI_API_KEY`, run
+`unset OPENAI_API_KEY` first so the `.env` value is used.
+
+```bash
+# 1. Draft the week that just finished. Reads every course repository, scores each project
+#    against the week's assignment goal, selects the top four in code, captures an image from
+#    each student's post, and writes the copy. Takes a few minutes.
+uv run python -m course_server.newsletter draft
+
+# 2. Review. The command prints the scoreboard and the text; open the HTML for the real look.
+open var/newsletter/issues/2026-week02.html
+
+# 3. Optional: a test copy to yourself. The issue stays a draft.
+uv run python -m course_server.newsletter send 2026-week02 --test-to you@mit.edu
+
+# 4. Approve and send. Prints the recipient list and waits for you to type SEND.
+uv run python -m course_server.newsletter send 2026-week02 --to-active-students
+```
+
+The week is chosen automatically as the most recent class week whose build window has closed,
+from `shared/course/schedule/schedule.md`; `--week N` or `--as-of YYYY-MM-DD` override it. Running
+`draft` again regenerates a draft; a week that was already sent is refused unless `--force` is
+passed. `list` shows every issue and its status, and `show <issue> [--html]` reprints one.
+Recipients are `--to`, `--to-active-students` (every active student account), and the
+`NEWSLETTER_RECIPIENTS` list in `.env`.
+
+The code lives in [`python/course_server/newsletter/`](python/course_server/newsletter/):
+
+| File | Role |
+| --- | --- |
+| `cli.py`, `__main__.py` | The `draft`, `show`, `list`, and `send` commands and their `.env` wiring |
+| `schedule.py` | Parses the course schedule into weeks, build windows, and assignment goals |
+| `collect.py` | Reads each repository's week folder, commits, and deployed site through the read-only GitHub catalog |
+| `score.py` | Rubric scoring per project, weights, goal-fit floor, cooldown, and the final selection |
+| `images.py`, `screenshots.py` | Finds the student's week post, captures its visuals, lets the model choose, re-encodes for email |
+| `compose.py` | Prompts and validation for the model-written copy; the OpenAI writer |
+| `render.py` | Plain-text and HTML renderings in the course site's visual language |
+| `store.py`, `models.py` | Issue records, scores, images, and delivery history under `var/newsletter/` |
+| `service.py` | The draft and send workflow that ties the pieces together |
+| `quotes.py` | The rotating closing quotes from AI pioneers |
+| `resources.py` | Sent issues as the public `course://newsletter` resources the site and the Course Agent read |
+
+Tests are in `python/tests/test_newsletter.py`; the operational reference, including how
+selection and images work and what the model can and cannot decide, is
+[docs/NEWSLETTER.md](docs/NEWSLETTER.md).
 
 ## Checks
 
@@ -201,6 +259,7 @@ pnpm typecheck
 python/agent_core/       framework-independent Python contracts
 python/course_server/    auth, orchestration, FastAPI/CLI, and PostgreSQL adapters
 python/course_server/mail/ provider-neutral mail workflow and Gmail/Graph adapters
+python/course_server/newsletter/ instructor-run weekly newsletter command
 python/runtime_smolagents/ replaceable ToolCallingAgent/OpenAI adapters
 skills/                  standard Agent Skills plus audience authorization registry
 python/tests/            Python serialization and contract tests
@@ -215,6 +274,7 @@ shared/registry/          public resource and trusted component registries
 data/                     untracked role-scoped student and instructor resources
 var/course-knowledge/     local generated public FAQ knowledge
 var/assignments/          local validated assignment JSON records
+var/newsletter/           local newsletter drafts, sent issues, and renderings
 docs/                    architecture and versioning decisions
 ```
 

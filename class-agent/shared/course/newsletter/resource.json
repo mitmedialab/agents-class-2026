@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "resource": {
+    "uri": "course://newsletter-highlights",
+    "title": "How The Class Runtime Chooses Its Highlights",
+    "description": "How the Course Agent scores each week's builds and picks the four highlights in the weekly newsletter.",
+    "media_type": "text/markdown",
+    "file": "highlights.md",
+    "visibility": "public",
+    "status": "published",
+    "order": 55
+  }
+}

@@ -11,10 +11,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App.js";
 import * as api from "./api.js";
 
-vi.mock("./api.js", () => ({
+vi.mock("./api.js", async () => {
+  // Pure URL helpers keep their real behavior; everything that talks to the API is mocked.
+  const actual = await vi.importActual<typeof import("./api.js")>("./api.js");
+  return {
   applyWorkspacePanelAction: vi.fn(),
   clickBrowserSession: vi.fn(),
   confirmInstructorMessage: vi.fn(),
+  courseDocumentImageUrl: actual.courseDocumentImageUrl,
+  courseResourceAssetUrl: actual.courseResourceAssetUrl,
   confirmTAQuestion: vi.fn(),
   continueAgentAfterEvent: vi.fn(),
   createConversation: vi.fn(),
@@ -34,7 +39,8 @@ vi.mock("./api.js", () => ({
   scrollBrowserSession: vi.fn(),
   streamAgentRun: vi.fn(),
   uploadFile: vi.fn(),
-}));
+  };
+});
 
 const publicPrincipal: PrincipalContext = {
   authenticated: false,
@@ -138,6 +144,17 @@ beforeEach(() => {
     },
   });
   vi.mocked(api.getCourseResourceContent).mockImplementation(async (uri) => {
+    if (uri === "course://newsletter-highlights") {
+      return {
+        uri,
+        mediaType: "text/markdown",
+        data: new TextEncoder().encode(
+          "# How The Class Runtime chooses its highlights\n\n" +
+            "**Curated by:** The Course Agent\n\n" +
+            "## The rubric\n\n| Criterion | Weight |\n| --- | --- |\n| **Originality** | 30% |",
+        ),
+      };
+    }
     if (uri === "course://syllabus") {
       return {
         pdfDownloadUrl: "/api/v1/course/resources/asset?uri=course%3A%2F%2Fsyllabus&asset_id=pdf",
@@ -1402,6 +1419,35 @@ describe("Course Agent interface", () => {
     );
   });
 
+  it("opens the newsletter's highlight explainer from the link in every issue", async () => {
+    window.history.replaceState({}, "", "/newsletter/highlights");
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", {
+        level: 1,
+        name: "How The Class Runtime chooses its highlights",
+      }),
+    ).toBeInTheDocument();
+    expect(api.getCourseResourceContent).toHaveBeenCalledWith("course://newsletter-highlights");
+    expect(screen.getByRole("cell", { name: "Originality" })).toBeInTheDocument();
+    expect(screen.getByText("Curated by")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Message" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "About" })).not.toHaveAttribute("aria-current");
+
+    fireEvent.click(screen.getByRole("button", { name: "About" }));
+
+    expect(window.location.pathname).toBe("/about");
+    expect(
+      await screen.findByRole("heading", {
+        level: 1,
+        name: "AI Agents for Cognitive Augmentation",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "About" })).toHaveAttribute("aria-current", "page");
+  });
+
   it("opens About from its direct URL and follows browser navigation", async () => {
     window.history.replaceState({}, "", "/about");
 
@@ -1948,5 +1994,124 @@ describe("Course Agent interface", () => {
     );
     expect(screen.getByRole("button", { name: "Contact" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Apply" })).not.toBeInTheDocument();
+  });
+
+  function mockNewsletterResources(): void {
+    const encode = (text: string) => new TextEncoder().encode(text);
+    vi.mocked(api.getCourseResourceContent).mockImplementation(async (uri) => {
+      if (uri === "course://newsletter") {
+        return {
+          uri,
+          mediaType: "text/markdown",
+          data: encode(
+            "# The Class Runtime\n\n**What it is:** The weekly newsletter.\n**Issues:** 1\n\n" +
+              "## [Issue 02 · High Five, Then Verify](course://newsletter/2026-week02)\n\n" +
+              "Week 2 · Sep 22 – Sep 28, 2026 · Sent Sep 29, 2026\n\nFeatured: Brooke.\n",
+          ),
+        };
+      }
+      if (uri === "course://newsletter/2026-week02") {
+        return {
+          uri,
+          mediaType: "text/markdown",
+          pdfDownloadUrl:
+            "/api/v1/course/resources/asset?uri=course%3A%2F%2Fnewsletter%2F2026-week02&asset_id=pdf",
+          data: encode(
+            "# High Five, Then Verify\n\n**Issue:** The Class Runtime · Issue 02\n\n" +
+              "## Highlights\n\n### Atlas, Meet Evidence\n\n01 · Brooke\n\n" +
+              "[![Atlas, Meet Evidence](agents2026_brooke)](https://example.edu/brooke/)\n\n" +
+              "Perci helps you study.\n\n" +
+              "[All issues of The Class Runtime →](course://newsletter)\n",
+          ),
+        };
+      }
+      throw new Error(`unexpected resource ${uri}`);
+    });
+  }
+
+  it("opens Newsletters from the header, lists sent issues, and opens one in place", async () => {
+    mockNewsletterResources();
+    render(<App />);
+    await openExistingConversation();
+
+    fireEvent.click(screen.getByRole("button", { name: "Newsletters" }));
+
+    expect(window.location.pathname).toBe("/newsletter");
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "The Class Runtime" }),
+    ).toBeInTheDocument();
+    expect(api.getCourseResourceContent).toHaveBeenCalledWith("course://newsletter");
+    expect(screen.getByRole("button", { name: "Newsletters" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(screen.getByRole("button", { name: "About" })).not.toHaveAttribute("aria-current");
+    expect(screen.queryByRole("textbox", { name: "Message" })).not.toBeInTheDocument();
+    expect(screen.getByText("Featured: Brooke.")).toBeInTheDocument();
+
+    const issueLink = screen.getByRole("link", { name: "Issue 02 · High Five, Then Verify" });
+    expect(issueLink).toHaveAttribute("href", "/newsletter/2026-week02");
+    expect(issueLink).not.toHaveAttribute("target");
+    fireEvent.click(issueLink);
+
+    expect(window.location.pathname).toBe("/newsletter/2026-week02");
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "High Five, Then Verify" }),
+    ).toBeInTheDocument();
+    expect(api.getCourseResourceContent).toHaveBeenCalledWith(
+      "course://newsletter/2026-week02",
+    );
+    const image = screen.getByRole("img", { name: "Atlas, Meet Evidence" });
+    expect(image).toHaveAttribute("src", expect.stringContaining("asset_id=agents2026_brooke"));
+    expect(image).toHaveAttribute(
+      "src",
+      expect.stringContaining("uri=course%3A%2F%2Fnewsletter%2F2026-week02"),
+    );
+    expect(image.closest("a")).toHaveAttribute("href", "https://example.edu/brooke/");
+    expect(screen.getByRole("link", { name: "Download issue PDF" })).toHaveAttribute(
+      "download",
+      "The Class Runtime issue.pdf",
+    );
+    expect(screen.getByRole("button", { name: "Newsletters" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+
+    // From an issue the header action returns to the list; from the list, back to the chat.
+    fireEvent.click(screen.getByRole("button", { name: "Newsletters" }));
+    expect(window.location.pathname).toBe("/newsletter");
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "The Class Runtime" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Newsletters" }));
+    expect(await screen.findByRole("textbox", { name: "Message" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/");
+    expect(screen.getByRole("button", { name: "Newsletters" })).not.toHaveAttribute(
+      "aria-current",
+    );
+  });
+
+  it("opens a newsletter issue from its direct URL and links back to every issue", async () => {
+    mockNewsletterResources();
+    window.history.replaceState({}, "", "/newsletter/2026-week02");
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "High Five, Then Verify" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Newsletters" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    const back = screen.getByRole("link", { name: "All issues of The Class Runtime →" });
+    expect(back).toHaveAttribute("href", "/newsletter");
+    fireEvent.click(back);
+
+    expect(window.location.pathname).toBe("/newsletter");
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "The Class Runtime" }),
+    ).toBeInTheDocument();
+    expect(api.getCourseResourceContent).toHaveBeenCalledWith("course://newsletter");
   });
 });

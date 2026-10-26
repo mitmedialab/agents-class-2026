@@ -11,8 +11,10 @@ import {
   applyWorkspacePanelAction,
   clickBrowserSession,
   confirmInstructorMessage,
+  confirmNewsletter,
   confirmTAQuestion,
   continueAgentAfterEvent,
+  courseDocumentImageUrl,
   createConversation,
   ensureApplicationDraft,
   generatePageGreeting,
@@ -46,6 +48,13 @@ import {
   type MobileView,
 } from "./MobileViewSwitcher.js";
 import { InstructorMessageConfirmation } from "./InstructorMessageConfirmation.js";
+import { NewsletterConfirmation } from "./NewsletterConfirmation.js";
+import {
+  applyNewsletterEvent,
+  pendingNewsletterContinuation,
+  projectNewsletterEvents,
+  type NewsletterConfirmation as NewsletterConfirmationState,
+} from "./newsletter.js";
 import {
   AgentResponse,
   RESPONSE_CHARACTER_STAGGER_MS,
@@ -80,7 +89,7 @@ import {
 } from "react";
 import { mergeNotificationCenterUpdates } from "./notifications.js";
 import { readStartupQuery, urlWithoutStartupQuery } from "./startupQuery.js";
-import { useAboutRoute } from "./aboutRoute.js";
+import { COURSE_DOCUMENTS, documentForUri, fixedDocument, useAboutRoute } from "./aboutRoute.js";
 
 const CONNECTION_ERROR = "I couldn’t reach the Course Agent. Please try again.";
 const WELCOME_MESSAGE =
@@ -265,7 +274,7 @@ export default function App() {
   const [pendingUploadCount, setPendingUploadCount] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [aboutOpen, setAboutOpen] = useAboutRoute();
+  const [aboutOpen, setAboutOpen, aboutLocation] = useAboutRoute();
   const [syllabusPdfUrl, setSyllabusPdfUrl] = useState<string | undefined>();
   const [syllabusContent, setSyllabusContent] = useState<string | null>(null);
   const [syllabusError, setSyllabusError] = useState<string | null>(null);
@@ -277,6 +286,7 @@ export default function App() {
   const [taQuestion, setTAQuestion] = useState<TAQuestionConfirmationState | null>(null);
   const [instructorMessage, setInstructorMessage] =
     useState<InstructorMessageConfirmationState | null>(null);
+  const [newsletter, setNewsletter] = useState<NewsletterConfirmationState | null>(null);
   const [notificationCenter, setNotificationCenter] =
     useState<NotificationCenterData>(EMPTY_NOTIFICATION_CENTER);
   const [notificationHistoryExpanded, setNotificationHistoryExpanded] =
@@ -345,6 +355,7 @@ export default function App() {
       setWorkspaceState(projectedWorkspace);
       setTAQuestion(projectTAQuestionEvents(detail.events));
       setInstructorMessage(projectInstructorMessageEvents(detail.events));
+      setNewsletter(projectNewsletterEvents(detail.events));
       setActivities([]);
       setMobileView(projectedWorkspace.panels.length > 0 ? "workspace" : "chat");
       setPresentedCommunication(null);
@@ -352,7 +363,8 @@ export default function App() {
       setAboutOpen(false);
       const pendingContinuation =
         pendingTAQuestionContinuation(detail.events) ??
-        pendingInstructorMessageContinuation(detail.events);
+        pendingInstructorMessageContinuation(detail.events) ??
+        pendingNewsletterContinuation(detail.events);
       if (pendingContinuation) {
         await runAgentContinuation(conversation.id, pendingContinuation.id);
       }
@@ -539,6 +551,8 @@ export default function App() {
     return () => window.clearTimeout(timeout);
   }, [isOpening]);
 
+  const aboutUri = aboutLocation.uri;
+  const aboutRoute = COURSE_DOCUMENTS[aboutLocation.document];
   useEffect(() => {
     if (!aboutOpen) return;
     let disposed = false;
@@ -546,7 +560,8 @@ export default function App() {
     setSyllabusPdfUrl(undefined);
     setSyllabusError(null);
     setSyllabusLoading(true);
-    void getCourseResourceContent("course://syllabus")
+    const route = COURSE_DOCUMENTS[aboutLocation.document];
+    void getCourseResourceContent(aboutUri)
       .then((resource) => {
         if (disposed) return;
         setSyllabusContent(new TextDecoder().decode(resource.data));
@@ -554,7 +569,7 @@ export default function App() {
       })
       .catch(() => {
         if (!disposed) {
-          setSyllabusError("The syllabus could not be loaded. Please try again.");
+          setSyllabusError(route.errorMessage);
         }
       })
       .finally(() => {
@@ -563,7 +578,7 @@ export default function App() {
     return () => {
       disposed = true;
     };
-  }, [aboutOpen]);
+  }, [aboutLocation.document, aboutOpen, aboutUri]);
 
   useEffect(() => {
     if (isOpening) return;
@@ -793,6 +808,8 @@ export default function App() {
           setTAQuestion(event.confirmation);
         } else if (event.kind === "instructor_message_confirmation") {
           setInstructorMessage(event.confirmation);
+        } else if (event.kind === "newsletter_confirmation") {
+          setNewsletter(event.confirmation);
         } else if (event.kind === "done") {
           setActivities((current) => [
             ...current,
@@ -945,15 +962,31 @@ export default function App() {
   }
 
   async function toggleAbout(): Promise<void> {
-    if (aboutOpen) {
+    if (aboutOpen && aboutLocation.document === "syllabus") {
       setAboutOpen(false);
       requestAnimationFrame(() => composerRef.current?.focus());
       return;
     }
     setHistoryOpen(false);
     setMobileView("chat");
-    setAboutOpen(true);
+    setAboutOpen(true, fixedDocument("syllabus"));
   }
+
+  /** The list of issues; from an open issue it returns to the list, from the list to chat. */
+  function toggleNewsletters(): void {
+    if (aboutOpen && aboutLocation.document === "newsletter") {
+      setAboutOpen(false);
+      requestAnimationFrame(() => composerRef.current?.focus());
+      return;
+    }
+    setHistoryOpen(false);
+    setMobileView("chat");
+    setAboutOpen(true, fixedDocument("newsletter"));
+  }
+
+  const newslettersOpen =
+    aboutOpen &&
+    (aboutLocation.document === "newsletter" || aboutLocation.document === "newsletter-issue");
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1062,6 +1095,25 @@ export default function App() {
       }
     } catch {
       setTAQuestion((current) => (current ? { ...current, status: "error" } : null));
+    }
+  }
+
+  async function handleNewsletterAction(action: "send" | "cancel"): Promise<void> {
+    if (!selectedConversationId || !newsletter || newsletter.status === "submitting") {
+      return;
+    }
+    setNewsletter((current) => (current ? { ...current, status: "submitting" } : null));
+    try {
+      const event = await confirmNewsletter(
+        selectedConversationId,
+        newsletter.issueId,
+        newsletter.confirmationId,
+        action,
+      );
+      setNewsletter((current) => applyNewsletterEvent(current, event));
+      await runAgentContinuation(selectedConversationId, event.id);
+    } catch {
+      setNewsletter((current) => (current ? { ...current, status: "error" } : null));
     }
   }
 
@@ -1474,7 +1526,14 @@ export default function App() {
               </Button>
             ))}
             <Button
-              aria-current={aboutOpen ? "page" : undefined}
+              aria-current={newslettersOpen ? "page" : undefined}
+              className="newsletters-link"
+              onClick={toggleNewsletters}
+            >
+              Newsletters
+            </Button>
+            <Button
+              aria-current={aboutOpen && aboutLocation.document === "syllabus" ? "page" : undefined}
               className="about-link"
               onClick={() => void toggleAbout()}
             >
@@ -1521,9 +1580,19 @@ export default function App() {
       {aboutOpen ? (
         <SyllabusPage
           content={syllabusContent}
-          pdfDownloadUrl={syllabusPdfUrl}
+          courseLinkPath={(uri) => documentForUri(uri)?.path ?? null}
           error={syllabusError}
+          layout={aboutRoute.layout}
           loading={syllabusLoading}
+          loadingMessage={aboutRoute.loadingMessage}
+          onCourseLink={(uri) => {
+            const location = documentForUri(uri);
+            if (location) setAboutOpen(true, location);
+          }}
+          pdfDownloadUrl={syllabusPdfUrl}
+          pdfLabel={aboutRoute.pdfLabel}
+          pdfTitle={aboutRoute.pdfTitle}
+          resolveImageSource={(source) => courseDocumentImageUrl(aboutUri, source)}
         />
       ) : (
         <>
@@ -1579,6 +1648,13 @@ export default function App() {
               onAction={(action, edit) =>
                 void handleInstructorMessageAction(action, edit)
               }
+            />
+          ) : null}
+          {newsletter ? (
+            <NewsletterConfirmation
+              confirmation={newsletter}
+              key={newsletter.confirmationId}
+              onAction={(action) => void handleNewsletterAction(action)}
             />
           ) : null}
         </section>

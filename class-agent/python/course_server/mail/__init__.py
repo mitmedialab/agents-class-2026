@@ -5,6 +5,7 @@ from .graph import MicrosoftGraphMailAdapter
 from .models import (
     FaqReviewCandidate,
     InboundMail,
+    InlineImage,
     MailAdapter,
     OutboundMail,
     ReporterVisibility,
@@ -33,6 +34,7 @@ __all__ = [
     "GoogleGmailMailAdapter",
     "InMemoryTAQuestionStore",
     "InboundMail",
+    "InlineImage",
     "MailAdapter",
     "MailWorker",
     "MicrosoftGraphMailAdapter",

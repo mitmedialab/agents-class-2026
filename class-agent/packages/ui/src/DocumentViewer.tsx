@@ -32,6 +32,8 @@ export interface DocumentViewerProps {
   page?: number | undefined;
   findText?: string | undefined;
   highlight?: TextHighlightAnchor | undefined;
+  /** Resolves Markdown image references (registered asset ids or https URLs) to URLs. */
+  imageSource?: DocumentImageSource | undefined;
   onPageChange?: ((page: number) => void) | undefined;
   onFind?: ((query: string) => void) | undefined;
 }
@@ -210,13 +212,37 @@ const markdownComponents: Components = {
   ),
 };
 
-function MarkdownDocument({ content, range }: { content: string; range: TextRange | null }) {
+/** Resolves an image reference in a Markdown document to a URL, or drops it with null. */
+export type DocumentImageSource = (source: string) => string | null;
+
+function MarkdownDocument({
+  content,
+  imageSource,
+  range,
+}: {
+  content: string;
+  imageSource: DocumentImageSource | undefined;
+  range: TextRange | null;
+}) {
   const highlightPlugin = useMemo(() => markdownHighlightPlugin(range), [range]);
+  const components = useMemo<Components>(
+    () =>
+      imageSource
+        ? {
+            ...markdownComponents,
+            img: ({ node: _node, src, alt, ...props }) => {
+              const resolved = typeof src === "string" ? imageSource(src) : null;
+              return resolved ? <img {...props} alt={alt ?? ""} src={resolved} /> : null;
+            },
+          }
+        : markdownComponents,
+    [imageSource],
+  );
 
   return (
     <div className="ca-document-markdown">
       <Markdown
-        components={markdownComponents}
+        components={components}
         rehypePlugins={[highlightPlugin]}
         remarkPlugins={[remarkGfm]}
         skipHtml
@@ -473,6 +499,7 @@ export function DocumentViewer({
   page = 1,
   findText = "",
   highlight,
+  imageSource,
   onPageChange,
   onFind,
 }: DocumentViewerProps) {
@@ -548,7 +575,7 @@ export function DocumentViewer({
             resource={resource}
           />
         ) : resource.mediaType === "text/markdown" ? (
-          <MarkdownDocument content={content} range={activeRange} />
+          <MarkdownDocument content={content} imageSource={imageSource} range={activeRange} />
         ) : (
           <pre>{markedText(content, 0, activeRange)}</pre>
         )}

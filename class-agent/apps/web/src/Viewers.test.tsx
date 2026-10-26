@@ -1026,3 +1026,44 @@ describe("DraftDocument", () => {
     expect(screen.queryByText("Waiting for information")).not.toBeInTheDocument();
   });
 });
+
+describe("DocumentViewer images", () => {
+  const markdown = [
+    "# Issue 02",
+    "",
+    "![Atlas](agents2026_brooke)",
+    "",
+    "![Remote](https://example.edu/figure.png)",
+    "",
+    "![Dropped](javascript:alert(1))",
+  ].join("\n");
+
+  it("resolves Markdown images through the page's resolver and drops the rest", () => {
+    render(
+      <DocumentViewer
+        imageSource={(source) =>
+          source.startsWith("https://")
+            ? source
+            : /^[a-z0-9_]+$/.test(source)
+              ? `/api/v1/course/resources/asset?uri=x&asset_id=${source}`
+              : null
+        }
+        resource={{
+          uri: "course://newsletter/2026-week02",
+          title: "Issue 02",
+          mediaType: "text/markdown",
+          data: new TextEncoder().encode(markdown),
+        }}
+      />,
+    );
+    expect(screen.getByRole("img", { name: "Atlas" })).toHaveAttribute(
+      "src",
+      "/api/v1/course/resources/asset?uri=x&asset_id=agents2026_brooke",
+    );
+    expect(screen.getByRole("img", { name: "Remote" })).toHaveAttribute(
+      "src",
+      "https://example.edu/figure.png",
+    );
+    expect(screen.queryByRole("img", { name: "Dropped" })).not.toBeInTheDocument();
+  });
+});

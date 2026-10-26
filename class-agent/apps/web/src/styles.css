@@ -154,7 +154,8 @@ textarea {
 
 .header-prompt,
 .logs-link,
-.about-link {
+.about-link,
+.newsletters-link {
   color: var(--color-text);
   font-size: 0.6875rem;
   letter-spacing: 0.14em;
@@ -163,13 +164,15 @@ textarea {
 
 .header-prompt,
 .logs-link,
-.about-link {
+.about-link,
+.newsletters-link {
   transition: color 140ms ease;
 }
 
 .header-prompt:hover,
 .logs-link:hover,
-.about-link:hover {
+.about-link:hover,
+.newsletters-link:hover {
   color: var(--color-text-muted);
 }
 
@@ -178,7 +181,8 @@ textarea {
   cursor: default;
 }
 
-.about-link[aria-current="page"] {
+.about-link[aria-current="page"],
+.newsletters-link[aria-current="page"] {
   color: var(--color-text-muted);
 }
 
@@ -197,6 +201,27 @@ textarea {
   display: flex;
   justify-content: flex-end;
   margin-bottom: var(--space-3);
+}
+
+/* The wordmark above a newsletter page; when it names the page it stands in for the title. */
+.syllabus-masthead {
+  margin: 0 0 3rem;
+}
+
+.syllabus-masthead .syllabus-figure {
+  margin: 0;
+}
+
+/* The nameplate is centered, as on a printed masthead; the text below keeps its left edge. */
+.syllabus-masthead .syllabus-figure img {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  display: block;
+  height: auto;
+  margin: 0 auto;
+  max-width: 100%;
+  width: 38rem;
 }
 
 .syllabus-document > h1 {
@@ -253,8 +278,36 @@ textarea {
 }
 
 .syllabus-sections h3 {
-  font-size: 1.35rem;
-  margin: 3rem 0 1rem;
+  font-size: clamp(1.45rem, 2vw, 1.8rem);
+  margin: 3.5rem 0 0.75rem;
+}
+
+/* The line under a feature heading (a highlight's number and student) sits close to it. */
+.syllabus-sections h3 + p {
+  margin-top: 0;
+}
+
+.syllabus-sections hr {
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  margin: 4rem 0 2rem;
+}
+
+/* Long prose reads at a measure, centered: the masthead, headline, facts, and images share
+   one column instead of leaving the right half of a wide screen empty. */
+.syllabus-document[data-layout="reading"] {
+  max-width: 46rem;
+}
+
+.syllabus-document[data-layout="reading"] .syllabus-metadata,
+.syllabus-document[data-layout="reading"] .syllabus-sections {
+  max-width: none;
+}
+
+.syllabus-document[data-layout="reading"] > h1 {
+  font-size: clamp(2.25rem, 4vw, 3.6rem);
+  margin-bottom: 4rem;
+  max-width: none;
 }
 
 .syllabus-sections p,
@@ -274,6 +327,43 @@ textarea {
   color: var(--color-text);
 }
 
+/* Labelled facts inside a section (an issue's week, assignment, and featured students on the
+   newsletter list): the title facts' grid, at the section's scale. */
+.syllabus-facts {
+  margin: 0 0 2.5rem;
+}
+
+.syllabus-facts > div {
+  border-top: 1px solid var(--color-border);
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: minmax(8rem, 11rem) minmax(0, 1fr);
+  padding: 0.85rem 0;
+}
+
+.syllabus-facts > div:last-child {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.syllabus-facts dt,
+.syllabus-facts dd {
+  font-size: clamp(1rem, 1.35vw, 1.2rem);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.syllabus-facts dt {
+  color: var(--color-text-muted);
+}
+
+.syllabus-facts dt a {
+  color: var(--color-text);
+}
+
+.syllabus-facts dd {
+  color: var(--color-text);
+}
+
 .syllabus-sections ul,
 .syllabus-sections ol {
   color: var(--color-text-muted);
@@ -285,6 +375,69 @@ textarea {
 
 .syllabus-sections a {
   color: var(--color-text);
+}
+
+/* A heading that is a link (an issue on the newsletter list) stays a heading, not a rule. */
+.syllabus-sections h1 a,
+.syllabus-sections h2 a,
+.syllabus-sections h3 a {
+  text-decoration: none;
+}
+
+.syllabus-sections h1 a:hover,
+.syllabus-sections h2 a:hover,
+.syllabus-sections h3 a:hover,
+.syllabus-sections h1 a:focus-visible,
+.syllabus-sections h2 a:focus-visible,
+.syllabus-sections h3 a:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+
+/* A newsletter issue's highlight image: the captured build, framed like the email's. */
+.syllabus-figure {
+  margin: 0 0 1.75rem;
+}
+
+.syllabus-figure img {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: block;
+  height: auto;
+  width: 100%;
+}
+
+.syllabus-figure a {
+  display: block;
+}
+
+/* A quoted line, such as an issue's closing quote: set large and light, under a rule. */
+.syllabus-sections blockquote {
+  border-top: 1px solid var(--color-border);
+  margin: 0 0 2rem;
+  padding-top: 1.75rem;
+}
+
+/* Directly under a section heading, the heading's rule is enough. */
+.syllabus-sections h2 + blockquote {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.syllabus-sections blockquote p {
+  color: var(--color-text);
+  font-size: clamp(1.5rem, 2.4vw, 2.1rem);
+  font-weight: 300;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+  margin: 0 0 1.1rem;
+}
+
+.syllabus-sections blockquote p:last-child {
+  color: var(--color-text-muted);
+  font-size: clamp(1rem, 1.35vw, 1.2rem);
+  font-weight: 400;
 }
 
 .syllabus-table-scroll {
@@ -2553,9 +2706,21 @@ textarea {
     gap: 0.65rem;
   }
 
+  /* Six actions no longer fit one row beside the marks; they wrap, right-aligned, inside
+     the fixed header's height. */
+  .header-actions {
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    margin-left: 0.75rem;
+    min-width: 0;
+    row-gap: 0.4rem;
+  }
+
   .header-prompt,
   .logs-link,
-  .about-link {
+  .about-link,
+  .newsletters-link {
     font-size: 0.6rem;
     letter-spacing: 0.08em;
   }
@@ -2576,6 +2741,15 @@ textarea {
     gap: 0.4rem;
     grid-template-columns: 1fr;
     padding: 1.1rem 0;
+  }
+
+  .syllabus-facts > div {
+    gap: 0.25rem;
+    grid-template-columns: 1fr;
+  }
+
+  .syllabus-masthead {
+    margin-bottom: 2rem;
   }
 
   .syllabus-sections h1,

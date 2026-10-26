@@ -3,7 +3,7 @@
 The web client is a static React/Vite application in `apps/web`. Its default
 screen is intentionally sparse:
 
-- MIT and MIT Media Lab marks at the left of the fixed header, with About at the right;
+- MIT and MIT Media Lab marks at the left of the fixed header, with Newsletters and About at the right;
 - a welcome message or latest agent response centered in the workspace;
 - `Course Agent` and its expandable current/last action immediately above the response;
 - borderless user text at the bottom while composing.
@@ -35,6 +35,13 @@ Submitting a new prompt immediately removes the prior answer and resets the
 activity trace, so only the new run's process is visible until its answer begins.
 Canonical history is still persisted as events and is available through the conversation drawer.
 Open the About page from the right side of the header or link directly to `/about`.
+**Newsletters** beside it opens `/newsletter`, the list of every sent issue of *The Class Runtime*,
+and each issue opens in place at `/newsletter/<issue_id>` with its highlight images, every link
+active, and a PDF download; from an issue the header action returns to the list, and from the
+list to the chat. Both are the registered `course://newsletter` resources rendered by the same
+course-document page as About: images are registered asset ids resolved through the asset route,
+`course://` links to routed documents navigate in place, and a `course://` link without a page is
+shown as text.
 The browser URL and Back/Forward navigation remain synchronized with that page. Notifications and their desktop/mobile layout state are hidden while About is open and restored when returning to chat. It
 contains a concise description, new/history navigation, and student login or logout
 without adding persistent chrome to the main interface.

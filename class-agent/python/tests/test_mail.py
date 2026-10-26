@@ -13,7 +13,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
-from pydantic import EmailStr, SecretStr
+from pydantic import EmailStr, SecretStr, ValidationError
 
 from agent_core import Conversation, PrincipalContext
 from course_server.agent import (
@@ -33,6 +33,7 @@ from course_server.mail import (
     CourseAskTATool,
     GoogleGmailMailAdapter,
     InboundMail,
+    InlineImage,
     InMemoryTAQuestionStore,
     MailWorker,
     MicrosoftGraphMailAdapter,
@@ -970,3 +971,227 @@ def test_worker_rejects_reply_from_untrusted_sender() -> None:
         assert mail.sent == []
 
     asyncio.run(scenario())
+
+
+def test_gmail_adapter_sends_optional_html_as_a_multipart_alternative() -> None:
+    async def scenario() -> None:
+        sent_mime: list[bytes] = []
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            if request.url.host == "oauth.test":
+                return httpx.Response(200, json={"access_token": "token", "expires_in": 3600})
+            payload = httpx.Response(200, content=request.read()).json()
+            sent_mime.append(base64.urlsafe_b64decode(payload["raw"]))
+            return httpx.Response(200, json={"id": "sent-html-1"})
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(respond))
+        adapter = GoogleGmailMailAdapter(
+            client_id="client-id",
+            client_secret="client-secret",
+            refresh_token="refresh-token",
+            mailbox_address="course-agent@example.edu",
+            client=client,
+            gmail_base_url="https://gmail.test/gmail/v1",
+            token_url="https://oauth.test/token",
+        )
+        await adapter.send_message(
+            OutboundMail(
+                to=("student@example.edu",),
+                subject="Newsletter",
+                text="Plain body",
+                html="<p>Rich <b>body</b></p>",
+            )
+        )
+        await client.aclose()
+
+        parsed = BytesParser(policy=policy.default).parsebytes(sent_mime[0])
+        assert parsed.get_content_type() == "multipart/alternative"
+        plain = parsed.get_body(preferencelist=("plain",))
+        html = parsed.get_body(preferencelist=("html",))
+        assert plain is not None and plain.get_content().strip() == "Plain body"
+        assert html is not None and "<b>body</b>" in html.get_content()
+
+    asyncio.run(scenario())
+
+
+def test_outbound_mail_inline_images_require_html_and_unique_ids() -> None:
+    image = InlineImage(content_id="shot-1", media_type="image/jpeg", data=b"\xff\xd8")
+    with pytest.raises(ValidationError):
+        OutboundMail(to=("a@example.edu",), subject="S", text="T", inline_images=(image,))
+    with pytest.raises(ValidationError):
+        OutboundMail(
+            to=("a@example.edu",),
+            subject="S",
+            text="T",
+            html="<p>x</p>",
+            inline_images=(image, image),
+        )
+
+
+def test_gmail_adapter_embeds_inline_images_as_related_parts() -> None:
+    async def scenario() -> None:
+        sent_mime: list[bytes] = []
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            if request.url.host == "oauth.test":
+                return httpx.Response(200, json={"access_token": "token", "expires_in": 3600})
+            payload = httpx.Response(200, content=request.read()).json()
+            sent_mime.append(base64.urlsafe_b64decode(payload["raw"]))
+            return httpx.Response(200, json={"id": "sent-inline-1"})
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(respond))
+        adapter = GoogleGmailMailAdapter(
+            client_id="client-id",
+            client_secret="client-secret",
+            refresh_token="refresh-token",
+            mailbox_address="course-agent@example.edu",
+            client=client,
+            gmail_base_url="https://gmail.test/gmail/v1",
+            token_url="https://oauth.test/token",
+        )
+        await adapter.send_message(
+            OutboundMail(
+                to=("student@example.edu",),
+                subject="Newsletter",
+                text="Plain body",
+                html='<p>Rich</p><img src="cid:agents2026-ada">',
+                inline_images=(
+                    InlineImage(
+                        content_id="agents2026-ada",
+                        media_type="image/jpeg",
+                        data=b"\xff\xd8jpeg",
+                        filename="2026-week01-agents2026-ada.jpg",
+                    ),
+                ),
+            )
+        )
+        await client.aclose()
+
+        parsed = BytesParser(policy=policy.default).parsebytes(sent_mime[0])
+        assert parsed.get_content_type() == "multipart/alternative"
+        plain = parsed.get_body(preferencelist=("plain",))
+        html = parsed.get_body(preferencelist=("html",))
+        assert plain is not None and plain.get_content().strip() == "Plain body"
+        assert html is not None and "cid:agents2026-ada" in html.get_content()
+        images = [part for part in parsed.walk() if part.get_content_type() == "image/jpeg"]
+        assert len(images) == 1
+        assert images[0]["Content-ID"] == "<agents2026-ada>"
+        assert images[0].get_content_disposition() == "inline"
+        assert images[0].get_filename() == "2026-week01-agents2026-ada.jpg"
+        assert images[0].get_content() == b"\xff\xd8jpeg"
+        related = [part for part in parsed.walk() if part.get_content_type() == "multipart/related"]
+        assert len(related) == 1
+
+    asyncio.run(scenario())
+
+
+def test_graph_adapter_sends_inline_images_as_inline_attachments() -> None:
+    async def scenario() -> None:
+        drafts: list[dict[str, object]] = []
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            path = request.url.path
+            if request.url.host == "login.test":
+                return httpx.Response(200, json={"access_token": "token", "expires_in": 3600})
+            if request.method == "POST" and path.endswith("/messages"):
+                drafts.append(json.loads(request.read()))
+                return httpx.Response(201, json={"id": "draft-id"})
+            if request.method == "POST" and path.endswith("/messages/draft-id/send"):
+                return httpx.Response(202)
+            if request.method == "GET" and path.endswith("/messages/draft-id"):
+                return httpx.Response(
+                    200,
+                    json={"id": "draft-id", "internetMessageId": "<newsletter@example.edu>"},
+                )
+            raise AssertionError(f"unexpected request {request.method} {path}")
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(respond))
+        adapter = MicrosoftGraphMailAdapter(
+            tenant_id="tenant",
+            client_id="client",
+            client_secret="secret",
+            mailbox_address="course-agent@example.edu",
+            client=client,
+            graph_base_url="https://graph.test/v1.0",
+            login_base_url="https://login.test",
+        )
+        sent = await adapter.send_message(
+            OutboundMail(
+                to=("student@example.edu",),
+                subject="Newsletter",
+                text="Plain body",
+                html='<img src="cid:agents2026-ada">',
+                inline_images=(
+                    InlineImage(
+                        content_id="agents2026-ada",
+                        media_type="image/jpeg",
+                        data=b"\xff\xd8jpeg",
+                    ),
+                ),
+            )
+        )
+        await client.aclose()
+
+        assert sent.provider_message_id == "draft-id"
+        body = drafts[0]["body"]
+        assert isinstance(body, dict) and body["contentType"] == "HTML"
+        attachments = drafts[0]["attachments"]
+        assert isinstance(attachments, list) and len(attachments) == 1
+        attachment = attachments[0]
+        assert attachment["contentId"] == "agents2026-ada" and attachment["isInline"] is True
+        assert attachment["contentType"] == "image/jpeg"
+        assert base64.b64decode(attachment["contentBytes"]) == b"\xff\xd8jpeg"
+
+    asyncio.run(scenario())
+
+
+def test_mail_authorize_builds_offline_consent_url_and_exchanges_the_code() -> None:
+    from course_server.mail_authorize import (
+        MailAuthorizationError,
+        build_consent_url,
+        exchange_code,
+    )
+
+    url = build_consent_url(
+        client_id="client-id", redirect_uri="http://127.0.0.1:8766/", state="abc"
+    )
+    query = parse_qs(url.split("?", 1)[1])
+    assert query["access_type"] == ["offline"] and query["prompt"] == ["consent"]
+    assert "gmail.send" in query["scope"][0] and "gmail.readonly" in query["scope"][0]
+    assert query["state"] == ["abc"] and query["redirect_uri"] == ["http://127.0.0.1:8766/"]
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        form = parse_qs(request.content.decode())
+        assert form["grant_type"] == ["authorization_code"]
+        assert form["code"] == ["one-time-code"] and form["client_secret"] == ["secret"]
+        return httpx.Response(200, json={"access_token": "a", "refresh_token": "fresh-token"})
+
+    token = exchange_code(
+        code="one-time-code",
+        client_id="client-id",
+        client_secret="secret",
+        redirect_uri="http://127.0.0.1:8766/",
+        transport=httpx.MockTransport(respond),
+    )
+    assert token == "fresh-token"
+
+    with pytest.raises(MailAuthorizationError, match="invalid_grant"):
+        exchange_code(
+            code="bad",
+            client_id="client-id",
+            client_secret="secret",
+            redirect_uri="http://127.0.0.1:8766/",
+            transport=httpx.MockTransport(
+                lambda _: httpx.Response(400, json={"error": "invalid_grant"})
+            ),
+        )
+    with pytest.raises(MailAuthorizationError, match="no refresh token"):
+        exchange_code(
+            code="ok",
+            client_id="client-id",
+            client_secret="secret",
+            redirect_uri="http://127.0.0.1:8766/",
+            transport=httpx.MockTransport(
+                lambda _: httpx.Response(200, json={"access_token": "a"})
+            ),
+        )

@@ -37,6 +37,11 @@
       "audience": "instructors"
     },
     {
+      "id": "instructor-newsletter",
+      "directory": "instructor-newsletter",
+      "audience": "instructors"
+    },
+    {
       "id": "weekly-build-showcase",
       "directory": "weekly-build-showcase",
       "audience": "instructors"
