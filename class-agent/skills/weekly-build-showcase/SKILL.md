@@ -22,7 +22,7 @@ that source immediately; do not start a class-wide review or repeatedly list ass
 Read this skill once per turn; reuse its instructions instead of loading it again.
 
 Call `staff.screen_weekly_showcase` once for the target week. It reads sites and repository
-file listings concurrently across projects, excludes recent presenters, and reuses successful
+file listings concurrently across projects, includes previous presenters, and reuses successful
 reads within this run. Its results are discovery evidence, not eligibility decisions.
 
 For every site without an obvious weekly post, use the repository tree to find the week's folder,
@@ -79,11 +79,17 @@ verified. Call `staff.select_weekly_showcase` with both the full `eligible_proje
 the assessed shortlist in `candidates`. Do not
 compute your own replacements or call model-chosen names random.
 
-The tool excludes students in the last two recorded issues before the requested week. Older
-appearances apply a multiplier of 1/(1 + prior appearances) to both rubric totals and random
-sampling weights. Assignment fit >=5 is ranked ahead of lower-fit builds, then adjusted total,
+There is no presentation cooldown; recent presenters remain eligible for repeat fallback.
+Appearances before the requested week apply a multiplier of 1/(1 + prior appearances) to both
+rubric totals and random sampling weights. All four slots prioritize first-time presenters; repeats fill only the
+shortfall when fewer than four eligible first-time presenters remain. Include
+at least two first-time presenters in the assessed shortlist, or all of them if fewer than two
+remain. Quality picks rank first-time presenters ahead of repeats. Within each group,
+assignment fit >=5 is ranked ahead of lower-fit builds, then adjusted total,
 then assignment fit, then originality. A remaining exact tie uses project ID. It chooses two
 ranked builds first, then two weighted random draws without replacement from the remainder.
+Random draws sample exclusively from zero-appearance students first; repeat presenters fill
+remaining slots only when fewer than two first-time presenters remain after ranking.
 This yields four distinct students. It does not guarantee everyone will be selected, particularly
 if they do not post eligible builds. Do not reroll simply because you dislike the result.
 

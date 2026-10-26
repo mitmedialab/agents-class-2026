@@ -121,11 +121,8 @@ def select_builds(request: SelectionRequest, history: ShowcaseHistory) -> dict[s
         key=lambda issue: issue.week,
     )
     counts = Counter(project for issue in previous for project in issue.project_ids)
-    excluded = {project for issue in previous[-2:] for project in issue.project_ids}
     rows: list[dict[str, JsonValue]] = []
     for candidate in request.candidates:
-        if candidate.project_id in excluded:
-            continue
         raw = sum(getattr(candidate, key) * weight for key, weight in RUBRIC_WEIGHTS.items())
         participation_weight = 1 / (1 + counts[candidate.project_id])
         rows.append(
@@ -137,9 +134,10 @@ def select_builds(request: SelectionRequest, history: ShowcaseHistory) -> dict[s
                 "sampling_weight": participation_weight,
             }
         )
-    # Fit >= 5 is a priority tier, not a blanket rejection of lower-fit builds.
+    # First-time presenters take precedence; fit >= 5 is a tier within each group.
     rows.sort(
         key=lambda row: (
+            int(cast(int, row["prior_appearances"]) > 0),
             -int(cast(float, row["assignment_fit"]) >= 5),
             -cast(float, row["adjusted_score"]),
             -cast(float, row["assignment_fit"]),
@@ -156,25 +154,31 @@ def select_builds(request: SelectionRequest, history: ShowcaseHistory) -> dict[s
                 "sampling_weight": 1 / (1 + counts[item.project_id]),
             }
             for item in pool
-            if item.project_id not in excluded
         ]
         if pool is not None
         else rows
     )
     if len(eligible) < 4:
-        raise ToolValidationError(
-            "Fewer than four eligible builds remain after the two-issue cooldown."
-        )
+        raise ToolValidationError("Fewer than four eligible builds are available.")
     if len(rows) < 2:
-        raise ToolValidationError("At least two assessed builds must remain after cooldown.")
+        raise ToolValidationError("At least two assessed builds are required.")
+    first_time_count = sum(row["prior_appearances"] == 0 for row in eligible)
+    assessed_first_time_count = sum(row["prior_appearances"] == 0 for row in rows)
+    if assessed_first_time_count < min(2, first_time_count):
+        raise ToolValidationError(
+            "Assess enough eligible first-time presenters for the two quality picks "
+            "before selecting; repeat presenters cannot replace unreviewed first-time presenters."
+        )
     ranked = rows[:2]
     ranked_ids = {row["project_id"] for row in ranked}
     remaining = [row for row in eligible if row["project_id"] not in ranked_ids]
     sampled = []
     rng = SystemRandom()
     for _ in range(2):
+        # Exhaust first-time presenters before falling back to weighted repeats.
+        draw_pool = [row for row in remaining if row["prior_appearances"] == 0] or remaining
         chosen = rng.choices(
-            remaining, weights=[cast(float, row["sampling_weight"]) for row in remaining], k=1
+            draw_pool, weights=[cast(float, row["sampling_weight"]) for row in draw_pool], k=1
         )[0]
         sampled.append(chosen)
         remaining.remove(chosen)
@@ -189,9 +193,12 @@ def select_builds(request: SelectionRequest, history: ShowcaseHistory) -> dict[s
             "ranking_scope": "Reviewed shortlist"
             if pool is not None
             else "All submitted candidates",
-            "excluded_project_ids": sorted(excluded),
+            # Retained for result compatibility; no cooldown exclusions.
+            "excluded_project_ids": [],
             "rubric_weights": RUBRIC_WEIGHTS,
             "method": "Two ranked first, then two weighted random draws without replacement; "
+            "all four slots prioritize zero-appearance students, with repeats only when fewer "
+            "than four eligible first-time presenters remain; "
             "weight = 1 / (1 + prior appearances). History is not modified.",
             "assessment_source": "Agent-supplied evidence and scores; not independently verified.",
         },
@@ -202,7 +209,7 @@ class ReadShowcaseHistoryTool:
     id = READ_SHOWCASE_HISTORY_TOOL_ID
     description = (
         "Read staff-maintained weekly presentation history before selecting builds. "
-        "Lists previous issues used for the two-issue cooldown and participation weights. "
+        "Lists previous issues used for first-time priority and participation weights. "
         "Supply week to retrieve its saved review and draw; reuse that request with selection "
         "to restore the same four students without repeating the assessment."
     )
@@ -253,14 +260,17 @@ class SelectShowcaseTool:
         "The first successful weekly review and draw is saved privately and reused on retries, "
         "including across conversations. Read history for saved reviews before doing new work. "
         "Supply eligible_projects for the full site-screened pool; only candidates in the ranked "
-        "shortlist need scores and repository review. Inspect their folder, notes and commits, "
+        "shortlist need scores and repository review. Assess at least two eligible first-time "
+        "presenters, or all of them if fewer than two remain. "
+        "Inspect their folder, notes and commits, "
         "and weekly site post when accessible. Repository documentation can verify weekly work "
         "when the site is hard to navigate; supply repository_evidence and describe the site "
         "limitation rather than inventing post_evidence. A filename alone is insufficient. "
         "Score each 0-10: originality, assignment fit, cognitive augmentation "
         "(helps thinking, memory, learning, focus or decisions with human control), execution "
         "(working evidence in repository/post). Weights are 30/25/25/20 percent. Platform enforces "
-        "history cooldown, participation weights, fit priority and tie-breaks. Supply evidence "
+        "first-time priority for all four slots, participation weights, "
+        "fit priority and tie-breaks. Supply evidence "
         "references and reasons. This proposes selections without recording "
         "an actual presentation. Call staff.discover_showcase_images for each selected student "
         "using their weekly-page URLs before declaring images unavailable. Display one verified "

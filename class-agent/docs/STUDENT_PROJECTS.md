@@ -95,7 +95,7 @@ the `weekly-build-showcase` skill. Resolve the assignment from maintained course
 an empty assignment list does not mean schedule or weekly resources lack the instructions.
 
 Screening reads public homepages and repository trees with at most four concurrent requests
-and a 100-project roster bound. Recent presenters are skipped. It returns up to 4,000 characters per page,
+and a 100-project roster bound. Previous presenters are included. It returns up to 4,000 characters per page,
 explicit truncation, repository file listings, and independent site/repository failures.
 Every inspected entry remains `needs_review`; a homepage read is not an eligibility result.
 Before excluding unclear sites, the agent reads relevant weekly documentation, implementation
@@ -123,14 +123,26 @@ see [RUNTIME.md](RUNTIME.md#bounded-runs-and-incomplete-results).
 The selection policy is two ranked builds first, then two random builds from the remainder:
 
 - Raw score: 30% originality + 25% assignment fit + 25% cognitive augmentation + 20% execution.
-- Students in either of the last two recorded issues before the target week are excluded.
-- Older appearances multiply scores and sampling weights by `1 / (1 + prior appearances)`.
-- Assignment fit >=5 takes precedence over lower-fit builds. Within each tier, rank by adjusted
+- There is no presentation cooldown: recent presenters remain eligible for repeat fallback.
+- Prior appearances multiply scores and sampling weights by `1 / (1 + prior appearances)`.
+- All four slots prioritize eligible students who have never presented. Repeat presenters fill
+  only the shortfall when fewer than four first-time presenters remain.
+- Quality picks rank first-time presenters ahead of repeats, then apply assignment fit >=5
+  priority within each group. Within each tier, rank by adjusted
   score, then assignment fit, then originality. Exact remaining ties use project ID.
-- Random draws use operating-system randomness with weighted sampling without replacement.
-  All four students are distinct. Fewer than four eligible candidates causes an explicit error;
-  cooldown is never silently relaxed. This improves participation, but cannot guarantee every
+- Random draws first sample exclusively from remaining zero-appearance students. Repeat
+  presenters fill slots only when fewer than two first-time presenters remain after ranking.
+  Draws use operating-system randomness with weighted sampling without replacement.
+  All four students are distinct. Fewer than four eligible candidates causes an explicit error.
+  This improves participation, but cannot guarantee every
   student will present, especially when builds are ineligible.
+
+This policy applies to new draws; existing saved selections are reused without rerolling.
+No schema change or migration is required.
+
+The assessed shortlist must include at least two eligible first-time presenters, or all of them
+if fewer than two remain. Otherwise the tool asks for more assessments instead of substituting
+reviewed repeat presenters.
 
 The result exposes raw scores, adjusted scores, evidence, ranking and random selections.
 The agent displays a 2×2 thumbnail gallery through `browser.compare` with
@@ -160,9 +172,9 @@ illustrative IDs with everyone actually featured in Week 1, whether chosen rando
 ```
 
 Add one issue per presented week. An empty `project_ids` list records an issue with no presenters;
-missing weeks do not count as issues for cooldown. Duplicate weeks or duplicate IDs within an issue
+missing weeks add no appearances. Duplicate weeks or duplicate IDs within an issue
 are invalid. A recorded target week cannot be drawn again. Future issues do not affect earlier
-selections. All historical appearances count, including ones older than the cooldown.
+selections. All appearances before the target week count, regardless of recency.
 
 For a new deployment, create the directory and initialize the file with
 `{"schema_version": 1, "issues": []}`, then enter existing selections before using the tool.

@@ -163,8 +163,10 @@ configured organization, prefix, and exclusions are enforced in platform code. S
 [docs/STUDENT_PROJECTS.md](docs/STUDENT_PROJECTS.md).
 
 Weekly showcase selection is available to staff through the read-only project integration:
-two rubric-ranked builds plus two weighted random draws, with a two-issue cooldown and reduced
-weight for older appearances. Enter actual Week 1 presenters in
+two rubric-ranked builds plus two weighted random draws, with no presentation cooldown and reduced
+weight for prior appearances. All four slots prioritize students who have never presented,
+using repeat presenters only to fill the shortfall when fewer than four eligible first-time
+presenters remain. Enter actual Week 1 presenters in
 `var/student-showcase/history.json`; see [the setup and policy](docs/STUDENT_PROJECTS.md#weekly-build-showcase).
 
 Staff-published FAQ knowledge is kept separately from maintained course files in one local,

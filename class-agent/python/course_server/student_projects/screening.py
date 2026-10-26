@@ -37,7 +37,7 @@ class ScreenShowcaseTool:
     id = SCREEN_SHOWCASE_TOOL_ID
     description = (
         "Screen all registered student sites in one bounded concurrent call for a weekly "
-        "showcase, excluding the last two issues' presenters. Returns public homepage text "
+        "showcase, including previous presenters. Returns public homepage text "
         "and repository file listings with independent failure statuses. Homepage text alone "
         "cannot establish absence of a weekly build. Follow links or read the relevant weekly "
         "repository documentation/files and commits with staff.inspect_student_repository "
@@ -72,10 +72,6 @@ class ScreenShowcaseTool:
         history = read_history(self._history_path)
         if any(issue.week == week for issue in history.issues):
             raise ToolValidationError("This week's issue is already recorded.")
-        previous = sorted(
-            (issue for issue in history.issues if issue.week < week), key=lambda issue: issue.week
-        )
-        excluded = {project for issue in previous[-2:] for project in issue.project_ids}
         try:
             projects = await asyncio.to_thread(self._projects.list_projects)
         except StudentProjectProviderError as error:
@@ -89,8 +85,6 @@ class ScreenShowcaseTool:
                 "project_id": project.id,
                 "site_url": project.site_url,
             }
-            if project.id in excluded:
-                return {**base, "status": "cooldown"}
             if not project.site_url:
                 return {**base, "status": "no_site"}
             async with semaphore:

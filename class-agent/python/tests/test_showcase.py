@@ -47,7 +47,7 @@ def ids(result: dict[str, JsonValue], key: str) -> list[str]:
     return [str(row["project_id"]) for row in cast(list[dict[str, JsonValue]], result[key])]
 
 
-def test_fit_priority_cooldown_and_participation_adjustment() -> None:
+def test_fit_priority_and_participation_adjustment() -> None:
     history = ShowcaseHistory(
         issues=[
             Issue(week=1, project_ids=["agents2026-old"]),
@@ -67,8 +67,9 @@ def test_fit_priority_cooldown_and_participation_adjustment() -> None:
         history,
     )
     assert ids(result, "ranked") == ["agents2026-new", "agents2026-other"]
-    assert ids(result, "ranking")[-1] == "agents2026-lowfit"
-    assert "agents2026-recent" not in ids(result, "ranking")
+    assert ids(result, "ranking")[-2:] == ["agents2026-old", "agents2026-recent"]
+    assert "agents2026-recent" in ids(result, "ranking")
+    assert result["excluded_project_ids"] == []
     rows = cast(list[dict[str, JsonValue]], result["ranking"])
     old = next(row for row in rows if row["project_id"] == "agents2026-old")
     assert old["raw_score"] == 10
@@ -88,8 +89,22 @@ def test_ties_use_fit_then_originality() -> None:
     assert ids(result, "ranked") == ["agents2026-c", "agents2026-b"]
 
 
-def test_sampler_receives_history_weights_and_removes_each_draw(
+@pytest.mark.parametrize("separate_pool", [False, True])
+@pytest.mark.parametrize(
+    ("new_count", "expected_pools", "expected_weights"),
+    [
+        (0, ["cdef", "cde"], [[0.5, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5]]),
+        (1, ["f", "cde"], [[1.0], [0.5, 0.5, 0.5]]),
+        (2, ["ef", "e"], [[1.0, 1.0], [1.0]]),
+        (3, ["def", "de"], [[1.0, 1.0, 1.0], [1.0, 1.0]]),
+    ],
+)
+def test_sampler_prioritizes_first_time_presenters_and_weights_repeat_fallback(
     monkeypatch: pytest.MonkeyPatch,
+    separate_pool: bool,
+    new_count: int,
+    expected_pools: list[str],
+    expected_weights: list[list[float]],
 ) -> None:
     calls: list[tuple[list[str], list[float]]] = []
 
@@ -104,15 +119,69 @@ def test_sampler_receives_history_weights_and_removes_each_draw(
     monkeypatch.setattr("course_server.student_projects.showcase.SystemRandom", ControlledRandom)
     history = ShowcaseHistory(
         issues=[
-            Issue(week=1, project_ids=["agents2026-d"]),
+            Issue(week=1, project_ids=[f"agents2026-{n}" for n in "cdef"[: 4 - new_count]]),
             Issue(week=2, project_ids=[]),
-            Issue(week=3, project_ids=[]),
+            Issue(week=3, project_ids=["agents2026-recent"]),
+            Issue(week=5, project_ids=["agents2026-f"]),  # Future appearances do not count.
         ]
     )
-    result = select_builds(request(*(candidate(name) for name in "abcde")), history)
-    assert ids(result, "random") == ["agents2026-d", "agents2026-e"]
-    assert calls[0][1] == [1.0, 1.0, 0.5]
-    assert "agents2026-d" not in calls[1][0]
+    selection = request(
+        candidate("a", 10, 10),
+        candidate("b", 10, 10),
+        *(candidate(name) for name in "cdef"),
+    )
+    if separate_pool:
+        selection = selection.model_copy(
+            update={
+                "eligible_projects": selection.candidates,
+                "candidates": selection.candidates[:2],
+            }
+        )
+    result = select_builds(selection, history)
+    assert ids(result, "ranked") == ["agents2026-a", "agents2026-b"]
+    assert calls == [
+        ([f"agents2026-{name}" for name in pool], weights)
+        for pool, weights in zip(expected_pools, expected_weights, strict=True)
+    ]
+    assert ids(result, "random") == [f"agents2026-{pool[-1]}" for pool in expected_pools]
+    assert len(set(ids(result, "ranked") + ids(result, "random"))) == 4
+
+
+@pytest.mark.parametrize("new_count", range(6))
+def test_all_four_slots_prioritize_first_time_presenters(new_count: int) -> None:
+    newcomers = [candidate(f"new-{n}", 1, 1) for n in range(new_count)]
+    repeats = [candidate(f"repeat-{n}", 10, 10) for n in range(4)]
+    history = ShowcaseHistory(
+        issues=[
+            Issue(week=1, project_ids=[]),
+            Issue(week=2, project_ids=[]),
+            Issue(week=3, project_ids=[item.project_id for item in repeats]),
+        ]
+    )
+    result = select_builds(request(*repeats, *newcomers), history)
+    selected = ids(result, "ranked") + ids(result, "random")
+    new_ids = {item.project_id for item in newcomers}
+    assert len(set(selected)) == 4
+    assert len(set(selected) & new_ids) == min(4, new_count)
+    assert len(set(ids(result, "ranked")) & new_ids) == min(2, new_count)
+
+
+@pytest.mark.parametrize("assessed_count", [0, 1])
+def test_unreviewed_first_time_presenters_cannot_be_bypassed(assessed_count: int) -> None:
+    newcomers = [candidate(f"new-{n}") for n in range(4)]
+    repeats = [candidate(f"repeat-{n}") for n in range(2)]
+    selection = request(*repeats, *newcomers[:assessed_count]).model_copy(
+        update={"eligible_projects": [*repeats, *newcomers]}
+    )
+    history = ShowcaseHistory(
+        issues=[
+            Issue(week=1, project_ids=[]),
+            Issue(week=2, project_ids=[]),
+            Issue(week=3, project_ids=[item.project_id for item in repeats]),
+        ]
+    )
+    with pytest.raises(ToolValidationError, match="Assess enough eligible first-time"):
+        select_builds(selection, history)
 
 
 def test_invalid_history_and_insufficient_candidates_fail_closed(tmp_path: Path) -> None:
@@ -209,7 +278,7 @@ def test_random_pool_does_not_require_repository_scores() -> None:
     assert ids(result, "ranked") == ["agents2026-a", "agents2026-b"]
     assert set(ids(result, "random")) == {"agents2026-c", "agents2026-d"}
     assert result["ranking_scope"] == "Reviewed shortlist"
-    assert result["eligible_count"] == 4
+    assert result["eligible_count"] == 5
     with pytest.raises(ValidationError, match="belong"):
         SelectionRequest(
             week=4,

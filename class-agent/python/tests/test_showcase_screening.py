@@ -13,7 +13,7 @@ from course_server.student_projects import InspectStudentSiteTool, StudentProjec
 from course_server.student_projects.screening import ScreenShowcaseTool
 
 
-def test_screening_bounds_cooldown_failures_and_run_cache(tmp_path: Path) -> None:
+def test_screening_includes_recent_presenters_bounds_failures_and_run_cache(tmp_path: Path) -> None:
     path = tmp_path / "history.json"
     path.write_text('{"schema_version":1,"issues":[{"week":1,"project_ids":["agents2026-a"]}]}')
 
@@ -54,26 +54,26 @@ def test_screening_bounds_cooldown_failures_and_run_cache(tmp_path: Path) -> Non
         assert isinstance(result.content, dict)
         rows = result.content["projects"]
         assert isinstance(rows, list)
-        assert isinstance(rows[0], dict) and rows[0]["status"] == "cooldown"
+        assert isinstance(rows[0], dict) and rows[0]["status"] == "read"
         assert isinstance(rows[1], dict) and rows[1]["status"] == "unreadable"
         assert rows[1]["repository_status"] == "read"
         assert rows[1]["eligibility_status"] == "needs_review"
-        assert "repository_tree" not in rows[0]
+        assert "repository_tree" in rows[0]
         assert isinstance(rows[2], dict)
         assert rows[2]["repository_status"] == "read"
         assert rows[2]["eligibility_status"] == "needs_review"
         assert isinstance(rows[2], dict) and rows[2]["truncated"] is True
         assert 1 < peak <= 4
-        assert len(calls) == 7
+        assert len(calls) == 8
         site = InspectStudentSiteTool(catalog, visit)
         full = await site.execute({"project_id": "agents2026-c"}, ctx)
         assert isinstance(full.content, dict) and isinstance(full.content["page"], dict)
         assert len(str(full.content["page"]["text"])) > 4000
-        assert len(calls) == 7
+        assert len(calls) == 8
         await tool.execute({"week": 2}, ctx)
-        assert len(calls) == 8  # Only failed evidence is fetched again.
+        assert len(calls) == 9  # Only failed evidence is fetched again.
         await site.execute({"project_id": "agents2026-c"}, context("instructor"))
-        assert len(calls) == 9  # Another run never inherits the cache.
+        assert len(calls) == 10  # Another run never inherits the cache.
         with pytest.raises(ToolValidationError):
             await tool.execute({"week": True}, ctx)
         with pytest.raises(ToolValidationError):
