@@ -79,7 +79,23 @@ server {
         proxy_read_timeout 300s;
     }
 
+    # Vite fingerprints build assets, so they can be cached for a year. A
+    # missing fingerprint belongs to an older deployment and must be a 404;
+    # serving index.html here makes browsers reject it as JavaScript or CSS.
+    location ^~ /assets/ {
+        try_files $uri =404;
+        expires 1y;
+    }
+
+    # The entry point names the current fingerprinted assets. Keep it
+    # revalidated so a browser cannot retain references to a removed build.
+    location = /index.html {
+        try_files $uri =404;
+        expires -1;
+    }
+
     location / {
         try_files $uri $uri/ /index.html;
+        expires -1;
     }
 }
