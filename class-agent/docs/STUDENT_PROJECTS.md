@@ -17,8 +17,10 @@ Platform code filters tools before the model sees them and each tool checks the 
 | TA | All course project sites | All course repositories |
 | Admin | All course project sites | All course repositories |
 
-The repository boundary is the configured organization and prefix, minus explicit exclusions.
-For this deployment that is `mitmedialab/agents2026-*` except `agents2026-test`. A model-supplied
+The repository boundary is the intersection of the configured organization/prefix, explicit
+exclusions, and active weekly-build project IDs from the canonical course roster. For this
+deployment that is the active subset of `mitmedialab/agents2026-*` except `agents2026-test`.
+Inactive former members are rejected before repository metadata is requested. A model-supplied
 organization, arbitrary repository URL, user ID, or role cannot widen that scope.
 
 `course.list_student_projects` returns only project IDs and deployed HTTPS URLs.
@@ -62,12 +64,14 @@ GITHUB_STUDENT_PROJECT_ALIASES=test-student=agents2026-example,test-student2=age
 GITHUB_ROSTER_CACHE_TTL_SECONDS=300
 ```
 
-Prefer a GitHub App installation token or a fine-grained token restricted to the 26 repositories.
+Prefer a GitHub App installation token or a fine-grained token restricted to the current active
+weekly-build repositories.
 Grant only Metadata, Contents, Pull requests, Issues, Actions, and Pages read access. Do not grant
 write or administration permissions. Keep the value in the protected server environment; never
 commit it. The API must be restarted after configuration changes.
 
-The adapter enumerates the real repositories rather than maintaining a second mock roster. To
+The adapter enumerates real repositories and intersects them with the canonical active roster
+rather than maintaining a second hand-edited project roster. To
 avoid repeating the same GitHub organization and Pages calls during a conversation, it keeps the
 resolved roster in process for the configured bounded TTL (five minutes by default). Set the TTL
 to `0` to disable caching. Repository summaries, trees, files, commits, branches, pull requests,

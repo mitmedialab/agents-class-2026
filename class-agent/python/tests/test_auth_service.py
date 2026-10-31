@@ -121,6 +121,44 @@ def test_create_login_and_resolve_instructor_role() -> None:
     asyncio.run(scenario())
 
 
+def test_user_access_policy_blocks_login_and_existing_sessions_without_affecting_staff() -> None:
+    async def scenario() -> None:
+        store, clock, admin, unrestricted = services()
+        student = await admin.create_user(
+            username="former-student",
+            display_name="Former Student",
+            email="former@example.edu",
+            role="student",
+        )
+        instructor = await admin.create_user(
+            username="prof",
+            display_name="Professor Example",
+            email="prof@example.edu",
+            role="instructor",
+        )
+        existing = await unrestricted.login(
+            username="former-student",
+            access_code=student.access_code,
+        )
+        restricted = AuthenticationService(
+            store,
+            hasher=Argon2AccessCodeHasher(),
+            clock=clock,
+            user_access_policy=lambda user: user.role != "student",
+        )
+
+        with pytest.raises(InvalidCredentials):
+            await restricted.login(
+                username="former-student",
+                access_code=student.access_code,
+            )
+        with pytest.raises(InvalidSession):
+            await restricted.resolve_authenticated(existing.token)
+        await restricted.login(username="prof", access_code=instructor.access_code)
+
+    asyncio.run(scenario())
+
+
 def test_invalid_user_and_invalid_code_have_same_public_failure() -> None:
     async def scenario() -> None:
         _, _, admin, auth = services()

@@ -86,6 +86,7 @@ from course_server.browser.stream import BrowserStreamService
 from course_server.browser.stream_response import browser_stream_response
 from course_server.browser.tools import browser_page_props
 from course_server.config import AgentSettings
+from course_server.course_roster import load_course_roster, verify_roster_resources
 from course_server.faq import (
     CourseNotification,
     LocalFaqKnowledgeStore,
@@ -846,6 +847,9 @@ def create_app(
         if settings is None:
             load_dotenv(override=False)
         resolved_settings = settings or AgentSettings.from_environment()
+        course_roster = load_course_roster(resolved_settings.course_roster_path)
+        if course_roster is not None:
+            verify_roster_resources(course_roster, resolved_settings.course_data_path)
         apply_migrations(resolved_settings.database_url)
         index_resources(resolved_settings.database_url)
         pool = create_auth_pool(resolved_settings.database_url)
@@ -867,7 +871,9 @@ def create_app(
         )
         applicant_store = FileApplicantStore(resolved_settings.applicant_data_path)
         await initialize_student_application_access(
-            applicant_store, resolved_settings.applicant_data_path
+            applicant_store,
+            resolved_settings.applicant_data_path,
+            roster=course_roster,
         )
         application_access = ApplicationAccessPolicy(
             resolved_settings.applicant_data_path / "student-access.json"
@@ -882,6 +888,11 @@ def create_app(
             auth=auth_store,
             email_enabled=resolved_settings.mail_enabled,
             questions=question_store,
+            student_access_policy=(
+                None
+                if course_roster is None
+                else lambda user: course_roster.permits_student_username(user.username)
+            ),
         )
         student_communication_service = StudentCommunicationService(
             auth=auth_store,
@@ -925,7 +936,17 @@ def create_app(
                 browser_service = playwright_browser
                 resources.browser = browser_service
         app.state.course_state.services = AppServices(
-            authentication=AuthenticationService(auth_store),
+            authentication=AuthenticationService(
+                auth_store,
+                user_access_policy=(
+                    None
+                    if course_roster is None
+                    else lambda user: (
+                        user.role != "student"
+                        or not course_roster.identifies_inactive_username(user.username)
+                    )
+                ),
+            ),
             agent=CourseAgentService(
                 runtime=build_runtime(
                     resolved_settings,
@@ -940,6 +961,7 @@ def create_app(
                     instructor_messages=instructor_message_service,
                     student_communications=student_communication_service,
                     faq_updates=faq_knowledge,
+                    course_roster=course_roster,
                 ),
                 conversations=conversation_store,
                 capability_policy=CourseCapabilityPolicy(

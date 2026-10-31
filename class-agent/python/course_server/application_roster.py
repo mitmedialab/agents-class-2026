@@ -7,6 +7,7 @@ import logging
 import os
 import tempfile
 import unicodedata
+from collections.abc import Sequence
 from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
@@ -16,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 if TYPE_CHECKING:
     from course_server.agent.capabilities import ApplicantStore
+    from course_server.course_roster import CourseMember, CourseRoster
 
 logger = logging.getLogger(__name__)
 
@@ -62,18 +64,26 @@ async def initialize_student_application_access(
     applicants: ApplicantStore,
     directory: Path,
     roster_path: Path | None = None,
+    *,
+    roster: CourseRoster | None = None,
 ) -> None:
     """Freeze unique matches from existing records; never extend access on later submissions."""
     access_path = directory / "student-access.json"
     if access_path.exists():
         return
-    roster_path = roster_path or directory / "accepted-applicants.json"
-    if not roster_path.exists():
-        logger.info("No local accepted-applicant roster; student application access stays closed.")
-        return
-    roster = AcceptedRoster.model_validate_json(roster_path.read_text(encoding="utf-8"))
+    entries: Sequence[CourseMember | AcceptedApplicant]
+    if roster is not None:
+        entries = roster.members
+    else:
+        roster_path = roster_path or directory / "accepted-applicants.json"
+        if not roster_path.exists():
+            logger.info("No local course roster; student application access stays closed.")
+            return
+        entries = AcceptedRoster.model_validate_json(
+            roster_path.read_text(encoding="utf-8")
+        ).applicants
     keys: set[str] = set()
-    for entry in roster.applicants:
+    for entry in entries:
         entry_keys = {_name_key(name) for name in [entry.name, *entry.aliases]}
         if "" in entry_keys or keys.intersection(entry_keys):
             raise ValueError("Accepted applicant roster contains conflicting names.")
@@ -82,7 +92,7 @@ async def initialize_student_application_access(
     summaries = await applicants.list_applications()
     approved: set[UUID] = set()
     resolutions: list[dict[str, object]] = []
-    for entry in roster.applicants:
+    for entry in entries:
         entry_keys = {_name_key(name) for name in [entry.name, *entry.aliases]}
         matches = [item for item in summaries if _name_key(item.name) in entry_keys]
         status = "missing" if not matches else "ambiguous"
@@ -125,5 +135,5 @@ async def initialize_student_application_access(
         "Accepted application access initialized: %d matched, %d unresolved; "
         "inspect private student-access-resolution.json for details.",
         len(approved),
-        len(roster.applicants) - len(approved),
+        len(entries) - len(approved),
     )

@@ -17,8 +17,10 @@ playwright-report/
 test-results/
 var/applicants/
 var/assignments/
+var/backups/
 var/course-knowledge/
 var/log/
+var/roster/
 var/uploads/
 # Private current class roster and participation status.
 var/active-roster.json

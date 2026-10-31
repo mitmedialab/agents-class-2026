@@ -105,7 +105,8 @@ def _translate_provider_error(error: StudentProjectProviderError) -> ToolProvide
 class ListStudentProjectsTool:
     id = LIST_STUDENT_PROJECTS_TOOL_ID
     description = (
-        "List the real course student projects and their deployed public website URLs. "
+        "List the real course student projects and their deployed public documentation "
+        "website URLs, where weekly builds and final-project work may be posted. "
         "Use this first when a course member asks about a student or project by name and "
         "the exact agents2026-* project identifier or deployed URL is not yet known. Once "
         "the project is identified, continue with the appropriate site or repository "
@@ -151,13 +152,12 @@ class ListStudentProjectsTool:
 class InspectStudentSiteTool:
     id = INSPECT_STUDENT_SITE_TOOL_ID
     description = (
-        "Read what one student's deployed public website currently displays. Authenticated "
-        "students, TAs, instructors, and admins may inspect any listed student site. Use the "
-        "exact project identifier returned by course.list_student_projects, and call this "
-        "directly for questions about what a student's live website shows. Use the "
-        "returned site URL "
-        "with browser.open when a live visual rendering is useful. This tool never returns "
-        "repository source, commits, issues, or workflow metadata."
+        "Read one student's deployed course documentation website. Look there for weekly "
+        "build and assignment write-ups and final-project documentation, but verify what "
+        "is actually posted. Authenticated course members may inspect any listed site. Use "
+        "the project identifier from course.list_student_projects. Follow the returned URL "
+        "with browser.open when navigation or visual rendering is needed. This does not "
+        "return repository code, commits, issues, or workflow metadata."
     )
     input_schema: ClassVar[dict[str, JsonValue]] = {
         "type": "object",
@@ -233,11 +233,11 @@ class InspectStudentSiteTool:
 class InspectMyStudentSiteTool:
     id = INSPECT_MY_STUDENT_SITE_TOOL_ID
     description = (
-        "Read the deployed public website belonging to the active student account. The platform "
-        "derives the exact course project from trusted login identity and deployment-owned "
-        "project mapping; no project identifier is accepted from the model. Use this when a "
-        "student asks for their own assignment submission to be checked. This returns current "
-        "website content, not repository source."
+        "Read the active student's deployed course documentation website. Look there for "
+        "their weekly build and assignment write-ups and final-project documentation, "
+        "verifying what is actually posted. The project is derived from trusted login "
+        "identity and deployment-owned mapping; the model cannot choose another project. "
+        "This returns website content, not repository code."
     )
     input_schema: ClassVar[dict[str, JsonValue]] = {
         "type": "object",
@@ -276,10 +276,11 @@ class InspectMyStudentSiteTool:
 class InspectStudentRepositoryTool:
     id = INSPECT_STUDENT_REPOSITORY_TOOL_ID
     description = (
-        "Inspect one real student GitHub repository as authorized course staff. Read summary, "
-        "tree, one "
-        "UTF-8 file, commits, branches, pull requests, issues, or workflow runs. Use several "
-        "focused calls when assessing current work or debugging evidence. For requests to tell "
+        "Inspect one student's course GitHub repository as authorized staff. This is where "
+        "to look for weekly assignment implementation code and final-project code when posted; "
+        "inspect the tree rather than assuming paths. Read summary, tree, one UTF-8 file, "
+        "commits, branches, pull requests, issues, or workflow runs in focused calls. "
+        "For requests to tell "
         "course staff about a named student's work, use the exact agents2026-* "
         "project identifier and inspect the repository directly; begin with summary or tree, "
         "then read only relevant files. Do not substitute general course-resource searches for "
@@ -379,12 +380,12 @@ class InspectStudentRepositoryTool:
 class InspectMyStudentRepositoryTool:
     id = INSPECT_MY_STUDENT_REPOSITORY_TOOL_ID
     description = (
-        "Inspect the real GitHub repository belonging to the active student account. Read its "
-        "summary, tree, one UTF-8 file, commits, branches, pull requests, issues, or workflow "
-        "runs using several focused calls. The platform derives the repository from trusted "
-        "login identity and deployment-owned project mapping; the model cannot choose another "
-        "project. Use this for rigorous checks of the student's own assignment code. It is "
-        "read-only and cannot access secrets, settings, collaborators, or perform writes."
+        "Inspect the active student's course GitHub repository, where weekly assignment "
+        "implementation code and final-project code may be posted. Inspect the tree before "
+        "assuming a file path; read summary, tree, one UTF-8 file, commits, branches, pulls, "
+        "issues, or workflows in focused calls. The platform derives the repository from "
+        "trusted login identity and deployment-owned mapping; the model cannot choose another "
+        "project. This is read-only and cannot access secrets, settings, or collaborators."
     )
     input_schema: ClassVar[dict[str, JsonValue]] = {
         "type": "object",

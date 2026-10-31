@@ -520,12 +520,14 @@ class InstructorMessageService:
         questions: TAQuestionStore | None = None,
         email_enabled: bool = False,
         clock: Callable[[], datetime] = _clock,
+        student_access_policy: Callable[[User], bool] | None = None,
     ) -> None:
         self._messages = messages
         self._auth = auth
         self._questions = questions
         self.email_enabled = email_enabled
         self._clock = clock
+        self._student_access_policy = student_access_policy or (lambda user: True)
 
     async def prepare(
         self,
@@ -723,7 +725,9 @@ class InstructorMessageService:
             (
                 user.public()
                 for user in await self._auth.list_users()
-                if user.active and user.role == "student"
+                if user.active
+                and user.role == "student"
+                and self._student_access_policy(user.public())
             ),
             key=lambda user: user.username,
         )

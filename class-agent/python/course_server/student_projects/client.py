@@ -94,6 +94,7 @@ class GitHubStudentProjectCatalog:
         organization: str,
         repository_prefix: str,
         excluded_repositories: tuple[str, ...] = (),
+        allowed_repositories: frozenset[str] | None = None,
         timeout_seconds: float = 10.0,
         roster_cache_ttl_seconds: float = 300.0,
         transport: httpx.BaseTransport | None = None,
@@ -110,6 +111,14 @@ class GitHubStudentProjectCatalog:
         self._organization = organization
         self._repository_prefix = repository_prefix
         self._excluded_repositories = frozenset(excluded_repositories)
+        if allowed_repositories is not None and any(
+            not _SAFE_REPOSITORY.fullmatch(name)
+            or not name.startswith(repository_prefix)
+            or name in self._excluded_repositories
+            for name in allowed_repositories
+        ):
+            raise ValueError("Allowed GitHub repositories must stay inside the configured scope")
+        self._allowed_repositories = allowed_repositories
         self._timeout_seconds = timeout_seconds
         if roster_cache_ttl_seconds < 0:
             raise ValueError("Roster cache TTL cannot be negative")
@@ -246,6 +255,7 @@ class GitHubStudentProjectCatalog:
             and name.startswith(self._repository_prefix)
             and len(name) > len(self._repository_prefix)
             and name not in self._excluded_repositories
+            and (self._allowed_repositories is None or name in self._allowed_repositories)
         )
 
     def _site_url(self, repository: Mapping[str, object], name: str) -> str | None:

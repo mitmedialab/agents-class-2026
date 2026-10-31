@@ -20,6 +20,7 @@ def test_settings_accept_standard_openai_environment_without_exposing_secret() -
     assert settings.model_api_key.get_secret_value() == "test-secret-value"
     assert settings.brave_search_api_key.get_secret_value() == "test-brave-value"
     assert settings.course_data_path.name == "data"
+    assert settings.course_roster_path.name == "course-members.json"
     assert settings.skills_path.name == "skills"
     assert settings.applicant_data_path.name == "applicants"
     assert settings.assignment_data_path.name == "assignments"
@@ -106,6 +107,7 @@ def test_settings_accept_private_applicant_storage_path() -> None:
             "OPENAI_API_KEY": "test-secret-value",
             "BRAVE_API_KEY": "test-brave-value",
             "COURSE_DATA_PATH": "/srv/class-agent/data",
+            "COURSE_ROSTER_PATH": "/srv/class-agent/private/course-members.json",
             "SKILLS_PATH": "/srv/class-agent/skills",
             "APPLICANT_DATA_PATH": "/srv/class-agent/applicants",
             "ASSIGNMENT_DATA_PATH": "/srv/class-agent/assignments",
@@ -115,6 +117,7 @@ def test_settings_accept_private_applicant_storage_path() -> None:
     )
 
     assert str(settings.course_data_path) == "/srv/class-agent/data"
+    assert str(settings.course_roster_path) == "/srv/class-agent/private/course-members.json"
     assert str(settings.skills_path) == "/srv/class-agent/skills"
     assert str(settings.applicant_data_path) == "/srv/class-agent/applicants"
     assert str(settings.assignment_data_path) == "/srv/class-agent/assignments"

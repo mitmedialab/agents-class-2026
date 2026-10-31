@@ -74,6 +74,18 @@ class FakeStudentProjects:
         }
 
 
+def test_project_tool_descriptions_point_to_code_and_documentation() -> None:
+    for repository_tool in (InspectStudentRepositoryTool, InspectMyStudentRepositoryTool):
+        assert "assignment" in repository_tool.description
+        assert "code" in repository_tool.description
+        assert "tree" in repository_tool.description
+    for site_tool in (InspectStudentSiteTool, InspectMyStudentSiteTool):
+        assert "documentation website" in site_tool.description
+        assert "weekly" in site_tool.description
+        assert "final-project" in site_tool.description
+        assert "verify" in site_tool.description
+
+
 def test_course_members_list_and_inspect_every_deployed_student_site() -> None:
     async def scenario() -> None:
         projects = FakeStudentProjects()
@@ -328,6 +340,42 @@ def test_github_catalog_caches_only_the_project_roster_for_the_bounded_ttl() -> 
     current_time += 60
     assert catalog.list_projects() == expected
     assert len(requests) == 4
+
+
+def test_github_catalog_filters_inactive_projects_before_exposing_or_inspecting_them() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/orgs/mitmedialab/repos":
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "name": "agents2026-active",
+                        "homepage": "https://active.example.edu",
+                        "has_pages": False,
+                    },
+                    {
+                        "name": "agents2026-inactive",
+                        "homepage": "https://inactive.example.edu",
+                        "has_pages": False,
+                    },
+                ],
+            )
+        raise AssertionError(f"unexpected request: {request.url}")
+
+    catalog = GitHubStudentProjectCatalog(
+        "read-only-token",
+        organization="mitmedialab",
+        repository_prefix="agents2026-",
+        allowed_repositories=frozenset({"agents2026-active"}),
+        transport=httpx.MockTransport(handler),
+        sleep=lambda _: None,
+    )
+
+    assert catalog.list_projects() == [
+        StudentProject("agents2026-active", "https://active.example.edu")
+    ]
+    with pytest.raises(StudentProjectNotFound, match="not found"):
+        catalog.inspect_repository("agents2026-inactive", "summary")
 
 
 def test_github_catalog_never_permits_other_org_repositories() -> None:

@@ -64,6 +64,11 @@ from course_server.browser.tools import (
     BrowserScrollTool,
 )
 from course_server.config import AgentSettings, ConfigurationError
+from course_server.course_roster import (
+    CourseRoster,
+    load_course_roster,
+    verify_roster_resources,
+)
 from course_server.faq import (
     CourseListFaqUpdatesTool,
     CourseReadFaqUpdateTool,
@@ -169,7 +174,11 @@ def build_runtime(
     student_communications: StudentCommunicationService | None = None,
     faq_updates: FaqKnowledgeStore | None = None,
     student_projects: StudentProjectCatalog | None = None,
+    course_roster: CourseRoster | None = None,
 ) -> SmolagentsRuntime:
+    resolved_roster = course_roster or load_course_roster(settings.course_roster_path)
+    if resources is None and resolved_roster is not None:
+        verify_roster_resources(resolved_roster, settings.course_data_path)
     course_resources = (
         resources
         if resources is not None
@@ -187,6 +196,10 @@ def build_runtime(
         else FileAssignmentStore(settings.assignment_data_path)
     )
     component_registry = components or load_component_registry()
+    student_project_aliases = (
+        resolved_roster.active_student_project_aliases if resolved_roster is not None else {}
+    )
+    student_project_aliases.update(dict(settings.github_student_project_aliases))
     project_catalog = student_projects
     if project_catalog is None and settings.github_student_projects_enabled:
         if settings.github_token is None:
@@ -196,6 +209,9 @@ def build_runtime(
             organization=settings.github_organization,
             repository_prefix=settings.github_repository_prefix,
             excluded_repositories=settings.github_excluded_repositories,
+            allowed_repositories=(
+                resolved_roster.active_weekly_project_ids if resolved_roster is not None else None
+            ),
             roster_cache_ttl_seconds=settings.github_roster_cache_ttl_seconds,
         )
     application_access = ApplicationAccessPolicy(
@@ -310,12 +326,12 @@ def build_runtime(
                     project_catalog,
                     fetch_public_webpage,
                     settings.github_repository_prefix,
-                    dict(settings.github_student_project_aliases),
+                    student_project_aliases,
                 ),
                 InspectMyStudentRepositoryTool(
                     project_catalog,
                     settings.github_repository_prefix,
-                    dict(settings.github_student_project_aliases),
+                    student_project_aliases,
                 ),
                 InspectStudentRepositoryTool(project_catalog),
                 ReadShowcaseHistoryTool(settings.showcase_history_path),
@@ -354,8 +370,15 @@ async def _run_postgres_turn(
     await pool.wait()
     try:
         faq_knowledge = LocalFaqKnowledgeStore(settings.published_faq_path)
+        course_roster = load_course_roster(settings.course_roster_path)
+        if course_roster is not None:
+            verify_roster_resources(course_roster, settings.course_data_path)
         applicant_store = FileApplicantStore(settings.applicant_data_path)
-        await initialize_student_application_access(applicant_store, settings.applicant_data_path)
+        await initialize_student_application_access(
+            applicant_store,
+            settings.applicant_data_path,
+            roster=course_roster,
+        )
         course_resources = PublishedFaqResourceCatalog(
             FileResourceProvider.from_registry(protected_data_path=settings.course_data_path),
             faq_knowledge,
@@ -369,6 +392,7 @@ async def _run_postgres_turn(
                 skills=skills,
                 faq_updates=faq_knowledge,
                 applicants=applicant_store,
+                course_roster=course_roster,
             ),
             auth_store=PostgresAuthStore(pool),
             conversation_store=PostgresConversationStore(pool),

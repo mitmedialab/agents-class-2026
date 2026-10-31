@@ -11,6 +11,10 @@ deployment data should normally live outside the Git checkout and be selected wi
 Contents below both audience directories are ignored by Git. Do not commit student records,
 grades, credentials, applicant records, or other private data.
 
+The active student roster and complete instructor roster are generated here from the private
+canonical `COURSE_ROSTER_PATH` source. Never edit those generated Markdown files or manifests by
+hand; see `docs/COURSE_ROSTER.md`.
+
 Each readable resource must have a sibling `resource.json`; files are never exposed merely
 because they exist in a protected directory. Example student resource:
 

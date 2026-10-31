@@ -3,7 +3,7 @@
 import asyncio
 import json
 import stat
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock
 from uuid import uuid4
@@ -16,6 +16,7 @@ from course_server.application_roster import (
     AcceptedRoster,
     initialize_student_application_access,
 )
+from course_server.course_roster import CourseMember, CourseRoster
 
 
 def write_roster(directory: Path) -> Path:
@@ -193,5 +194,43 @@ def test_absent_local_roster_does_not_initialize_or_read_applications(tmp_path: 
         store.list_applications.return_value = []
         await initialize_student_application_access(store, tmp_path)
         assert (tmp_path / "student-access.json").exists()
+
+    asyncio.run(scenario())
+
+
+def test_canonical_course_roster_initializes_application_access_without_legacy_file(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        accepted = summary("Ada Example")
+        store = AsyncMock(spec=ApplicantStore)
+        store.list_applications.return_value = [accepted]
+        store.read_application.return_value = {"application": {"school": "MIT"}}
+        roster = CourseRoster(
+            schema_version=1,
+            as_of=date(2026, 10, 26),
+            members=[
+                CourseMember(
+                    student_id="ada",
+                    name="Ada Example",
+                    email="ada@example.edu",
+                    username="ada",
+                    github_username="ada-github",
+                    institution="MIT",
+                    department="Example",
+                    enrollment_type="credit",
+                    course_status="active",
+                    participation="weekly_build",
+                )
+            ],
+        )
+
+        await initialize_student_application_access(store, tmp_path, roster=roster)
+
+        policy = ApplicationAccessPolicy(tmp_path / "student-access.json")
+        assert policy.scope(authenticated_principal("student")) == frozenset(
+            {accepted.application_id}
+        )
+        assert not (tmp_path / "accepted-applicants.json").exists()
 
     asyncio.run(scenario())

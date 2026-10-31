@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, SecretStr, model_validator
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, EmailStr, Field, SecretStr, model_validator
 
 DEFAULT_PUBLISHED_FAQ_PATH = (
     Path(__file__).resolve().parents[2] / "var/course-knowledge/published-faq.json"
@@ -75,6 +75,7 @@ class MailSettings(BaseModel):
     authorized_reply_senders: tuple[EmailStr, ...] = ()
     poll_interval_seconds: int = Field(default=60, ge=15, le=3_600)
     published_faq_path: Path = DEFAULT_PUBLISHED_FAQ_PATH
+    course_site_base_url: AnyHttpUrl | None = None
 
     @model_validator(mode="after")
     def validate_provider_configuration(self) -> Self:
@@ -143,6 +144,7 @@ class MailSettings(BaseModel):
             authorized_reply_senders=reply_senders,
             poll_interval_seconds=int(values.get("MAIL_POLL_INTERVAL_SECONDS", "60")),
             published_faq_path=published_faq_path,
+            course_site_base_url=(values.get("MCP_PUBLIC_BASE_URL") or None),
         )
 
 
@@ -161,6 +163,9 @@ class AgentSettings(BaseModel):
     max_steps: int = Field(default=10, ge=1, le=50)
     database_url: str
     course_data_path: Path = Path(__file__).resolve().parents[2] / "data"
+    course_roster_path: Path = (
+        Path(__file__).resolve().parents[2] / "var/roster/course-members.json"
+    )
     skills_path: Path = Path(__file__).resolve().parents[2] / "skills"
     applicant_data_path: Path = Path(__file__).resolve().parents[2] / "var/applicants"
     assignment_data_path: Path = Path(__file__).resolve().parents[2] / "var/assignments"
@@ -241,6 +246,12 @@ class AgentSettings(BaseModel):
             Path(raw_course_data_path.strip()).expanduser()
             if raw_course_data_path and raw_course_data_path.strip()
             else Path(__file__).resolve().parents[2] / "data"
+        )
+        raw_course_roster_path = values.get("COURSE_ROSTER_PATH")
+        course_roster_path = (
+            Path(raw_course_roster_path.strip()).expanduser()
+            if raw_course_roster_path and raw_course_roster_path.strip()
+            else Path(__file__).resolve().parents[2] / "var/roster/course-members.json"
         )
         raw_skills_path = values.get("SKILLS_PATH")
         skills_path = (
@@ -331,6 +342,7 @@ class AgentSettings(BaseModel):
             max_steps=int(values.get("AGENT_MAX_STEPS", "10")),
             database_url=database_url,
             course_data_path=course_data_path,
+            course_roster_path=course_roster_path,
             skills_path=skills_path,
             applicant_data_path=applicant_data_path,
             assignment_data_path=assignment_data_path,

@@ -38,6 +38,7 @@ from .security import (
 from .store import AuthStore
 
 Clock = Callable[[], datetime]
+UserAccessPolicy = Callable[[StoredUser], bool]
 _USERNAME_ADAPTER = TypeAdapter(Username)
 _EMAIL_ADAPTER = TypeAdapter(EmailStr)
 
@@ -150,11 +151,13 @@ class AuthenticationService:
         hasher: AccessCodeHasher | None = None,
         policy: SessionPolicy | None = None,
         clock: Clock = _system_clock,
+        user_access_policy: UserAccessPolicy | None = None,
     ) -> None:
         self._store = store
         self._hasher = hasher or Argon2AccessCodeHasher()
         self._policy = policy or SessionPolicy()
         self._clock = clock
+        self._user_access_policy = user_access_policy or (lambda user: True)
         self._dummy_hash = self._hasher.hash(generate_access_code())
 
     async def login(self, *, username: str, access_code: str) -> SessionCredential:
@@ -172,7 +175,7 @@ class AuthenticationService:
             user.access_code_hash.get_secret_value() if user is not None else self._dummy_hash
         )
         verified = self._hasher.verify(encoded_hash, access_code)
-        if user is None or not user.active or not verified:
+        if user is None or not user.active or not self._user_access_policy(user) or not verified:
             await self._store.record_login_failure(rate_limit_key, now)
             raise InvalidCredentials("invalid username or access code")
 
@@ -211,7 +214,7 @@ class AuthenticationService:
         if session is None or session.revoked_at is not None or now >= session.expires_at:
             raise InvalidSession("invalid authenticated session")
         user = await self._store.get_user_by_id(session.user_id)
-        if user is None or not user.active:
+        if user is None or not user.active or not self._user_access_policy(user):
             raise InvalidSession("invalid authenticated session")
 
         await self._store.touch_auth_session(session.id, now)

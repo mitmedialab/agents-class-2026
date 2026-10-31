@@ -121,6 +121,52 @@ def test_instructor_confirms_one_fixed_all_student_recipient_snapshot() -> None:
     asyncio.run(scenario())
 
 
+def test_instructor_directory_and_all_student_messages_exclude_nonmembers() -> None:
+    async def scenario() -> None:
+        auth = InMemoryAuthStore()
+        instructor = await create_principal(
+            auth,
+            username="prof",
+            display_name="Professor Example",
+            role="instructor",
+        )
+        await create_principal(
+            auth,
+            username="active-student",
+            display_name="Active Student",
+            role="student",
+        )
+        await create_principal(
+            auth,
+            username="former-student",
+            display_name="Former Student",
+            role="student",
+        )
+        service = InstructorMessageService(
+            messages=InMemoryInstructorMessageStore(),
+            auth=auth,
+            student_access_policy=lambda user: user.username == "active-student",
+        )
+
+        students = await service.list_students(instructor)
+        assert [student.username for student in students] == ["active-student"]
+        prepared = await service.prepare(
+            principal=instructor,
+            conversation_id=uuid4(),
+            draft=InstructorMessageDraft(
+                greeting="Hello,",
+                sign_off="Best,\nProfessor Example",
+                audience="all_students",
+                recipients=[],
+                subject="Active cohort",
+                message="This message is for current members.",
+            ),
+        )
+        assert [student.username for student in prepared.recipients] == ["active-student"]
+
+    asyncio.run(scenario())
+
+
 def test_targeted_tool_resolves_students_and_requires_instructor_confirmation() -> None:
     async def scenario() -> None:
         auth = InMemoryAuthStore()
