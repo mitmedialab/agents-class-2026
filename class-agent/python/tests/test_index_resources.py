@@ -1,6 +1,9 @@
 import json
 from pathlib import Path
 
+import pytest
+from pypdf import PdfWriter
+
 from course_server.index_resources import (
     DEFAULT_FAQ_PATH,
     load_faq_document,
@@ -115,3 +118,35 @@ def test_slide_thumbnail_is_generated_and_refreshed_with_deck_bytes(tmp_path: Pa
     writer.write(pdf_path)
     refresh_resource_registry(registry_path)
     assert json.loads(registry_path.read_text())["resources"][0]["assets"]["first_slide"] != asset
+
+
+def test_slide_accessibility_sidecar_is_registered_inside_its_deck_directory(
+    tmp_path: Path,
+) -> None:
+    directory = tmp_path / "shared/course/slides/week-01"
+    directory.mkdir(parents=True)
+    writer = PdfWriter()
+    writer.add_blank_page(width=612, height=345)
+    writer.write(directory / "slides.pdf")
+    (directory / "accessibility.txt").write_text("1 | A visible diagram.\n", encoding="utf-8")
+    manifest_path = directory / "resource.json"
+    resource_manifest = {
+        "uri": "course://slides/week-01",
+        "title": "Lecture",
+        "media_type": "application/pdf",
+        "file": "slides.pdf",
+        "accessibility_file": "accessibility.txt",
+    }
+    manifest = {"schema_version": 1, "resource": resource_manifest}
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    registry_path = tmp_path / "shared/registry/resources.json"
+
+    refresh_resource_registry(registry_path)
+    entry = json.loads(registry_path.read_text())["resources"][0]
+    assert entry["accessibility_path"] == "course/slides/week-01/accessibility.txt"
+
+    resource_manifest["accessibility_file"] = "../outside.txt"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    (directory.parent / "outside.txt").write_text("1 | Outside.\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="invalid accessibility file"):
+        refresh_resource_registry(registry_path)

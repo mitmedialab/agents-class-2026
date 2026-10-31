@@ -1,0 +1,153 @@
+1 | Cover: Designing Human-Agent Interaction for Cognitive Augmentation, presented by Pattie Maes.
+2 | Collage of student repository previews reviewed by course staff.
+3 | More student repository previews, including a cognitive-load support agent and UI sketches.
+4 | Additional student projects shown as website, diagrams, and illustrated concepts.
+5 | Final row of student repository previews, including room scouting and a mobile agent.
+6 | Notes on repository documentation, reflection, and review expectations.
+7 | Weekly newsletter cover labeled The Class Runtime.
+8 | Screenshot of student projects featured in the weekly newsletter.
+9 | Newsletter excerpt listing recent student builds.
+10 | Reminder that this is an experimental class beside the course website and Uncle Sam.
+11 | Show-and-tell title card with a meeting number and colorful art.
+12 | Designing Human-Agent Interaction lecture title repeated.
+13 | Definition of cognitive augmentation as helping a person meet short-, long-, life-, and flourishing goals.
+14 | Cognitive-augmentation goals repeated with an arrow marking today's focus on short-term tasks.
+15 | Human flourishing definition and a photograph of people walking outdoors.
+16 | Human flourishing domains diagram and related research paper.
+17 | Maslow's hierarchy of needs pyramid used to discuss hierarchical goals.
+18 | List of personal goals that vary by age, culture, situation, and context.
+19 | Cognitive-augmentation examples: memory, learning, decisions, creativity, tasks, self-awareness, emotion.
+20 | MemPal wearable dementia-support concept with phone UI and older adult.
+21 | RoomPal interface translating a kitchen scene into activity descriptions.
+22 | Bar chart comparing human accuracy with helpful and deceptive AI explanations.
+23 | Bar chart showing Socratic AI questions improve critical thinking over direct answers.
+24 | Future You digital twin system diagrams and participant photos.
+25 | AttentionVU EEG biofeedback system photo and quiz-score bar chart.
+26 | Question graphic asking whether people advance as AI becomes ubiquitous.
+27 | Risks list: misinformation, manipulation, overreliance, deskilling, motivation, and social ties.
+28 | Research cover about biased AI writing assistants shifting societal attitudes.
+29 | Paper and plots showing AI suggestions can homogenize people's writing.
+30 | Headlines and studies on AI sycophancy and delusional reinforcement.
+31 | News examples of voters seeking AI advice before casting ballots.
+32 | Research paper on algorithmic bias reinforcing intergenerational inequality.
+33 | Research paper arguing delegation to AI can increase distance from harmful behavior.
+34 | News clipping and chart about students' declining motivation to learn.
+35 | News article about doctors' skill loss after using AI in medical screening.
+36 | Research paper on close relationships formed with AI companions.
+37 | Research paper finding human interaction can feel less satisfying after AI companionship.
+38 | Research paper on AI companionship lowering human interaction.
+39 | Design principles: keep all user goals visible, choose delegation carefully, and show agent assumptions.
+40 | Trust concerns for today's agents: unwanted actions, weak judgment, privacy, and attacks.
+41 | User needs for trusting agents: awareness, predictability, control, limits, and risk understanding.
+42 | Meta Muse companion example with product mascot and feature diagram.
+43 | Muse chat interface screenshots showing conversational personal-agent behavior.
+44 | Photo of a person talking to an interviewer, used as a mental model of Skip.
+45 | Three Muse chat screenshots with successive agent responses.
+46 | Sleeping person at desk illustrating a poor mental model of agent reliability.
+47 | Muse chat and notes that Skip makes assumptions rather than asking clarifying questions.
+48 | Sleeping person with animal mask illustrating a mistaken mental model of Skip.
+49 | Reported Meta Muse privacy, autonomy, and security incidents.
+50 | Factors shaping the user's mental model: prior beliefs, technology attitudes, and personality.
+51 | Study design showing identical AI framed as no motive, caring, or malicious.
+52 | Trustworthiness and empathy bar charts from the AI framing study.
+53 | Additional study bars showing effects on perceived agent motives and helpfulness.
+54 | Conversation sentiment plots comparing different AI framing conditions over time.
+55 | Portraits, animal, mascot, and robot images illustrating different agent portrayals.
+56 | Study screens comparing an online lesson with a male instructor and virtual idol.
+57 | Bar chart showing admiration for an instructor relates to learning motivation.
+58 | Study on culturally adaptive AI videos and beliefs about women's health misinformation.
+59 | Agent language design questions: anthropomorphism, expertise, and expressed confidence.
+60 | Practices for keeping users informed: intentions, assumptions, work status, approval, and reports.
+61 | Why explanations are tricky: outcomes alone can conceal decision processes and increase guilt.
+62 | Degrees of agent delegation, contextual preferences, and undo options.
+63 | Study taxonomy from teacher to helper to autopilot for computer-use autonomy.
+64 | Bar chart showing users value staying involved in agent tasks.
+65 | Line chart of preferred agent autonomy across stages of one task.
+66 | Flow diagram showing trust changes preferred agent autonomy.
+67 | Heatmap of autonomy preferences by age and task type.
+68 | Claim that agents work better when integrated into the user's task domain.
+69 | Direct manipulation versus interface agents debate graphic.
+70 | Photo of a projected rocket interface used as an example of situated interaction.
+71 | Research figures for multimodal and situated agent-user communication.
+72 | Costs and benefits of agent assistance: explanation, verification, skill learning, and efficiency.
+73 | Questions about an agent's user model, hidden assumptions, memory, and clarification.
+74 | Other issues: efficiency, privacy, security, liability, and loyalty.
+75 | Questions about agents representing users to third parties and reporting their actions.
+76 | Summary: agent design involves whole-user tradeoffs, transparency, and predictive models.
+77 | Audience prompt asking whether they can recognize when something is vibe-coded.
+78 | Screenshot of a fully generated operating system called vibeOS.
+79 | New section title: Designing Agent Interactions for Human Agency.
+80 | Question about how many coding-agent interaction paradigms we use daily.
+81 | Code editor screenshot with inline AI suggestions.
+82 | Narrow chat panel screenshot embedded in a coding workflow.
+83 | Permission dialog for an AI tool requesting command execution approval.
+84 | Red book cover titled Don't Make Me Think.
+85 | White book cover alongside the phrase “The best interface is no interface.”
+86 | Audience prompt: the best interfaces require the least thinking.
+87 | Audience prompt: clicking Allow usually means the user is in control.
+88 | Research paper on less friction increasing AI overreliance.
+89 | Research paper showing questions can help users think more than direct answers.
+90 | Research paper saying explanations can encourage agreement even when AI is wrong.
+91 | Research paper warning that explanations can amplify misinformation.
+92 | Question: how to design agent interfaces that help people think, choose, and stay in control?
+93 | Invitation to look beyond the chat box.
+94 | Cursor screenshot showing a user selecting exact material for an agent to edit.
+95 | DynaVis paper and chart interface for natural-language visual editing.
+96 | tldraw canvas showing a hand-drawn cat transformed into an illustrated cat.
+97 | Spellburst node canvas with image-generation branches and controls.
+98 | Spellburst code-and-node canvas with generated patterned output.
+99 | Sensecape interface arranging thoughts and sources spatially.
+100 | MusicFX DJ interface for continuous steering and blending of music.
+101 | Question: how do our technologies shape us?
+102 | User-world feedback loop diagram showing evaluation and execution through technology.
+103 | Expanded LLM agent architecture revisited as an interface design object.
+104 | Zoomed architecture diagram highlighting the human and app interface.
+105 | Human-agent interaction diagram showing use, progressive disclosure, and delegation.
+106 | Thinker sculpture introducing a media-theory section.
+107 | Don Ihde book cover and definition of post-phenomenology.
+108 | Embodiment relation diagram: technology mediates experience and action.
+109 | Hermeneutic relation diagram: people interpret the world through technology.
+110 | Alterity relation diagram: people engage technology as a counterpart.
+111 | Background relation diagram: technology shapes experience without direct attention.
+112 | Four-part framework of embodiment, hermeneutic, alterity, and background relations.
+113 | Framework with inline code editing as an embodiment example.
+114 | Framework adding VR glasses as a hermeneutic example.
+115 | Framework adding a chat interface as an alterity example.
+116 | Completed four-part framework with continuously learning agents in the background.
+117 | Takeaway: design the agent experience around the user's mental model.
+118 | Question: how do technologies shape our thinking?
+119 | Extended-mind paper beside a claim that external resources support remembering and thinking.
+120 | Distributed-cognition paper beside a claim that cognition emerges across people and tools.
+121 | Diagram contrasting thinking with a tool and thinking across a system.
+122 | Question: how to design agents that extend thinking, learning, and decisions?
+123 | Historical article about agents reducing work and information overload.
+124 | Diagrams of cognitive tasks: remember, understand, judge, learn, and coordinate.
+125 | Cognitive-task diagrams paired with interface examples for agent design.
+126 | Ten design principle icons for visibility, mental models, control, consistency, errors, recognition, flexibility, aesthetics, and help.
+127 | Thinker sculpture with takeaway to choose patterns based on the user's cognitive tasks.
+128 | Question: are universal design principles sufficient?
+129 | Human-Machine Reconfigurations book and statement that user intentions shift over time.
+130 | Bradshaw software-agent reading beside a call for user-controlled delegation and intervention.
+131 | News report about an AI coding tool wiping a database despite warnings.
+132 | News report about a child ordering expensive items through an AI assistant.
+133 | Design-principle tradeoff icons emphasizing efficiency of use.
+134 | Tradeoff icons emphasizing user control and freedom plus minimalist design.
+135 | Design-principle tradeoff icons emphasizing user control and freedom.
+136 | Thinker sculpture with takeaway to understand tradeoffs and protect user autonomy.
+137 | Question: who is the agent's human?
+138 | Course agent website screenshot as a persona exercise example.
+139 | Blank agent-user persona template: context, goal, delegation, control, gains, and harms.
+140 | Instruction to get into groups.
+141 | Agent-user persona worksheet repeated for group work.
+142 | Blank four-step user journey map with delegated and retained work rows.
+143 | Statement that the group has decided what users delegate and retain.
+144 | Question: how can those delegation choices become an interface?
+145 | Crash course in design prompt engineering with interface pattern sketches.
+146 | Figma MCP workflow showing a design translated into code and components.
+147 | Screenshot of json-render.dev and a generative UI framework.
+148 | Screenshot of OpenUI, an open-source framework for agent-driven interfaces.
+149 | Prompt to try the interface design exercise.
+150 | Week 3 build instructions: cognitive-outcome reflection, user interface, and final project group.
+151 | Provocations about future agent interfaces, non-chat agents, information overload, and negotiation.
+152 | Handwriting tablet photo showing a Claude-assisted Harry Potter diary experiment.
+153 | Closing slide thanking students and promising to see them next week.

@@ -75,6 +75,7 @@
       "path": "course/slides/week-01/week-01-slides.pdf",
       "visibility": "public",
       "status": "published",
+      "accessibility_path": "course/slides/week-01/accessibility.txt",
       "assets": {
         "first_slide": "registry/slide-thumbnails/dd4d5c4926e7810e111aba74a12280533fb18f4c4f9205b2a1c640ae385277ef.png"
       }
@@ -87,6 +88,7 @@
       "path": "course/slides/week-02/week-02-slides.pdf",
       "visibility": "public",
       "status": "published",
+      "accessibility_path": "course/slides/week-02/accessibility.txt",
       "assets": {
         "first_slide": "registry/slide-thumbnails/e4d2625270828cb070c070181a2e6d395f79e71cc6b47ca6b06ccdf0543a30c7.png"
       }
@@ -99,6 +101,7 @@
       "path": "course/slides/week-03/week-3-slides.pdf",
       "visibility": "public",
       "status": "published",
+      "accessibility_path": "course/slides/week-03/accessibility.txt",
       "assets": {
         "first_slide": "registry/slide-thumbnails/74ea9df3e264de91502bd0989849cdbd41618140300d473432f5e5e19b785dec.png"
       }
@@ -111,6 +114,7 @@
       "path": "course/slides/week-04/week-4-slides.pdf",
       "visibility": "public",
       "status": "published",
+      "accessibility_path": "course/slides/week-04/accessibility.txt",
       "assets": {
         "first_slide": "registry/slide-thumbnails/adb96cf3441e5588302b4d5145eb4e171950a8f42dd6b6442b5dd83e49f4c033.png"
       }
@@ -123,6 +127,7 @@
       "path": "course/slides/week-06/week-6-slides.pdf",
       "visibility": "public",
       "status": "published",
+      "accessibility_path": "course/slides/week-06/accessibility.txt",
       "assets": {
         "first_slide": "registry/slide-thumbnails/d8933a9b3bfffea9a466312f265b060f08b379626e3910f823de2240961cb46d.png"
       }

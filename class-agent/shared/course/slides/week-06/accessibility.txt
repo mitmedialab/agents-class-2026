@@ -1,0 +1,69 @@
+1 | Cover: Computer-Use Agents and Beyond, presented by Yasith Samaradivakara.
+2 | Collage of Week 4 student environment projects, first set.
+3 | Collage of Week 4 student environment projects, second set.
+4 | Collage of Week 4 student environment projects, third set.
+5 | Course logistics: environment reflections, class survey, and project proposals.
+6 | Show-and-tell title card with colorful project art.
+7 | Show-and-tell prompts about problem, environment state, live demo, and learning.
+8 | Computer-Use Agents and Beyond lecture title repeated.
+9 | Device-Use Agents section title over a computer interface illustration.
+10 | Question: what is a device-use agent?
+11 | Device-use perception-action diagram connecting a human, AI agent, and device environments.
+12 | Browser perception-action diagram listing visual and DOM observations and browser actions.
+13 | Question: human user versus computer software?
+14 | DOM versus screenshots comparison with code/tree and visual interface examples.
+15 | White and blue floral mugs used to illustrate visually grounded object selection.
+16 | Browser-use architecture diagram with cloud and local browser access.
+17 | Playwright code and accessibility snapshot example for browser automation.
+18 | Chrome DevTools Protocol connection diagram from AI agent through Playwright to Chromium.
+19 | Desktop perception-action diagram listing screenshot, UI-tree, and desktop actions.
+20 | Shell commands versus screenshots comparison for file and application control.
+21 | Scaling Agents for Computer Use paper with S1, S2, and S3 chart.
+22 | UI-Tars Desktop multimodal agent screenshot.
+23 | Claude Computer Use code example using the computer tool.
+24 | PyAutoGUI code example for mouse and keyboard automation.
+25 | Operating-system accessibility APIs screenshots with element trees and roles.
+26 | Shell-execution flow from agent to subprocess or PTY and a Python code example.
+27 | Mobile perception-action diagram listing device state and phone actions.
+28 | MobileRun and DroidRun setup photo and iOS/Android automation code.
+29 | Android and iOS accessibility-services screenshots and APIs.
+30 | Android Debug Bridge terminal command examples for device control.
+31 | Wearable perception-action diagram with smartglasses and sensor/action channels.
+32 | VisionClaw smartglasses assistant screenshot for Meta Ray-Ban glasses.
+33 | AISee wearable development platform screenshot for smartglasses and headphones.
+34 | Smartwatch assistant screen and developer page.
+35 | Other physical-device perception-action diagram with robot and printer examples.
+36 | Home Assistant MCP server screenshot for smart-home devices.
+37 | ROS 2 robot operating-system integration diagram with model and robot tools.
+38 | CUPS printer integration page and command examples.
+39 | Question: what can go wrong in device-use agent work?
+40 | Evaluation Environments section title.
+41 | WebArena and VisualWebArena browser-benchmark diagrams.
+42 | The Agent Company workplace benchmark cover page.
+43 | OSWorld desktop computer-use benchmark paper and screenshot.
+44 | WindowsAgentArena evaluation platform screenshot.
+45 | Terminal-Bench leaderboard screenshot for command-line agent tasks.
+46 | AndroidWorld mobile device benchmark paper and task screenshots.
+47 | Privacy risk statement with least privilege, data minimization, trust boundaries, approval, and auditability.
+48 | Diagram of a computer-use agent's unnecessary access to screenshots, files, messages, and authenticated sessions.
+49 | Visual prompt injection diagram showing malicious instructions in a webpage image.
+50 | Training Computer-Use Models section title.
+51 | Imitation-learning loop predicting the next action from an instruction and current state.
+52 | Supervised visual-grounding pipeline from screenshot and instruction to predicted click location.
+53 | World-model training diagram predicting future screen states from actions.
+54 | Section title: examples of device-use agents.
+55 | Small Chrome-themed robot climbing stairs in a physical-world example.
+56 | Close-up of hands operating a physical device in a demonstration.
+57 | Video still of a remote house-viewing robot or camera system.
+58 | Claude Sonnet playing DOOM on an ESP32-P4 display and code console.
+59 | Phone automation test rig with iPhone screen and control terminal.
+60 | Physical electronics board and phone showing an agent navigating the home screen.
+61 | Reverse Engineer Anything project page with interface and hardware screenshots.
+62 | Question: cognitive augmentation with device-use agents?
+63 | AISee wearable AI agent for low-vision users, shown with person and task interface.
+64 | Accessible browser interface screenshots with assistant controls.
+65 | Phi-Ground guided computer interaction diagram in a presentation editor.
+66 | Question: how should future devices be designed for humans when agents operate them?
+67 | Tutorial start slide.
+68 | Assignment: make an agent operate a device with an existing operating system.
+69 | MIT Media Lab and Fluid Interfaces closing slide.

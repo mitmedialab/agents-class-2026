@@ -1,0 +1,47 @@
+1 | Cover: Tools, MCPs and Skills over a still of an ape among bones.
+2 | Course logistics screenshot with reminders about communication, assignments, slides, and peer work.
+3 | Course website screenshot beside Uncle Sam and reminder that students can change the agent.
+4 | Four final-project formats: new agent, outcome study, evaluation environment, or benchmark.
+5 | Show-and-tell transition slide.
+6 | Tools section title over a close-up of the ape scene.
+7 | LLM agent loop diagram connecting human, model, environment, feedback, and stop.
+8 | Toolformer paper page and tool-call flow showing how LLMs use tools.
+9 | Agent loop annotated with reasoning, action, observation, and stop examples.
+10 | Simplified LLM agent loop diagram repeated.
+11 | Agent runtime metaphor: two cartoon infants learning to walk, one supported and one restrained.
+12 | Simplified LLM agent loop diagram revisited.
+13 | Expanded agent architecture linking human interface, orchestrator, memory, model, tools, sandbox, and environment.
+14 | Coding-agent example diagram with orchestrator, interface, and code task.
+15 | Coding-agent step showing an LLM response and orchestrator check.
+16 | Coding-agent step showing a sandbox tool call and saved result.
+17 | Coding-agent step showing orchestrator context assembly and next LLM call.
+18 | Full expanded agent architecture revisited after coding-agent steps.
+19 | Tool Tips section title over a robot at a desk.
+20 | Tool hygiene comparison of vague overlapping APIs and narrow, named, high-impact tools.
+21 | Research figure comparing tool agents with coding agents.
+22 | MCPs section title over a mechanical machine image.
+23 | Model Context Protocol diagram of an agent connecting to external MCP servers.
+24 | Example JSON tool descriptions for a search or content tool.
+25 | Example JSON tool call from model to server and JSON response.
+26 | Second JSON tool-call example showing returned structured result.
+27 | Logos of public MCP integrations such as Slack, GitHub, Notion, Figma, Drive, and Blender.
+28 | Skills section title over a robot drawing with a pen.
+29 | Skill definition and example SKILL.md containing procedural instructions.
+30 | Tool Inspiration transition slide.
+31 | Photo of a phone in a car facing a forest, used as tool inspiration.
+32 | Social posts proposing agent-only communication and a personal assistant.
+33 | The Agent Village Experiment article with proposed four-week plan.
+34 | Photos of a hand-operated instrument, used as a human-operator tool example.
+35 | News headlines about AI agents recruiting human workers and physical-world workforces.
+36 | Historical calendar agent diagrams: observation and communication as candidate tools.
+37 | Social post of a coding agent helping with a real-world cooking task.
+38 | Question: what tools could support attention, reasoning, memory, learning, social cognition, or other cognitive skills?
+39 | Research paper page about peer support and its importance to learning and belonging.
+40 | Warning that AI use may reduce peer support.
+41 | Research paper and summary saying students sometimes ask ChatGPT rather than classmates for help.
+42 | Course website screenshot inviting students to socialize.
+43 | Tutorial start slide.
+44 | Weekly builds title card with colorful project art.
+45 | Week 2 build: make at least five novel smolagents tools and discuss final projects.
+46 | Office hours schedule: Monday and Thursday, 3–4 PM.
+47 | MIT Media Lab and Fluid Interfaces closing slide.

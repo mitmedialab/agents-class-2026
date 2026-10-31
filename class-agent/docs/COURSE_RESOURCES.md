@@ -49,6 +49,7 @@ For a public course slide deck, use one directory per deck:
 ```text
 shared/course/slides/week-01/
 ├── resource.json
+├── accessibility.txt
 └── week-01-slides.pdf
 ```
 
@@ -61,6 +62,7 @@ shared/course/slides/week-01/
     "description": "Slides for the first course meeting.",
     "media_type": "application/pdf",
     "file": "week-01-slides.pdf",
+    "accessibility_file": "accessibility.txt",
     "visibility": "public",
     "status": "published",
     "order": 100
@@ -79,11 +81,22 @@ Slides appear only in **See more**, stay available after opening, and do not cre
 alerts or greeting reminders.
 
 PDF indexing extracts embedded text by page for Course Agent reads and search while retaining the
-original bytes for the workspace's `document-viewer`. Image-only or scanned slides still render
-and the agent can inspect the focused page visually on demand through the authorized
-`document.inspect_page` tool, but they require a separate OCR workflow before their contents are
-searchable. The renderer receives only registered course bytes or a principal-owned temporary
-upload; rendered PNG bytes are ephemeral and are not stored in conversation history.
+original bytes for the workspace's `document-viewer`. Each published slide deck also registers an
+`accessibility.txt` sidecar with one numbered visual description per PDF page. A line has the form
+`1 | Cover: ...`; page numbers must be consecutive and the description count must match the PDF.
+Set `"accessibility_file": "accessibility.txt"` in the deck's `resource.json`. The registered
+descriptions appear alongside embedded text under each `--- Page N ---` heading in Course Agent
+reads, `course.search`, Course MCP reads and search, and the PostgreSQL index. This makes diagrams,
+screenshots, and image-only pages findable by topic and page number. Keep each description accurate
+when replacing a PDF; indexing rejects a count mismatch. The PDF bytes remain unchanged. For visual
+questions, the agent can still inspect an authorized page through `document.inspect_page` or
+`course.inspect_slide_page`; rendered PNG bytes are ephemeral and are not stored in conversation
+history.
+
+For a specific page of a registered slide deck that is not focused in the workspace,
+the first-party Course Agent can use `course.inspect_slide_page`; the Course MCP's
+`read_course_slide_page` returns the actual page image as an MCP image content block.
+Both paths check the principal's resource access and render one bounded page at a time.
 
 Public course readings use a dedicated directory per artifact under
 `shared/course/readings/` and a `course://readings/<reading-id>` URI. PDF readings are
@@ -174,6 +187,11 @@ Students can list, search, read, and display student resources after login. Inst
 do the same for both audiences. Anonymous, TA, and admin principals receive neither set.
 The API and agent capability catalog use the same trusted-principal policy. Private tool
 results use summary-only durable storage, and protected HTTP responses use `no-store`.
+
+At startup the canonical private roster generates `course://students/roster`, containing full
+profiles and project interests for active members only, and `course://instructors/roster`,
+containing active and inactive operational status. The generated files are projections rather
+than independent sources; see [COURSE_ROSTER.md](COURSE_ROSTER.md).
 
 ## Applications
 

@@ -7,6 +7,7 @@ from .capabilities import (
     COURSE_APPLICATION_URI,
     COURSE_FAQ_URI,
     COURSE_GET_ASSIGNMENT_TOOL_ID,
+    COURSE_INSPECT_SLIDE_PAGE_TOOL_ID,
     COURSE_INSTRUCTORS_URI,
     COURSE_LIST_ASSIGNMENTS_TOOL_ID,
     COURSE_REPOSITORIES_URI,
@@ -90,6 +91,7 @@ from .skills import (
     SkillCatalogError,
     SkillMetadata,
 )
+from .slide_inspection import CourseInspectSlidePageTool
 from .store import (
     ConversationAccessDenied,
     ConversationStore,
@@ -102,6 +104,7 @@ __all__ = [
     "COURSE_APPLICATION_URI",
     "COURSE_FAQ_URI",
     "COURSE_GET_ASSIGNMENT_TOOL_ID",
+    "COURSE_INSPECT_SLIDE_PAGE_TOOL_ID",
     "COURSE_INSTRUCTORS_URI",
     "COURSE_LIST_ASSIGNMENTS_TOOL_ID",
     "COURSE_REPOSITORIES_URI",
@@ -143,6 +146,7 @@ __all__ = [
     "CourseCapabilityPolicy",
     "CourseGetApplicationTool",
     "CourseGetScheduleTool",
+    "CourseInspectSlidePageTool",
     "CourseListPrivateResourcesTool",
     "CourseReadPrivateResourceTool",
     "CourseReadPublicFileTool",

@@ -6,6 +6,7 @@
     "description": "Slides for the fourth course meeting.",
     "media_type": "application/pdf",
     "file": "week-4-slides.pdf",
+    "accessibility_file": "accessibility.txt",
     "visibility": "public",
     "status": "published",
     "order": 63

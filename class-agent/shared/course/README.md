@@ -14,8 +14,8 @@ includes:
 - the published weekly lecture slide decks;
 - the Week 1 Bradshaw reading on software agents.
 
-Only the file selected by each public manifest and assets explicitly named in that
-manifest are exposed to the Course Agent. Registered asset IDs, rather than repository
-paths, are used in workspace compositions. Private application submissions and
-temporary uploads are stored under `APPLICANT_DATA_PATH` and `UPLOAD_DATA_PATH`, never
-in this directory.
+Only the file selected by each public manifest, any declared slide accessibility sidecar
+as page text, and assets explicitly named in that manifest are exposed to the Course Agent.
+Registered asset IDs, rather than repository paths, are used in workspace compositions.
+Private application submissions and temporary uploads are stored under
+`APPLICANT_DATA_PATH` and `UPLOAD_DATA_PATH`, never in this directory.

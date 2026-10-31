@@ -8,5 +8,9 @@ repository-owned file and includes public title, description, media type, visibi
 and publication status. Paths are resolved under `shared/`; entries that escape that
 root are rejected.
 
+Published slide entries also carry a deck-local `accessibility_path` when the source
+manifest declares `accessibility_file`. These page descriptions join extracted PDF text
+for reads and search; the sidecar is not a downloadable asset.
+
 This registry maps directly to future MCP resources without defining a competing
 external protocol.

@@ -56,6 +56,11 @@ from course_server.faq import (
     CourseReadFaqUpdateTool,
     InMemoryFaqStore,
 )
+from course_server.resource_text import (
+    ResourceTextExtractionError,
+    extract_resource_text,
+    load_slide_accessibility,
+)
 from course_server.uploads import FileTemporaryUploadStore
 
 
@@ -222,6 +227,70 @@ def test_registered_invalid_pdf_fails_as_an_unreadable_resource(tmp_path: Path) 
         asyncio.run(resources.read("course://slides/broken"))
 
 
+def test_slide_accessibility_text_is_page_numbered_and_searchable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def inline_to_thread(function: object, *args: object, **kwargs: object) -> object:
+        assert callable(function)
+        return function(*args, **kwargs)
+
+    monkeypatch.setattr(asyncio, "to_thread", inline_to_thread)
+    pdf_path = tmp_path / "slides.pdf"
+    pdf_path.write_bytes(_pdf_with_text("Visible words on the slide."))
+    sidecar = tmp_path / "accessibility.txt"
+    sidecar.write_text("1 | A blue floral mug beside a plain white mug.\n", encoding="utf-8")
+    resource = ResourceDefinition(
+        uri="course://slides/example",
+        title="Example Slides",
+        media_type="application/pdf",
+        path=pdf_path,
+        accessibility_path=sidecar,
+    )
+    resources = FileResourceProvider([resource])
+
+    contents = asyncio.run(resources.read(resource.uri))
+    assert "--- Page 1 ---\nAccessibility description: A blue floral mug" in contents.text
+    assert "Visible words on the slide." in contents.text
+    matches = asyncio.run(resources.search("floral mug"))
+    assert len(matches) == 1
+    assert "Page 1" in matches[0].excerpt
+    assert "blue floral mug" in matches[0].excerpt
+
+    pdf_path.write_bytes(_pdf_with_text("filler " * 100 + "hidden phrase"))
+    late_match = asyncio.run(resources.search("hidden phrase"))
+    assert late_match[0].excerpt.startswith("--- Page 1 --- …")
+
+    sidecar.write_text("2 | Wrong page number.\n", encoding="utf-8")
+    with pytest.raises(ResourceTextExtractionError, match="consecutive"):
+        load_slide_accessibility(sidecar)
+    sidecar.write_text("1 | One page.\n2 | Extra page.\n", encoding="utf-8")
+    with pytest.raises(ResourceTextExtractionError, match="does not match"):
+        extract_resource_text(
+            pdf_path.read_bytes(),
+            "application/pdf",
+            slide_descriptions=load_slide_accessibility(sidecar),
+        )
+
+
+def test_all_published_slide_pages_have_accessibility_descriptions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def inline_to_thread(function: object, *args: object, **kwargs: object) -> object:
+        assert callable(function)
+        return function(*args, **kwargs)
+
+    monkeypatch.setattr(asyncio, "to_thread", inline_to_thread)
+    resources = FileResourceProvider.from_registry()
+    for resource in load_resource_definitions():
+        if not resource.uri.startswith("course://slides/"):
+            continue
+        assert resource.accessibility_path is not None
+        descriptions = load_slide_accessibility(resource.accessibility_path)
+        assert all(len(description) > 12 for description in descriptions)
+        contents = asyncio.run(resources.read(resource.uri))
+        assert contents.text.count("Accessibility description:") == len(descriptions)
+
+
 def test_public_resource_registry_includes_provisional_schedule() -> None:
     resources = FileResourceProvider.from_registry()
 
@@ -250,6 +319,15 @@ def test_public_resource_registry_includes_provisional_schedule() -> None:
     schedule_contents = asyncio.run(resources.read(COURSE_SCHEDULE_URI))
     assert schedule_contents.media_type == "text/markdown"
     assert "| Week 1 (9/15) |" in schedule_contents.text
+    assert "| Week 9 (11/10) | **Multimodal agents**" in schedule_contents.text
+    assert "multimodal grounding. *Paul Liang*" in schedule_contents.text
+    assert "| Week 10 (11/17) | **Multi-agent systems and simulated societies.**" in (
+        schedule_contents.text
+    )
+    assert "*Guest speaker: Michael Bernstein*" in schedule_contents.text
+    assert "| Week 11 (11/24) | **Agentic RL and self-improving agents**" in (
+        schedule_contents.text
+    )
     assert "| Week 13 (12/8) |" in schedule_contents.text
     assert "| Week 14 (12/14) |" in schedule_contents.text
 
@@ -458,6 +536,36 @@ def test_resource_registry_rejects_paths_outside_shared_root(tmp_path: Path) -> 
     registry_path.write_text(json.dumps(registry), encoding="utf-8")
 
     with pytest.raises(ValueError, match="leaves shared root"):
+        FileResourceProvider.from_registry(registry_path)
+
+
+def test_slide_accessibility_path_cannot_leave_its_deck_directory(tmp_path: Path) -> None:
+    shared_root = tmp_path / "shared"
+    deck = shared_root / "course/slides/week-01"
+    deck.mkdir(parents=True)
+    (deck / "slides.pdf").write_bytes(b"%PDF-1.7\n")
+    (shared_root / "outside.txt").write_text("1 | Outside.\n", encoding="utf-8")
+    registry_path = shared_root / "registry/resources.json"
+    registry_path.parent.mkdir()
+    registry_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "resources": [
+                    {
+                        "uri": "course://slides/week-01",
+                        "title": "Lecture",
+                        "media_type": "application/pdf",
+                        "path": "course/slides/week-01/slides.pdf",
+                        "accessibility_path": "outside.txt",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="leaves deck directory"):
         FileResourceProvider.from_registry(registry_path)
 
 

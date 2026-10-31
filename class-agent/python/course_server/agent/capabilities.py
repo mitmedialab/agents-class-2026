@@ -43,7 +43,11 @@ from course_server.course_application import (
     SCHOOL_OPTIONS,
     CourseApplication,
 )
-from course_server.resource_text import ResourceTextExtractionError, extract_resource_text
+from course_server.resource_text import (
+    ResourceTextExtractionError,
+    extract_resource_text,
+    load_slide_accessibility,
+)
 from course_server.student_project_tool_ids import (
     INSPECT_STUDENT_REPOSITORY_TOOL_ID,
     OWN_STUDENT_PROJECT_TOOL_IDS,
@@ -76,6 +80,7 @@ SUBMIT_APPLICATION_TOOL_ID = "course.submit_application"
 ASK_TA_TOOL_ID = "course.ask_ta"
 READ_UPLOAD_TOOL_ID = "upload.read"
 DOCUMENT_INSPECT_PAGE_TOOL_ID = "document.inspect_page"
+COURSE_INSPECT_SLIDE_PAGE_TOOL_ID = "course.inspect_slide_page"
 LIST_PRIVATE_RESOURCES_TOOL_ID = "course.list_private_resources"
 READ_PRIVATE_RESOURCE_TOOL_ID = "course.read_private_resource"
 INSTRUCTOR_LIST_APPLICATIONS_TOOL_ID = "instructor.list_applications"
@@ -882,6 +887,7 @@ class ResourceDefinition:
     assets: dict[str, Path] = field(default_factory=dict)
     announcement: ResourceAnnouncement | None = None
     deadline: ResourceDeadline | None = None
+    accessibility_path: Path | None = None
 
 
 class ResourceRegistryEntry(BaseModel):
@@ -894,6 +900,7 @@ class ResourceRegistryEntry(BaseModel):
     description: str = ""
     media_type: str
     path: str
+    accessibility_path: str | None = None
     assets: dict[str, str] = Field(default_factory=dict)
     visibility: Literal["public"] = "public"
     status: ResourceStatus = "published"
@@ -1019,7 +1026,16 @@ class FileResourceProvider:
         resource_file = await self.read_file(uri)
         resource = self._resources[uri]
         try:
-            text = extract_resource_text(resource_file.data, resource_file.media_type)
+            descriptions = (
+                load_slide_accessibility(resource.accessibility_path)
+                if resource.accessibility_path is not None
+                else None
+            )
+            text = extract_resource_text(
+                resource_file.data,
+                resource_file.media_type,
+                slide_descriptions=descriptions,
+            )
         except ResourceTextExtractionError as error:
             raise ResourceNotFound(f"{uri} is not a readable course resource") from error
         return ResourceContents(
@@ -1213,6 +1229,13 @@ def load_resource_definitions(
         if not path.is_file():
             raise ResourceNotFound(entry.uri)
         assets: dict[str, Path] = {}
+        accessibility_path = None
+        if entry.accessibility_path is not None:
+            accessibility_path = (shared_root / entry.accessibility_path).resolve()
+            if not accessibility_path.is_relative_to(path.parent):
+                raise ValueError(f"slide accessibility path leaves deck directory: {entry.uri}")
+            if not accessibility_path.is_file():
+                raise ResourceNotFound(f"{entry.uri} accessibility text")
         for asset_id, asset_path_string in entry.assets.items():
             asset_path = (shared_root / asset_path_string).resolve()
             if not asset_path.is_relative_to(shared_root):
@@ -1227,6 +1250,7 @@ def load_resource_definitions(
                 description=entry.description,
                 media_type=entry.media_type,
                 path=path,
+                accessibility_path=accessibility_path,
                 visibility=entry.visibility,
                 status=entry.status,
                 assets=assets,
@@ -1359,7 +1383,11 @@ def _search_excerpt(
     if end - start < max_length:
         start = max(0, end - max_length)
     excerpt = block[start:end].strip()
-    return f"{'…' if start else ''}{excerpt}{'…' if end < len(block) else ''}"
+    excerpt = f"{'…' if start else ''}{excerpt}{'…' if end < len(block) else ''}"
+    page_heading = re.match(r"--- Page [1-9][0-9]* ---", block)
+    if page_heading is not None and start:
+        return f"{page_heading.group()} {excerpt}"
+    return excerpt
 
 
 def _reject_unknown_arguments(
@@ -2761,6 +2789,7 @@ class CourseCapabilityPolicy:
                 SEARCH_COURSE_TOOL_ID,
                 READ_UPLOAD_TOOL_ID,
                 DOCUMENT_INSPECT_PAGE_TOOL_ID,
+                COURSE_INSPECT_SLIDE_PAGE_TOOL_ID,
                 SUBMIT_APPLICATION_TOOL_ID,
                 WEB_SEARCH_TOOL_ID,
                 WEB_IMAGE_SEARCH_TOOL_ID,

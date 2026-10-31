@@ -8,6 +8,7 @@ import pytest
 
 from agent_core import PrincipalContext
 from course_server.agent import (
+    CourseInspectSlidePageTool,
     DocumentInspectPageTool,
     FileResourceProvider,
     ResourceDefinition,
@@ -15,6 +16,7 @@ from course_server.agent import (
     ToolValidationError,
 )
 from course_server.agent.document_inspection import RenderedPdfPage, render_pdf_page
+from course_server.slide_pages import CourseSlidePageService
 from course_server.uploads import FileTemporaryUploadStore
 from course_server.workspace import WorkspacePanel, WorkspaceState
 
@@ -71,6 +73,121 @@ def test_render_pdf_page_returns_bounded_png_and_text() -> None:
 
     with pytest.raises(ValueError, match="outside this 116-page document"):
         render_pdf_page(SLIDES_PATH.read_bytes(), 117)
+
+
+def test_slide_page_service_reads_only_authorized_registered_slides(tmp_path: Path) -> None:
+    slide_uri = "course://slides/week-01"
+    private_uri = "course://slides/private"
+    resources = FileResourceProvider(
+        [
+            ResourceDefinition(
+                uri=slide_uri,
+                title="Week 1 Slides",
+                media_type="application/pdf",
+                path=SLIDES_PATH,
+            ),
+            ResourceDefinition(
+                uri=private_uri,
+                title="Private Slides",
+                media_type="application/pdf",
+                path=SLIDES_PATH,
+                visibility="students",
+            ),
+            ResourceDefinition(
+                uri="course://readings/sample",
+                title="Reading",
+                media_type="text/markdown",
+                path=tmp_path / "reading.md",
+            ),
+            ResourceDefinition(
+                uri="course://slides/not-pdf",
+                title="Not a PDF",
+                media_type="text/markdown",
+                path=PROJECT_ROOT / "shared/course/schedule/schedule.md",
+            ),
+        ]
+    )
+    service = CourseSlidePageService(resources)
+    slide = asyncio.run(service.read_page(public_principal(), slide_uri, 1))
+    assert slide.resource_uri == slide_uri
+    assert slide.page == 1
+    assert slide.page_count == 116
+    assert slide.png.startswith(b"\x89PNG\r\n\x1a\n")
+    with pytest.raises(PermissionError):
+        asyncio.run(service.read_page(public_principal(), private_uri, 1))
+    with pytest.raises(PermissionError):
+        asyncio.run(service.read_page(public_principal(), "course://readings/sample", 1))
+    with pytest.raises(ValueError, match="not a PDF"):
+        asyncio.run(service.read_page(public_principal(), "course://slides/not-pdf", 1))
+    with pytest.raises(ValueError, match="positive"):
+        asyncio.run(service.read_page(public_principal(), slide_uri, 0))
+    with pytest.raises(ValueError, match="outside"):
+        asyncio.run(service.read_page(public_principal(), slide_uri, 117))
+    with pytest.raises(ValueError, match="positive"):
+        asyncio.run(service.read_page(public_principal(), slide_uri, True))
+
+
+def test_course_agent_can_inspect_specific_slide_without_open_workspace(tmp_path: Path) -> None:
+    uri = "course://slides/week-01"
+    resources = FileResourceProvider(
+        [
+            ResourceDefinition(
+                uri=uri,
+                title="Week 1 Slides",
+                media_type="application/pdf",
+                path=SLIDES_PATH,
+            )
+        ]
+    )
+    calls: list[tuple[bytes, str]] = []
+
+    def inspect(image: bytes, prompt: str) -> str:
+        calls.append((image, prompt))
+        return "A visible course diagram."
+
+    tool = CourseInspectSlidePageTool(
+        CourseSlidePageService(
+            resources,
+            render=lambda _data, page: RenderedPdfPage(
+                png=b"\x89PNG\r\n\x1a\nrendered-slide",
+                page=page,
+                page_count=116,
+                text="Extracted words",
+            ),
+        ),
+        inspect,
+    )
+    context = ToolExecutionContext(
+        principal=public_principal(),
+        conversation_id=uuid4(),
+        permitted_resource_uris=frozenset({uri}),
+    )
+    result = asyncio.run(
+        tool.execute({"resource_uri": uri, "page": 6, "prompt": "What diagram is shown?"}, context)
+    )
+    assert calls == [
+        (
+            b"\x89PNG\r\n\x1a\nrendered-slide",
+            "Course slide deck: Week 1 Slides. Page 6 of 116.\n\nWhat diagram is shown?",
+        )
+    ]
+    assert result.storage_policy == "server_summary"
+    assert result.resource_uris == [uri]
+    assert isinstance(result.content, dict)
+    assert result.content["visual_analysis"] == "A visible course diagram."
+    assert result.content["visual_analysis_is_interpretation"] is True
+    assert "rendered-slide" not in str(result.content)
+    with pytest.raises(PermissionError):
+        asyncio.run(
+            tool.execute(
+                {"resource_uri": uri, "page": 6, "prompt": "What diagram?"},
+                ToolExecutionContext(
+                    principal=context.principal,
+                    conversation_id=uuid4(),
+                    permitted_resource_uris=frozenset(),
+                ),
+            )
+        )
 
 
 def test_document_inspection_uses_current_page_without_persisting_image_bytes(

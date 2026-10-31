@@ -16,6 +16,7 @@ from course_server.agent import (
     CourseCapabilityPolicy,
     CourseGetApplicationTool,
     CourseGetScheduleTool,
+    CourseInspectSlidePageTool,
     CourseListPrivateResourcesTool,
     CourseReadPrivateResourceTool,
     CourseReadPublicFileTool,
@@ -86,6 +87,7 @@ from course_server.mail import CourseAskTATool, TAQuestionService
 from course_server.migrations import apply_migrations
 from course_server.postgres.auth_store import PostgresAuthStore, create_auth_pool
 from course_server.postgres.conversation_store import PostgresConversationStore
+from course_server.slide_pages import CourseSlidePageService
 from course_server.student_communications import (
     CourseListMyCommunicationsTool,
     CourseReadMyCommunicationTool,
@@ -233,6 +235,15 @@ def build_runtime(
         DocumentInspectPageTool(
             course_resources,
             upload_store,
+            lambda image, prompt: inspect_document_page_with_openai(
+                image,
+                prompt,
+                model_id=settings.model_id,
+                api_key=settings.model_api_key.get_secret_value(),
+            ),
+        ),
+        CourseInspectSlidePageTool(
+            CourseSlidePageService(course_resources),
             lambda image, prompt: inspect_document_page_with_openai(
                 image,
                 prompt,

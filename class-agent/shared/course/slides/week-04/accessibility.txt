@@ -1,0 +1,83 @@
+1 | Cover: Agent Evaluation and Environments over a moon rover photograph.
+2 | Course logistics: lab sessions, office hours, weekly builds feedback, and progress review.
+3 | Show-and-tell title card with colorful project art.
+4 | Show-and-tell format: problem, environment, live demo, and what was learned.
+5 | Environments section title over a moon rover photograph.
+6 | Question: what is an environment for an agent?
+7 | Agent loop diagram highlighting the environment connected by actions and feedback.
+8 | POMDP diagram labeling objectives, agent state, actions, transitions, observations, and rewards.
+9 | Expanded agent architecture highlighting sandboxes, tools, and environment boundaries.
+10 | Planet, forest, and city photographs illustrating different kinds of environments.
+11 | Collage of chess, shopping, greenhouse, vending, classroom, and soil environments.
+12 | Task-environment properties: observability, agents, determinism, episodes, dynamics, continuity, and knowledge.
+13 | POMDP diagram focusing on environment state and observation space.
+14 | POMDP taxonomy defining states, actions, transitions, rewards, observations, and discount.
+15 | Browser-agent environment diagram with computer interface and page state.
+16 | Greenhouse-agent environment diagram with conditions and sensor observations.
+17 | Tutor-agent environment diagram with learning state and student response.
+18 | Multi-agent stochastic-game diagram with interacting agent and environment loops.
+19 | Statement that one environment can support multiple objectives.
+20 | Section title: examples of environments.
+21 | AlphaGo game-board screenshot showing a Go environment.
+22 | Gemini Robotics robot illustration as a physical environment example.
+23 | Humanoid robot photo in an outdoor environment.
+24 | Grocery items photo as a physical-world task environment.
+25 | Social post about Claude-powered cooking assistance in a kitchen.
+26 | NVIDIA ACE game examples including Skyrim and The Sims.
+27 | Claude playing Pokémon screenshot with game state and reasoning log.
+28 | Minecraft world screenshot used as a multi-agent environment example.
+29 | Close-up of a robotic device arm in a physical environment.
+30 | Student project screenshot collage labeled “And yours!”
+31 | Section title: the agent-environment interface.
+32 | Photo of a person operating a device, illustrating an interface to the physical world.
+33 | Diagram placing an interface protocol between agent actions and environment states.
+34 | Gymnasium-style environment API example with reset and step returning observation and reward.
+35 | Question: how do we know whether agents achieve objectives in an environment?
+36 | Evaluating Agents section title over a grayscale photo.
+37 | Side-by-side trajectories with identical final refund outcome but different paths.
+38 | Evaluation units: answer, tool call, trajectory, final state, and whole episode.
+39 | Scorer types: deterministic program, model-based grader, and human evaluation.
+40 | Trial stochasticity explanation contrasting pass-at-least-once and pass-all measures.
+41 | Experimental confounds list including model, prompt, tools, token budget, and sampling settings.
+42 | Bar and line charts showing how model and parameter choices change benchmark metrics.
+43 | Verifiable-environment examples: terminal, shopping, theorem proving, physics, and classroom.
+44 | Benchmarks separated into response grading and environment-state grading.
+45 | Agent-environment diagram adding a grader alongside the environment interface.
+46 | Simulated Environments section title over a grayscale photo.
+47 | Agent loop diagram with a changing environment state and costly action evaluation.
+48 | WebArena screenshot collage of web shopping, social, and forum tasks.
+49 | AppWorld diagram of simulated applications, supervisor, and evaluation tests.
+50 | τ²-bench customer-service benchmark screenshot.
+51 | The Agent Company workplace simulation diagram with professional tasks and tools.
+52 | ScienceWorld pixel-art virtual science environment map.
+53 | DiscoveryWorld illustrated map for evaluating scientific-discovery agents.
+54 | AI2-THOR embodied-agent environment screenshots from kitchens and rooms.
+55 | Vending-Bench 2 line chart of simulated vending-machine business balances.
+56 | GreenLight-Gym2 greenhouse-control environment diagram.
+57 | BEHAVIOR-1K benchmark photos and simulated household activity scenes.
+58 | Reminder and boxing metaphor title card with a driver in a car.
+59 | Sandboxing architecture diagram separating agent runtime from external environment tools.
+60 | Cognitive Environments section title over a warm-toned image.
+61 | Statement that cognitive-environment research is underexplored and growing.
+62 | Definition: a cognitive environment contains human cognitive state that agent actions may change.
+63 | TutorBench paper page on evaluating tutor behavior.
+64 | Research paper page on simulating human belief updates.
+65 | Research paper page on building simulated classroom environments.
+66 | Papers and charts on evaluating real learning outcomes of tutoring agents.
+67 | Sotopia social-interaction environment title and illustrated village.
+68 | Simulate Community flowchart for studying an agent's influence on community well-being.
+69 | Question: how can agent effects on human cognition be evaluated?
+70 | Three evaluation levels: agent capability, simulated human state, and real human state.
+71 | Research paper warning that simulations do not always match real-world behavior.
+72 | Validation criteria for simulated environments: realism, data alignment, outcome validity, and robustness.
+73 | Examples of validation: real data alignment and real-world outcome validity.
+74 | Collage of possible real-world benchmark settings: chess, shops, greenhouse, vending, classroom, and soil.
+75 | Provocation asking whether agents can be benchmarked in real environments.
+76 | End-of-lecture title over a dark image of a large dome.
+77 | Course website screenshot and prompts to discuss environments and validation socially.
+78 | Tutorial start slide.
+79 | Week 4 build title card with colorful project art.
+80 | Week 4 build: make and score a realistic environment, then submit final project idea and group.
+81 | Open labs schedule: Monday and Thursday, 3–4 PM.
+82 | Announcement that there is no class next week.
+83 | MIT Media Lab and Fluid Interfaces closing slide.

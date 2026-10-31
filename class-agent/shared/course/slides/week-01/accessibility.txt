@@ -1,0 +1,116 @@
+1 | Cover: AI Agents for Cognitive Augmentation over a glowing network of connected points.
+2 | Course instructor portraits and biographies for Pattie Maes and Valdemar Danry.
+3 | Teaching assistant portraits, names, and contact details in a four-person directory.
+4 | Student introduction prompt: name, degree program, research group, and course interests.
+5 | Plain black transition slide with no visible content.
+6 | Archival photo of a researcher beside computer racks, introducing Nadir and early agent work.
+7 | Section title: a brief history of software agents.
+8 | Statement that autonomous sensing, acting, state, and learning predate artificial intelligence.
+9 | Historical automata: Elmer and Elsie robot photo alongside other mechanical examples.
+10 | Definition of an agent as a system sensing its environment and acting toward goals.
+11 | List separating hardware agents from simulated, software, and interface agents.
+12 | Historical quotation about John McCarthy and Oliver Selfridge's idea of software agents.
+13 | Comparison of multi-agent systems and personal interface agents, with digital twins between them.
+14 | Apple Knowledge Navigator concept video still and a list of tasks for its assistant Phil.
+15 | Dark video still from the Knowledge Navigator example.
+16 | Pattie Maes's early autonomous-agent research, illustrated by book and robot images.
+17 | Learning Interface Agents paper, with a note about a calendar-scheduling agent.
+18 | Scanned diagrams from a 1993 calendar agent paper showing interfaces and learned behavior.
+19 | Figures from the calendar agent paper on emotional state and prediction results.
+20 | Scanned 1994 paper titled Agents that Reduce Work and Information Overload.
+21 | Scientific American cover and article about intelligent software in 1995.
+22 | Definition and capabilities of software and interface agents: planning, learning, personalization, tools, collaboration.
+23 | Direct manipulation versus interface agents debate, with Ben Shneiderman and Pattie Maes portraits.
+24 | Bulleted ideas for sharing, selling, and proactively using what agents learn about users.
+25 | Screenshot of the 1990s HOMR music recommendation website.
+26 | Screenshot of the Emacs Remembrance Agent showing suggested information beside a document.
+27 | Wearable Remembrance Agent photo: head-mounted camera and prompts about current activity.
+28 | Browser Remembrance Agent screenshot with contextual retrieval results.
+29 | Virtual Mentors screenshot and message exchange illustrating advice from simulated people.
+30 | Example messages showing a virtual mentor recommending a person with shared interests.
+31 | Yenta matchmaking agent screenshot with a profile and suggested introduction.
+32 | ChatGPT launch announcement from November 2022.
+33 | Collage of 2025 tool-use agents including Anthropic Computer Use, Operator, and browser products.
+34 | Collage of 2026 personal-agent product pages including Gemini Spark and cloud browser agents.
+35 | Agents are back: historical quotation about knowledge and trust challenges that remain.
+36 | Competence concerns: hallucinations, inconsistent behavior, compounded errors, and differing user needs.
+37 | Trust requirements: predictability, awareness, control, limitations, privacy, and gradual adoption.
+38 | Predictability and safety concerns for agents, including unwanted actions and vulnerability to nudging.
+39 | Nudge book beside claims that language-model agents are highly sensitive to suggestions.
+40 | Research paper page about LLM agents' hypersensitivity to nudges.
+41 | Research paper page on algorithmic inheritance and intergenerational inequality.
+42 | Claude vending-machine experiment page and performance chart.
+43 | List of Claude vending-machine mistakes, including hallucinated products and poor pricing.
+44 | VendingBench line chart comparing simulated agent balances over time.
+45 | Examples of real-world agents causing unwanted actions, from database deletion to prompt injection.
+46 | Hype versus reality: warning that unreliability consumes oversight time.
+47 | Current agent deployment advice: narrow tasks, auditing, liability, and better interfaces.
+48 | Capability-control dilemma statement: more capable agents can also pose greater safety risks.
+49 | Summary questions about oversight, transparency, trust, personalization, and delegation.
+50 | Marshall McLuhan quotation: every extension is an amputation.
+51 | Section title: a modern view of agents, presented by Valdemar Danry.
+52 | News collage on AI's effects on learning, creativity, and mental health.
+53 | More news examples on AI and schooling, homogenized thought, and companionship.
+54 | Collage of economic and policy claims about AI agents' impact and reliability.
+55 | Collage of reports on agentic AI, power, catastrophic errors, and business adoption.
+56 | Course goal: build AI agents that improve lives through cognitive augmentation.
+57 | Section question: what are AI agents?
+58 | Classic agent-environment diagram with sensors, actuators, and an unspecified agent core.
+59 | Classic agent-environment diagram with an LLM placed inside the agent core.
+60 | Language-model primer with token prediction diagram and Transformer paper page.
+61 | Language-model primer adding a text prompt to a paper and model image.
+62 | Simple input-to-LLM-to-output diagram showing text generation.
+63 | LLM example mapping a request for cat breeds to a numbered answer.
+64 | LLM example predicting the next tokens after the phrase “Spaghetti is.”
+65 | Tokenization diagram beside the original Transformer paper.
+66 | Text-to-tokenizer-to-model-to-detokenizer pipeline for language models.
+67 | Question slide: how are LLM agents different from other architectures?
+68 | Chatbot architecture diagram with independent user queries and LLM responses.
+69 | Prompt-chaining diagram with sequential LLM calls and a conditional gate.
+70 | ReAct and Toolformer research paper pages introducing LLM agent approaches.
+71 | LLM agent loop diagram connecting human, model call, environment, feedback, and stop.
+72 | Markov decision process view of an LLM agent with memory, policy, action, and observation spaces.
+73 | Sequence diagram of human request, model, environment, tool calls, and returned results.
+74 | Section title: examples of agents.
+75 | Slack and Discord agent example showing a message assistant in a team channel.
+76 | ChatGPT Work and Claude Cowork plugin interface screenshot.
+77 | Claude Code terminal screenshot showing a coding task and tool activity.
+78 | OpenClaw terminal screenshot showing a conversational personal agent.
+79 | Hermes Agent terminal interface and code screenshot.
+80 | Circuit board and computer-use example labeled GPT-6.
+81 | Browser interface example of computer use labeled GPT-6.
+82 | Word processor document example of computer use labeled GPT-6.
+83 | Social post showing a CAD agent operating SolidWorks.
+84 | Social post showing GPT-6 Astra controlling a 3D modeling workflow.
+85 | Statement that current agent products only scratch the surface of possibilities.
+86 | Colorful pixel-art map with buildings and paths, illustrating an agent environment.
+87 | Social post and food photo about a coding agent using a real kitchen.
+88 | Social post and device photo about an agent's physical-world action.
+89 | Social post with video still of an agent locating an item in an office.
+90 | Photo of a telepresent human face on a screen above a physical apparatus.
+91 | Hard Mode MIT hardware and AI hackathon title card.
+92 | Question slide: what are agents for cognitive augmentation?
+93 | Grid of ten cognitive domains: reasoning, sleep, speech, memory, communication, attention, gut, BCI, emotion, perception.
+94 | MEMORO wearable personal memory assistant title slide.
+95 | Photo of three people discussing a wearable memory assistant around a table.
+96 | Gaze-aware AI assistant demonstration with a person looking at a screen.
+97 | Diagram of an LLM inferring user thoughts from gaze and behavior signals.
+98 | Stepwise diagram of prediction, consent, reflection, pattern training, and adaptive behavior.
+99 | Timeline of interface-agent publications from 1993 to 1999.
+100 | Video still of a woman presenting an agent-related example.
+101 | Open questions for cognitive augmentation agents: goals, interfaces, language, social role, privacy.
+102 | Disclaimer that the class is experimental and playful.
+103 | Course website screenshot introducing logistics.
+104 | Course website screenshot beside Uncle Sam and an invitation to change the class agent.
+105 | Weekly builds title card with colorful student-project art.
+106 | Instruction to experiment weekly with lecture techniques for cognitive augmentation.
+107 | Documentation expectations: use a GitHub repository and GitHub Pages for progress.
+108 | Example student project names and links for documentation inspiration.
+109 | Class AI policy: transparent AI use and explanations of design choices.
+110 | Week 1 assignment: documentation site, three final-project ideas, and an agent from scratch.
+111 | Office hours schedule: Monday and Friday, 3–4 PM.
+112 | Anthropic logo transition slide.
+113 | Tutorial start slide.
+114 | Course website screenshot with invitation to socialize.
+115 | Office hours schedule repeated: Monday and Friday, 3–4 PM.
+116 | MIT Media Lab and Fluid Interfaces closing slide thanking students.
