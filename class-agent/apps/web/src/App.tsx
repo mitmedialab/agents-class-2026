@@ -56,6 +56,14 @@ import { SyllabusPage } from "./SyllabusPage.js";
 import { TAQuestionConfirmation } from "./TAQuestionConfirmation.js";
 import { Workspace } from "./Workspace.js";
 import {
+  ConversationTimeline,
+  latestConversationResponse,
+  momentAtOffset,
+  projectConversationTimeline,
+  timelineFade,
+} from "./ConversationTimeline.js";
+import { historicalInteraction, historicalPanelAction } from "./historicalWorkspace.js";
+import {
   applyTAQuestionEvent,
   pendingTAQuestionContinuation,
   projectTAQuestionEvents,
@@ -74,12 +82,14 @@ import {
 } from "./instructorMessages.js";
 import {
   type DragEvent,
+  type CSSProperties,
   type FormEvent,
   type KeyboardEvent,
   type UIEvent,
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -99,6 +109,8 @@ const WELCOME_PRESENTATION_MS =
   180;
 const NOTIFICATION_POLL_INTERVAL_MS = 60_000;
 const CONVERSATION_PAGE_SIZE = 5;
+const TIMELINE_WHEEL_PAUSE_MS = 280;
+const TIMELINE_MIN_MOMENT_DWELL_MS = 400;
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const SUPPORTED_UPLOAD_EXTENSIONS = new Set([
   "csv",
@@ -161,22 +173,6 @@ function newestFirst(conversations: Conversation[]): Conversation[] {
   return [...conversations].sort(
     (left, right) => Date.parse(right.updated_at) - Date.parse(left.updated_at),
   );
-}
-
-function latestAgentResponse(events: Event[]): string {
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    const event = events[index];
-    if (
-      event?.type === "email.ta_answer.received" &&
-      typeof event.payload.answer === "string"
-    ) {
-      return `Course staff replied:\n\n${event.payload.answer}`;
-    }
-    if (event?.type === "agent.message" && typeof event.payload.text === "string") {
-      return event.payload.text;
-    }
-  }
-  return "";
 }
 
 function conversationTitle(conversation: Conversation): string {
@@ -267,6 +263,10 @@ async function notificationsFor(
   }
 }
 
+function hasNotificationHistory(data: NotificationCenterData): boolean {
+  return data.items.length > 0 || (data.history_items?.length ?? 0) > 0;
+}
+
 export default function App() {
   const [startupQuery] = useState(() => readStartupQuery(window.location.href));
   const [principal, setPrincipal] = useState<PrincipalContext | null>(null);
@@ -278,6 +278,18 @@ export default function App() {
   const [isLoadingMoreConversations, setIsLoadingMoreConversations] = useState(false);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [latestResponse, setLatestResponse] = useState("");
+  const [conversationEvents, setConversationEvents] = useState<Event[]>([]);
+  const [timelineOffset, setTimelineOffset] = useState(0);
+  const [timelinePull, setTimelinePull] = useState<{
+    targetOffset: number;
+    progress: number;
+  } | null>(null);
+  const [historicalWorkspaceOverride, setHistoricalWorkspaceOverride] = useState<{
+    momentId: string;
+    state: WorkspaceState;
+  } | null>(null);
+  const [pinnedNotificationCenter, setPinnedNotificationCenter] =
+    useState<NotificationCenterData | null>(null);
   const [currentAction, setCurrentAction] = useState<string | null>("Connecting");
   const [activities, setActivities] = useState<AgentActivity[]>([]);
   const [workspaceState, setWorkspaceState] = useState<WorkspaceState>(
@@ -326,8 +338,31 @@ export default function App() {
   const composerFormRef = useRef<HTMLFormElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const historyRef = useRef<HTMLElement>(null);
+  const responseStageRef = useRef<HTMLElement>(null);
   const workspaceShellRef = useRef<HTMLElement>(null);
   const activeRun = useRef<AbortController | null>(null);
+  const timelineGestureReset = useRef<number | null>(null);
+  const timelineSettleCommit = useRef<number | null>(null);
+  const timelinePullRef = useRef<{ targetOffset: number; progress: number } | null>(null);
+  const timelineOriginScrollTop = useRef<number | null>(null);
+  const timelineInputSource = useRef<"wheel" | "touch" | null>(null);
+  const timelineLastWheelAt = useRef(0);
+  const timelineWheelLockDirection = useRef<1 | -1 | null>(null);
+  const timelineWheelLockUntil = useRef(0);
+  const timelineInputHandlers = useRef<{
+    wheel: (event: globalThis.WheelEvent) => void;
+    touchStart: (event: globalThis.TouchEvent) => void;
+    touchMove: (event: globalThis.TouchEvent) => void;
+    touchEnd: (event: globalThis.TouchEvent) => void;
+    touchCancel: () => void;
+  } | null>(null);
+  const timelineTouchStart = useRef<{
+    y: number;
+    atTop: boolean;
+    atBottom: boolean;
+    progress: number;
+    targetOffset: number | null;
+  } | null>(null);
   const startupQueryStarted = useRef(false);
   const operationInFlight = useRef(false);
   const applicationReturnResponse = useRef<string | null>(null);
@@ -347,6 +382,163 @@ export default function App() {
   const composerBlockedByConfirmation =
     awaitingTAQuestionAction ||
     (awaitingInstructorMessageAction && !canRequestInstructorRevision);
+  const timelineMoments = useMemo(
+    () => projectConversationTimeline(conversationEvents),
+    [conversationEvents],
+  );
+  const historicalMoment =
+    timelineOffset > 0 ? momentAtOffset(timelineMoments, timelineOffset) : null;
+  const previewMoment = timelinePull
+    ? momentAtOffset(timelineMoments, timelinePull.targetOffset)
+    : null;
+  const isTimeTraveling = historicalMoment !== null;
+  const displayedResponse = historicalMoment?.response ?? latestResponse;
+  const displayedWorkspaceState = historicalMoment
+    ? historicalWorkspaceOverride?.momentId === historicalMoment.id
+      ? historicalWorkspaceOverride.state
+      : historicalMoment.workspace
+    : workspaceState;
+  const presentMoment = momentAtOffset(timelineMoments, 0);
+  const displayedUserMessage = historicalMoment
+    ? historicalMoment.userMessage
+    : presentMoment?.response === latestResponse
+      ? presentMoment.userMessage
+      : undefined;
+  const previewWorkspaceState = previewMoment
+    ? timelinePull?.targetOffset === 0
+      ? workspaceState
+      : historicalWorkspaceOverride?.momentId === previewMoment.id
+        ? historicalWorkspaceOverride.state
+        : previewMoment.workspace
+    : emptyWorkspaceState();
+  const hasOpenWorkspace = displayedWorkspaceState.panels.length > 0;
+  const historyNotifications = pinnedNotificationCenter ?? EMPTY_NOTIFICATION_CENTER;
+  const currentNotificationData = isTimeTraveling
+    ? historyNotifications
+    : notificationCenter;
+  const previewNotificationData = timelinePull?.targetOffset === 0
+    ? notificationCenter
+    : isTimeTraveling
+      ? historyNotifications
+      : notificationCenter;
+  const currentNotificationVisible =
+    !aboutOpen &&
+    principal?.authenticated === true &&
+    hasNotificationHistory(currentNotificationData) &&
+    !hasOpenWorkspace &&
+    (isTimeTraveling || presentedCommunication === null);
+  const previewNotificationVisible =
+    timelinePull !== null &&
+    !aboutOpen &&
+    principal?.authenticated === true &&
+    hasNotificationHistory(previewNotificationData) &&
+    previewWorkspaceState.panels.length === 0 &&
+    (timelinePull.targetOffset > 0 || presentedCommunication === null);
+  const fade = timelineFade(timelinePull?.progress ?? 0);
+  const targetFlow = timelinePull !== null && timelinePull.progress >= 0.5;
+  const notificationCenterForDisplay =
+    timelinePull && targetFlow && previewNotificationVisible && !currentNotificationVisible
+      ? previewNotificationData
+      : currentNotificationData;
+  const notificationCenterVisible =
+    currentNotificationVisible || previewNotificationVisible;
+  const currentNotificationReserved =
+    currentNotificationVisible &&
+    (currentNotificationData.items.length > 0 || notificationHistoryExpanded);
+  const previewNotificationReserved =
+    previewNotificationVisible &&
+    (previewNotificationData.items.length > 0 || notificationHistoryExpanded);
+  const notificationCenterAffectsLayout =
+    currentNotificationReserved || previewNotificationReserved;
+  const timelineNotificationPresence = timelinePull
+    ? currentNotificationReserved && previewNotificationReserved
+      ? 1
+      : currentNotificationReserved
+        ? 1 - fade.layout
+        : previewNotificationReserved
+          ? fade.layout
+          : 0
+    : 0;
+  const timelineNotificationOpacity = timelinePull
+    ? currentNotificationVisible && previewNotificationVisible
+      ? 1
+      : currentNotificationVisible
+        ? fade.outgoing
+        : previewNotificationVisible
+          ? fade.incoming
+          : 0
+    : 1;
+  const timelineWorkspacePresence = timelinePull
+    ? displayedWorkspaceState.panels.length > 0 && previewWorkspaceState.panels.length > 0
+      ? 1
+      : displayedWorkspaceState.panels.length > 0
+        ? 1 - fade.layout
+        : previewWorkspaceState.panels.length > 0
+          ? fade.layout
+          : 0
+    : 0;
+  const timelineStyle = timelinePull
+    ? ({
+        "--timeline-workspace-presence": timelineWorkspacePresence,
+        "--timeline-outgoing-opacity": fade.outgoing,
+        "--timeline-incoming-opacity": fade.incoming,
+        "--timeline-header-opacity": Math.max(fade.outgoing, fade.incoming),
+        "--timeline-notification-opacity": timelineNotificationOpacity,
+        "--timeline-notification-presence": timelineNotificationPresence,
+        "--timeline-composer-opacity": timelineOffset === 0
+          ? fade.outgoing
+          : timelinePull.targetOffset === 0
+            ? fade.incoming
+            : 0,
+      } as CSSProperties)
+    : undefined;
+
+  useLayoutEffect(() => {
+    if (!timelinePull) return;
+    const stage = responseStageRef.current;
+    if (!stage) return;
+    stage.scrollTop = targetFlow ? 0 : timelineOriginScrollTop.current ?? stage.scrollTop;
+  }, [targetFlow, timelinePull?.targetOffset]);
+
+  useEffect(() => {
+    const maximumOffset = Math.max(0, timelineMoments.length - 1);
+    if (timelineOffset > maximumOffset) setTimelineOffset(maximumOffset);
+  }, [timelineMoments.length, timelineOffset]);
+
+  useEffect(() => {
+    if (timelineOffset !== 0) return;
+    setPinnedNotificationCenter(null);
+    setHistoricalWorkspaceOverride(null);
+  }, [timelineOffset, selectedConversationId]);
+
+  useEffect(() => {
+    if (timelineGestureReset.current !== null) {
+      window.clearTimeout(timelineGestureReset.current);
+      timelineGestureReset.current = null;
+    }
+    if (timelineSettleCommit.current !== null) {
+      window.clearTimeout(timelineSettleCommit.current);
+      timelineSettleCommit.current = null;
+    }
+    timelinePullRef.current = null;
+    timelineOriginScrollTop.current = null;
+    timelineInputSource.current = null;
+    timelineWheelLockDirection.current = null;
+    timelineTouchStart.current = null;
+    setTimelinePull(null);
+  }, [selectedConversationId]);
+
+  useEffect(
+    () => () => {
+      if (timelineGestureReset.current !== null) {
+        window.clearTimeout(timelineGestureReset.current);
+      }
+      if (timelineSettleCommit.current !== null) {
+        window.clearTimeout(timelineSettleCommit.current);
+      }
+    },
+    [],
+  );
 
   const showWelcomeMessage = useCallback(() => {
     setLatestResponse(WELCOME_MESSAGE);
@@ -360,6 +552,8 @@ export default function App() {
     operationInFlight.current = false;
     applicationReturnResponse.current = null;
     setSelectedConversationId(null);
+    setConversationEvents([]);
+    setTimelineOffset(0);
     showWelcomeMessage();
     setActivities([]);
     setWorkspaceState(emptyWorkspaceState());
@@ -382,10 +576,14 @@ export default function App() {
 
   async function showConversation(conversation: Conversation): Promise<void> {
     setCurrentAction("Loading conversation");
+    setConversationEvents([]);
+    setTimelineOffset(0);
     try {
       const detail = await getConversation(conversation.id);
       setSelectedConversationId(conversation.id);
-      const response = latestAgentResponse(detail.events);
+      setConversationEvents(detail.events);
+      setTimelineOffset(0);
+      const response = latestConversationResponse(detail.events);
       if (response) setLatestResponse(response);
       else showWelcomeMessage();
       const projectedWorkspace = workspaceFromEvents(detail.events);
@@ -461,6 +659,8 @@ export default function App() {
         return;
       }
       setLatestResponse("");
+      setConversationEvents([]);
+      setTimelineOffset(0);
       setIsPresentingWelcome(false);
       setCurrentAction("Preparing welcome");
       setActivities([]);
@@ -473,9 +673,10 @@ export default function App() {
       const pendingDetail = await getPendingActionConversation();
       if (signal?.aborted) return;
       if (pendingDetail) {
-        const response = latestAgentResponse(pendingDetail.events);
+        const response = latestConversationResponse(pendingDetail.events);
         const projectedWorkspace = workspaceFromEvents(pendingDetail.events);
         setSelectedConversationId(pendingDetail.conversation.id);
+        setConversationEvents(pendingDetail.events);
         setLatestResponse(response ?? "");
         setWorkspaceState(projectedWorkspace);
         setTAQuestion(projectTAQuestionEvents(pendingDetail.events));
@@ -775,6 +976,7 @@ export default function App() {
       isInitializing ||
       isRunning ||
       isUploading ||
+      (isTimeTraveling && !isSuggestedPrompt) ||
       (!operationAlreadyClaimed && operationInFlight.current)
     ) {
       return false;
@@ -812,6 +1014,7 @@ export default function App() {
       ? messageWithCommunicationContext(userMessage, communicationContext)
       : userMessage;
     setMobileView("chat");
+    setTimelineOffset(0);
     setPresentedCommunication(communicationContext);
 
     if (!isSuggestedPrompt) {
@@ -949,6 +1152,7 @@ export default function App() {
       if (!controller.signal.aborted) {
         try {
           const detail = await getConversation(activeConversationId);
+          setConversationEvents(detail.events);
           const persistedWorkspace = workspaceFromEvents(detail.events);
           if (persistedWorkspace.panels.length > 0) {
             setWorkspaceState(persistedWorkspace);
@@ -1045,6 +1249,7 @@ export default function App() {
   const canDropFiles =
     !aboutOpen &&
     !historyOpen &&
+    !isTimeTraveling &&
     !isInitializing &&
     !isRunning &&
     !isUploading &&
@@ -1153,10 +1358,29 @@ export default function App() {
     }
   }
 
+  function updateHistoricalWorkspace(
+    update: (state: WorkspaceState) => WorkspaceState,
+  ): void {
+    if (!historicalMoment) return;
+    setHistoricalWorkspaceOverride((current) => ({
+      momentId: historicalMoment.id,
+      state: update(
+        current?.momentId === historicalMoment.id
+          ? current.state
+          : historicalMoment.workspace,
+      ),
+    }));
+  }
+
   async function handleWorkspacePanelAction(
     action: "focus" | "close",
     panelId: string,
   ): Promise<void> {
+    if (historicalMoment) {
+      updateHistoricalWorkspace((state) => historicalPanelAction(state, action, panelId));
+      setMobileView(action === "close" ? "chat" : "workspace");
+      return;
+    }
     if (!selectedConversationId) return;
     try {
       const event = await applyWorkspacePanelAction(
@@ -1264,6 +1488,8 @@ export default function App() {
       setActivities([{ kind: "complete", label: "Agent run complete" }]);
       try {
         const detail = await getConversation(conversationId);
+        setConversationEvents(detail.events);
+        setTimelineOffset(0);
         setWorkspaceState(workspaceFromEvents(detail.events));
         setTAQuestion(projectTAQuestionEvents(detail.events));
         setInstructorMessage(projectInstructorMessageEvents(detail.events));
@@ -1343,6 +1569,7 @@ export default function App() {
   }
 
   async function handleNotificationAction(item: NotificationCenterItem): Promise<void> {
+    setTimelineOffset(0);
     setAboutOpen(false);
     setHistoryOpen(false);
     setNotificationHistoryExpanded(false);
@@ -1381,6 +1608,11 @@ export default function App() {
   }
 
   async function handleCloseWorkspace(): Promise<void> {
+    if (historicalMoment) {
+      updateHistoricalWorkspace(() => emptyWorkspaceState());
+      setMobileView("chat");
+      return;
+    }
     const panels = workspaceState.panels;
     const isApplicationWorkspace = panels.some(
       (panel) =>
@@ -1426,6 +1658,12 @@ export default function App() {
     action: string,
     value: JsonValue,
   ): Promise<void> {
+    if (historicalMoment) {
+      updateHistoricalWorkspace((state) =>
+        historicalInteraction(state, panelId, action, value),
+      );
+      return;
+    }
     if (!selectedConversationId) return;
     if (
       action !== "calendar.select_event" &&
@@ -1463,6 +1701,7 @@ export default function App() {
     sessionId: string,
     deltaY: number,
   ): Promise<void> {
+    if (historicalMoment) return;
     if (!selectedConversationId) return;
     try {
       const event = await scrollBrowserSession(
@@ -1488,6 +1727,7 @@ export default function App() {
     x: number,
     y: number,
   ): Promise<void> {
+    if (historicalMoment) return;
     if (!selectedConversationId) return;
     try {
       const event = await clickBrowserSession(
@@ -1514,6 +1754,7 @@ export default function App() {
     width: number,
     height: number,
   ): Promise<void> {
+    if (historicalMoment) return;
     if (!selectedConversationId) return;
     try {
       const event = await resizeBrowserSession(
@@ -1536,17 +1777,6 @@ export default function App() {
 
   const isWelcomePresentationActive =
     !isOpening && latestResponse === WELCOME_MESSAGE && isPresentingWelcome;
-  const hasOpenWorkspace = workspaceState.panels.length > 0;
-  const notificationCenterVisible =
-    !aboutOpen &&
-    principal?.authenticated === true &&
-    (notificationCenter.items.length > 0 ||
-      (notificationCenter.history_items?.length ?? 0) > 0) &&
-    !hasOpenWorkspace &&
-    presentedCommunication === null;
-  const notificationCenterAffectsLayout =
-    notificationCenterVisible &&
-    (notificationCenter.items.length > 0 || notificationHistoryExpanded);
   const mobileSecondaryView = hasOpenWorkspace ? "workspace" : "updates";
   const activeMobileView: MobileView =
     mobileView === mobileSecondaryView ? mobileView : "chat";
@@ -1558,6 +1788,200 @@ export default function App() {
       current === nextScrolled ? current : nextScrolled,
     );
   };
+  const resetTimelinePull = () => {
+    if (timelineGestureReset.current !== null) {
+      window.clearTimeout(timelineGestureReset.current);
+      timelineGestureReset.current = null;
+    }
+    if (timelineSettleCommit.current !== null) {
+      window.clearTimeout(timelineSettleCommit.current);
+      timelineSettleCommit.current = null;
+    }
+    timelinePullRef.current = null;
+    timelineOriginScrollTop.current = null;
+    timelineInputSource.current = null;
+    setTimelinePull(null);
+  };
+  const timelineScrubDistance = (stage: HTMLElement) =>
+    Math.min(560, Math.max(360, stage.clientHeight * 0.65 || 420));
+  const previewTimelinePull = (targetOffset: number, progress: number) => {
+    const pull = { targetOffset, progress: Math.min(1, Math.max(0, progress)) };
+    timelinePullRef.current = pull;
+    setTimelinePull(pull);
+  };
+  const handleTimelineOffsetChange = (nextOffset: number) => {
+    const boundedOffset = Math.min(
+      Math.max(0, nextOffset),
+      Math.max(0, timelineMoments.length - 1),
+    );
+    if (timelineOffset === 0 && boundedOffset > 0) {
+      setPinnedNotificationCenter(notificationCenter);
+    } else if (boundedOffset === 0) {
+      setPinnedNotificationCenter(null);
+      setHistoricalWorkspaceOverride(null);
+    }
+    resetTimelinePull();
+    setTimelineOffset(boundedOffset);
+    requestAnimationFrame(() => {
+      const stage = responseStageRef.current;
+      if (stage) stage.scrollTop = 0;
+    });
+  };
+  const settleTimelinePull = () => {
+    const pull = timelinePullRef.current;
+    if (!pull) return;
+    const inputSource = timelineInputSource.current;
+    const direction: -1 | 1 = pull.targetOffset > timelineOffset ? -1 : 1;
+    const settledProgress = pull.progress >= 0.5 ? 1 : 0;
+    previewTimelinePull(pull.targetOffset, settledProgress);
+    timelineSettleCommit.current = window.setTimeout(() => {
+      timelineSettleCommit.current = null;
+      if (settledProgress === 1) {
+        if (inputSource === "wheel") {
+          timelineWheelLockDirection.current = direction;
+          timelineWheelLockUntil.current =
+            performance.now() + TIMELINE_MIN_MOMENT_DWELL_MS;
+        }
+        handleTimelineOffsetChange(pull.targetOffset);
+      }
+      else resetTimelinePull();
+    }, 240);
+  };
+  const scheduleTimelineSettle = (delay = 140) => {
+    if (timelineGestureReset.current !== null) {
+      window.clearTimeout(timelineGestureReset.current);
+    }
+    timelineGestureReset.current = window.setTimeout(() => {
+      timelineGestureReset.current = null;
+      settleTimelinePull();
+    }, delay);
+  };
+  const handleTimelineWheel = (event: globalThis.WheelEvent) => {
+    if (isRunning || Math.abs(event.deltaY) < 0.1 || timelineMoments.length < 2) return;
+    const stage = responseStageRef.current;
+    if (!stage) return;
+    const wheelPixels = event.deltaY *
+      (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? stage.clientHeight || 600 : 1);
+    const atTop = stage.scrollTop <= 1;
+    const atBottom = stage.scrollTop + stage.clientHeight >= stage.scrollHeight - 1;
+    const now = performance.now();
+    const wheelWasIdle = now - timelineLastWheelAt.current > TIMELINE_WHEEL_PAUSE_MS;
+    timelineLastWheelAt.current = now;
+    // Inertial wheel events from one gesture must not skip the adjacent moment.
+    if (
+      timelineWheelLockDirection.current === Math.sign(wheelPixels) &&
+      (wheelPixels < 0 ? atTop : atBottom)
+    ) {
+      if (!wheelWasIdle || now < timelineWheelLockUntil.current) {
+        event.preventDefault();
+        return;
+      }
+      timelineWheelLockDirection.current = null;
+    }
+    const activePull = timelinePullRef.current;
+    const targetOffset = activePull?.targetOffset ?? (
+      wheelPixels < 0 && atTop && timelineOffset < timelineMoments.length - 1
+        ? timelineOffset + 1
+        : wheelPixels > 0 && atBottom && timelineOffset > 0
+          ? timelineOffset - 1
+          : null
+    );
+    if (targetOffset === null) return;
+    event.preventDefault();
+    if (!activePull) {
+      timelineOriginScrollTop.current = stage.scrollTop;
+      timelineInputSource.current = "wheel";
+    }
+    if (timelineSettleCommit.current !== null) {
+      window.clearTimeout(timelineSettleCommit.current);
+      timelineSettleCommit.current = null;
+    }
+    const direction = targetOffset > timelineOffset ? -1 : 1;
+    const nextProgress = (activePull?.progress ?? 0) +
+      (wheelPixels * direction) / timelineScrubDistance(stage);
+    if (nextProgress <= 0) {
+      resetTimelinePull();
+      return;
+    }
+    previewTimelinePull(targetOffset, nextProgress);
+    scheduleTimelineSettle(nextProgress >= 1 ? 70 : 150);
+  };
+  const handleTimelineTouchStart = (event: globalThis.TouchEvent) => {
+    if (isRunning || timelineMoments.length < 2 || event.touches.length !== 1) return;
+    if (timelineGestureReset.current !== null) window.clearTimeout(timelineGestureReset.current);
+    if (timelineSettleCommit.current !== null) window.clearTimeout(timelineSettleCommit.current);
+    const stage = responseStageRef.current;
+    if (!stage) return;
+    timelineInputSource.current = "touch";
+    timelineTouchStart.current = {
+      y: event.touches[0]!.clientY,
+      atTop: stage.scrollTop <= 1,
+      atBottom: stage.scrollTop + stage.clientHeight >= stage.scrollHeight - 1,
+      progress: timelinePullRef.current?.progress ?? 0,
+      targetOffset: timelinePullRef.current?.targetOffset ?? null,
+    };
+  };
+  const handleTimelineTouchMove = (event: globalThis.TouchEvent) => {
+    const start = timelineTouchStart.current;
+    const stage = responseStageRef.current;
+    if (!start || !stage || event.touches.length !== 1) return;
+    const delta = event.touches[0]!.clientY - start.y;
+    const targetOffset = start.targetOffset ?? (
+      delta > 0 && start.atTop && timelineOffset < timelineMoments.length - 1
+        ? timelineOffset + 1
+        : delta < 0 && start.atBottom && timelineOffset > 0
+          ? timelineOffset - 1
+          : null
+    );
+    if (targetOffset === null) return;
+    event.preventDefault();
+    if (start.targetOffset === null) timelineOriginScrollTop.current = stage.scrollTop;
+    const direction = targetOffset > timelineOffset ? 1 : -1;
+    const progress = start.progress + (delta * direction) / timelineScrubDistance(stage);
+    if (progress <= 0) resetTimelinePull();
+    else previewTimelinePull(targetOffset, progress);
+  };
+  const handleTimelineTouchEnd = (event: globalThis.TouchEvent) => {
+    const hadTouchStart = timelineTouchStart.current !== null;
+    timelineTouchStart.current = null;
+    if (!hadTouchStart) return;
+    if (event.changedTouches.length !== 1) {
+      resetTimelinePull();
+      return;
+    }
+    settleTimelinePull();
+  };
+  timelineInputHandlers.current = {
+    wheel: handleTimelineWheel,
+    touchStart: handleTimelineTouchStart,
+    touchMove: handleTimelineTouchMove,
+    touchEnd: handleTimelineTouchEnd,
+    touchCancel: () => {
+      timelineTouchStart.current = null;
+      resetTimelinePull();
+    },
+  };
+  useEffect(() => {
+    const stage = responseStageRef.current;
+    if (!stage) return;
+    const onWheel = (event: globalThis.WheelEvent) => timelineInputHandlers.current?.wheel(event);
+    const onTouchStart = (event: globalThis.TouchEvent) => timelineInputHandlers.current?.touchStart(event);
+    const onTouchMove = (event: globalThis.TouchEvent) => timelineInputHandlers.current?.touchMove(event);
+    const onTouchEnd = (event: globalThis.TouchEvent) => timelineInputHandlers.current?.touchEnd(event);
+    const onTouchCancel = () => timelineInputHandlers.current?.touchCancel();
+    stage.addEventListener("wheel", onWheel, { passive: false });
+    stage.addEventListener("touchstart", onTouchStart, { passive: true });
+    stage.addEventListener("touchmove", onTouchMove, { passive: false });
+    stage.addEventListener("touchend", onTouchEnd);
+    stage.addEventListener("touchcancel", onTouchCancel);
+    return () => {
+      stage.removeEventListener("wheel", onWheel);
+      stage.removeEventListener("touchstart", onTouchStart);
+      stage.removeEventListener("touchmove", onTouchMove);
+      stage.removeEventListener("touchend", onTouchEnd);
+      stage.removeEventListener("touchcancel", onTouchCancel);
+    };
+  }, [aboutOpen]);
   const contactPrompt = principal?.authenticated
     ? principal.roles.includes("instructor")
       ? INSTRUCTOR_CONTACT_PROMPT
@@ -1572,6 +1996,7 @@ export default function App() {
     <div
       className="course-agent"
       data-about-open={aboutOpen}
+      data-conversation-reading={selectedConversationId !== null}
       data-file-drag-active={isFileDragActive}
       data-mobile-notifications-open={
         notificationCenterVisible && activeMobileView === "updates"
@@ -1581,7 +2006,12 @@ export default function App() {
       }
       data-notifications-open={notificationCenterAffectsLayout}
       data-opening={isOpening}
+      data-preview-workspace={previewWorkspaceState.panels.length > 0}
+      data-timeline-target-flow={targetFlow}
+      data-timeline-transition={timelinePull !== null}
+      data-time-traveling={isTimeTraveling}
       data-workspace-open={!aboutOpen && hasOpenWorkspace}
+      style={timelineStyle}
       onDragEnter={handleFileDragEnter}
       onDragLeave={handleFileDragLeave}
       onDragOver={handleFileDragOver}
@@ -1616,45 +2046,57 @@ export default function App() {
             </button>
           </div>
         </div>
-        {workspaceState.panels.length === 0 || aboutOpen ? (
-          <nav aria-label="Course shortcuts" className="header-actions">
-            {headerPrompts.map((prompt) => (
+        <div className="header-utility">
+          <Button className="header-new-chat" onClick={startNewConversation}>
+            New chat
+          </Button>
+          {displayedWorkspaceState.panels.length === 0 || aboutOpen ? (
+            <nav aria-label="Course shortcuts" className="header-actions">
+              {headerPrompts.map((prompt) => (
+                <Button
+                  className="header-prompt"
+                  disabled={
+                    isInitializing ||
+                    isRunning ||
+                    isUploading ||
+                    awaitingConfirmationAction ||
+                    timelinePull !== null
+                  }
+                  key={prompt.label}
+                  onClick={() =>
+                    prompt.label === "Apply"
+                      ? void startApplication()
+                      : (setAboutOpen(false), void sendMessage(prompt.message))
+                  }
+                >
+                  {prompt.label}
+                </Button>
+              ))}
               <Button
-                className="header-prompt"
-                disabled={
-                  isInitializing || isRunning || isUploading || awaitingConfirmationAction
-                }
-                key={prompt.label}
-                onClick={() =>
-                  prompt.label === "Apply"
-                    ? void startApplication()
-                    : (setAboutOpen(false), void sendMessage(prompt.message))
-                }
+                aria-current={aboutOpen ? "page" : undefined}
+                className="about-link"
+                onClick={() => void toggleAbout()}
               >
-                {prompt.label}
+                About
               </Button>
-            ))}
-            <Button
-              aria-current={aboutOpen ? "page" : undefined}
-              className="about-link"
-              onClick={() => void toggleAbout()}
-            >
-              About
-            </Button>
-            <Button
-              aria-expanded={historyOpen}
-              aria-haspopup="dialog"
-              className="logs-link"
-              onClick={() => {
-                setAboutOpen(false);
-                setMobileView("chat");
-                setHistoryOpen(true);
-              }}
-            >
-              Your logs
-            </Button>
-          </nav>
-        ) : null}
+              <a className="about-link" href="/ai-connect">
+                Connect AI
+              </a>
+              <Button
+                aria-expanded={historyOpen}
+                aria-haspopup="dialog"
+                className="logs-link"
+                onClick={() => {
+                  setAboutOpen(false);
+                  setMobileView("chat");
+                  setHistoryOpen(true);
+                }}
+              >
+                Your logs
+              </Button>
+            </nav>
+          ) : null}
+        </div>
       </header>
 
       {mobileViewSwitcherVisible ? (
@@ -1670,13 +2112,25 @@ export default function App() {
 
       {notificationCenterVisible ? (
         <NotificationCenter
-          busy={isInitializing || isRunning || isUploading || awaitingConfirmationAction}
-          data={notificationCenter}
+          busy={isInitializing || isRunning || isUploading || awaitingConfirmationAction || timelinePull !== null}
+          data={notificationCenterForDisplay}
           historyExpanded={notificationHistoryExpanded}
-          onAction={(item) => void handleNotificationAction(item)}
-          onHistoryExpandedChange={setNotificationHistoryExpanded}
-          onMarkRead={(notificationId) => void handleNotificationRead(notificationId)}
-          onSubmissionCheck={(item) => void handleSubmissionCheck(item)}
+          inert={timelinePull !== null}
+          onAction={(item) => {
+            if (timelinePull === null) void handleNotificationAction(item);
+          }}
+          onHistoryExpandedChange={(expanded) => {
+            if (timelinePull === null) setNotificationHistoryExpanded(expanded);
+          }}
+          onMarkRead={(notificationId) => {
+            if (timelinePull === null) {
+              setTimelineOffset(0);
+              void handleNotificationRead(notificationId);
+            }
+          }}
+          onSubmissionCheck={(item) => {
+            if (timelinePull === null) void handleSubmissionCheck(item);
+          }}
         />
       ) : null}
 
@@ -1695,6 +2149,7 @@ export default function App() {
             data-testid="workspace-shell"
           >
         <section
+          ref={responseStageRef}
           aria-atomic="false"
           aria-live="polite"
           className="response-stage"
@@ -1716,34 +2171,70 @@ export default function App() {
               <ActivityTrace activities={activities} currentLabel={currentAction} />
             </div>
           </div>
-          {presentedCommunication ? (
+          <ConversationTimeline
+            disabled={isRunning}
+            moments={timelineMoments}
+            offset={timelineOffset}
+            previewOffset={timelinePull?.targetOffset ?? null}
+            progress={timelinePull?.progress ?? 0}
+            onOffsetChange={handleTimelineOffsetChange}
+          />
+          {!isTimeTraveling && presentedCommunication ? (
             <CommunicationDetailCard
               generatedAt={notificationCenter.generated_at}
               item={presentedCommunication}
               onClose={handleClosePresentedCommunication}
             />
           ) : null}
-          {latestResponse ? (
-            <AgentResponse
-              initialCharacterDelayMs={
-                isWelcomePresentationActive ? WELCOME_MORPH_DELAY_MS : 0
-              }
-              key={
-                latestResponse === WELCOME_MESSAGE
-                  ? `welcome-${welcomePresentationId}`
-                  : "agent-response"
-              }
-              staggerCharacters={latestResponse === WELCOME_MESSAGE}
-              stableScroll={
-                presentedCommunication !== null ||
-                taQuestion !== null ||
-                instructorMessage !== null
-              }
-              streaming={isStreamingText || isWelcomePresentationActive}
-              text={latestResponse}
-            />
+          {displayedResponse ? (
+            <div className="timeline-message-stack">
+              <div
+                className="timeline-message-group"
+                key={historicalMoment?.id ?? presentMoment?.id ?? "live"}
+              >
+                {displayedUserMessage ? (
+                  <section aria-label="Your message" className="timeline-user-message">
+                    {displayedUserMessage}
+                  </section>
+                ) : null}
+                <AgentResponse
+                  fixedSize={selectedConversationId !== null}
+                  initialCharacterDelayMs={
+                    isWelcomePresentationActive ? WELCOME_MORPH_DELAY_MS : 0
+                  }
+                  key={
+                    historicalMoment?.id ?? (latestResponse === WELCOME_MESSAGE
+                      ? `welcome-${welcomePresentationId}`
+                      : "agent-response")
+                  }
+                  staggerCharacters={latestResponse === WELCOME_MESSAGE}
+                  stableScroll={
+                    !isTimeTraveling &&
+                    (presentedCommunication !== null ||
+                      taQuestion !== null ||
+                      instructorMessage !== null)
+                  }
+                  streaming={!isTimeTraveling && (isStreamingText || isWelcomePresentationActive)}
+                  text={displayedResponse}
+                />
+              </div>
+              {previewMoment ? (
+                <div
+                  aria-hidden="true"
+                  className="timeline-preview-message-group timeline-message-group"
+                  inert
+                >
+                  {previewMoment.userMessage ? (
+                    <section className="timeline-user-message">
+                      {previewMoment.userMessage}
+                    </section>
+                  ) : null}
+                  <AgentResponse key={previewMoment.id} preview text={previewMoment.response} />
+                </div>
+              ) : null}
+            </div>
           ) : null}
-          {taQuestion ? (
+          {!isTimeTraveling && taQuestion ? (
             <TAQuestionConfirmation
               confirmation={taQuestion}
               key={taQuestion.id}
@@ -1752,7 +2243,7 @@ export default function App() {
               }
             />
           ) : null}
-          {instructorMessage ? (
+          {!isTimeTraveling && instructorMessage ? (
             <InstructorMessageConfirmation
               confirmation={instructorMessage}
               key={instructorMessage.id}
@@ -1761,7 +2252,7 @@ export default function App() {
               }
             />
           ) : null}
-          {selectedConversationId && instructorEmailDelivery ? (
+          {!isTimeTraveling && selectedConversationId && instructorEmailDelivery ? (
             <InstructorEmailDeliveryStatus
               conversationId={selectedConversationId}
               key={instructorEmailDelivery.messageId}
@@ -1770,25 +2261,55 @@ export default function App() {
             />
           ) : null}
         </section>
-        {workspaceState.panels.length > 0 ? (
-          <Workspace
-            browserControlsReady={!isRunning}
-            conversationId={selectedConversationId!}
-            onBrowserActivate={handleBrowserActivate}
-            onBrowserResize={handleBrowserResize}
-            onBrowserScroll={handleBrowserScroll}
-            onInteraction={handleWorkspaceInteraction}
-            onCloseWorkspace={handleCloseWorkspace}
-            onPanelAction={handleWorkspacePanelAction}
-            onCheckAssignment={
-              principal?.roles.includes("student")
-                ? (resourceUri) =>
-                    void sendMessage(assignmentSubmissionCheckPrompt(resourceUri))
-                : undefined
-            }
-            onSubmitApplication={() => void sendMessage("Please submit my application.")}
-            state={workspaceState}
-          />
+        {displayedWorkspaceState.panels.length > 0 ||
+        (timelinePull !== null && previewWorkspaceState.panels.length > 0) ? (
+          <div className="timeline-workspace-layer">
+            {displayedWorkspaceState.panels.length > 0 ? (
+              <div className="timeline-workspace-current" inert={timelinePull !== null}>
+                <Workspace
+                  browserControlsReady={!isRunning && !isTimeTraveling}
+                  conversationId={selectedConversationId!}
+                  historical={isTimeTraveling}
+                  key={historicalMoment?.id ?? "current"}
+                  onBrowserActivate={handleBrowserActivate}
+                  onBrowserResize={handleBrowserResize}
+                  onBrowserScroll={handleBrowserScroll}
+                  onInteraction={handleWorkspaceInteraction}
+                  onCloseWorkspace={handleCloseWorkspace}
+                  onPanelAction={handleWorkspacePanelAction}
+                  onCheckAssignment={
+                    !isTimeTraveling && principal?.roles.includes("student")
+                      ? (resourceUri) =>
+                          void sendMessage(assignmentSubmissionCheckPrompt(resourceUri))
+                      : undefined
+                  }
+                  onSubmitApplication={
+                    isTimeTraveling
+                      ? undefined
+                      : () => void sendMessage("Please submit my application.")
+                  }
+                  state={displayedWorkspaceState}
+                />
+              </div>
+            ) : null}
+            {timelinePull && previewWorkspaceState.panels.length > 0 ? (
+              <div aria-hidden="true" className="timeline-workspace-preview" inert>
+                <Workspace
+                  browserControlsReady={false}
+                  conversationId={selectedConversationId!}
+                  historical
+                  key={previewMoment?.id ?? "preview"}
+                  onBrowserActivate={handleBrowserActivate}
+                  onBrowserResize={handleBrowserResize}
+                  onBrowserScroll={handleBrowserScroll}
+                  onInteraction={handleWorkspaceInteraction}
+                  onCloseWorkspace={handleCloseWorkspace}
+                  onPanelAction={handleWorkspacePanelAction}
+                  state={previewWorkspaceState}
+                />
+              </div>
+            ) : null}
+          </div>
         ) : null}
           <form
         ref={composerFormRef}
@@ -1870,13 +2391,20 @@ export default function App() {
               autoFocus={!isOpening}
               className="composer-text"
               disabled={
-                isInitializing || isRunning || isUploading || composerBlockedByConfirmation
+                isInitializing ||
+                isRunning ||
+                isUploading ||
+                composerBlockedByConfirmation ||
+                isTimeTraveling ||
+                timelinePull !== null
               }
               enterKeyHint="send"
               onChange={(event) => setMessage(event.target.value)}
               onKeyDown={handleComposerKeyDown}
               placeholder={
-                canRequestInstructorRevision
+                isTimeTraveling
+                  ? "Return to now to continue the conversation"
+                  : canRequestInstructorRevision
                   ? "Ask the agent to revise this draft"
                   : awaitingConfirmationAction
                     ? "Review the draft above"
@@ -1901,7 +2429,8 @@ export default function App() {
                   isInitializing ||
                   isRunning ||
                   isUploading ||
-                  composerBlockedByConfirmation
+                  composerBlockedByConfirmation ||
+                  isTimeTraveling
                 }
                 onClick={() => fileInputRef.current?.click()}
                 type="button"

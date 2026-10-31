@@ -3,13 +3,42 @@
 The web client is a static React/Vite application in `apps/web`. Its default
 screen is intentionally sparse:
 
-- MIT and MIT Media Lab marks at the left of the fixed header, with About at the right;
+- MIT and MIT Media Lab marks at the left of the fixed header, with a visible New chat
+  action immediately before the course shortcuts at the right;
 - a welcome message or latest agent response centered in the workspace;
 - `Course Agent` and its expandable current/last action immediately above the response;
 - borderless user text at the bottom while composing.
 
+An opened conversation is also a scrollable timeline. When it contains more than one
+assistant response, ordinary scrolling moves through a long response first. Continuing upward
+at its top scrubs a pinned transition into the previous student-prompt/assistant-response pair;
+continuing downward at its bottom moves toward the present. The current message, action trace,
+notifications, and workspace fade fully to black before the earlier moment appears. Any layout
+change happens during that black interval. Reversing the wheel, trackpad, or
+touch gesture immediately reverses the transition. When scrolling stops, a short settle completes
+the nearest moment; there is no release-to-switch threshold. One wheel gesture can move only one
+adjacent moment, and the next turn waits for a fresh gesture. A text-free dot pager appears during movement,
+stays minimally visible in history, and can return directly to the present. Keyboard-accessible
+controls provide the same movement. The message remains borderless on black, with the student
+prompt in muted text and no visible timeline rail or scrollbar. Each moment projects the canonical
+workspace events that existed at that point. Historical native workspace views allow temporary
+local exploration without appending events or changing the present workspace; live browser actions
+and submissions are unavailable in history. A notification snapshot is captured even when the
+present workspace hides it; it stays pinned beside chat-only moments and is hidden whenever that
+moment has a workspace. Header shortcuts and notification cards become usable as soon as a
+moment settles; live actions return to the present before running. Composing remains paused in
+history. This is a browser projection
+of canonical events, not a second persisted conversation or workspace history. Platform-added
+upload receipts and communication context are excluded from the displayed student message.
+Conversation replies and their decorative figure keep the same sizes in the scrub preview and
+settled state; longer replies scroll naturally within the conversation stage instead of being
+refitted.
+
 An empty or new conversation explains that the Course Agent is itself the class
 website and invites visitors to ask for course information or discuss applying.
+The text-only New chat header action remains available while a workspace is open. At phone
+widths, it stays at the start of the right-side actions; About and history remain visible,
+while course shortcuts are available through the conversation.
 Opening the site with a non-empty `q` query parameter starts a fresh conversation and submits the
 decoded value through the same agent path as typed text. For example,
 `/?q=Show%20me%20the%20course%20schedule` opens with that request instead of generating a separate
@@ -39,8 +68,9 @@ The browser URL and Back/Forward navigation remain synchronized with that page. 
 contains a concise description, new/history navigation, and student login or logout
 without adding persistent chrome to the main interface.
 
-Response typography uses the largest display scale that lets the complete conversation presentation
-fit without scrolling. The browser measures the animated figure, activity trace, response, and any
+Outside a loaded conversation, response typography uses the largest display scale that lets the
+complete presentation fit without scrolling. The browser measures the animated figure, activity
+trace, response, and any
 confirmation together, and continuously adjusts type size, line height, measure, spacing, and padding
 when that content or the surrounding notification/workspace layout changes. A length-based estimate
 prevents an oversized first paint before measurement. If the presentation cannot fit at the minimum
@@ -151,7 +181,9 @@ release notes. Communications shows a student's queued/open staff questions and 
 instructor messages, replacing a pending question item with the private answer when one arrives;
 TAs and instructors instead see questions that still
 need a staff reply. Upcoming contains authorized structured assignments only during the fourteen
-days before their stored deadline and computes the countdown from the server projection time. Course
+days before their stored deadline and computes the countdown by local calendar day from the server
+projection time, so a deadline on the next calendar date is shown as tomorrow even when it is more
+than 24 hours away. Course
 updates and replies can be marked read; pending threads and deadlines remain visible while active.
 Each released structured-assignment update and deadline card gives students an always-visible
 **Review my progress** action in addition to **View details**. The review starts the bounded

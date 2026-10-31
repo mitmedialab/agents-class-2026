@@ -1748,7 +1748,14 @@
   margin: 0 auto;
   max-width: 48rem;
   overflow-wrap: anywhere;
+}
+
+.ca-document-content > pre {
   white-space: pre-wrap;
+}
+
+.ca-document-markdown {
+  white-space: normal;
 }
 
 .ca-document-markdown h1,

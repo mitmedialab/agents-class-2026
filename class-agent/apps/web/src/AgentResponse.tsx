@@ -73,7 +73,7 @@ function fitResponseElement(
   element: HTMLElement,
   preferredScale?: number,
 ): Pick<ResponseFit, "expanded" | "fits" | "scale"> | null {
-  const stage = element.parentElement;
+  const stage = element.closest<HTMLElement>(".response-stage") ?? element.parentElement;
   if (!stage) return null;
   const previousStyle = element.getAttribute("style");
   const previousMeasuringState = element.getAttribute("data-response-measuring");
@@ -369,7 +369,9 @@ function responseBlocks(
 }
 
 export interface AgentResponseProps {
+  fixedSize?: boolean;
   initialCharacterDelayMs?: number;
+  preview?: boolean;
   staggerCharacters?: boolean;
   stableScroll?: boolean;
   streaming?: boolean;
@@ -377,7 +379,9 @@ export interface AgentResponseProps {
 }
 
 export function AgentResponse({
+  fixedSize = false,
   initialCharacterDelayMs = 0,
+  preview = false,
   staggerCharacters = false,
   stableScroll = false,
   streaming = false,
@@ -391,7 +395,15 @@ export function AgentResponse({
     scale: responseScale(text),
     text,
   }));
-  const currentFit = stableScroll
+  const currentFit = fixedSize || preview
+    ? {
+        expanded: false,
+        fits: null,
+        measured: true,
+        scale: 0,
+        text,
+      }
+    : stableScroll
     ? {
         expanded: true,
         fits: false,
@@ -410,9 +422,9 @@ export function AgentResponse({
         };
 
   useLayoutEffect(() => {
-    if (stableScroll) return;
+    if (fixedSize || stableScroll || preview) return;
     const element = responseRef.current;
-    const stage = element?.parentElement;
+    const stage = element?.closest<HTMLElement>(".response-stage") ?? element?.parentElement;
     if (!element || !stage) return;
     let animationFrame = 0;
 
@@ -464,14 +476,15 @@ export function AgentResponse({
       mutationObserver?.disconnect();
       observer?.disconnect();
     };
-  }, [stableScroll, streaming, text]);
+  }, [fixedSize, preview, stableScroll, streaming, text]);
 
   return (
     <div
       ref={responseRef}
       className="latest-response"
       data-character-delay={initialCharacterDelayMs}
-      data-response-fit={currentFit.measured ? "measured" : "estimated"}
+      data-response-fit={fixedSize || preview ? "fixed" : currentFit.measured ? "measured" : "estimated"}
+      data-response-fixed-size={fixedSize || preview}
       data-response-layout={currentFit.expanded ? "expanded" : "standard"}
       data-response-overflow={currentFit.fits === false}
       data-response-scale={currentFit.scale.toFixed(3)}

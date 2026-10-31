@@ -81,6 +81,14 @@ The workspace has priority over the notification center in their shared presenta
 workspace hides, but does not consume, the current notification projection; closing the workspace
 restores it immediately.
 
+When rewinding a conversation, the workspace displays the projection from that turn. Native
+components remain explorable: view switches, page selection, local draft edits, focus, and close
+apply only to a temporary browser state for that historical turn. They do not append canonical
+events or modify the present workspace. A historical browser panel uses its recorded snapshot
+instead of a live stream; remote browser actions and submissions remain unavailable. If the
+notification center occupied the side slot when rewind began, its snapshot remains pinned beside
+the historical workspace on desktop rather than disappearing when that workspace reappears.
+
 The server reconstructs workspace state from all prior panel events before a run.
 Commands reject unknown components, invalid props, unsupported operations, duplicate
 panels, missing panels, and unauthorized resource URIs. The browser validates again

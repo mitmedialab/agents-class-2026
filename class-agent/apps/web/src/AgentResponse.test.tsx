@@ -111,6 +111,42 @@ describe("AgentResponse", () => {
     expect(response).toHaveAttribute("data-response-overflow", "true");
   });
 
+  it("renders a timeline preview without changing the active response layout", () => {
+    const { container } = render(
+      <section className="response-stage">
+        <AgentResponse preview text="A prior answer with **emphasis**." />
+      </section>,
+    );
+
+    expect(screen.getByText("emphasis")).toBeInTheDocument();
+    expect(container.querySelector(".latest-response")).toHaveAttribute(
+      "data-response-fit",
+      "fixed",
+    );
+    expect(container.querySelector(".latest-response")).toHaveAttribute(
+      "data-response-fixed-size",
+      "true",
+    );
+    expect(container.querySelector(".latest-response")).toHaveAttribute(
+      "data-response-overflow",
+      "false",
+    );
+  });
+
+  it("keeps a settled conversation response at the same fixed scale as its preview", () => {
+    const { container, rerender } = render(
+      <AgentResponse fixedSize text="A short answer." />,
+    );
+    const response = container.querySelector(".latest-response");
+
+    expect(response).toHaveAttribute("data-response-fit", "fixed");
+    expect(response).toHaveAttribute("data-response-scale", "0.000");
+
+    rerender(<AgentResponse fixedSize text={"A much longer answer. ".repeat(50)} />);
+    expect(response).toHaveAttribute("data-response-fit", "fixed");
+    expect(response).toHaveAttribute("data-response-scale", "0.000");
+  });
+
   it("uses the largest rendered text scale that fits without scrolling", async () => {
     const clientHeight = Object.getOwnPropertyDescriptor(
       HTMLElement.prototype,

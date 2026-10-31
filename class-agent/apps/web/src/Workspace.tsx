@@ -1,4 +1,5 @@
 import {
+  BrowserViewer,
   Calendar,
   DocumentViewer,
   DraftDocument,
@@ -33,11 +34,12 @@ import { StreamingBrowserViewer } from "./StreamingBrowserViewer.js";
 interface WorkspaceProps {
   browserControlsReady?: boolean;
   conversationId: string;
+  historical?: boolean;
   state: WorkspaceState;
   onPanelAction: (action: "focus" | "close", panelId: string) => Promise<void>;
   onCloseWorkspace: () => Promise<void>;
   onCheckAssignment?: ((resourceUri: string) => void) | undefined;
-  onSubmitApplication: () => void;
+  onSubmitApplication?: (() => void) | undefined;
   onInteraction: (panelId: string, action: string, value: JsonValue) => Promise<void>;
   onBrowserScroll: (panelId: string, sessionId: string, deltaY: number) => Promise<void>;
   onBrowserActivate: (
@@ -217,6 +219,7 @@ function pageCardItems(
 function ResourcePanel({
   browserControlsReady,
   conversationId,
+  historical,
   panel,
   onBrowserActivate,
   onBrowserScroll,
@@ -227,6 +230,7 @@ function ResourcePanel({
 }: {
   browserControlsReady: boolean;
   conversationId: string;
+  historical: boolean;
   panel: WorkspacePanel;
   onBrowserActivate: (
     panelId: string,
@@ -243,7 +247,7 @@ function ResourcePanel({
   ) => Promise<void>;
   onInteraction: (panelId: string, action: string, value: JsonValue) => Promise<void>;
   onCheckAssignment?: ((resourceUri: string) => void) | undefined;
-  onSubmitApplication: () => void;
+  onSubmitApplication?: (() => void) | undefined;
 }) {
   const [resource, setResource] = useState<CourseResourceContent | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -366,21 +370,25 @@ function ResourcePanel({
     if (!sessionId || !url || !title || !revision) {
       return <p className="workspace-panel-message">The browser session is invalid.</p>;
     }
-    return (
+    const viewerProps = {
+      controlsEnabled: browserControlsReady,
+      imageUrl: browserSnapshotUrl(conversationId, sessionId, revision),
+      onActivate: (x: number, y: number) => onBrowserActivate(panel.id, sessionId, x, y),
+      onScroll: (deltaY: number) => onBrowserScroll(panel.id, sessionId, deltaY),
+      onResize: (width: number, height: number) =>
+        onBrowserResize(panel.id, sessionId, width, height),
+      title,
+      url,
+      ...(viewportHeight === undefined ? {} : { viewportHeight }),
+      ...(viewportWidth === undefined ? {} : { viewportWidth }),
+      ...(scrollY === undefined ? {} : { focusScrollY: scrollY }),
+    };
+    return historical ? (
+      <BrowserViewer {...viewerProps} />
+    ) : (
       <StreamingBrowserViewer
-        controlsEnabled={browserControlsReady}
+        {...viewerProps}
         streamUrl={browserStreamUrl(conversationId, sessionId)}
-        imageUrl={browserSnapshotUrl(conversationId, sessionId, revision)}
-        onActivate={(x, y) => onBrowserActivate(panel.id, sessionId, x, y)}
-        onScroll={(deltaY) => onBrowserScroll(panel.id, sessionId, deltaY)}
-        onResize={(width, height) =>
-          onBrowserResize(panel.id, sessionId, width, height)
-        }
-        title={title}
-        url={url}
-        {...(viewportHeight === undefined ? {} : { viewportHeight })}
-        {...(viewportWidth === undefined ? {} : { viewportWidth })}
-        {...(scrollY === undefined ? {} : { focusScrollY: scrollY })}
       />
     );
   }
@@ -475,7 +483,7 @@ function ResourcePanel({
               : undefined
           }
         />
-        {applicationFields && applicationProgress !== null ? (
+        {applicationFields && applicationProgress !== null && onSubmitApplication ? (
           <footer className="workspace-application-submit">
             <span
               title={
@@ -570,6 +578,7 @@ function ResourcePanel({
 export function Workspace({
   browserControlsReady = true,
   conversationId,
+  historical = false,
   state,
   onPanelAction,
   onCloseWorkspace,
@@ -595,6 +604,7 @@ export function Workspace({
     <aside
       aria-label="Workspace"
       className="workspace-pane"
+      data-history={historical ? "true" : undefined}
       data-tabbed={tabbed}
     >
       {tabbed ? (
@@ -635,8 +645,9 @@ export function Workspace({
       )}
       <div className="workspace-panel" role="tabpanel">
         <ResourcePanel
-          browserControlsReady={browserControlsReady}
+          browserControlsReady={browserControlsReady && !historical}
           conversationId={conversationId}
+          historical={historical}
           onBrowserActivate={onBrowserActivate}
           onBrowserResize={onBrowserResize}
           onBrowserScroll={onBrowserScroll}

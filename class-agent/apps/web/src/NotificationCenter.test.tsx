@@ -247,6 +247,32 @@ describe("NotificationCenter", () => {
     expect(center).toBeVisible();
   });
 
+  it("counts assignment deadlines by calendar day instead of rounding hours up", () => {
+    render(
+      <NotificationCenter
+        busy={false}
+        data={{
+          generated_at: "2026-10-28T01:00:00-04:00",
+          unread_count: 0,
+          items: [
+            {
+              ...data.items[3]!,
+              due_at: "2026-10-29T08:00:00-04:00",
+              title: "Final Project Team Formation",
+            },
+          ],
+        }}
+        historyExpanded={false}
+        onAction={vi.fn()}
+        onHistoryExpandedChange={vi.fn()}
+        onMarkRead={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Due tomorrow")).toBeVisible();
+    expect(screen.queryByText("Due in 2 days")).not.toBeInTheDocument();
+  });
+
   it("does not reserve a surface when there are no items", () => {
     render(
       <NotificationCenter

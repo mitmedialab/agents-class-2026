@@ -104,6 +104,23 @@ describe("DocumentViewer", () => {
     expect(screen.getByText("Be creative!")).toBeInTheDocument();
   });
 
+  it("keeps blank Markdown source lines out of the document structure", () => {
+    const { container } = render(
+      <DocumentViewer
+        resource={{
+          uri: "course://assignment/spacing",
+          title: "Spacing",
+          mediaType: "text/markdown",
+          data: new TextEncoder().encode("# Spacing\n\nFirst paragraph.\n\nSecond paragraph."),
+        }}
+      />,
+    );
+
+    expect(container.querySelector(".ca-document-markdown")).not.toBeNull();
+    expect(container.querySelector(".ca-document-markdown br")).toBeNull();
+    expect(container.querySelectorAll(".ca-document-markdown p")).toHaveLength(2);
+  });
+
   it("renders GFM tables without changing their text or allowing raw HTML", () => {
     const content = [
       "| Name | Email | Website | Project Idea |",

@@ -40,6 +40,7 @@ interface NotificationCenterProps {
   busy: boolean;
   data: NotificationCenterData;
   historyExpanded: boolean;
+  inert?: boolean;
   onAction: (item: NotificationCenterItem) => void;
   onSubmissionCheck?: ((item: NotificationCenterItem) => void) | undefined;
   onHistoryExpandedChange: (expanded: boolean) => void;
@@ -215,8 +216,13 @@ function formatDate(value: string): string {
 function formatDeadline(value: string, now = new Date()): string {
   const deadline = new Date(value);
   if (Number.isNaN(deadline.getTime())) return "Due date unavailable";
-  const remainingMs = deadline.getTime() - now.getTime();
-  const remainingDays = Math.ceil(remainingMs / 86_400_000);
+  const deadlineDay = Date.UTC(
+    deadline.getFullYear(),
+    deadline.getMonth(),
+    deadline.getDate(),
+  );
+  const currentDay = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const remainingDays = Math.round((deadlineDay - currentDay) / DAY_MS);
   if (remainingDays <= 0) return "Due today";
   if (remainingDays === 1) return "Due tomorrow";
   return `Due in ${remainingDays} days`;
@@ -447,6 +453,7 @@ export function NotificationCenter({
   busy,
   data,
   historyExpanded,
+  inert = false,
   onAction,
   onHistoryExpandedChange,
   onMarkRead,
@@ -490,6 +497,7 @@ export function NotificationCenter({
       data-current-empty={data.items.length === 0 ? "true" : "false"}
       data-history-open={historyExpanded ? "true" : "false"}
       data-scrolled={hasScrolled ? "true" : "false"}
+      inert={inert}
     >
       <span aria-hidden="true" className="notification-center-header-fade" />
       <div className="notification-center-scroll" onScroll={handleScroll}>

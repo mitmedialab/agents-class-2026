@@ -257,11 +257,21 @@ describe("Course Agent interface", () => {
     expect(api.createConversation).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "MIT" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "MIT Media Lab" })).toBeInTheDocument();
+    const newChat = screen.getByRole("button", { name: "New chat" });
+    expect(newChat).toBe(document.querySelector(".header-utility")?.firstElementChild);
+    expect(newChat.querySelector("svg")).toBeNull();
+    expect(
+      screen.getByRole("navigation", { name: "Course shortcuts" }).previousElementSibling,
+    ).toBe(newChat);
     expect(screen.getByRole("button", { name: "Your logs" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Apply" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Schedule" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Grading" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "About" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Connect AI" })).toHaveAttribute(
+      "href",
+      "/ai-connect",
+    );
     expect(screen.getByText("Course Agent")).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Message" })).toHaveAttribute(
       "placeholder",
@@ -272,6 +282,352 @@ describe("Course Agent interface", () => {
     expect(workspaceShell).toContainElement(composerForm);
     fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
     expect(screen.getByRole("button", { name: /Week one/ })).toBeInTheDocument();
+  });
+
+  it("scrolls backward through assistant moments and restores their workspace", async () => {
+    vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
+    vi.mocked(api.getNotificationCenter).mockResolvedValue({
+      generated_at: "2026-09-05T12:00:00Z",
+      unread_count: 1,
+      items: [{
+        id: "60000000-0000-4000-8000-000000000001",
+        section: "notifications",
+        kind: "course_update",
+        state: "unread",
+        title: "Project update",
+        detail: "A new project note is available.",
+        timestamp: "2026-09-05T12:00:00Z",
+        due_at: null,
+        action_label: "Discuss update",
+        action_prompt: "Explain this update.",
+        unread: true,
+        dismissible: true,
+        sender: null,
+      }],
+    });
+    const workspaceOpened = {
+      ...previousEvent,
+      id: "30000000-0000-4000-8000-000000000010",
+      timestamp: "2026-08-23T10:06:00Z",
+      type: "workspace.panel.opened",
+      payload: {
+        command: {
+          type: "open",
+          panel: {
+            id: "40000000-0000-4000-8000-000000000010",
+            component_id: "calendar",
+            title: "Course schedule",
+            resource_uri: "course://schedule",
+            props: {},
+            state: {},
+          },
+        },
+      },
+    };
+    const latestEvent = {
+      ...previousEvent,
+      id: "30000000-0000-4000-8000-000000000013",
+      timestamp: "2026-08-23T10:09:00Z",
+      payload: { text: "The current response." },
+    };
+    const workspaceResponse = {
+      ...previousEvent,
+      id: "30000000-0000-4000-8000-000000000011",
+      timestamp: "2026-08-23T10:07:00Z",
+      payload: { text: "The schedule is open." },
+    };
+    const workspacePrompt = {
+      ...previousEvent,
+      id: "30000000-0000-4000-8000-000000000014",
+      timestamp: "2026-08-23T10:05:30Z",
+      type: "user.message",
+      actor: "user",
+      payload: { text: "Show me the course schedule." },
+    };
+    const closePrompt = {
+      ...previousEvent,
+      id: "30000000-0000-4000-8000-000000000015",
+      timestamp: "2026-08-23T10:07:30Z",
+      type: "user.message",
+      actor: "user",
+      payload: { text: "Close the schedule and summarize it." },
+    };
+    const workspaceClosed = {
+      ...previousEvent,
+      id: "30000000-0000-4000-8000-000000000012",
+      timestamp: "2026-08-23T10:08:00Z",
+      type: "workspace.panel.closed",
+      payload: {
+        command: {
+          type: "close",
+          panel_id: "40000000-0000-4000-8000-000000000010",
+        },
+      },
+    };
+    vi.mocked(api.getConversation).mockResolvedValue({
+      conversation,
+      events: [
+        previousEvent,
+        workspacePrompt,
+        workspaceOpened,
+        workspaceResponse,
+        closePrompt,
+        workspaceClosed,
+        latestEvent,
+      ],
+    });
+
+    render(<App />);
+    await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Week one/ }));
+
+    expect(await screen.findByText("The current response.")).toBeInTheDocument();
+    expect(within(document.querySelector(".timeline-message-group")!).getByText("Close the schedule and summarize it.")).toBeInTheDocument();
+    expect(screen.queryByRole("complementary", { name: "Workspace" })).not.toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Notification center" })).toBeInTheDocument();
+
+    const stage = document.querySelector(".response-stage")!;
+    Object.defineProperty(stage, "scrollHeight", { configurable: true, value: 600 });
+    Object.defineProperty(stage, "clientHeight", { configurable: true, value: 300 });
+    Object.defineProperty(stage, "scrollTop", { configurable: true, writable: true, value: 80 });
+    const ordinaryScroll = new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: -80 });
+    stage.dispatchEvent(ordinaryScroll);
+    expect(ordinaryScroll.defaultPrevented).toBe(false);
+    expect(document.querySelector(".timeline-preview-message-group")).not.toBeInTheDocument();
+    stage.scrollTop = 0;
+
+    const timelineScroll = new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: -160 });
+    act(() => { stage.dispatchEvent(timelineScroll); });
+    expect(timelineScroll.defaultPrevented).toBe(true);
+    expect(document.querySelector(".timeline-preview-message-group")).toHaveTextContent("Show me the course schedule.");
+    expect(document.querySelector(".timeline-workspace-preview")).toHaveAttribute("aria-hidden", "true");
+    expect(document.querySelector(".conversation-timeline")).toHaveAttribute("data-scrubbing", "true");
+    expect(document.querySelector(".course-agent")).toHaveAttribute("data-timeline-transition", "true");
+    expect(document.querySelector(".timeline-message-group .latest-response")).toHaveAttribute("data-response-fit", "fixed");
+    expect(document.querySelector(".timeline-preview-message-group .latest-response")).toHaveAttribute("data-response-fit", "fixed");
+    const agent = document.querySelector<HTMLElement>(".course-agent")!;
+    expect(agent.style.getPropertyValue("--timeline-outgoing-opacity")).toBe("0");
+    expect(agent.style.getPropertyValue("--timeline-incoming-opacity")).toBe("0");
+    expect(agent.style.getPropertyValue("--timeline-header-opacity")).toBe("0");
+    expect(agent.style.getPropertyValue("--timeline-notification-opacity")).toBe("0");
+    fireEvent.wheel(stage, { deltaY: -40 });
+    expect(agent).toHaveAttribute("data-timeline-target-flow", "true");
+    expect(agent.style.getPropertyValue("--timeline-outgoing-opacity")).toBe("0");
+    expect(agent.style.getPropertyValue("--timeline-incoming-opacity")).toBe("0");
+    fireEvent.wheel(stage, { deltaY: 120 });
+    expect(within(document.querySelector(".timeline-message-group")!).getByText("The current response.")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(document.querySelector(".conversation-timeline")).toHaveAttribute("data-active", "false"),
+    );
+    fireEvent.wheel(stage, { deltaY: -120 });
+    fireEvent.wheel(stage, { deltaY: -120 });
+    expect(document.querySelector(".timeline-preview-message-group")).toHaveTextContent("The schedule is open.");
+
+    await waitFor(() =>
+      expect(within(document.querySelector(".timeline-message-group:not(.timeline-preview-message-group)")!).getByText("The schedule is open.")).toBeInTheDocument(),
+    );
+    expect(within(document.querySelector(".timeline-message-group")!).getByText("Show me the course schedule.")).toBeInTheDocument();
+    expect(screen.queryByText("Close the schedule and summarize it.")).not.toBeInTheDocument();
+    const historicalWorkspace = screen.getByRole("complementary", {
+      name: "Workspace",
+    });
+    expect(historicalWorkspace).toHaveAttribute("data-history", "true");
+    expect(screen.queryByRole("complementary", { name: "Notification center" })).not.toBeInTheDocument();
+    expect(screen.getByTestId("course-agent-interface").parentElement).toHaveAttribute("data-notifications-open", "false");
+    expect(historicalWorkspace.querySelector("[inert]")).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "Month" }));
+    expect(screen.getByRole("button", { name: "Month" })).toHaveAttribute("aria-pressed", "true");
+    expect(api.recordWorkspaceInteraction).not.toHaveBeenCalled();
+    expect(screen.getByRole("textbox", { name: "Message" })).toBeDisabled();
+    expect(document.querySelector(".timeline-pager")).toHaveAttribute("aria-description", "Moment 2 of 3");
+
+    fireEvent.click(screen.getByRole("button", { name: "Go to an older assistant response" }));
+    expect(screen.getByRole("complementary", { name: "Notification center" })).toBeInTheDocument();
+    expect(screen.queryByRole("complementary", { name: "Workspace" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Go to a newer assistant response" }));
+    expect(screen.queryByRole("complementary", { name: "Notification center" })).not.toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Workspace" })).toHaveAttribute("data-history", "true");
+
+    stage.scrollTop = 300;
+    fireEvent.wheel(stage, { deltaY: 100 });
+    expect(document.querySelector(".timeline-preview-message-group")).toHaveTextContent("The current response.");
+    fireEvent.wheel(stage, { deltaY: -60 });
+    await waitFor(() =>
+      expect(document.querySelector(".timeline-preview-message-group")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("complementary", { name: "Workspace" })).toHaveAttribute("data-history", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Return to current response" }));
+
+    expect(await screen.findByText("The current response.")).toBeInTheDocument();
+    expect(within(document.querySelector(".timeline-message-group")!).getByText("Close the schedule and summarize it.")).toBeInTheDocument();
+    expect(screen.queryByRole("complementary", { name: "Workspace" })).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Message" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Schedule" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Discuss update: Project update" })).toBeEnabled();
+
+    fireEvent.touchStart(stage, { touches: [{ clientY: 200 }] });
+    fireEvent.touchMove(stage, { touches: [{ clientY: 440 }] });
+    expect(document.querySelector(".conversation-timeline")).toHaveAttribute("data-scrubbing", "true");
+    expect(within(document.querySelector(".timeline-message-group")!).getByText("The current response.")).toBeInTheDocument();
+    fireEvent.touchEnd(stage, { changedTouches: [{ clientY: 440 }] });
+    await waitFor(() =>
+      expect(within(document.querySelector(".timeline-message-group:not(.timeline-preview-message-group)")!).getByText("Show me the course schedule.")).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Go to an older assistant response" }));
+    expect(screen.getByRole("button", { name: "Schedule" })).toBeEnabled();
+    expect(screen.getByRole("complementary", { name: "Notification center" })).not.toHaveAttribute("inert");
+    fireEvent.click(screen.getByRole("button", { name: "Schedule" }));
+    await waitFor(() =>
+      expect(api.streamAgentRun).toHaveBeenCalledWith(
+        conversation.id,
+        "Show me the course schedule.",
+        expect.any(Function),
+        expect.any(AbortSignal),
+      ),
+    );
+    expect(document.querySelector(".course-agent")).toHaveAttribute("data-time-traveling", "false");
+  });
+
+  it("reveals notifications in an older chat moment even when the current workspace hides them", async () => {
+    vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
+    vi.mocked(api.getNotificationCenter).mockResolvedValue({
+      generated_at: "2026-09-05T12:00:00Z",
+      unread_count: 1,
+      items: [{
+        id: "60000000-0000-4000-8000-000000000001",
+        section: "notifications",
+        kind: "course_update",
+        state: "unread",
+        title: "Project update",
+        detail: "A new project note is available.",
+        timestamp: "2026-09-05T12:00:00Z",
+        due_at: null,
+        action_label: "Discuss update",
+        action_prompt: "Explain this update.",
+        unread: true,
+        dismissible: true,
+        sender: null,
+      }],
+    });
+    vi.mocked(api.getConversation).mockResolvedValue({
+      conversation,
+      events: [
+        previousEvent,
+        {
+          ...previousEvent,
+          id: "30000000-0000-4000-8000-000000000010",
+          type: "workspace.panel.opened",
+          payload: {
+            command: {
+              type: "open",
+              panel: {
+                id: "40000000-0000-4000-8000-000000000010",
+                component_id: "calendar",
+                title: "Course schedule",
+                resource_uri: "course://schedule",
+                props: {},
+                state: {},
+              },
+            },
+          },
+        },
+        {
+          ...previousEvent,
+          id: "30000000-0000-4000-8000-000000000011",
+          payload: { text: "The schedule is open." },
+        },
+      ],
+    });
+
+    render(<App />);
+    await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Week one/ }));
+    expect(await screen.findByText("The schedule is open.")).toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Workspace" })).toBeInTheDocument();
+    expect(screen.queryByRole("complementary", { name: "Notification center" })).not.toBeInTheDocument();
+
+    const stage = document.querySelector(".response-stage")!;
+    Object.defineProperty(stage, "scrollHeight", { configurable: true, value: 300 });
+    Object.defineProperty(stage, "clientHeight", { configurable: true, value: 300 });
+    fireEvent.wheel(stage, { deltaY: -220 });
+    expect(screen.getByRole("complementary", { name: "Notification center" })).toBeInTheDocument();
+    expect(Number(document.querySelector<HTMLElement>(".course-agent")!.style.getPropertyValue("--timeline-notification-opacity"))).toBeGreaterThan(0);
+
+    await waitFor(() =>
+      expect(within(document.querySelector(".timeline-message-group:not(.timeline-preview-message-group)")!).getByText("The earlier response.")).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("complementary", { name: "Notification center" })).toBeInTheDocument();
+    expect(screen.queryByRole("complementary", { name: "Workspace" })).not.toBeInTheDocument();
+
+    const historicalUpdate = screen.getByRole("button", { name: "Discuss update: Project update" });
+    expect(historicalUpdate).toBeEnabled();
+    expect(screen.getByRole("complementary", { name: "Notification center" })).not.toHaveAttribute("inert");
+    fireEvent.click(historicalUpdate);
+    await waitFor(() =>
+      expect(api.streamAgentRun).toHaveBeenCalledWith(
+        conversation.id,
+        "Explain this update.",
+        expect.any(Function),
+        expect.any(AbortSignal),
+      ),
+    );
+    expect(document.querySelector(".course-agent")).toHaveAttribute("data-time-traveling", "false");
+    expect(screen.getByRole("complementary", { name: "Workspace" })).toBeInTheDocument();
+
+    expect(screen.queryByRole("complementary", { name: "Notification center" })).not.toBeInTheDocument();
+  });
+
+  it("requires a new wheel gesture before moving past the adjacent moment", async () => {
+    vi.mocked(api.getConversation).mockResolvedValue({
+      conversation,
+      events: [
+        previousEvent,
+        {
+          ...previousEvent,
+          id: "30000000-0000-4000-8000-000000000021",
+          payload: { text: "The middle response." },
+        },
+        {
+          ...previousEvent,
+          id: "30000000-0000-4000-8000-000000000022",
+          payload: { text: "The latest response." },
+        },
+      ],
+    });
+
+    render(<App />);
+    await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Week one/ }));
+    expect(await screen.findByText("The latest response.")).toBeInTheDocument();
+
+    const stage = document.querySelector(".response-stage")!;
+    Object.defineProperty(stage, "scrollHeight", { configurable: true, value: 300 });
+    Object.defineProperty(stage, "clientHeight", { configurable: true, value: 300 });
+    fireEvent.wheel(stage, { deltaY: -80 });
+    expect(document.querySelector(".timeline-pager")).toHaveAttribute("aria-description", "Moment 3 of 3");
+    await waitFor(() =>
+      expect(document.querySelector(".timeline-preview-message-group")).not.toBeInTheDocument(),
+    );
+
+    fireEvent.wheel(stage, { deltaY: -600 });
+    await waitFor(() =>
+      expect(within(document.querySelector(".timeline-message-group:not(.timeline-preview-message-group)")!).getByText("The middle response.")).toBeInTheDocument(),
+    );
+    const continuedScroll = new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: -600 });
+    act(() => { stage.dispatchEvent(continuedScroll); });
+    expect(continuedScroll.defaultPrevented).toBe(true);
+    expect(document.querySelector(".timeline-pager")).toHaveAttribute("aria-description", "Moment 2 of 3");
+    expect(document.querySelector(".timeline-preview-message-group")).not.toBeInTheDocument();
+
+    await new Promise((resolve) => window.setTimeout(resolve, 480));
+    fireEvent.wheel(stage, { deltaY: -600 });
+    await waitFor(() =>
+      expect(within(document.querySelector(".timeline-message-group:not(.timeline-preview-message-group)")!).getByText("The earlier response.")).toBeInTheDocument(),
+    );
   });
 
   it("starts a fresh conversation from a shared q query and consumes the parameter", async () => {
@@ -1064,9 +1420,9 @@ describe("Course Agent interface", () => {
     );
   });
 
-  it.each(["MIT", "MIT Media Lab"])(
-    "starts a fresh chat from the %s logo",
-    async (logoName) => {
+  it.each(["MIT", "MIT Media Lab", "New chat"])(
+    "starts a fresh chat from the %s header control",
+    async (controlName) => {
       vi.useFakeTimers();
       try {
         render(<App />);
@@ -1078,7 +1434,7 @@ describe("Course Agent interface", () => {
         });
         const composer = screen.getByRole("textbox", { name: "Message" });
         fireEvent.change(composer, { target: { value: "Unsent draft" } });
-        fireEvent.click(screen.getByRole("button", { name: logoName }));
+        fireEvent.click(screen.getByRole("button", { name: controlName }));
 
         expect(document.querySelector(".latest-response")).toHaveTextContent(
           /Welcome\. I’m the Course Agent/,
@@ -1144,7 +1500,13 @@ describe("Course Agent interface", () => {
     await openExistingConversation();
 
     expect(screen.queryByRole("button", { name: "Apply" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Contact" }));
+    const contact = screen.getByRole("button", { name: "Contact" });
+    const shortcuts = screen.getByRole("navigation", { name: "Course shortcuts" });
+    expect(contact).toBe(shortcuts.firstElementChild);
+    expect(shortcuts.previousElementSibling).toBe(
+      screen.getByRole("button", { name: "New chat" }),
+    );
+    fireEvent.click(contact);
 
     await waitFor(() =>
       expect(api.streamAgentRun).toHaveBeenCalledWith(
@@ -1191,6 +1553,22 @@ describe("Course Agent interface", () => {
       expect.any(Function),
       expect.any(AbortSignal),
     );
+  });
+
+  it("keeps New chat available while the workspace is open", async () => {
+    render(<App />);
+    await openExistingConversation();
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    expect(await screen.findByRole("complementary", { name: "Workspace" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "New chat" }));
+
+    expect(screen.queryByRole("complementary", { name: "Workspace" })).not.toBeInTheDocument();
+    expect(document.querySelector(".latest-response")).toHaveTextContent(
+      /Welcome\. I’m the Course Agent/,
+    );
+    expect(screen.getByRole("textbox", { name: "Message" })).toBeEnabled();
   });
 
   it("returns to the prior conversation after closing the application workspace", async () => {
