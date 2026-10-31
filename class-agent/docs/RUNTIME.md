@@ -77,6 +77,7 @@ course.search_faq
 course.list_faq_updates
 course.read_faq_update
 course.search
+course.inspect_slide_page
 course.list_my_communications (exact student role only)
 course.read_my_communication (exact student role only)
 course.submit_application
@@ -98,8 +99,10 @@ skills.read_reference
 The readable resources are `course://syllabus`, `course://schedule`,
 `course://repositories`, `course://faq`, `course://instructors`, and
 `course://application`. Application wrappers use canonical IDs, resource URIs, and JSON
-input schemas that translate directly to MCP. They are not a second wire protocol, and
-an MCP server is intentionally deferred.
+input schemas that translate directly to MCP. They are not a second wire protocol.
+The optional, student-only ChatGPT Course MCP pilot is a separate transport over
+selected course services; the internal capability gateway and full MCP topology
+remain deferred. See [MCP.md](MCP.md).
 
 Authorization happens before smolagents receives tools. `CourseCapabilityPolicy` grants
 public resources to everyone, student resources to students and instructors, and instructor
@@ -151,7 +154,8 @@ the exact stored Markdown. See
 
 `instructor.list_students` exposes a paginated active-student directory (display name, username,
 and email) only when the instructor messaging service is configured. Capability filtering and a
-fresh stored-account role check both require the exact instructor role. It omits inactive students,
+fresh stored-account role check both require the exact instructor role. A recipient must be active
+in both the canonical course roster and the authentication database. It omits inactive students,
 credentials, user IDs, and question ownership. Tool events retain only a count summary.
 
 `instructor.message_students` is available only when the PostgreSQL-backed messaging service is
@@ -177,7 +181,8 @@ The mail worker mirrors an online resolution into the original staff email threa
 exists.
 
 The optional GitHub student-project tools use the same pre-model and execution-time checks.
-All authenticated course roles can list and inspect every deployed course website. Students never
+All authenticated course roles can list and inspect each active weekly-build website authorized
+by the canonical roster. Students never
 receive repository source or development metadata; TAs, instructors, and admins can make bounded,
 read-only calls across the configured course repository collection. GitHub results remain
 ephemeral to the current turn and durable events keep only completion summaries; the token remains
@@ -215,6 +220,16 @@ storage disabled. The image bytes and model-facing data URL never enter `ToolExe
 canonical events; the current run receives the textual inspection and page metadata, while history
 keeps only a generic summary and resource provenance. Tool arguments are redacted from audit events.
 PDFium rendering is serialized inside the process because its rendering API is not thread-safe.
+
+`course.inspect_slide_page` uses the same bounded renderer and multimodal inspection
+boundary for a specified numbered page of a registered `course://slides/` PDF,
+without requiring it to be the focused workspace panel. The platform checks both
+the run's resource grant and the principal's current resource access. Only the
+textual visual interpretation and source/page metadata return to the agent; the
+PNG is never saved in canonical history. The Course MCP reuses this authorized
+page-read service but returns an MCP image content block to the student's chosen
+client instead of running server-side vision. Existing public/private resource
+readers already provide the exact registered Markdown text.
 
 Resource reads also return safe registered-asset IDs when a manifest declares them.
 The runtime tells the agent to prefer those official assets, attach them to a visual
@@ -256,6 +271,10 @@ and instructor-review procedures therefore do not occupy every turn's system pro
 registered files, so edits are visible without a server restart. The companion
 `course_server.index_resources` command maintains normalized PostgreSQL full-text data
 for inspection and later MCP-backed search without requiring embeddings.
+Registered slide PDFs include page-numbered accessibility descriptions from each deck's
+maintained `accessibility.txt` sidecar in both read and search text. The sidecar is confined to
+the deck directory and its page count is checked against the PDF, so visual examples can be
+located before an agent opens the original page image.
 
 `course.submit_application` is public so prospective students do not need an account.
 Its schema requires every structured application field and a principal-owned temporary

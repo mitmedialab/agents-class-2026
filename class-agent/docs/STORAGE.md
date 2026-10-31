@@ -29,6 +29,11 @@ PostgreSQL stores durable server-side identity and canonical conversation histor
 - `instructor_messages`: instructor-owned pending, sent, or cancelled in-app message content and
   confirmation state tied to the originating conversation;
 - `instructor_message_recipients`: the fixed active-student recipient snapshot for each message.
+- `course_direct_messages`: one-to-one or shared-staff course messages, private drafts,
+  confirmation state, reply references, and email-copy outbox fields. MCP cannot send;
+  the signed-in website confirmation action makes a draft visible and queues email.
+- `mcp_tool_usage`: pseudonymized MCP tool names, coarse outcomes, durations, and release
+  identifiers. It stores no prompts, tool arguments or results, access tokens, or raw user IDs.
 
 Conversation messages are represented by `user.message` and `agent.message` events. The database does not store a smolagents agent, memory object, pickle, or provider-specific conversation object.
 
@@ -62,6 +67,21 @@ message for idempotency. Both origins share the existing FAQ candidate and answe
 outboxes; question-reply message rows are excluded from direct-message projection.
 Migration `0013_online_answer_retention` makes question deletion clean up its linked confirmation
 draft while keeping the durable answer independent from later instructor-conversation retention.
+Migration `0017_course_direct_messages` is additive and does not backfill existing
+communications. It records an owned, one-recipient draft before delivery; a
+human-confirmed status change makes it visible to the recipient. Reply
+references to existing instructor messages and TA questions preserve their
+original records. Email-copy attempts and provider IDs are private operational
+metadata; the worker never sends unconfirmed drafts. Existing v1 portable
+contracts are unchanged.
+Migration `0018_mcp_usage` adds an independent operational telemetry table; it does not
+change conversation events or portable v1 contracts. A SHA-256 digest of the random
+user UUID permits aggregate unique-user counts without storing the UUID in this table.
+This is pseudonymization, not anonymity: a database administrator with access to the
+`users` table can recompute the digest. Rows older than 260 days are removed on the next
+MCP tool call after the daily pruning interval. The staff-side aggregate report never
+returns individual digests. Database backups may retain older copies according to their
+separate retention policy.
 
 ## Course assignments
 
@@ -147,18 +167,18 @@ course staff. Anonymous questions never expose the assignment. Example:
 }
 ```
 
-The server-local `APPLICANT_DATA_PATH/accepted-applicants.json` is the instructor-approved
-roster used for initial server provisioning. It contains private student information: never
-commit it or register it as a public course resource. The filename is ignored by Git in any
-directory. Install it directly on the server with mode `0600`, separately from Git deployment.
-At API or CLI startup, before accepting submissions, the server resolves that
-roster against the existing applications in `APPLICANT_DATA_PATH` (default `var/applicants/`).
+The server-local canonical roster at `COURSE_ROSTER_PATH` is the instructor-approved membership
+source used for initial application-access provisioning. It contains private student information:
+never commit it or register it directly as a course resource. Install it with mode `0600`,
+separately from Git deployment. At API or CLI startup, before accepting submissions, the server
+projects accepted identities from that roster and resolves them against existing applications in
+`APPLICANT_DATA_PATH` (default `var/applicants/`).
 It writes the matching UUIDs once to `student-access.json`, plus a private
 `student-access-resolution.json` report for every roster entry. Both files have mode `0600`
-and are ignored by Git. The code and tests contain no real roster; tests use fictional fixtures.
-If the local roster is absent, startup skips initialization and student access remains closed
-unless an existing UUID allowlist already grants access. No empty snapshot is written merely
-because the roster is missing, so installing it and restarting can initialize access later.
+and are ignored by Git. If the canonical roster is absent, startup skips initialization and
+student access remains closed unless an existing UUID allowlist already grants access. The former
+`accepted-applicants.json` shape remains readable only as migration compatibility when no canonical
+roster is supplied; it is not an independently maintained source after cutover.
 
 Matching normalizes Unicode, case, whitespace, parentheses, and name order. A roster entry can
 explicitly provide alternative names in its `aliases` list. Each person must match exactly one existing
@@ -175,18 +195,10 @@ access file exists, startup **never replaces or expands it**, including an empty
 file. Subsequent submissions with an accepted name cannot grant access, and explicit revocations
 survive restarts. The initial resolution report is a snapshot, not a live view of later edits.
 
-Deployment: pull the code on the real server, verify `APPLICANT_DATA_PATH` points to its
-existing application directory, install the private roster there, and restart the API.
-Git pulls cannot supply the roster. Its format is shown below with fictional data:
-
-```json
-{
-  "schema_version": 1,
-  "applicants": [
-    {"name": "Ada Example", "institution": "MIT", "department": "Example", "aliases": []}
-  ]
-}
-```
+Deployment: pull the code on the real server, verify `APPLICANT_DATA_PATH` points to its existing
+application directory, install the canonical roster at `COURSE_ROSTER_PATH`, publish its
+role-filtered projections, and restart the API. Git pulls cannot supply the roster. See
+[COURSE_ROSTER.md](COURSE_ROSTER.md) for the schema, migration, access matrix, and update command.
 
 Review the startup matched/unresolved counts
 and the private resolution report. No UUID transcription is needed for unambiguous matches.
@@ -195,7 +207,8 @@ that ignored file to production. If a prior `student-access.json` already exists
 authority. To resolve an unresolved entry, verify its application UUID and explicitly add it to
 that file. Do not delete the snapshot to rerun name matching against later unreviewed submissions.
 
-At tool/photo execution, authorization uses only the UUID snapshot, never name matching.
+At tool/photo execution, application authorization uses only the UUID snapshot, never name
+matching or current roster status.
 Changes are read on each request, so removing an ID revokes future tool reads and photo requests
 without restarting. Previously returned content in conversation history is not erased by
 revocation. Back up the private roster, UUID allowlist, and resolution report with applicant records. Malformed access files deny

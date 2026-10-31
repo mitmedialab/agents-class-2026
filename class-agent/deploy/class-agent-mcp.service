@@ -1,0 +1,42 @@
+[Unit]
+Description=MIT Cognitive Agents Course MCP
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=wazeer
+Group=wazeer
+WorkingDirectory=/home/wazeer/agents-class-2026/class-agent
+EnvironmentFile=/home/wazeer/agents-class-2026/class-agent/.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=MCP_PUBLIC_BASE_URL=https://cognitive-agents.media.mit.edu
+Environment=MCP_MESSAGING_ENABLED=true
+Environment=MCP_RELEASE=pilot-2026-10-30
+ExecStart=/home/wazeer/agents-class-2026/class-agent/.venv/bin/python -m course_server.mcp_server
+Restart=on-failure
+RestartSec=5
+UMask=0077
+
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHome=read-only
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+CapabilityBoundingSet=
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RemoveIPC=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictRealtime=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

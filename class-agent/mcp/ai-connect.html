@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#000000">
+    <title>Install the Course Agent MCP</title>
+    <meta name="description" content="Instructions for connecting the Course Agent MCP to an AI app.">
+    <link rel="stylesheet" href="/mcp-pages.css">
+  </head>
+  <body class="mcp-setup-page">
+    <a class="connect-skip" href="#main">Skip to content</a>
+    <header class="connect-header">
+      <a class="connect-marks" href="/" aria-label="Course Agent home">
+        <img src="/mit-logo.svg" alt="MIT" width="42" height="22">
+        <img src="/media-lab-logo.svg" alt="MIT Media Lab" width="44" height="24">
+      </a>
+      <nav class="connect-nav" aria-label="Course navigation">
+        <a href="/">Course Agent</a>
+        <a href="/about">About</a>
+        <a href="/connections">Your connections</a>
+      </nav>
+    </header>
+
+    <main id="main" class="connect-main">
+      <section class="connect-hero" aria-labelledby="connect-title">
+        <h1 id="connect-title">Install the Course Agent MCP</h1>
+        <p class="connect-intro">Connect your AI app to released assignments, course materials, updates, and your messages. You’ll sign in with your course account.</p>
+      </section>
+
+      <section class="connect-endpoint" aria-labelledby="endpoint-title">
+        <div class="connect-endpoint-label">
+          <h2 id="endpoint-title">MCP server URL</h2>
+        </div>
+        <code class="connect-url">{{MCP_ENDPOINT}}</code>
+      </section>
+
+      <section class="connect-section" aria-labelledby="choose-title">
+        <h2 id="choose-title">Choose your app</h2>
+
+        <div class="connect-clients">
+          <article class="connect-client" aria-labelledby="chatgpt-title">
+            <div class="connect-client-name">
+              <h3 id="chatgpt-title">ChatGPT</h3>
+            </div>
+            <div class="connect-client-details">
+              <ol>
+                <li>Open ChatGPT Plugins and add a custom MCP server.</li>
+                <li>Paste the MCP server URL and select OAuth.</li>
+                <li>Install it, sign in on the course website, and select the plugin in a new chat.</li>
+              </ol>
+              <a class="connect-outbound" href="https://chatgpt.com/plugins" target="_blank" rel="noopener noreferrer">Open ChatGPT Plugins <span aria-hidden="true">↗</span></a>
+            </div>
+          </article>
+
+          <article class="connect-client" aria-labelledby="claude-title">
+            <div class="connect-client-name">
+              <h3 id="claude-title">Claude</h3>
+            </div>
+            <div class="connect-client-details">
+              <ol>
+                <li>In Claude, open Plugins or Customize → Connectors and add a custom remote connector.</li>
+                <li>Paste the MCP server URL, sign in on the course website, and enable the connector in a chat.</li>
+              </ol>
+              <a class="connect-outbound" href="https://claude.ai/" target="_blank" rel="noopener noreferrer">Open Claude <span aria-hidden="true">↗</span></a>
+            </div>
+          </article>
+
+          <article class="connect-client" aria-labelledby="gemini-title">
+            <div class="connect-client-name">
+              <h3 id="gemini-title">Gemini</h3>
+            </div>
+            <div class="connect-client-details">
+              <ol>
+                <li>In Gemini, open Settings → Connected Apps → Add a custom app.</li>
+                <li>Paste the MCP server URL and sign in on the course website.</li>
+              </ol>
+              <p class="connect-note">Requires an eligible personal account and a callback configured by course staff.</p>
+              <a class="connect-outbound" href="https://gemini.google.com/" target="_blank" rel="noopener noreferrer">Open Gemini <span aria-hidden="true">↗</span></a>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="connect-information" aria-label="More information">
+        <div>
+          <h2>Learning instruction</h2>
+          <p>Assignments include <a href="/learning-contract">instructions for the assistant</a> to guide your learning without doing your work. The assistant may not always follow them.</p>
+        </div>
+        <div>
+          <h2>Connections</h2>
+          <p><a href="/connections">Manage or revoke your connections</a>.</p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

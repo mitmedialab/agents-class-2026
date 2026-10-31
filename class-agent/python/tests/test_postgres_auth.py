@@ -70,6 +70,9 @@ def test_postgres_auth_store_roundtrip() -> None:
             "0013_online_answer_retention",
             "0014_instructor_message_email",
             "0015_silent_faq_publication",
+            "0016_course_mcp",
+            "0017_course_direct_messages",
+            "0018_mcp_usage",
         ]
         assert apply_migrations(scoped_url) == []
         assert index_resources(scoped_url) == [

@@ -1,0 +1,272 @@
+:root {
+  color-scheme: dark;
+  font-family: Arial, Helvetica, sans-serif;
+  background: #090909;
+  color: #f1eee7;
+}
+
+body {
+  max-width: 44rem;
+  margin: 3rem auto;
+  padding: 1.5rem;
+  font-size: 1.125rem;
+  line-height: 1.55;
+}
+
+a { color: inherit; }
+a:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+h1 { font-size: 2.2rem; line-height: 1.1; }
+h2 { font-size: 1.4rem; margin-top: 2rem; }
+code { overflow-wrap: anywhere; }
+li { margin: .75rem 0; }
+hr { border: 0; border-top: 1px solid #666; margin: 2rem 0; }
+small { color: #aaa; }
+label { display: block; margin: 1rem 0; }
+input {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  padding: .7rem;
+  margin-top: .4rem;
+  background: #171717;
+  color: inherit;
+  border: 1px solid #777;
+}
+button {
+  padding: .8rem 1.2rem;
+  background: #f1eee7;
+  color: #090909;
+  border: 0;
+  cursor: pointer;
+}
+.learning-contract { white-space: pre-wrap; font: inherit; }
+
+/* The setup page shares the About page's editorial layout and visual tokens. */
+.mcp-setup-page {
+  --setup-text: #f5f5f2;
+  --setup-muted: #8b8b86;
+  --setup-border: #2a2a28;
+  --setup-gutter: clamp(1.5rem, 6vw, 7rem);
+  background: #000;
+  color: var(--setup-text);
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 1rem;
+  margin: 0;
+  max-width: none;
+  padding: 0;
+  text-rendering: optimizeLegibility;
+}
+
+.mcp-setup-page * { box-sizing: border-box; }
+
+.connect-skip {
+  background: var(--setup-text);
+  color: #000;
+  left: 1rem;
+  padding: .65rem 1rem;
+  position: absolute;
+  top: -5rem;
+  z-index: 10;
+}
+
+.connect-skip:focus { top: 1rem; }
+
+.connect-header {
+  align-items: center;
+  display: flex;
+  gap: 2rem;
+  justify-content: space-between;
+  min-height: 5rem;
+  padding: 0 calc(1.5rem + 24px);
+}
+
+.connect-marks {
+  align-items: center;
+  display: inline-flex;
+  flex: none;
+  gap: 1.1rem;
+}
+
+.connect-marks img {
+  display: block;
+  filter: grayscale(1) brightness(0) invert(1);
+  height: 1.4rem;
+  width: auto;
+}
+
+.connect-nav { display: flex; gap: clamp(.75rem, 2vw, 1.75rem); }
+
+.connect-nav a,
+.connect-outbound {
+  font-size: .6875rem;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.connect-nav a { text-decoration: none; }
+.connect-nav a:hover,
+.connect-outbound:hover,
+.connect-information a:hover { color: var(--setup-muted); }
+
+.connect-main {
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 76rem;
+  padding-bottom: 6rem;
+  width: calc(100% - var(--setup-gutter) - var(--setup-gutter));
+}
+
+.connect-hero { padding: 5rem 0 3.5rem; }
+
+.connect-hero h1 {
+  font-size: clamp(2.75rem, 5.2vw, 5rem);
+  font-weight: 700;
+  letter-spacing: -.04em;
+  line-height: 1;
+  margin: 0;
+}
+
+.connect-intro {
+  color: var(--setup-muted);
+  font-size: clamp(1rem, 1.5vw, 1.25rem);
+  line-height: 1.6;
+  margin: 1.5rem 0 0;
+  max-width: 50rem;
+}
+
+.connect-endpoint {
+  border-bottom: 1px solid var(--setup-border);
+  border-top: 1px solid var(--setup-border);
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: minmax(10rem, 16rem) minmax(0, 1fr);
+  padding: 1.5rem 0;
+}
+
+.connect-endpoint-label h2 {
+  color: var(--setup-muted);
+  font-size: clamp(1rem, 1.5vw, 1.35rem);
+  font-weight: 400;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.connect-url {
+  align-self: center;
+  font-family: inherit;
+  font-size: clamp(1rem, 1.5vw, 1.35rem);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.connect-section { padding-top: 4rem; }
+
+.connect-section > h2 {
+  font-size: clamp(1.8rem, 3vw, 2.75rem);
+  font-weight: 400;
+  letter-spacing: -.025em;
+  line-height: 1.15;
+  margin: 0 0 2rem;
+}
+
+.connect-clients { margin-top: 0; }
+
+.connect-client {
+  border-top: 1px solid var(--setup-border);
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: minmax(10rem, 16rem) minmax(0, 1fr);
+  padding: 1.5rem 0 2rem;
+}
+
+.connect-client:last-child { border-bottom: 1px solid var(--setup-border); }
+
+.connect-client-name h3 {
+  font-size: clamp(1.5rem, 2vw, 2rem);
+  font-weight: 400;
+  letter-spacing: -.025em;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.connect-client-details ol {
+  color: var(--setup-muted);
+  display: grid;
+  gap: .4rem;
+  margin: 0 0 1rem;
+  padding-left: 1.25rem;
+}
+
+.connect-client-details li {
+  font-size: clamp(1rem, 1.2vw, 1.1rem);
+  line-height: 1.55;
+  margin: 0;
+  padding-left: .3rem;
+}
+
+.connect-client-details li::marker { color: var(--setup-text); }
+
+.connect-outbound { text-decoration: none; }
+.connect-outbound span { display: inline-block; margin-left: .4rem; }
+
+.connect-note {
+  color: var(--setup-muted);
+  font-size: .95rem;
+  line-height: 1.6;
+  margin: 0 0 1rem;
+  max-width: 42rem;
+}
+
+.connect-information { margin-top: 3.5rem; }
+
+.connect-information > div {
+  border-top: 1px solid var(--setup-border);
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: minmax(10rem, 16rem) minmax(0, 1fr);
+  padding: 1.5rem 0;
+}
+
+.connect-information > div:last-child { border-bottom: 1px solid var(--setup-border); }
+
+.connect-information h2 {
+  color: var(--setup-muted);
+  font-size: clamp(1rem, 1.5vw, 1.35rem);
+  font-weight: 400;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.connect-information p {
+  color: var(--setup-muted);
+  font-size: clamp(1rem, 1.2vw, 1.1rem);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.connect-information a { color: var(--setup-text); }
+
+@media (max-width: 700px) {
+  .connect-header { padding: 0 1.5rem; }
+  .connect-nav a:first-child { display: none; }
+  .connect-hero { padding: 3rem 0; }
+  .connect-hero h1 { font-size: clamp(2.5rem, 10vw, 4rem); }
+  .connect-endpoint,
+  .connect-client,
+  .connect-information > div { gap: .7rem; grid-template-columns: 1fr; }
+  .connect-endpoint { padding: 1.25rem 0; }
+  .connect-section { padding-top: 3.5rem; }
+  .connect-client { padding: 1.5rem 0 2rem; }
+  .connect-client-details ol { margin-top: .4rem; }
+  .connect-information { margin-top: 3rem; }
+  .connect-main { padding-bottom: 4rem; }
+}
+
+@media (max-width: 430px) {
+  .connect-header { gap: 1rem; }
+  .connect-marks { gap: .7rem; }
+  .connect-marks img { height: 1.1rem; }
+  .connect-nav { gap: .8rem; }
+  .connect-nav a { font-size: .6rem; letter-spacing: .08em; }
+}

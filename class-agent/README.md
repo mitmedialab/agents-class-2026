@@ -2,7 +2,7 @@
 
 Class Agent is the extensible Course Agent platform described in [CONSTITUTION.md](CONSTITUTION.md). It is designed for an MIT Media Lab course and favors explicit, portable contracts that students can inspect and extend.
 
-The repository is currently at **Phase 7**, plus the explicitly authorized course-email workflow from Phase 10: validated native workspace components over the Phase 6 Course Agent, with an optional Gmail or Microsoft 365 mailbox worker for unanswered student questions and email-moderated FAQ publication. It contains stable core and workspace contracts, access-code and anonymous authentication, portable PostgreSQL conversation/event history, a `ToolCallingAgent` adapter, public course resources and search, private course applications, typed workspace tools, an event-derived panel workspace, visual compositions, a specific-artifact DocumentViewer, a month/agenda Calendar, and a role-scoped notification center for course releases, staff communications, and near assignment deadlines. It intentionally does not yet contain MCP Apps, Agent Bridge, or a browser extension. It loads standard `SKILL.md` bundles progressively: the model initially sees only login-authorized skill metadata and reads full instructions or references on demand.
+The repository is currently at **Phase 7**, plus the explicitly authorized course-email workflow from Phase 10 and a student-only ChatGPT Course MCP pilot: validated native workspace components over the Phase 6 Course Agent, with an optional Gmail or Microsoft 365 mailbox worker for unanswered student questions and email-moderated FAQ publication. It contains stable core and workspace contracts, access-code and anonymous authentication, portable PostgreSQL conversation/event history, a `ToolCallingAgent` adapter, public course resources and search, private course applications, typed workspace tools, an event-derived panel workspace, visual compositions, a specific-artifact DocumentViewer, a month/agenda Calendar, and a role-scoped notification center for course releases, staff communications, and near assignment deadlines. It intentionally does not yet contain MCP Apps, Agent Bridge, or a browser extension. It loads standard `SKILL.md` bundles progressively: the model initially sees only login-authorized skill metadata and reads full instructions or references on demand.
 
 ## Requirements
 
@@ -65,6 +65,15 @@ Run the API at `http://127.0.0.1:8000` with:
 uv run python -m course_server.api
 ```
 
+The optional Course MCP runs as a separate process using the same course accounts,
+released assignments, authorized course resources, updates, and private student
+messages. Its GitHub tools can also inspect course project sites and the student's
+own repository when that integration is enabled. An optional messaging path
+prepares student-to-student and student-to-staff messages and replies for
+explicit course-site confirmation, then queues email copies. It requires a public HTTPS `/mcp`
+endpoint to connect from supported remote clients; see [docs/MCP.md](docs/MCP.md) for setup,
+student authorization, limitations, and test prompts.
+
 The runtime prompt, authorized tool catalog, and public resource index are constructed
 at API startup. Restart this process after changing Python runtime behavior or resource
 manifests. Public resource file contents themselves are read when a tool is called.
@@ -111,17 +120,21 @@ in-app delivery always occurs. After an opted-in Send, the instructor conversati
 queued, sent, failed, and account-deferred email counts from the durable outbox. Confirmed messages remain in each recipient's Communications
 stack and authorized agent context until the student marks them read.
 
-Students can use the application-review tools for accepted applicants explicitly shared by
-UUID in the private `APPLICANT_DATA_PATH/student-access.json` registry. On server startup, a private
-`APPLICANT_DATA_PATH/accepted-applicants.json` roster is resolved against existing applications
-and frozen to UUIDs. Install this file directly on the server; it is ignored by Git.
-Without a local roster or an existing UUID allowlist, student application access stays closed.
-Missing or ambiguous matches stay blocked; existing access registries are preserved. See [docs/STORAGE.md](docs/STORAGE.md) for provisioning.
+The private canonical roster at `COURSE_ROSTER_PATH` records accepted membership, active/inactive
+status, enrollment, account and GitHub identities, participation, projects, and interests. Startup
+validates it and verifies its active-only student and complete instructor projections are current.
+Students can use the application-review tools for application UUIDs explicitly shared by the
+separate `APPLICANT_DATA_PATH/student-access.json` security registry. Initial provisioning
+projects accepted identities from the canonical roster, but never replaces an existing UUID
+allowlist. See [docs/COURSE_ROSTER.md](docs/COURSE_ROSTER.md) and
+[docs/STORAGE.md](docs/STORAGE.md).
 
 Role-scoped course resources live under `COURSE_DATA_PATH` (default `data/`): student
 resources are available to logged-in students and instructors, while instructor resources
 are available only to instructors. Their contents are ignored by Git and are never added to
-the public registry or PostgreSQL public search index.
+the public registry or PostgreSQL public search index. The generated
+`course://students/roster` resource gives the student Course Agent the full active roster and
+project-interest context while deterministically excluding inactive former members.
 
 Authenticated students can optionally escalate a question that the maintained site and
 appropriate research cannot answer. The agent prepares the exact email, but platform code
@@ -154,9 +167,9 @@ communications and assignments, or suggests something useful when the projection
 successful welcome acknowledges the Updates visible for that opening so they are absent next time;
 ongoing Communications and Upcoming items remain until their own state changes.
 
-An optional read-only GitHub integration connects the agent directly to the real
-`mitmedialab/agents2026-*` course repositories. All authenticated course roles can inspect every
-deployed student website; TAs, instructors, and admins also receive repository source and
+An optional read-only GitHub integration connects the agent directly to active weekly-build
+repositories from the canonical roster inside `mitmedialab/agents2026-*`. Authenticated course
+roles can inspect those deployed student websites; TAs, instructors, and admins also receive repository source and
 development metadata tools. Students receive source and development metadata only for the exact
 repository derived from their trusted account username. The credential remains server-side and the
 configured organization, prefix, and exclusions are enforced in platform code. See

@@ -7,6 +7,7 @@ import asyncio
 import logging
 import os
 from collections.abc import Sequence
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -18,6 +19,7 @@ from course_server.mail import (
     MicrosoftGraphMailAdapter,
     PostgresTAQuestionStore,
 )
+from course_server.mail.course_message_delivery import CourseMessageEmailDelivery
 from course_server.mail.instructor_delivery import InstructorEmailDelivery
 from course_server.migrations import apply_migrations
 from course_server.postgres.auth_store import PostgresAuthStore, create_auth_pool
@@ -64,10 +66,23 @@ async def run_worker(*, database_url: str, settings: MailSettings, once: bool = 
         authorized_reply_senders=(str(value) for value in settings.authorized_reply_senders),
     )
     instructor_delivery = InstructorEmailDelivery(pool, adapter)
+    course_message_delivery = CourseMessageEmailDelivery(
+        pool,
+        adapter,
+        staff_recipient=str(settings.staff_recipient_address),
+        public_base_url=(
+            str(settings.course_site_base_url) if settings.course_site_base_url else None
+        ),
+        roster_path=Path(
+            os.environ.get("COURSE_ROSTER_PATH")
+            or Path(__file__).resolve().parents[2] / "var/roster/course-members.json"
+        ),
+    )
     try:
         while True:
             try:
                 await instructor_delivery.run_once()
+                await course_message_delivery.run_once()
                 await worker.run_once()
             except Exception as error:
                 logger.error("Mail worker cycle failed (%s)", type(error).__name__)

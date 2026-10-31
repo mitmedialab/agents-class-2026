@@ -29,8 +29,38 @@ def test_migrations_are_discoverable_and_checksummed() -> None:
         "0013_online_answer_retention",
         "0014_instructor_message_email",
         "0015_silent_faq_publication",
+        "0016_course_mcp",
+        "0017_course_direct_messages",
+        "0018_mcp_usage",
     ]
     assert all(len(migration.checksum) == 64 for migration in migrations)
+
+
+def test_course_message_migration_requires_confirmation_and_email_outbox() -> None:
+    sql = discover_migrations(MIGRATIONS_PATH)[16].sql.lower()
+
+    assert "create table course_direct_messages" in sql
+    assert "pending_confirmation" in sql
+    assert "recipient_kind" in sql
+    assert "reply_to_instructor_message_id" in sql
+    assert "reply_to_question_id" in sql
+    assert "email_sent_at" in sql
+
+
+def test_mcp_usage_migration_stores_no_raw_identity_or_content() -> None:
+    sql = "\n".join(
+        line
+        for line in discover_migrations(MIGRATIONS_PATH)[17].sql.lower().splitlines()
+        if not line.strip().startswith("--")
+    )
+
+    assert "create table mcp_tool_usage" in sql
+    assert "principal_hash bytea" in sql
+    assert "tool_name" in sql
+    assert "duration_ms" in sql
+    assert "user_id" not in sql
+    assert "arguments" not in sql
+    assert "result" not in sql
 
 
 def test_phase_two_migration_contains_required_authentication_tables() -> None:
