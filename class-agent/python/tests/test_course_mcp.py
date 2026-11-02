@@ -276,7 +276,7 @@ def test_course_resources_follow_student_visibility(tmp_path: Path) -> None:
     asyncio.run(scenario())
 
 
-def test_project_inspection_is_scoped_to_student_identity(tmp_path: Path) -> None:
+def test_project_links_and_repository_are_scoped_to_student_identity(tmp_path: Path) -> None:
     class FakeProjects:
         def list_projects(self) -> list[StudentProject]:
             return [
@@ -299,7 +299,6 @@ def test_project_inspection_is_scoped_to_student_identity(tmp_path: Path) -> Non
     async def scenario() -> None:
         service = CourseMcpProjectService(
             FakeProjects(),
-            lambda url: {"url": url, "text": "Live site", "images": []},
             repository_prefix="agents2026-",
         )
         student = PrincipalContext(
@@ -312,12 +311,18 @@ def test_project_inspection_is_scoped_to_student_identity(tmp_path: Path) -> Non
         own = await service.inspect_my_repository(student, "file", path="src/App.tsx")
         assert own["project_id"] == "agents2026-student"
         assert own["path"] == "src/App.tsx"
-        own_site = await service.inspect_my_site(student)
-        assert own_site["site_url"] == "https://student.example.edu"
-        other_site = await service.inspect_site(student, "agents2026-other")
-        assert other_site["site_url"] == "https://other.example.edu"
+        own_project = await service.get_my_project(student)
+        assert own_project == {
+            "project_id": "agents2026-student",
+            "site_url": "https://student.example.edu",
+            "site_content_inspected": False,
+        }
         listed = await service.list_projects(student)
         assert listed["count"] == 2
+        assert listed["projects"] == [
+            {"project_id": "agents2026-student", "site_url": "https://student.example.edu"},
+            {"project_id": "agents2026-other", "site_url": "https://other.example.edu"},
+        ]
         with pytest.raises(ValueError, match="view"):
             await service.inspect_my_repository(student, "secrets")
         anonymous = PrincipalContext(
@@ -328,6 +333,8 @@ def test_project_inspection_is_scoped_to_student_identity(tmp_path: Path) -> Non
         )
         with pytest.raises(PermissionError):
             await service.inspect_my_repository(anonymous, "summary")
+        with pytest.raises(PermissionError):
+            await service.get_my_project(anonymous)
 
         app = create_course_mcp_app(
             CourseMcpSettings(
@@ -344,22 +351,24 @@ def test_project_inspection_is_scoped_to_student_identity(tmp_path: Path) -> Non
         tools_by_name = {tool.name: tool for tool in await app.state.course_mcp.list_tools()}
         tool_names = set(tools_by_name)
         assert {
-            "list_student_projects",
-            "inspect_student_site",
-            "inspect_my_student_site",
+            "list_student_course_websites",
+            "get_my_course_website",
             "inspect_my_student_repository",
         } <= tool_names
+        assert "inspect_student_site" not in tool_names
+        assert "inspect_my_student_site" not in tool_names
         assert "assignment implementation code" in (
             tools_by_name["inspect_my_student_repository"].description or ""
         )
-        for name in ("inspect_student_site", "inspect_my_student_site"):
-            description = tools_by_name[name].description or ""
-            assert "documentation website" in description
-            assert "weekly" in description
-            assert "final-project" in description
+        assert "No website is" in (tools_by_name["get_my_course_website"].description or "")
+        assert "weekly build/assignment" in (
+            tools_by_name["get_my_course_website"].description or ""
+        )
         test_student = student.model_copy(update={"username": "test-student2"})
         aliased = await app.state.course_projects.inspect_my_repository(test_student, "summary")
         assert aliased["project_id"] == "agents2026-student"
+        aliased_project = await app.state.course_projects.get_my_project(test_student)
+        assert aliased_project["project_id"] == "agents2026-student"
 
     asyncio.run(scenario())
 

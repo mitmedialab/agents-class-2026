@@ -22,8 +22,10 @@ the MCP URL and manual steps; opening a client link alone grants no access.
 The MCP now exposes released assignments; searchable, authorized course resources
 (including readings and extracted slide text); updates and deadlines; and the
 student's own staff communications. If the website's GitHub integration is
-enabled, it can also inspect deployed project sites and the student's own
-repository. Those tools are read-only. With messaging enabled, the MCP can also
+enabled, it can return deployed course-website URLs, identify the connected
+student's own course website, and inspect that student's own repository. It does not
+fetch the deployed sites; repository reads remain server-side and read-only.
+With messaging enabled, the MCP can also
 prepare student-authored messages and replies; only a signed-in student can
 deliver them by reviewing and pressing Send on the course website. See the
 [capability details](../docs/MCP.md).

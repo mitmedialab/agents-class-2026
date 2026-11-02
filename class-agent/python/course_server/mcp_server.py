@@ -61,7 +61,6 @@ from course_server.student_communications import (
     StudentCommunicationService,
 )
 from course_server.student_projects import GitHubStudentProjectCatalog, StudentProjectCatalog
-from course_server.web_search import fetch_public_webpage
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _AUTH_COOKIE = "class_agent_auth"
@@ -346,7 +345,6 @@ def create_course_mcp_app(
     projects = (
         CourseMcpProjectService(
             student_projects,
-            fetch_public_webpage,
             repository_prefix=settings.github_repository_prefix,
             student_project_aliases={
                 **(roster.active_student_project_aliases if roster else {}),
@@ -574,40 +572,33 @@ def create_course_mcp_app(
     if projects is not None:
 
         @mcp.tool(
-            name="list_student_projects",
+            name="list_student_course_websites",
             description=(
-                "List course project IDs and deployed documentation-site URLs, where weekly "
-                "builds and final-project work may be posted. Never returns repository code."
+                "List students' course documentation website URLs. These sites may contain "
+                "weekly builds and assignments as well as final-project documentation; "
+                "project_id is the linked GitHub repository ID, not a final-project label. "
+                "This does not open or verify website content or return repository code."
             ),
             annotations=_READ_ONLY,
         )
-        async def list_student_projects() -> Any:
+        async def list_student_course_websites() -> Any:
             return await projects.list_projects(await principal())
 
         @mcp.tool(
-            name="inspect_student_site",
+            name="get_my_course_website",
             description=(
-                "Read a listed student's deployed course documentation website. Look for "
-                "weekly build/assignment write-ups and final-project documentation; verify "
-                "what is actually posted. This does not return repository code."
+                "Return the connected student's own course documentation website URL, "
+                "resolved from their login. The site is for weekly build/assignment and "
+                "final-project documentation, not only the final project. The returned "
+                "project_id is its linked GitHub repository ID. No website is "
+                "opened or inspected. Browse the URL separately before describing its "
+                "contents; if browsing is unavailable, give the link without claiming "
+                "to have read the site."
             ),
             annotations=_READ_ONLY,
         )
-        async def inspect_student_site(project_id: str) -> Any:
-            return await projects.inspect_site(await principal(), project_id)
-
-        @mcp.tool(
-            name="inspect_my_student_site",
-            description=(
-                "Read the connected student's own deployed course documentation website, "
-                "derived from their login. Look for weekly build/assignment write-ups and "
-                "final-project documentation, but verify what is posted. Do not write or "
-                "rewrite their documentation."
-            ),
-            annotations=_READ_ONLY,
-        )
-        async def inspect_my_student_site() -> Any:
-            return await projects.inspect_my_site(await principal())
+        async def get_my_course_website() -> dict[str, str | bool | None]:
+            return await projects.get_my_project(await principal())
 
         @mcp.tool(
             name="inspect_my_student_repository",

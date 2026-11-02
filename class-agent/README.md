@@ -67,8 +67,9 @@ uv run python -m course_server.api
 
 The optional Course MCP runs as a separate process using the same course accounts,
 released assignments, authorized course resources, updates, and private student
-messages. Its GitHub tools can also inspect course project sites and the student's
-own repository when that integration is enabled. An optional messaging path
+messages. Its GitHub tools return course project website URLs and can inspect the
+student's own repository when that integration is enabled; the MCP does not fetch
+student websites. An optional messaging path
 prepares student-to-student and student-to-staff messages and replies for
 explicit course-site confirmation, then queues email copies. It requires a public HTTPS `/mcp`
 endpoint to connect from supported remote clients; see [docs/MCP.md](docs/MCP.md) for setup,

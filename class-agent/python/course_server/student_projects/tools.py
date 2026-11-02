@@ -64,7 +64,7 @@ def _require_student(principal: PrincipalContext) -> None:
         raise ToolValidationError("An active student login is required.")
 
 
-async def _own_project(
+async def resolve_own_project(
     projects: StudentProjectCatalog,
     principal: PrincipalContext,
     repository_prefix: str,
@@ -264,7 +264,7 @@ class InspectMyStudentSiteTool:
     ) -> ToolExecutionResult:
         if arguments:
             raise ToolValidationError("This tool accepts no arguments.")
-        project = await _own_project(
+        project = await resolve_own_project(
             self._projects,
             context.principal,
             self._repository_prefix,
@@ -427,7 +427,7 @@ class InspectMyStudentRepositoryTool:
         unknown = set(arguments) - {"view", "path", "ref"}
         if unknown:
             raise ToolValidationError(f"unexpected arguments: {', '.join(sorted(unknown))}")
-        project = await _own_project(
+        project = await resolve_own_project(
             self._projects,
             context.principal,
             self._repository_prefix,

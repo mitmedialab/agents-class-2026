@@ -48,18 +48,25 @@ with that scope; the student still must confirm each individual send on the
 course website.
 
 If the existing GitHub project integration is enabled, the MCP also provides
-`list_student_projects`, `inspect_student_site`, `inspect_my_student_site`,
-and `inspect_my_student_repository`. Students can inspect public deployed sites
-for listed course projects, but source-code reads are confined to their own
-roster-linked repository. Repository inspection supports summary, tree, one
+`list_student_course_websites`, `get_my_course_website`, and
+`inspect_my_student_repository`. The first two return linked GitHub project IDs and deployed
+documentation-site URLs only. The MCP does not fetch student websites; a connected
+client may open a returned public URL with its own browser, but must not claim to
+have inspected the site if it cannot. These course websites are for weekly
+build/assignment documentation and final-project work, not just final projects.
+`get_my_course_website` identifies the connected student's own site from trusted
+login identity, without asking the model to infer ownership from the class list.
+Source-code reads remain confined
+to that student's roster-linked repository. Repository inspection supports summary, tree, one
 bounded UTF-8 file, commits, branches, pull requests, issues, and workflows.
 The model cannot supply a different repository ID to the own-repository tool.
 This integration requires an active canonical roster and the same protected
 read-only GitHub credential configured for the website. The MCP also uses the
 website's deployment-owned `GITHUB_STUDENT_PROJECT_ALIASES` mapping for test
 accounts; an alias target must still be an active roster-listed project in
-the configured GitHub collection. Without a matching project, own-site and
-own-repository inspection fail closed.
+the configured GitHub collection. Without a matching project, the own-website
+lookup and own-repository inspection fail closed. GitHub API metadata and
+repository reads still happen on the course server using its protected credential.
 
 The MCP cannot read draft assignments, another student's private communications
 or repository source, instructor tools, the student's course-chat history, or
@@ -250,9 +257,11 @@ Pilot prompts to test with a student account:
    it cites the course resources with `?q=` opening links, not raw PDF URLs,
    and does not claim to have seen slide diagrams unless it called
    `read_course_slide_page` for the numbered page.
-7. If GitHub integration is enabled, ask it to inspect your own repository and
-   deployed site, then ask for a focused critique of a design decision. Confirm
-   another student's repository source is not accessible.
+7. If GitHub integration is enabled, ask for your own course website URL and a
+   list of classmates' course website URLs. Confirm the MCP returns links without website text or
+   claiming to have read a site. Then ask it to inspect your own repository;
+   confirm another student's repository source is not accessible. If the client
+   has browsing, ask it to open a returned site URL separately.
 8. Ask it to write a paste-ready website project description. The course tools
    should offer no such write action; note whether ChatGPT still writes one in
    chat, because the instruction boundary is not a guarantee.

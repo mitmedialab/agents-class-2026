@@ -1,4 +1,4 @@
-"""Student-scoped MCP wrappers around the existing project inspection tools."""
+"""Student-scoped MCP project links and own-repository inspection."""
 
 from __future__ import annotations
 
@@ -7,30 +7,27 @@ from typing import Any
 from uuid import uuid4
 
 from agent_core import PrincipalContext
-from course_server.agent.capabilities import ToolExecutionContext, WebVisitRunner
+from course_server.agent.capabilities import ToolExecutionContext
 from course_server.student_projects import (
     InspectMyStudentRepositoryTool,
-    InspectMyStudentSiteTool,
-    InspectStudentSiteTool,
     ListStudentProjectsTool,
     StudentProjectCatalog,
 )
+from course_server.student_projects.tools import resolve_own_project
 
 
 class CourseMcpProjectService:
     def __init__(
         self,
         projects: StudentProjectCatalog,
-        visit: WebVisitRunner,
         *,
         repository_prefix: str,
         student_project_aliases: Mapping[str, str] | None = None,
     ) -> None:
+        self._projects = projects
+        self._repository_prefix = repository_prefix
+        self._student_project_aliases = dict(student_project_aliases or {})
         self._list = ListStudentProjectsTool(projects)
-        self._site = InspectStudentSiteTool(projects, visit)
-        self._my_site = InspectMyStudentSiteTool(
-            projects, visit, repository_prefix, student_project_aliases
-        )
         self._my_repository = InspectMyStudentRepositoryTool(
             projects, repository_prefix, student_project_aliases
         )
@@ -48,13 +45,19 @@ class CourseMcpProjectService:
     async def list_projects(self, principal: PrincipalContext) -> Any:
         return (await self._list.execute({}, self._context(principal))).content
 
-    async def inspect_site(self, principal: PrincipalContext, project_id: str) -> Any:
-        return (
-            await self._site.execute({"project_id": project_id}, self._context(principal))
-        ).content
-
-    async def inspect_my_site(self, principal: PrincipalContext) -> Any:
-        return (await self._my_site.execute({}, self._context(principal))).content
+    async def get_my_project(self, principal: PrincipalContext) -> dict[str, str | bool | None]:
+        self._context(principal)
+        project = await resolve_own_project(
+            self._projects,
+            principal,
+            self._repository_prefix,
+            self._student_project_aliases,
+        )
+        return {
+            "project_id": project.id,
+            "site_url": project.site_url,
+            "site_content_inspected": False,
+        }
 
     async def inspect_my_repository(
         self,
