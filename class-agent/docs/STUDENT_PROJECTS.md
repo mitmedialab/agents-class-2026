@@ -4,6 +4,13 @@ The Course Agent connects directly to the GitHub API for the repositories in the
 course collection. This is a server-side, read-only integration; GitHub credentials never reach
 the browser, model prompt, tool arguments, events, or logs.
 
+The Week 8 student starter has an explicit offline fixture mode. When
+`STUDENT_PROJECT_FIXTURES_ENABLED=true`, checked-in synthetic projects answer the same
+project tools through the production GitHub response parser. The source label is
+`fixture`, the site reader accepts only exact fictional URLs, and no network or token
+is used. This mode requires the fictional roster and cannot be combined with live
+GitHub mode. See the [starter setup](../examples/memory_starter/README.md).
+
 ## Authorization
 
 Platform code filters tools before the model sees them and each tool checks the trusted

@@ -105,14 +105,15 @@ def _translate_provider_error(error: StudentProjectProviderError) -> ToolProvide
 class ListStudentProjectsTool:
     id = LIST_STUDENT_PROJECTS_TOOL_ID
     description = (
-        "List the real course student projects and their deployed public documentation "
+        "List course student projects and their documentation "
         "website URLs, where weekly builds and final-project work may be posted. "
         "Use this first when a course member asks about a student or project by name and "
         "the exact agents2026-* project identifier or deployed URL is not yet known. Once "
         "the project is identified, continue with the appropriate site or repository "
         "inspection tool instead of searching general course resources. "
         "Available only to authenticated course members. This does not expose "
-        "repository source or GitHub development metadata."
+        "repository source or GitHub development metadata. A fixture provider result "
+        "contains fictional local examples."
     )
     input_schema: ClassVar[dict[str, JsonValue]] = {
         "type": "object",
@@ -141,7 +142,7 @@ class ListStudentProjectsTool:
                     {"project_id": project.id, "site_url": project.site_url} for project in projects
                 ],
                 "count": len(projects),
-                "provider": "github",
+                "provider": getattr(self._projects, "provider_name", "github"),
                 "retrieved_at": datetime.now(UTC).isoformat(),
             },
             summary=f"Listed {len(projects)} student project websites.",

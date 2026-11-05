@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import os
-import shutil
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -23,6 +23,7 @@ from course_server.postgres.auth_store import PostgresAuthStore, create_auth_poo
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = Path(__file__).with_name("course-members.json")
+STAFF = Path(__file__).with_name("course-staff.json")
 ASSIGNMENTS = Path(__file__).with_name("assignments")
 DEFAULT_DATABASE_URL = "postgresql://class_agent:class_agent_dev@127.0.0.1:5432/class_agent"
 
@@ -59,7 +60,7 @@ def install_fixture(output_root: Path) -> tuple[Path, Path]:
 def install_assignments(output_root: Path) -> Path:
     """Install released course assignments without replacing local records."""
     destination = output_root / "var/assignments"
-    fixtures = sorted(ASSIGNMENTS.glob("week-*"))
+    fixtures = sorted(folder for folder in ASSIGNMENTS.iterdir() if folder.is_dir())
     expected_ids = {folder.name for folder in fixtures}
     if destination.is_symlink() or (destination.exists() and not destination.is_dir()):
         raise FileExistsError(f"Refusing invalid assignment directory: {destination}")
@@ -94,24 +95,31 @@ async def provision_users(store: InMemoryAuthStore | PostgresAuthStore) -> list[
     roster = CourseRoster.model_validate_json(FIXTURE.read_text(encoding="utf-8"))
     admin = UserAdminService(store)
     issued_codes: list[tuple[str, str]] = []
-    for member in roster.active_members:
-        existing = await store.get_user_by_username(member.username)
+    staff = json.loads(STAFF.read_text(encoding="utf-8"))["staff"]
+    accounts = [
+        (member.username, member.name, str(member.email), "student") for member in roster.members
+    ] + [
+        (person["username"], person["display_name"], person["email"], person["role"])
+        for person in staff
+    ]
+    for username, display_name, email, role in accounts:
+        existing = await store.get_user_by_username(username)
         if existing is not None:
             if (
-                existing.display_name != member.name
-                or str(existing.email) != str(member.email)
-                or existing.role != "student"
+                existing.display_name != display_name
+                or str(existing.email) != email
+                or existing.role != role
                 or not existing.active
             ):
-                raise ValueError(f"Existing account conflicts with demo user {member.username}")
+                raise ValueError(f"Existing account conflicts with demo user {username}")
             continue
         issued = await admin.create_user(
-            username=member.username,
-            display_name=member.name,
-            email=str(member.email),
-            role="student",
+            username=username,
+            display_name=display_name,
+            email=email,
+            role=role,
         )
-        issued_codes.append((member.username, issued.access_code))
+        issued_codes.append((username, issued.access_code))
     return issued_codes
 
 
@@ -168,7 +176,14 @@ def main() -> None:
 
         env_path = PROJECT_ROOT / ".env"
         if not env_path.exists():
-            shutil.copyfile(PROJECT_ROOT / ".env.example", env_path)
+            example = (PROJECT_ROOT / ".env.example").read_text(encoding="utf-8")
+            env_path.write_text(
+                example.replace(
+                    "STUDENT_PROJECT_FIXTURES_ENABLED=false",
+                    "STUDENT_PROJECT_FIXTURES_ENABLED=true",
+                ),
+                encoding="utf-8",
+            )
             env_path.chmod(0o600)
         apply_migrations(arguments.database_url)
         index_resources(arguments.database_url)
@@ -183,10 +198,10 @@ def main() -> None:
             print(f"  {username}: {code}")
     else:
         print(
-            "Both demo accounts already exist; use their original codes "
+            "Demo accounts already exist; use their original codes "
             "or reset them with the admin CLI."
         )
-    print("Add your own OPENAI_API_KEY to .env before starting the agent API.")
+    print("Add your own OPENAI_API_KEY and BRAVE_API_KEY to .env before starting the agent API.")
     print("Start the API with `uv run python -m course_server.api` and Vite with `pnpm dev`.")
     print("Open https://localhost:5173 and accept the local development certificate warning.")
 

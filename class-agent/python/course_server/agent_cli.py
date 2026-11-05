@@ -102,6 +102,7 @@ from course_server.student_projects import (
     ListStudentProjectsTool,
     StudentProjectCatalog,
 )
+from course_server.student_projects.fixture import FixtureStudentProjectCatalog
 from course_server.student_projects.images import DiscoverShowcaseImagesTool
 from course_server.student_projects.screening import ScreenShowcaseTool
 from course_server.student_projects.showcase import ReadShowcaseHistoryTool, SelectShowcaseTool
@@ -203,6 +204,10 @@ def build_runtime(
     )
     student_project_aliases.update(dict(settings.github_student_project_aliases))
     project_catalog = student_projects
+    if project_catalog is None and settings.student_project_fixtures_enabled:
+        if resolved_roster is None:
+            raise ConfigurationError("Fictional project fixtures require the course roster")
+        project_catalog = FixtureStudentProjectCatalog(resolved_roster)
     if project_catalog is None and settings.github_student_projects_enabled:
         if settings.github_token is None:
             raise ConfigurationError("GitHub student projects are enabled without a token")
@@ -329,13 +334,18 @@ def build_runtime(
             [CourseListFaqUpdatesTool(faq_updates), CourseReadFaqUpdateTool(faq_updates)]
         )
     if project_catalog is not None:
+        visit_student_site = (
+            project_catalog.visit_site
+            if isinstance(project_catalog, FixtureStudentProjectCatalog)
+            else fetch_public_webpage
+        )
         executable_tools.extend(
             [
                 ListStudentProjectsTool(project_catalog),
-                InspectStudentSiteTool(project_catalog, fetch_public_webpage),
+                InspectStudentSiteTool(project_catalog, visit_student_site),
                 InspectMyStudentSiteTool(
                     project_catalog,
-                    fetch_public_webpage,
+                    visit_student_site,
                     settings.github_repository_prefix,
                     student_project_aliases,
                 ),
@@ -348,10 +358,10 @@ def build_runtime(
                 ReadShowcaseHistoryTool(settings.showcase_history_path),
                 SelectShowcaseTool(project_catalog, settings.showcase_history_path),
                 DiscoverShowcaseImagesTool(
-                    project_catalog, fetch_public_webpage, probe_public_image_url
+                    project_catalog, visit_student_site, probe_public_image_url
                 ),
                 ScreenShowcaseTool(
-                    project_catalog, fetch_public_webpage, settings.showcase_history_path
+                    project_catalog, visit_student_site, settings.showcase_history_path
                 ),
             ]
         )
@@ -410,7 +420,10 @@ async def _run_postgres_turn(
             capability_policy=CourseCapabilityPolicy(
                 course_resources,
                 faq_updates_enabled=True,
-                student_projects_enabled=settings.github_student_projects_enabled,
+                student_projects_enabled=(
+                    settings.github_student_projects_enabled
+                    or settings.student_project_fixtures_enabled
+                ),
             ),
             skills=skills,
         )

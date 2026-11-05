@@ -133,6 +133,15 @@
       }
     },
     {
+      "uri": "course://week-8-ideas",
+      "title": "Week 8 Personalization Examples",
+      "description": "A short, privacy-safe summary of the Week 8 slide examples for student development forks.",
+      "media_type": "text/markdown",
+      "path": "course/week-8-ideas/week-8-ideas.md",
+      "visibility": "public",
+      "status": "published"
+    },
+    {
       "uri": "course://readings/software-agents-bradshaw",
       "title": "An Introduction to Software Agents",
       "description": "Week 1 assigned reading by Jeffrey M. Bradshaw on the history, definitions, motivations, and attributes of software agents.",

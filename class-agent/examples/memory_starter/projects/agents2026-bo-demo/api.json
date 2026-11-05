@@ -1,0 +1,17 @@
+{
+  "name": "agents2026-bo-demo",
+  "default_branch": "main",
+  "description": "Fictional visual planner for creative work",
+  "homepage": "https://student-fixtures.invalid/bo-demo",
+  "has_pages": false,
+  "language": "TypeScript",
+  "topics": ["planning", "visualization", "audio"],
+  "pushed_at": "2026-11-03T16:00:00Z",
+  "updated_at": "2026-11-03T16:00:00Z",
+  "archived": false,
+  "commits": [{"sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "commit": {"message": "Add visual project timeline", "author": {"name": "Bo Sample", "date": "2026-11-03T16:00:00Z"}}, "author": {"login": "bo-sample-demo"}}],
+  "branches": [{"name": "main", "commit": {"sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}, "protected": false}],
+  "issues": [{"number": 4, "title": "Remember whether I prefer diagrams", "state": "open", "body": "The agent should offer visual summaries when I ask for them.", "user": {"login": "bo-sample-demo"}, "labels": [{"name": "personalization"}], "created_at": "2026-11-03T16:00:00Z", "updated_at": "2026-11-03T16:00:00Z"}],
+  "pulls": [{"number": 1, "title": "Prototype timeline view", "state": "closed", "body": "Initial fictional planner view.", "user": {"login": "bo-sample-demo"}, "labels": [], "created_at": "2026-10-28T16:00:00Z", "updated_at": "2026-10-29T16:00:00Z", "merged_at": "2026-10-29T16:00:00Z"}],
+  "workflow_runs": [{"name": "tests", "head_branch": "main", "event": "push", "status": "completed", "conclusion": "failure", "created_at": "2026-11-03T16:00:00Z", "updated_at": "2026-11-03T16:02:00Z"}]
+}

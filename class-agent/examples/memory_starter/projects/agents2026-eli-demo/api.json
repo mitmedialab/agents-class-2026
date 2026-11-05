@@ -1,0 +1,17 @@
+{
+  "name": "agents2026-eli-demo",
+  "default_branch": "main",
+  "description": "Archived fictional wearable reflection prototype",
+  "homepage": "https://student-fixtures.invalid/eli-demo",
+  "has_pages": false,
+  "language": "Python",
+  "topics": ["wearables", "reflection"],
+  "pushed_at": "2026-10-10T18:00:00Z",
+  "updated_at": "2026-10-10T18:00:00Z",
+  "archived": true,
+  "commits": [],
+  "branches": [{"name": "main", "commit": {"sha": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"}, "protected": false}],
+  "issues": [],
+  "pulls": [],
+  "workflow_runs": []
+}

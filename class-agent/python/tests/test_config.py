@@ -31,6 +31,7 @@ def test_settings_accept_standard_openai_environment_without_exposing_secret() -
     assert settings.browser_max_sessions_per_principal == 2
     assert settings.anonymous_quotas_enabled is True
     assert settings.github_student_projects_enabled is False
+    assert settings.student_project_fixtures_enabled is False
     assert settings.github_roster_cache_ttl_seconds == 300
     assert settings.github_token is None
     assert "test-secret-value" not in repr(settings)
@@ -76,6 +77,22 @@ def test_settings_require_github_token_only_when_student_projects_are_enabled() 
                 "BRAVE_API_KEY": "test-brave-value",
                 "GITHUB_STUDENT_PROJECTS_ENABLED": "true",
             }
+        )
+
+
+def test_settings_enable_offline_projects_without_token_and_reject_mixed_sources() -> None:
+    base = {
+        "DATABASE_URL": "postgresql://example",
+        "OPENAI_API_KEY": "test-secret-value",
+        "BRAVE_API_KEY": "test-brave-value",
+        "STUDENT_PROJECT_FIXTURES_ENABLED": "true",
+    }
+    settings = AgentSettings.from_environment(base)
+    assert settings.student_project_fixtures_enabled
+    assert settings.github_token is None
+    with pytest.raises(ConfigurationError, match="cannot both be enabled"):
+        AgentSettings.from_environment(
+            {**base, "GITHUB_STUDENT_PROJECTS_ENABLED": "true", "GITHUB_TOKEN": "test"}
         )
 
 

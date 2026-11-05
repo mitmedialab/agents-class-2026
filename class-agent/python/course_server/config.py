@@ -185,6 +185,7 @@ class AgentSettings(BaseModel):
     mail_enabled: bool = False
     showcase_history_path: Path = DEFAULT_SHOWCASE_HISTORY_PATH
     github_student_projects_enabled: bool = False
+    student_project_fixtures_enabled: bool = False
     github_token: SecretStr | None = Field(default=None, repr=False)
     github_organization: str = Field(default="mitmedialab", pattern=r"^[A-Za-z0-9_.-]{1,100}$")
     github_repository_prefix: str = Field(default="agents2026-", pattern=r"^[A-Za-z0-9_.-]{1,100}$")
@@ -308,6 +309,17 @@ class AgentSettings(BaseModel):
         )
         if github_projects_enabled not in {"true", "false", "1", "0", "yes", "no"}:
             raise ConfigurationError("GITHUB_STUDENT_PROJECTS_ENABLED must be true or false")
+        fixture_projects_enabled = (
+            values.get("STUDENT_PROJECT_FIXTURES_ENABLED", "false").strip().casefold()
+        )
+        if fixture_projects_enabled not in {"true", "false", "1", "0", "yes", "no"}:
+            raise ConfigurationError("STUDENT_PROJECT_FIXTURES_ENABLED must be true or false")
+        if github_projects_enabled in {"true", "1", "yes"} and fixture_projects_enabled in {
+            "true",
+            "1",
+            "yes",
+        }:
+            raise ConfigurationError("GitHub and fictional project fixtures cannot both be enabled")
         raw_github_token = values.get("GITHUB_TOKEN")
         github_token = raw_github_token.strip() if raw_github_token else ""
         if github_token and (
@@ -365,6 +377,7 @@ class AgentSettings(BaseModel):
             workspace_strict_visual_policy=strict_visual_policy in {"true", "1", "yes"},
             mail_enabled=mail_enabled in {"true", "1", "yes"},
             github_student_projects_enabled=github_projects_enabled in {"true", "1", "yes"},
+            student_project_fixtures_enabled=fixture_projects_enabled in {"true", "1", "yes"},
             showcase_history_path=Path(
                 values.get(
                     "SHOWCASE_HISTORY_PATH",

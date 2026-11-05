@@ -1,0 +1,20 @@
+{
+  "name": "agents2026-ada-demo",
+  "default_branch": "main",
+  "description": "Fictional hint-first study companion for weekly builds",
+  "homepage": "https://student-fixtures.invalid/ada-demo",
+  "has_pages": false,
+  "language": "Python",
+  "topics": ["learning", "hints", "course-agent"],
+  "pushed_at": "2026-11-04T18:00:00Z",
+  "updated_at": "2026-11-04T18:00:00Z",
+  "archived": false,
+  "commits": [
+    {"sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "commit": {"message": "Add hint-first weekly reflection", "author": {"name": "Ada Example", "date": "2026-11-04T18:00:00Z"}}, "author": {"login": "ada-example-demo"}},
+    {"sha": "aaaaaaaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "commit": {"message": "Document MCP versus tool learning note", "author": {"name": "Ada Example", "date": "2026-10-20T18:00:00Z"}}, "author": {"login": "ada-example-demo"}}
+  ],
+  "branches": [{"name": "main", "commit": {"sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}, "protected": false}],
+  "issues": [{"number": 3, "title": "Let me choose hints or full explanations", "state": "open", "body": "The learner should control how much help appears.", "user": {"login": "ada-example-demo"}, "labels": [{"name": "student-control"}], "created_at": "2026-11-02T18:00:00Z", "updated_at": "2026-11-02T18:00:00Z"}],
+  "pulls": [{"number": 2, "title": "Add reflection notes", "state": "closed", "body": "Adds fictional weekly notes.", "user": {"login": "ada-example-demo"}, "labels": [], "created_at": "2026-10-20T18:00:00Z", "updated_at": "2026-10-21T18:00:00Z", "merged_at": "2026-10-21T18:00:00Z"}],
+  "workflow_runs": [{"name": "tests", "head_branch": "main", "event": "push", "status": "completed", "conclusion": "success", "created_at": "2026-11-04T18:00:00Z", "updated_at": "2026-11-04T18:02:00Z"}]
+}

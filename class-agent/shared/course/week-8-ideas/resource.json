@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "resource": {
+    "uri": "course://week-8-ideas",
+    "title": "Week 8 Personalization Examples",
+    "description": "A short, privacy-safe summary of the Week 8 slide examples for student development forks.",
+    "media_type": "text/markdown",
+    "file": "week-8-ideas.md",
+    "visibility": "public",
+    "status": "published",
+    "order": 68
+  }
+}

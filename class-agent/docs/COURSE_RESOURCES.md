@@ -16,6 +16,7 @@ course://slides/week-02
 course://slides/week-03
 course://slides/week-04
 course://slides/week-06
+course://week-8-ideas
 course://readings/software-agents-bradshaw
 ```
 

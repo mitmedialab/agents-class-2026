@@ -1,0 +1,16 @@
+{
+  "staff": [
+    {
+      "username": "teacher-demo",
+      "display_name": "Taylor Mentor",
+      "email": "teacher@example.org",
+      "role": "instructor"
+    },
+    {
+      "username": "ta-demo",
+      "display_name": "Sam Helper",
+      "email": "ta@example.org",
+      "role": "ta"
+    }
+  ]
+}

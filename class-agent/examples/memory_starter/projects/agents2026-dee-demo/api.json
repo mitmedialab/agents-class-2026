@@ -1,0 +1,17 @@
+{
+  "name": "agents2026-dee-demo",
+  "default_branch": "main",
+  "description": "Fictional team reflection agent",
+  "homepage": "https://student-fixtures.invalid/dee-demo",
+  "has_pages": false,
+  "language": "Python",
+  "topics": ["collaboration", "reflection", "sound"],
+  "pushed_at": "2026-11-02T20:00:00Z",
+  "updated_at": "2026-11-02T20:00:00Z",
+  "archived": false,
+  "commits": [{"sha": "dddddddddddddddddddddddddddddddddddddddd", "commit": {"message": "Document consent for shared reflections", "author": {"name": "Dee Fiction", "date": "2026-11-02T20:00:00Z"}}, "author": {"login": "dee-fiction-demo"}}],
+  "branches": [{"name": "main", "commit": {"sha": "dddddddddddddddddddddddddddddddddddddddd"}, "protected": false}],
+  "issues": [{"number": 2, "title": "Ask before sharing a reflection", "state": "open", "body": "A personal note should remain private until its author chooses a group audience.", "user": {"login": "dee-fiction-demo"}, "labels": [{"name": "consent"}], "created_at": "2026-11-02T20:00:00Z", "updated_at": "2026-11-02T20:00:00Z"}],
+  "pulls": [],
+  "workflow_runs": []
+}

@@ -13,6 +13,7 @@ includes:
 - the public application guide;
 - the published weekly lecture slide decks;
 - the Week 1 Bradshaw reading on software agents.
+- a short Week 8 personalization example summary for portable student forks.
 
 Only the file selected by each public manifest, any declared slide accessibility sidecar
 as page text, and assets explicitly named in that manifest are exposed to the Course Agent.

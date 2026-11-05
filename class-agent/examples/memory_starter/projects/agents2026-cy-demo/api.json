@@ -1,0 +1,17 @@
+{
+  "name": "agents2026-cy-demo",
+  "default_branch": "main",
+  "description": "Fictional accessible feedback assistant",
+  "homepage": "https://student-fixtures.invalid/cy-demo",
+  "has_pages": false,
+  "language": "TypeScript",
+  "topics": ["accessibility", "feedback", "reading"],
+  "pushed_at": "2026-11-04T13:00:00Z",
+  "updated_at": "2026-11-04T13:00:00Z",
+  "archived": false,
+  "commits": [{"sha": "cccccccccccccccccccccccccccccccccccccccc", "commit": {"message": "Add text-first feedback mode", "author": {"name": "Cy Placeholder", "date": "2026-11-04T13:00:00Z"}}, "author": {"login": "cy-placeholder-demo"}}],
+  "branches": [{"name": "main", "commit": {"sha": "cccccccccccccccccccccccccccccccccccccccc"}, "protected": false}],
+  "issues": [{"number": 1, "title": "Control what the agent remembers", "state": "open", "body": "A learner should be able to inspect and correct stored preferences.", "user": {"login": "cy-placeholder-demo"}, "labels": [{"name": "privacy"}], "created_at": "2026-11-01T13:00:00Z", "updated_at": "2026-11-01T13:00:00Z"}],
+  "pulls": [],
+  "workflow_runs": [{"name": "tests", "head_branch": "main", "event": "push", "status": "completed", "conclusion": "success", "created_at": "2026-11-04T13:00:00Z", "updated_at": "2026-11-04T13:01:00Z"}]
+}

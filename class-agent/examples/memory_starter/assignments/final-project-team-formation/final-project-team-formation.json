@@ -1,0 +1,14 @@
+{
+  "schema_version": 3,
+  "assignment_id": "final-project-team-formation",
+  "revision": 1,
+  "status": "published",
+  "title": "Final Project Team Formation",
+  "summary": "Form a final-project team and send the course staff a tentative topic.",
+  "content_markdown": "# Final Project Team Formation\n\n**Historical assignment: complete by 8:00 AM Eastern on Thursday, October 29.**\n\nThis fictional copy lets a student fork exercise the published-assignment workflow.\nFor actual course groups and instructions, use the live Course Agent.\n\nIf you do not yet have a final-project group, contact classmates with related\ninterests and tell the course staff your tentative topic by the deadline.\n\n## Fictional students still looking for teammates\n\n| Student | Interests or tentative direction |\n| --- | --- |\n| Cy Placeholder | Accessible text-first feedback and learner control |\n\n## Fictional example groups\n\n| Members | Tentative direction |\n| --- | --- |\n| Ada Example, Dee Fiction | A reflection companion that keeps personal notes private until shared |\n| Bo Sample | A visual planner for creative projects and sound sketches |\n\nThese names, interests, and groups are synthetic examples. They do not represent\ncurrent enrollment or actual team assignments.\n",
+  "release_at": "2026-10-28T01:00:00-04:00",
+  "due_at": "2026-10-29T08:00:00-04:00",
+  "created_at": "2026-10-28T01:00:00-04:00",
+  "updated_at": "2026-11-05T19:00:00Z",
+  "created_by_user_id": "00000000-0000-4000-8000-000000000001"
+}

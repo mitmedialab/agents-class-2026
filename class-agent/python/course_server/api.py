@@ -972,7 +972,10 @@ def create_app(
                     instructor_messaging_enabled=True,
                     student_communications_enabled=True,
                     faq_updates_enabled=True,
-                    student_projects_enabled=(resolved_settings.github_student_projects_enabled),
+                    student_projects_enabled=(
+                        resolved_settings.github_student_projects_enabled
+                        or resolved_settings.student_project_fixtures_enabled
+                    ),
                 ),
                 skills=skills,
                 workspace_registry=component_registry,

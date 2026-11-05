@@ -61,6 +61,7 @@ from course_server.student_communications import (
     StudentCommunicationService,
 )
 from course_server.student_projects import GitHubStudentProjectCatalog, StudentProjectCatalog
+from course_server.student_projects.fixture import FixtureStudentProjectCatalog
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _AUTH_COOKIE = "class_agent_auth"
@@ -98,6 +99,7 @@ class CourseMcpSettings:
     course_data_path: Path = _PROJECT_ROOT / "data"
     published_faq_path: Path = _PROJECT_ROOT / "var/course-knowledge/published-faq.json"
     github_projects_enabled: bool = False
+    student_project_fixtures_enabled: bool = False
     github_token: str = ""
     github_organization: str = "mitmedialab"
     github_repository_prefix: str = "agents2026-"
@@ -125,6 +127,8 @@ class CourseMcpSettings:
             raise ValueError("Course MCP requires a database and an HTTPS public origin")
         if self.github_projects_enabled and not self.github_token:
             raise ValueError("GITHUB_TOKEN is required when project inspection is enabled")
+        if self.github_projects_enabled and self.student_project_fixtures_enabled:
+            raise ValueError("GitHub and fictional project fixtures cannot both be enabled")
         if self.messaging_enabled and not self.mail_enabled:
             raise ValueError("Course messaging requires the configured mail worker")
         if re.fullmatch(r"[A-Za-z0-9._-]{1,64}", self.release) is None:
@@ -137,6 +141,11 @@ class CourseMcpSettings:
         github_enabled = values.get("GITHUB_STUDENT_PROJECTS_ENABLED", "false").strip().casefold()
         if github_enabled not in {"true", "false", "1", "0", "yes", "no"}:
             raise ValueError("GITHUB_STUDENT_PROJECTS_ENABLED must be true or false")
+        fixtures_enabled = (
+            values.get("STUDENT_PROJECT_FIXTURES_ENABLED", "false").strip().casefold()
+        )
+        if fixtures_enabled not in {"true", "false", "1", "0", "yes", "no"}:
+            raise ValueError("STUDENT_PROJECT_FIXTURES_ENABLED must be true or false")
         messaging_enabled = values.get("MCP_MESSAGING_ENABLED", "false").strip().casefold()
         mail_enabled = values.get("MAIL_ENABLED", "false").strip().casefold()
         if messaging_enabled not in {"true", "false", "1", "0", "yes", "no"}:
@@ -171,6 +180,7 @@ class CourseMcpSettings:
                 or _PROJECT_ROOT / "var/course-knowledge/published-faq.json"
             ).expanduser(),
             github_projects_enabled=github_enabled in {"true", "1", "yes"},
+            student_project_fixtures_enabled=fixtures_enabled in {"true", "1", "yes"},
             github_token=values.get("GITHUB_TOKEN", "").strip(),
             github_organization=values.get("GITHUB_ORGANIZATION", "mitmedialab").strip(),
             github_repository_prefix=repository_prefix,
@@ -331,6 +341,10 @@ def create_course_mcp_app(
         instructor_messages=instructor_message_store,
         questions=question_store,
     )
+    if student_projects is None and settings.student_project_fixtures_enabled:
+        if roster is None:
+            raise ValueError("Fictional project fixtures require the course roster")
+        student_projects = FixtureStudentProjectCatalog(roster)
     if student_projects is None and settings.github_projects_enabled:
         if roster is None:
             raise ValueError("Project inspection requires the active course roster")

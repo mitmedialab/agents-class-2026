@@ -169,6 +169,24 @@ def test_chatgpt_redirect_allowlist_and_settings() -> None:
     assert parsed_settings.github_student_project_aliases == (
         ("test-student2", "agents2026-student"),
     )
+    fixture_settings = CourseMcpSettings.from_environment(
+        {
+            "DATABASE_URL": "postgresql://unused/unused",
+            "MCP_PUBLIC_BASE_URL": BASE_URL,
+            "STUDENT_PROJECT_FIXTURES_ENABLED": "true",
+        }
+    )
+    assert fixture_settings.student_project_fixtures_enabled
+    with pytest.raises(ValueError, match="cannot both be enabled"):
+        CourseMcpSettings.from_environment(
+            {
+                "DATABASE_URL": "postgresql://unused/unused",
+                "MCP_PUBLIC_BASE_URL": BASE_URL,
+                "STUDENT_PROJECT_FIXTURES_ENABLED": "true",
+                "GITHUB_STUDENT_PROJECTS_ENABLED": "true",
+                "GITHUB_TOKEN": "test",
+            }
+        )
     with pytest.raises(ConfigurationError, match="GITHUB_STUDENT_PROJECT_ALIASES"):
         CourseMcpSettings.from_environment(
             {
