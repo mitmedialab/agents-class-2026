@@ -1,0 +1,168 @@
+/* =====================================================================
+   IDIOMA. Los agentes generan texto en español con plantillas finitas; para el
+   inglés, tr() traduce esas plantillas por reglas, y la interfaz usa un diccionario.
+   ===================================================================== */
+let lang="en";
+try{const s=localStorage.getItem("placelab341-lang");if(s==="en"||s==="es")lang=s}catch(e){}
+const UI={
+  es:{band:"· e14 / e15 · tercer piso",sim:"GA Cognitive Agents",title:"placelab",tagline:"¿qué ideas nacen cuando la clase se cruza?",nav1:"perfil",nav2:"simulación",nav3:"resultados",
+    ask:"los alumnos de Cognitive Agents entran como personajes sin nombre, con memoria, y se mueven solo por los espacios comunes del tercer piso: la 341, el foodcam, el atrio, la cafetería y los pasillos. al hablar, cruzan lo que traen (proyecto, intereses, habilidades) y de ahí nacen ideas nuevas. nada está escrito de antemano: las ideas salen de las conversaciones.",
+    floor:"tercer piso",tabConv:"conversaciones",tabMem:"memoria",tabYou:"tú",you:"tú",dayShort:"día",
+    convHint:"cada conversación de los espacios comunes queda grabada aquí, frase a frase, mientras ocurre. toca una cara para abrir la memoria de esa persona.",noConvs:"todavía no ha habido conversaciones.",
+    memHint:"toca un personaje en la escena, o una cara en una conversación, para abrir su memoria: el flujo de nodos (event · thought · chat), su contador de reflexión y las tres preguntas que se hizo la última vez.",
+    noUser:"todavía no has aceptado tu perfil: elige tu código en la pestaña perfil.",ideasNow:"ideas en las que está",agree:"en lo mismo",bornTag:"idea nueva",joinTag:"se apunta",
+    presence:"presencia",days:"días",ffday:"saltar al final del día",ffall:"saltar al final",ffRun:"avanzando",
+    k1:"tu personaje · anillo naranja",k3:"calor de presencia",k4:"calor de ideas",k5:"toca un personaje para abrir su memoria · acércate a la cafetería, al atrio o al foodcam para oír la conversación · lo negro no se puede pisar",
+    v3d:"Vista 3D",vtop:"Vista en planta",vcafe:"Cafetería",heat:"Dónde ha estado la gente",prop:"Dónde se habla de ideas",pause:"Pausar",resume:"Reanudar",reset:"Volver a empezar",speed:"Velocidad",presenceT:"Fracción de la clase presente",daysT:"Días de simulación",follow:"Seguir a tu personaje",
+    stConv:"Ideas en las que estás / ideas nacidas",stTalks:"Conversaciones",stMeet:"Encuentros en pasillos",spark:"Encuentros a lo largo del tiempo",
+    count:(n,P,m)=>`${n} de ${P} en la planta · ${m} en la cafetería`,
+    cafe:"cafetería",reflIn:(c,m)=>`reflexión en ${c} / ${m}`,knows:"lugares que conoce",lastRefl:"última reflexión",noEv:"sin suficiente evidencia todavía",
+    noRefl:"todavía no ha reflexionado: cuando la importancia acumulada de lo que percibe llegue al umbral, se hará tres preguntas sobre sus recuerdos y las responderá con evidencia.",
+    because:"porque",evTitle:"memorias que sostienen esta frase",
+    pfProj:"proyecto",pfSkills:"sabe de",pfInt:"le interesa",pfChoose:"elige tu código…",pfNeed:"rellena proyecto, habilidades e intereses.",
+    pfcode:"tu código (sin nombres)",pfnote:"tu perfil viene del roster de Cognitive Agents: equipo, intereses, habilidades y proyecto. si aceptas, da vida a un personaje sin nombre que sustituye al sintético de tu código; se le reconoce por la ropa y solo tú sabes quién es. puedes modificar el perfil antes o después; la versión original queda registrada.",
+    pfaccept:"acepto que se use mi perfil",pfmodify:"modificar mi perfil",pfsave:"guardar y dar vida al personaje",pfcancel:"cancelar",pfproject:"proyecto (una frase)",pfskills:"habilidades (separadas por comas)",pfinterests:"intereses (separados por comas)",
+    youexists:"tu personaje ya existe en este navegador",youfollow:"seguir a tu personaje",youedit:"modificar mi perfil",youforget:"olvidar y empezar de cero",ysn:"ideas",
+    you2:{sub:(w,c,t,p)=>`${w} · ${c} · ${t} · proyecto: ${p}. no tiene nombre: solo tú sabes quién es.`,versions:n=>`perfil modificado ${n-1} ${n===2?"vez":"veces"}; la versión original queda registrada.`},
+    lvlab:"ahora mismo",lvhint:"la arquitectura en marcha para un personaje: lo que acaba de percibir, lo que guarda, lo que recuperó para su última frase, lo que dijo y planea, y lo que destiló. sigue a tu personaje cuando está hablando; toca otro para seguirlo.",
+    live:{perc:"percepción",percS:"últimos sucesos (vision_r 4 · ≤ 3)",mem:"memoria",memS:"flujo asociativo",stm:"corto plazo",ltm:"largo plazo",trig:"reflexión",ret:"recuperación",retS:"15 nodos por foco · top 5",reason:"razonamiento",reasonS:"última frase y proyecto",plan:"plan",evo:"evolución",evoS:"reflexión y almacenado",reflH:"última reflexión",storedH:"último almacenado",none:"nada todavía",noRet:"todavía no ha recuperado nada",noUtt:"todavía no ha hablado",noRefl:"todavía no ha reflexionado",noStored:"nada todavía"},
+    sclab:"esquema",sctitle:"arquitectura del agente en este experimento",schint:"el mismo esquema que el de un agente basado en LLM, con lo que hay aquí en cada bloque. el ejemplo de la izquierda es la última conversación real (la tuya, si la hay), escrita como trayectoria.",
+    schema:{left:"interacción en los espacios comunes",leftS:"última conversación como trayectoria",noConv:"todavía no ha habido ninguna conversación.",enter:(a,b)=>`${a} coincide con ${b}`,
+      thought:"pensamiento",action:"acción",obs:"observación",reward:"recompensa",rewardBorn:t=>`nace la idea «${t}»`,rewardYes:(a,t)=>`${a} se apunta a «${t}»`,rewardAgree:"ya estaban en lo mismo",rewardNo:"cada uno con lo suyo",
+      perc:"percepción",percS:"perceive.py",percIn:"entrada: posiciones y actos de los demás, cómo es cada espacio al visitarlo",percOut:"cada 2 s · radio 4 · ≤ 3 sucesos · sin repetidos",percTok:"salida: nodos event con poignancy",
+      agent:"agente basado en reglas",agentS:"sin LLM dentro; Claude escribe las ideas si se lo pides",goal:"premisa común: contar lo que uno hace, escuchar lo que trae el otro y ver qué sale al juntarlo.",prof:"perfil",profG:"equipo",profS:"ideas en las que está",
+      self:"auto-acción",know:"conocimiento",knowExt:"base externa: plano (espacios comunes, puertas, rejilla de navegación)",knowInt:"interna: memoria espacial (espacios vistos y cómo son)",knowCtx:"→ contexto: con quién está y dónde",
+      mem:"memoria",stm:"corto plazo: últimos 5 sucesos (retention)",ltm:"largo plazo: flujo asociativo event · thought · chat",ret:"recuperación: recencia × 0,5 + relevancia × 3 + importancia × 2",
+      reason:"razonamiento y planificación",reasonS:"converse.py · agent_chat_v2",traj:"trayectorias",trajA:"cuenta su proyecto o una idea",trajB:"el otro la cruza con lo suyo",trajC:"idea nueva · se apunta · en lo mismo · cada uno con lo suyo",trajR:"recompensa = ideas nacidas y gente que se apunta",
+      evo:"evolución",evoS:"reflect.py",evoMem:"memoria",evoFilt:"trayectorias filtradas: top 30 por puntuación",evoRefl:"reflexión: 3 preguntas → insights con evidencia",evoStore:"almacenar: thought con evidencia",evoMsg:"mensaje a otros: memo «X anda con…», «X sabe de…», «X está con la idea…»",evoAgents:"→ cuenta · se apunta · va a ver un espacio · reflexiona"},
+    maplab:"1 · mapa de calor de ideas",maptitle:"dónde nacen y se discuten las ideas, y cómo cambia",maphint:"cada espacio común se tiñe según las ideas que han nacido allí (fuerte) y las conversaciones que ha habido (suave). el número es el de ideas nacidas; al lado, las conversaciones. los círculos negros son ideas con tu personaje. lo negro no se puede pisar. mueve el tiempo para ver cómo se desplaza.",
+    convlab:"2 · cómo van las conversaciones",convtitle:"qué pasa en los espacios comunes, día a día",convhint2:"cada cuadrado es una conversación, en orden. naranja: nace una idea; verde: alguien se apunta a una; gris: ya estaban en lo mismo; claro: cada uno con lo suyo. con borde, las de tu personaje.",
+    idlab:"3 · ideas nuevas",idtitle:"lo que ha salido de cruzarse",idhint:"cada idea junta el proyecto de una persona con algo que trajo otra. abajo, quién está en cada una y dónde nació. si quieres, Claude las escribe como ideas de proyecto de verdad a partir de las conversaciones (se te pedirá permiso; gasta tu uso de Claude).",
+    simmore:"por dentro: quién está en el piso, la arquitectura en marcha y el esquema del agente",more:"más lecturas: arquitectura",
+    res:{noUser:"todavía no has aceptado tu perfil.",ideasBorn:n=>n===1?"idea nacida":"ideas nacidas",sub:(b,j,o,d,D)=>`tu personaje ha hecho nacer ${b} y se ha apuntado a ${j}; comparte ideas con ${o} personas. día ${d} de ${D}.`,
+      at:(d,hm)=>`día ${d} · ${hm}`,endDay:d=>`fin del día ${d}`,play:"reproducir",stop:"parar",dayRow:(n,b,j)=>`${n} conv · ${b} ideas · ${j} se apuntan`,trend:(n,p)=>`${n} conversaciones en total; el ${p} % acaba con una idea nueva o alguien apuntándose. por espacio:`,
+      noIdeas:"todavía no ha nacido ninguna idea.",ideaFrom:(a,b)=>`de «${a}» + ${b}`,llmBtn:"que Claude escriba las ideas",llmThinking:"pensando…",llmDone:"ideas escritas por Claude a partir de las conversaciones.",llmNo:"Claude no está disponible en esta vista.",llmLater:"demasiadas peticiones; prueba más tarde.",llmErr:"no se pudo; vuelve a intentarlo."},
+    STATE:{walk:a=>`camina hacia ${a.dest==="cafe"?"la cafetería":typeof a.dest==="string"&&a.dest.startsWith("corr:")?SP[a.dest.slice(5)].n:ZONES[a.dest]?ZONES[a.dest].n:"su destino"}`,
+      work:()=>"está en clase, en la sala 341",wait:a=>`está en ${a.dest==="cafe"?"la cafetería":ZONES[a.dest]?ZONES[a.dest].n:"un espacio común"}, a ver si llega alguien`,talk:a=>`conversa en ${a.dest==="cafe"?"la cafetería":ZONES[a.dest]?ZONES[a.dest].n:"un espacio común"}`,chat:()=>"charla un momento en el pasillo",away:()=>"está fuera de la planta",visit:a=>`se queda un rato en ${typeof a.dest==="string"&&a.dest.startsWith("corr:")?SP[a.dest.slice(5)].n:"otro sitio"}`},
+    arch:[["percibir · perceive.py","cada 2 s el personaje mira a su alrededor (vision_r = 4), se queda con los 3 sucesos más cercanos (att_bandwidth) y descarta los repetidos (retention = 5). cada suceso entra como nodo event con una poignancy."],
+      ["recuperar · retrieve.py","cada frase y cada decisión parte de una recuperación: puntuación = recencia × 0,5 + relevancia × 3 + importancia × 2, cada una normalizada a [0, 1]."],
+      ["reflexionar · reflect.py","cuando la poignancy acumulada supera el umbral, el personaje se hace 3 preguntas sobre sus recuerdos (ideas que suenan, qué sabe hacer alguien, cómo es un espacio) y las responde con insights que citan su evidencia."],
+      ["conversar · converse.py","cada frase recupera 15 memorias sobre el otro, su actividad y las últimas 4 líneas. uno cuenta su proyecto o una idea; el otro la cruza con lo que trae (intereses, habilidades): si hay algo en común y algo complementario, nace una idea; si ya conoce la idea y le atañe, se apunta."]]},
+  en:{band:"· e14 / e15 · third floor",sim:"GA Cognitive Agents",title:"placelab",tagline:"what ideas are born when the class crosses paths?",nav1:"profile",nav2:"simulation",nav3:"results",
+    ask:"the students of Cognitive Agents enter as nameless characters with memory and move only through the common spaces of the third floor: room 341, the foodcam, the atrium, the café and the corridors. when they talk, they cross what they bring (project, interests, skills) and new ideas are born. nothing is scripted: the ideas come out of the conversations.",
+    floor:"third floor",tabConv:"conversations",tabMem:"memory",tabYou:"you",you:"you",dayShort:"day",
+    convHint:"every conversation in the common spaces is recorded here, line by line, as it happens. tap a face to open that person's memory.",noConvs:"no conversations yet.",
+    memHint:"tap a character in the scene, or a face in a conversation, to open its memory: the node stream (event · thought · chat), its reflection counter and the three questions it asked itself last time.",
+    noUser:"you haven't accepted your profile yet: pick your code in the profile tab.",ideasNow:"ideas it is part of",agree:"same page",bornTag:"new idea",joinTag:"joins",
+    presence:"presence",days:"days",ffday:"skip to end of day",ffall:"skip to the end",ffRun:"running",
+    k1:"your character · orange ring",k3:"presence heat",k4:"idea heat",k5:"tap a character to open its memory · get close to the café, the atrium or the foodcam to hear the conversation · black is off limits",
+    v3d:"3D view",vtop:"Plan view",vcafe:"Café",heat:"Where people have been",prop:"Where ideas are discussed",pause:"Pause",resume:"Resume",reset:"Start over",speed:"Speed",presenceT:"Fraction of the class present",daysT:"Days of simulation",follow:"Follow your character",
+    stConv:"Ideas you are in / ideas born",stTalks:"Conversations",stMeet:"Corridor encounters",spark:"Encounters over time",
+    count:(n,P,m)=>`${n} of ${P} on the floor · ${m} in the café`,
+    cafe:"café",reflIn:(c,m)=>`reflection in ${c} / ${m}`,knows:"places it knows",lastRefl:"last reflection",noEv:"not enough evidence yet",
+    noRefl:"it hasn't reflected yet: when the accumulated importance of what it perceives reaches the threshold, it will ask itself three questions about its memories and answer them with evidence.",
+    because:"because",evTitle:"memories behind this line",
+    pfProj:"project",pfSkills:"knows about",pfInt:"interested in",pfChoose:"pick your code…",pfNeed:"fill in project, skills and interests.",
+    pfcode:"your code (no names)",pfnote:"your profile comes from the Cognitive Agents roster: team, interests, skills and project. if you accept, it gives life to a nameless character that replaces the synthetic one with your code; you recognize it by its clothes and only you know who it is. you can modify the profile before or after; the original version stays on record.",
+    pfaccept:"I accept that my profile is used",pfmodify:"modify my profile",pfsave:"save and give life to the character",pfcancel:"cancel",pfproject:"project (one sentence)",pfskills:"skills (comma-separated)",pfinterests:"interests (comma-separated)",
+    youexists:"your character already exists in this browser",youfollow:"follow your character",youedit:"modify my profile",youforget:"forget it and start over",ysn:"ideas",
+    you2:{sub:(w,c,t,p)=>`${w} · ${c} · ${t} · project: ${p}. it has no name: only you know who it is.`,versions:n=>`profile modified ${n-1} ${n===2?"time":"times"}; the original version stays on record.`},
+    lvlab:"right now",lvhint:"the architecture at work for one character: what it just perceived, what it stores, what it retrieved for its last line, what it said and plans, and what it distilled. follows your character while it is talking; tap another to follow it.",
+    live:{perc:"perception",percS:"latest events (vision_r 4 · ≤ 3)",mem:"memory",memS:"associative stream",stm:"short term",ltm:"long term",trig:"reflection",ret:"retrieval",retS:"15 nodes per focus · top 5",reason:"reasoning",reasonS:"last line and project",plan:"plan",evo:"evolution",evoS:"reflection and storing",reflH:"last reflection",storedH:"last stored",none:"nothing yet",noRet:"nothing retrieved yet",noUtt:"hasn't spoken yet",noRefl:"hasn't reflected yet",noStored:"nothing yet"},
+    sclab:"schema",sctitle:"agent architecture in this experiment",schint:"the same schema as an LLM-based agent, with what is here in each block. the example on the left is the last real conversation (yours, if any), written as a trajectory.",
+    schema:{left:"interaction in the common spaces",leftS:"last conversation as a trajectory",noConv:"no conversation yet.",enter:(a,b)=>`${a} runs into ${b}`,
+      thought:"thought",action:"action",obs:"observation",reward:"reward",rewardBorn:t=>`the idea “${t}” is born`,rewardYes:(a,t)=>`${a} joins “${t}”`,rewardAgree:"they were already on the same page",rewardNo:"each keeps their own",
+      perc:"perception",percS:"perceive.py",percIn:"input: positions and acts of others, what each space is like when visited",percOut:"every 2 s · radius 4 · ≤ 3 events · no repeats",percTok:"output: event nodes with poignancy",
+      agent:"rule-based agent",agentS:"no LLM inside; Claude writes the ideas if you ask",goal:"shared premise: say what you are working on, listen to what the other brings, and see what comes out of joining them.",prof:"profile",profG:"team",profS:"ideas it is part of",
+      self:"self-action",know:"knowledge",knowExt:"external base: floor plan (common spaces, doors, navigation grid)",knowInt:"internal: spatial memory (spaces seen and what they are like)",knowCtx:"→ context: who it is with and where",
+      mem:"memory",stm:"short term: last 5 events (retention)",ltm:"long term: associative stream event · thought · chat",ret:"retrieval: recency × 0.5 + relevance × 3 + importance × 2",
+      reason:"reasoning and planning",reasonS:"converse.py · agent_chat_v2",traj:"trajectories",trajA:"tells their project or an idea",trajB:"the other crosses it with their own",trajC:"new idea · joins · same page · each keeps their own",trajR:"reward = ideas born and people joining",
+      evo:"evolution",evoS:"reflect.py",evoMem:"memory",evoFilt:"filtered trajectories: top 30 by score",evoRefl:"reflection: 3 questions → insights with evidence",evoStore:"store: thought with evidence",evoMsg:"message to others: memo “X is working on…”, “X knows about…”, “X is in the idea…”",evoAgents:"→ tells · joins · goes to see a space · reflects"},
+    maplab:"1 · idea heat map",maptitle:"where ideas are born and discussed, and how it shifts",maphint:"each common space is tinted by the ideas born there (strong) and the conversations held there (soft). the number is ideas born; next to it, conversations. black circles are ideas with your character. black areas are off limits. move the time to see how it shifts.",
+    convlab:"2 · how the conversations are going",convtitle:"what happens in the common spaces, day by day",convhint2:"each square is a conversation, in order. orange: an idea is born; green: someone joins one; gray: already on the same page; light: each keeps their own. outlined, your character's.",
+    idlab:"3 · new ideas",idtitle:"what came out of crossing paths",idhint:"each idea joins one person's project with something another one brought. below, who is in each and where it was born. if you want, Claude writes them as real project ideas from the conversations (you will be asked for permission; it spends your Claude usage).",
+    simmore:"under the hood: who is on the floor, the architecture at work and the agent schema",more:"more readings: architecture",
+    res:{noUser:"you haven't accepted your profile yet.",ideasBorn:n=>n===1?"idea born":"ideas born",sub:(b,j,o,d,D)=>`your character gave birth to ${b} and joined ${j}; it shares ideas with ${o} people. day ${d} of ${D}.`,
+      at:(d,hm)=>`day ${d} · ${hm}`,endDay:d=>`end of day ${d}`,play:"play",stop:"stop",dayRow:(n,b,j)=>`${n} conv · ${b} ideas · ${j} join`,trend:(n,p)=>`${n} conversations in total; ${p} % end with a new idea or someone joining. by space:`,
+      noIdeas:"no idea has been born yet.",ideaFrom:(a,b)=>`from “${a}” + ${b}`,llmBtn:"let Claude write the ideas",llmThinking:"thinking…",llmDone:"ideas written by Claude from the conversations.",llmNo:"Claude is not available in this view.",llmLater:"too many requests; try later.",llmErr:"it didn't work; try again."},
+    STATE:{walk:a=>`walking to ${a.dest==="cafe"?"the café":typeof a.dest==="string"&&a.dest.startsWith("corr:")?trp(SP[a.dest.slice(5)].n):ZONES[a.dest]?trp(ZONES[a.dest].n):"its destination"}`,
+      work:()=>"in class in room 341",wait:a=>`in ${a.dest==="cafe"?"the café":ZONES[a.dest]?trp(ZONES[a.dest].n):"a common space"}, waiting to see who shows up`,talk:a=>`talking in ${a.dest==="cafe"?"the café":ZONES[a.dest]?trp(ZONES[a.dest].n):"a common space"}`,chat:()=>"chatting for a moment in the corridor",away:()=>"off the floor",visit:a=>`hanging around ${typeof a.dest==="string"&&a.dest.startsWith("corr:")?trp(SP[a.dest.slice(5)].n):"somewhere else"}`},
+    arch:[["perceive · perceive.py","every 2 s the character looks around (vision_r = 4), keeps the 3 closest events (att_bandwidth) and drops repeats (retention = 5). each event enters as an event node with a poignancy."],
+      ["retrieve · retrieve.py","every line and every decision starts from a retrieval: score = recency × 0.5 + relevance × 3 + importance × 2, each normalized to [0, 1]."],
+      ["reflect · reflect.py","when the accumulated poignancy passes the threshold, the character asks itself 3 questions about its memories (ideas going around, what someone knows how to do, what a space is like) and answers them with insights citing their evidence."],
+      ["converse · converse.py","each line retrieves 15 memories about the other person, their activity and the last 4 lines. one tells their project or an idea; the other crosses it with what they bring (interests, skills): with something in common and something complementary, an idea is born; if they already know the idea and it concerns them, they join."]]}
+};
+const L=k=>UI[lang][k]??UI.es[k];
+const PLACE_EN={"la cafetería":"the café","el pasaje principal":"the main passage","el atrio":"the atrium","el pasillo del Swatch Lab":"the Swatch Lab corridor","el pasillo del BT Lab":"the BT Lab corridor","el núcleo norte de E14":"the E14 north core","el núcleo sur de E14":"the E14 south core","el anillo norte de E15":"the E15 north ring","el pasillo oeste":"the west corridor","el pasillo sur":"the south corridor","el pasillo este de E15":"the E15 east corridor","el ala norte de E15":"the E15 north wing","un laboratorio":"a lab","la sala Nagashima":"the Nagashima room","la planta":"the floor"};
+const COLOR_EN={azul:"blue",roja:"red",verde:"green",amarilla:"yellow",morada:"purple",rosa:"pink",turquesa:"turquoise",blanca:"white",negra:"black",naranja:"orange"};
+const HAIR_EN={"pelo negro":"black hair","pelo castaño oscuro":"dark brown hair","pelo castaño":"brown hair","pelo rubio":"blond hair","pelo rojizo":"red hair","pelo azul":"blue hair","pelo gris":"gray hair","pelo blanco":"white hair"};
+const PANTS_EN={"pantalón azul marino":"navy pants","pantalón gris claro":"light gray pants","pantalón gris":"gray pants","pantalón marrón":"brown pants","pantalón azul":"blue pants","pantalón verde":"green pants"};
+const trp=p=>lang==="en"&&PLACE_EN[p]?PLACE_EN[p]:p;
+
+const SP_EN={r341:"room 341",cafe:"the café",atrium:"the atrium",foodcam:"the foodcam",pasaje:"the main passage",alanorte:"the north wing of E15",swatchc:"the Swatch Lab corridor",btc:"the BT Lab corridor",sur:"the south corridor"};
+const PRE=[
+  [/ llega a la planta por el ascensor/g," arrives on the floor by the elevator"],[/ sale de la planta por el ascensor/g," leaves the floor by the elevator"],[/ está fuera de la planta/g," is off the floor"],
+  [/ está en clase en /g," is in class in "],
+  [/tiene mesas y pizarra/g,"has tables and a whiteboard"],[/es tranquila/g,"is quiet"],[/es tranquilo/g,"is quiet"],[/es pequeña/g,"is small"],[/es pequeño/g,"is small"],[/está lejos de la cafetería/g,"is far from the café"],
+  [/tiene café y comida/g,"has coffee and food"],[/pasa gente todo el rato/g,"people pass by all the time"],[/es ruidosa/g,"is noisy"],[/es ruidoso/g,"is noisy"],[/está al lado del atrio/g,"is next to the atrium"],
+  [/es grande/g,"is big"],[/tiene mucha luz/g,"has lots of light"],[/tiene eco/g,"echoes"],[/está al lado de la cafetería/g,"is next to the café"],
+  [/a veces hay comida gratis/g,"sometimes there is free food"],[/es un sitio de paso/g,"is a pass-through spot"],[/pasa todo el mundo/g,"everyone passes through"],[/conecta E14 y E15/g,"connects E14 and E15"],
+  [/tiene ventanas/g,"has windows"],[/no tiene ventanas/g,"has no windows"],[/está cerca de los ascensores/g,"is near the elevators"],[/no pasa casi nadie/g,"hardly anyone passes"],[/es largo/g,"is long"],[/está lejos de todo/g,"is far from everything"]
+];
+const RULES=[
+  [/Llevo pensando que /g,"I've been thinking that "],[/Vengo de ver que /g,"I just saw that "],[/Pues yo creo que /g,"Well, I think "],[/Yo he visto que /g,"I saw that "],
+  [/Hoy casi no me he cruzado con nadie\./g,"I've barely run into anyone today."],[/Yo acabo de llegar, todavía no me he fijado\./g,"I just got here, I haven't noticed yet."],
+  [/Estoy con una idea con (.+?): /g,"I'm working on an idea with $1: "],[/Estoy con una idea: /g,"I'm working on an idea: "],
+  [/Yo estoy dándole vueltas a (.+?); lo mío es /g,"I'm turning over $1; my thing is "],[/Ya estoy en esa; cuenta conmigo\./g,"I'm already in that one; count me in."],
+  [/Me apunto: yo puedo poner /g,"Count me in: I can bring "],[/Lo veo, pero lo mío va por otro lado: /g,"I see it, but mine goes another way: "],
+  [/¿Y si juntamos lo tuyo, (.+?), con (.+?)\? Podría salir /g,"What if we join yours, $1, with $2? It could become "],[/Pues mira, ¿y si juntamos (.+?) con (.+?)\? Saldría /g,"Well, what if we join $1 with $2? We'd get "],
+  [/Lo mío va por otro lado: (.+?); sé de /g,"Mine goes another way: $1; I know about "],[/Me gusta\. Lo apuntamos y seguimos hablando\./g,"I like it. Let's note it down and keep talking."],[/Hecho\. Lo apuntamos\./g,"Done. Let's note it down."],
+  [/Pues seguimos cada uno con lo suyo\./g,"Then we each keep our own."],[/Hablamos otro día\./g,"Let's talk another day."],
+  [/^Idea con (.+?): (.+?) \(nació en (.+?)\)\./g,"Idea with $1: $2 (born in $3)."],[/^Me apunté a la idea (.+?) con /g,"I joined the idea $1 with "],[/^Tengo que seguir con (.+?) con /g,"I have to keep going with $1 with "],[/^Quiero aportar a (.+?) lo que sé de /g,"I want to bring to $1 what I know about "],
+  [/^Mi proyecto va de (.+?); lo mío es (.+?); me interesa /g,"My project is about $1; my thing is $2; I'm interested in "],
+  [/ anda con /g," is working on "],[/ sabe de /g," knows about "],[/ está con la idea /g," is in the idea "],[/ tiene una idea con /g," has an idea with "],[/ se apunta a la idea /g," joins the idea "],
+  [/[Mm]ucha gente está con la idea /g,"many people are in the idea "],[/[Vv]arias personas están con la idea /g,"several people are in the idea "],
+  [/[Hh]ablé con (.+?) en (.+?); /g,"I talked with $1 in $2; "],[/[Hh]ablé con (.+?) en (.+?)\./g,"I talked with $1 in $2."],[/[Hh]ablé con (.+?) en (.+?) y /g,"I talked with $1 in $2 and "],[/ y nos salió /g," and we came up with "],[/ y me apunté a /g," and I joined "],[/ y se apuntó a /g," and they joined "],[/ y estamos en lo mismo/g," and we're on the same page"],
+  [/ y yo ya hemos hablado (.+?) de nuestros proyectos\./g," and I have already talked $1 about our projects."],[/una vez/g,"once"],[/(\d+) veces/g,"$1 times"],[/A (.+?) apenas la conozco\./g,"I barely know $1."],
+  [/ va a ver /g," goes to see "],[/ camina por /g," is walking through "],[/ conversa con /g," is talking with "],[/ está en /g," is in "],
+  [/¿Cómo es (.+?)\?/g,"What is $1 like?"],[/¿Quién está con la idea (.+?)\?/g,"Who is in the idea $1?"],[/¿Qué sabe hacer (.+?)\?/g,"What can $1 do?"],
+  [/¿Qué ideas están sonando\?/g,"Which ideas are going around?"],[/¿Con quién podría trabajar\?/g,"Who could I work with?"],[/¿Dónde se habla más\?/g,"Where do people talk most?"],
+  [/ en /g," in "],[/ y /g," and "],[/ de /g," of "],[/ con /g," with "]
+];
+const tr=t=>{
+  if(lang!=="en"||!t)return t;
+  const toks=[];const tok=s=>{toks.push(s);return `\u0001${toks.length-1}\u0002`};
+  let s=String(t);
+  // los textos de los perfiles (proyectos, habilidades, intereses) y los títulos de ideas se dejan tal cual
+  s=s.replace(/«[^»]*»/g,m=>tok(m));
+  if(typeof PROFILES!=="undefined")for(const p of PROFILES){for(const x of [p.project,...p.skills,...p.interests])if(x&&s.includes(x))s=s.split(x).join(tok(x))}
+  if(typeof CFG!=="undefined"&&CFG.user&&CFG.user.over)for(const x of [CFG.user.over.project,...(CFG.user.over.skills||[]),...(CFG.user.over.interests||[])])if(x&&s.includes(x))s=s.split(x).join(tok(x));
+  s=s.replace(/la de camiseta (\w+) y (pelo [\wñáéíóú]+(?: oscuro)?)(?: con (pantalón [\wñáéíóú]+(?: marino| claro)?))?/gi,(m,c,h,p)=>{const col=COLOR_EN[c.toLowerCase()]||c;return tok(`the one in ${/^[aeiou]/.test(col)?"an":"a"} ${col} shirt with ${HAIR_EN[h.toLowerCase()]||h}${p?" and "+(PANTS_EN[p.toLowerCase()]||p):""}`)});
+  for(const id of Object.keys(SP).sort((a,b)=>SP[b].n.length-SP[a].n.length)){const n=SP[id].n;if(n.startsWith("el "))s=s.split("al "+n.slice(3)).join(tok("to "+SP_EN[id]));s=s.split(n).join(tok(SP_EN[id]))}
+  for(const [re,rep] of PRE)s=s.replace(re,rep);
+  for(const k of Object.keys(PLACE_EN).sort((a,b)=>b.length-a.length)){if(k.startsWith("el "))s=s.split("al "+k.slice(3)).join(tok("to "+PLACE_EN[k]));s=s.split(k).join(tok(PLACE_EN[k]))}
+  for(const [re,rep] of RULES)s=s.replace(re,rep);
+  s=s.replace(/\u0001(\d+)\u0002/g,(m,i)=>toks[+i]);
+  return s.charAt(0).toUpperCase()+s.slice(1);
+};
+function applyLang(){
+  document.documentElement.lang=lang;
+  const set=(id,k)=>{const el=$(id);if(el)el.textContent=L(k)};
+  [["t-band","band"],["t-sim","sim"],["t-title","title"],["t-tagline","tagline"],["t-nav1","nav1"],["t-nav2","nav2"],["t-nav3","nav3"],["t-ask","ask"],["t-floor","floor"],["tab-conv","tabConv"],["tab-mem","tabMem"],["tab-you","tabYou"],["t-convhint","convHint"],["t-days","days"],["t-ffday","ffday"],["t-ffall","ffall"],
+   ["t-k1","k1"],["t-k3","k3"],["t-k4","k4"],["t-k5","k5"],["t-lvlab","lvlab"],["t-lvhint","lvhint"],["t-sclab","sclab"],["t-sctitle","sctitle"],["t-schint","schint"],
+   ["t-pfcode","pfcode"],["t-pfnote","pfnote"],["t-pfaccept","pfaccept"],["t-pfmodify","pfmodify"],["t-pfsave","pfsave"],["t-pfcancel","pfcancel"],["t-pfproject","pfproject"],["t-pfskills","pfskills"],["t-pfinterests","pfinterests"],
+   ["t-maplab","maplab"],["t-maptitle","maptitle"],["t-maphint","maphint"],["t-convlab","convlab"],["t-convtitle","convtitle"],["t-convhint2","convhint2"],["t-idlab","idlab"],["t-idtitle","idtitle"],["t-idhint","idhint"],["t-more","more"],["t-simmore","simmore"],["t-ysn","ysn"],
+   ["t-youexists","youexists"],["t-youfollow","youfollow"],["t-youedit","youedit"],["t-youforget","youforget"]].forEach(([id,k])=>set(id,k));
+  [["v3d","v3d"],["vtop","vtop"],["vcafe","vcafe"],["heat","heat"],["prop","prop"],["reset","reset"],["follow","follow"]].forEach(([id,k])=>{const el=$(id);el.title=L(k);el.setAttribute("aria-label",L(k))});
+  $("play").title=L("pause");$("play").setAttribute("aria-label",L("pause"));
+  $("speed").setAttribute("aria-label",L("speed"));$("days").setAttribute("aria-label",L("daysT"));$("spark").setAttribute("aria-label",L("spark"));
+  [["st-conv","stConv"],["st-talks","stTalks"],["st-meet","stMeet"]].forEach(([id,k])=>{const el=$(id);if(el)el.title=L(k)});
+  $("arch").innerHTML=L("arch").map(([t,b])=>`<div><b>${t}</b>${b}</div>`).join("");
+  const rp=$("t-resplay");if(rp)rp.textContent=L("res").play;const lb=$("t-ideasllm");if(lb)lb.textContent=L("res").llmBtn;
+  if(typeof renderYouCard==="function"&&typeof userAgent!=="undefined")renderYouCard();
+  if(typeof fillCodeOptions==="function"){const cur=$("pf-code").value;fillCodeOptions();$("pf-code").value=cur;if(typeof pfPreview==="function")pfPreview()}
+  $("lang-es").setAttribute("aria-pressed",lang==="es");$("lang-en").setAttribute("aria-pressed",lang==="en");
+  dirtyConv=dirtyMem=true;
+}
+function setLang(l){lang=l;try{localStorage.setItem("placelab341-lang",lang)}catch(e){}applyLang();if(typeof renderAll==="function")renderAll()}
+$("lang-es").addEventListener("click",()=>setLang("es"));$("lang-en").addEventListener("click",()=>setLang("en"));
