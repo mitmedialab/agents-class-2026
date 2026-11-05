@@ -19,6 +19,7 @@ var/applicants/
 var/assignments/
 var/backups/
 var/course-knowledge/
+var/grades/
 var/log/
 var/roster/
 var/uploads/

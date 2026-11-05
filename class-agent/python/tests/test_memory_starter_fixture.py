@@ -57,10 +57,27 @@ def test_memory_starter_installs_only_fictional_private_data(tmp_path: Path) -> 
     }
     assert len(roster.active_members) == 4
     assert roster.identifies_inactive_username("eli-demo")
+    eli = next(member for member in roster.members if member.username == "eli-demo")
+    assert eli.enrollment_type == "credit"
     assert all(str(member.email).endswith("@example.org") for member in roster.members)
     assert all(member.application_id is None for member in roster.members)
     assert stat.S_IMODE(roster_path.stat().st_mode) == 0o600
     verify_roster_resources(roster, tmp_path / "data")
+    grade_path = tmp_path / "var/grades/weekly-feedback.json"
+    gradebook = json.loads(grade_path.read_text(encoding="utf-8"))
+    assert stat.S_IMODE(grade_path.stat().st_mode) == 0o600
+    assert gradebook["schema_version"] == 2
+    assert gradebook["weekly_build_assignment_ids"] == [
+        "week-2",
+        "week-3",
+        "week-4",
+        "week-5",
+        "week-6",
+        "week-8",
+    ]
+    assert set(gradebook["students"]) == {"ada-demo", "bo-demo", "eli-demo"}
+    feedback_counts = {username: len(notes) for username, notes in gradebook["students"].items()}
+    assert feedback_counts == {"ada-demo": 1, "bo-demo": 2, "eli-demo": 1}
     assignments = FileAssignmentStore(tmp_path / "var/assignments")._read_all()
     assert {assignment.assignment_id for assignment in assignments} == {
         *(f"week-{number}" for number in range(1, 9)),
@@ -72,7 +89,7 @@ def test_memory_starter_installs_only_fictional_private_data(tmp_path: Path) -> 
     )
     week_eight = next(a for a in assignments if a.assignment_id == "week-8")
     assert "personalization feature" in week_eight.content_markdown
-    assert "Jad Bendarkawi" not in week_eight.content_markdown
+    assert "Group membership is omitted from this portable starter." in week_eight.content_markdown
     for assignment in assignments:
         authoring_copy = (
             tmp_path / f"var/assignments/{assignment.assignment_id}/{assignment.assignment_id}.md"
@@ -108,6 +125,19 @@ def test_memory_starter_refuses_to_replace_assignment(tmp_path: Path) -> None:
     assert blocked.returncode != 0
     assert "Refusing to replace a local assignment" in blocked.stderr
     assert assignment_path.read_bytes() != original
+
+
+def test_memory_starter_refuses_to_replace_gradebook(tmp_path: Path) -> None:
+    command = [sys.executable, str(SETUP), "--data-only", "--output-root", str(tmp_path)]
+    first = subprocess.run(command, cwd=PROJECT_ROOT, capture_output=True, text=True, check=False)
+    assert first.returncode == 0, first.stderr
+    grade_path = tmp_path / "var/grades/weekly-feedback.json"
+    grade_path.write_bytes(b'{"local": "student feedback"}')
+
+    blocked = subprocess.run(command, cwd=PROJECT_ROOT, capture_output=True, text=True, check=False)
+    assert blocked.returncode != 0
+    assert "Refusing to replace a local gradebook" in blocked.stderr
+    assert grade_path.read_bytes() == b'{"local": "student feedback"}'
 
 
 def test_memory_starter_provisions_matching_accounts_once() -> None:

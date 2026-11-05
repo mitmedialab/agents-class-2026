@@ -24,12 +24,13 @@ docker compose up -d postgres
 uv run python examples/memory_starter/setup.py
 ```
 
-The last command installs the published assignments and fictional user data into
+The last command installs the published assignments, fictional user data, and a
+fictional weekly feedback file into
 ignored local paths, creates `.env`, applies database migrations, indexes public
 course resources, enables offline project fixtures in `.env`, and prints a one-time
 access code for each fictional account. Save those codes locally; do not commit
 them. The setup is safe to rerun with the
-same fixtures and refuses to replace an existing roster or different assignments.
+same fixtures and refuses to replace an existing roster, gradebook, or different assignments.
 Use `--data-only --output-root /path/to/empty/directory` to try the file setup without
 connecting to PostgreSQL. A non-default local database may be passed with
 `--database-url`; remote database URLs are refused. If `.env` already exists, setup
@@ -61,6 +62,13 @@ public repository instead, put it in an organization and repository naming scope
 that matches the fictional roster IDs, then configure the separate GitHub integration
 with a read-only token. Do not commit tokens or collected profiles.
 
+The [fictional gradebook](grades/weekly-feedback.json) follows the deployment's
+private schema: Ada and Bo have different amounts of feedback, Cy has none, Dee is
+an active listener, and Eli is an inactive former credit student with historical
+feedback. Setup copies it to ignored `var/grades/weekly-feedback.json` with private
+file permissions and never replaces different local feedback. The current starter
+branch does not yet include the grading UI or API; this data is ready for that code
+when its work is merged. No actual student's feedback is included.
+
 The historical assignments are reference material; the Week 8 build is the current
-task, due Monday, November 9 at 11:59 PM Eastern Time. Grades are outside this
-starter; the course deployment maintains them separately.
+task, due Monday, November 9 at 11:59 PM Eastern Time.

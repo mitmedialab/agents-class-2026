@@ -1,0 +1,36 @@
+{
+  "schema_version": 2,
+  "weekly_build_assignment_ids": ["week-2", "week-3", "week-4", "week-5", "week-6", "week-8"],
+  "students": {
+    "ada-demo": [
+      {
+        "week": 3,
+        "date": "2026-10-17",
+        "reviewer": "Fictional Course TA",
+        "feedback": "Comments:\nYour revised explanation makes the difference between an MCP server and one tool clear. The learning note shows how your understanding changed. For the next build, show when the assistant should offer a hint instead of a complete answer.\n\nGrading Checklist:\n✓ Working build and explanation\n✓ Reflection on a changed understanding\n✗ Clear learner control over hint level"
+      }
+    ],
+    "bo-demo": [
+      {
+        "week": 2,
+        "date": "2026-10-10",
+        "reviewer": "Fictional Course TA",
+        "feedback": "Comments:\nThe visual planner makes it easy to see project stages. Your write-up explains the interaction, but the accessibility description needs more detail.\n\nGrading Checklist:\n✓ Working prototype\n✓ Description of design choices\n✗ Keyboard interaction documented"
+      },
+      {
+        "week": 4,
+        "date": "2026-10-24",
+        "reviewer": "Fictional Course TA",
+        "feedback": "Comments:\nThe newer planner includes a useful text outline alongside the visual map. Explain how you checked that both views stay in sync.\n\nGrading Checklist:\n✓ Iteration on earlier feedback\n✓ Text alternative\n✓ Testing notes"
+      }
+    ],
+    "eli-demo": [
+      {
+        "week": 2,
+        "date": "2026-10-11",
+        "reviewer": "Fictional Course TA",
+        "feedback": "Comments:\nHistorical sample for an inactive fictional credit student. The prototype describes a wearable reflection prompt.\n\nGrading Checklist:\n✓ Concept and prototype documented"
+      }
+    ]
+  }
+}

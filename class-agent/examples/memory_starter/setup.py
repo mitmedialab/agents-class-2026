@@ -25,6 +25,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = Path(__file__).with_name("course-members.json")
 STAFF = Path(__file__).with_name("course-staff.json")
 ASSIGNMENTS = Path(__file__).with_name("assignments")
+GRADES = Path(__file__).with_name("grades") / "weekly-feedback.json"
 DEFAULT_DATABASE_URL = "postgresql://class_agent:class_agent_dev@127.0.0.1:5432/class_agent"
 
 
@@ -87,6 +88,21 @@ def install_assignments(output_root: Path) -> Path:
             if not target.exists():
                 target.write_bytes(source.read_bytes())
                 target.chmod(0o600)
+    return destination
+
+
+def install_grades(output_root: Path) -> Path:
+    """Install fictional feedback without replacing an existing gradebook."""
+    destination = output_root / "var/grades/weekly-feedback.json"
+    if destination.parent.is_symlink() or destination.is_symlink():
+        raise FileExistsError(f"Refusing invalid gradebook path: {destination}")
+    if destination.exists():
+        if not destination.is_file() or destination.read_bytes() != GRADES.read_bytes():
+            raise FileExistsError(f"Refusing to replace a local gradebook: {destination}")
+        return destination
+    destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    destination.write_bytes(GRADES.read_bytes())
+    destination.chmod(0o600)
     return destination
 
 
@@ -168,10 +184,12 @@ def main() -> None:
                 raise ValueError("--output-root requires --data-only")
         roster_path, data_path = install_fixture(arguments.output_root)
         assignment_path = install_assignments(arguments.output_root)
+        grade_path = install_grades(arguments.output_root)
         if arguments.data_only:
             print(f"Installed fictional roster: {roster_path}")
             print(f"Published fictional protected resources: {data_path}")
             print(f"Installed released course assignments: {assignment_path}")
+            print(f"Installed fictional weekly feedback: {grade_path}")
             return
 
         env_path = PROJECT_ROOT / ".env"
@@ -192,6 +210,7 @@ def main() -> None:
         parser.exit(1, f"{error}\n")
     print(f"Fictional roster and protected resources are ready: {roster_path}")
     print(f"Released course assignments are ready: {assignment_path}")
+    print(f"Fictional weekly feedback is ready: {grade_path}")
     if issued_codes:
         print("New local student access codes (shown only now; keep them out of Git):")
         for username, code in issued_codes:
