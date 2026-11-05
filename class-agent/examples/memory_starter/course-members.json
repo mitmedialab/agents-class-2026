@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "as_of": "2026-11-03",
+  "members": [
+    {
+      "student_id": "ada-demo",
+      "name": "Ada Example",
+      "aliases": [],
+      "email": "ada@example.org",
+      "username": "ada-demo",
+      "github_username": "ada-example-demo",
+      "institution": "Example University",
+      "department": "Design",
+      "enrollment_type": "credit",
+      "course_status": "active",
+      "participation": "weekly_build",
+      "project_id": "agents2026-ada-demo",
+      "website": null,
+      "keywords": ["learning", "study tools"],
+      "project_ideas": ["A study assistant that offers hints before complete answers."],
+      "application_id": null,
+      "inactive_reason": null,
+      "departure_notice_received": null
+    },
+    {
+      "student_id": "bo-demo",
+      "name": "Bo Sample",
+      "aliases": [],
+      "email": "bo@example.org",
+      "username": "bo-demo",
+      "github_username": "bo-sample-demo",
+      "institution": "Example University",
+      "department": "Media Arts",
+      "enrollment_type": "credit",
+      "course_status": "active",
+      "participation": "weekly_build",
+      "project_id": "agents2026-bo-demo",
+      "website": null,
+      "keywords": ["planning", "visual tools"],
+      "project_ideas": ["A visual planner that helps organize creative projects."],
+      "application_id": null,
+      "inactive_reason": null,
+      "departure_notice_received": null
+    }
+  ]
+}

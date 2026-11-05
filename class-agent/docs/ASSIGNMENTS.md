@@ -86,3 +86,11 @@ support. Reviews do not append a separate resource section or general reading li
 Restart the API after changing Python code or `ASSIGNMENT_DATA_PATH`. Assignment JSON contents are
 read from disk for each projection and tool call, so ordinary content edits do not otherwise require
 reindexing or a database migration.
+
+## Student fork fixture
+
+The [Week 8 student setup](../examples/memory_starter/README.md) contains portable copies
+of the published Week 1–8 assignments. Its setup command installs the validated JSON records
+and matching Markdown into the ignored `var/assignments/` directory. The fixture replaces
+the author account ID with a fictional ID and omits the Week 8 group roster. For group
+membership or later assignment revisions, use the live Course Agent.
