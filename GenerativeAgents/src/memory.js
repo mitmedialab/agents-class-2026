@@ -154,7 +154,7 @@ function generate_summarize_agent_relationship(persona,other){
   return chats?`${cap(who(other))} y yo ya hemos hablado ${chats===1?"una vez":chats+" veces"} de nuestros proyectos.`:`A ${who(other)} apenas la conozco.`;
 }
 function agent_chat_v2(init_persona,target_persona){
-  const curr_chat=[],ctx={props:{},adopt:[],agree:false,born:[]};
+  const curr_chat=[],ctx={props:{},adopt:[],agree:false,born:[],evo:[]};
   let a=init_persona,b=target_persona;
   for(let round=0;round<8;round++){
     for(const [spk,oth] of [[a,b],[b,a]]){

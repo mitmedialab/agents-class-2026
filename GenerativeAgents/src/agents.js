@@ -42,7 +42,8 @@ const qt=t=>`«${t}»`;
 const shortP=p=>p.length>48?p.slice(0,46).replace(/\s+\S*$/,"")+"…":p;
 function newIdea(a,b,part,place,x,z){
   const title=`${shortP(a.pf.project)} + ${part}`;
-  const idea={id:"i"+(++ideaN),title,parts:[{a,text:a.pf.project},{a:b,text:part}],by:[a,b],members:new Set([a,b]),born:{t:simT,day,clk:clock(),place,x,z},mentions:0,tags:[...new Set([...a.pf.interests,...b.pf.interests,part])],llm:null};
+  const idea={id:"i"+(++ideaN),title,parts:[{a,text:a.pf.project},{a:b,text:part}],by:[a,b],members:new Set([a,b]),born:{t:simT,day,clk:clock(),place,x,z},mentions:0,tags:[...new Set([...a.pf.interests,...b.pf.interests,part])],llm:null,
+    versions:[{n:1,kind:"born",t:simT,clk:clock(),place,by:[a,b],text:`${a.pf.project} + ${part}`,evidence:[]}],wanted:new Map()};
   IDEAS.push(idea);return idea;
 }
 const ideaTitle=i=>i.llm&&i.llm.title?i.llm.title:i.title;
@@ -56,7 +57,7 @@ function LLM_poignancy_event(desc){
   if(desc.includes("va a ver"))return 4;if(desc.includes("conversa con"))return 3;
   if(desc.includes("la cafetería")||desc.includes("el atrio")||desc.includes("el foodcam"))return 3;return 2;
 }
-function LLM_poignancy_thought(t){if(/^Idea con|^Me apunté/.test(t))return 8;if(/^Varias personas|^Mucha gente/.test(t))return 7;if(/ sabe de | anda con /.test(t))return 5;return 4}
+function LLM_poignancy_thought(t){if(/^Idea con|^Me apunté|^La idea .* ahora/.test(t))return 8;if(/^Varias personas|^Mucha gente/.test(t))return 7;if(/ sabe de | anda con /.test(t))return 5;return 4}
 function LLM_poignancy_chat(ctx){return ctx.born.length?8:ctx.adopt.length?7:ctx.agree?5:4}
 function LLM_triple(persona,t){
   const w=SHIRTN.find(c=>t.includes("camiseta "+c));const m=t.match(/«([^»]+)»/);const s=spaceIn(t);
@@ -110,6 +111,25 @@ function ideaEvidence(persona,retrieved,idea){
   for(const n of nodes){if(!n.description.includes(idea.title))continue;ids.push(n.node_id);w+=/^Mucha gente/.test(n.description)?2:/^Varias personas/.test(n.description)?1.2:.6}
   return {w,ids};
 }
+/* ---------- cómo evoluciona una idea al oírla: lo que el oyente aporta sale de lo que recupera de su memoria ----------
+   1) un memo «X sabe de S» (S nueva para la idea) → recomienda hablar con X (la idea busca a X: cuando X la oiga, se apuntará)
+   2) un hecho de un espacio («el atrio tiene mucha luz») o un insight → propone dónde/cómo probarla
+   3) su propia habilidad complementaria → se apunta y la idea gana esa parte
+   Cada versión cita los nodos de memoria que la sostienen (evidence), igual que las reflexiones. */
+function LLM_evolve(spk,oth,retrieved,idea){
+  const R=new_retrieve(spk,[idea.title,idea.parts[0].text],12);const nodes=[];for(const f in R)for(const n of R[f].nodes)if(!nodes.includes(n))nodes.push(n);
+  const have=new Set([...idea.tags,...idea.versions.map(v=>v.part).filter(Boolean)]);
+  for(const n of nodes){const m=n.description.match(/^La de camiseta (\S+)(.*?) sabe de ([^.]+)\.$/);if(!m||n.type!=="thought"||/ y anda con /.test(n.description))continue;
+    const w=("la de camiseta "+m[1]+m[2]).toLowerCase(),skill=m[3];if(have.has(skill)||idea.members.has(spk))continue;
+    const who3=agents.find(x=>who(x)===w&&x!==spk&&x!==oth&&!idea.members.has(x));if(!who3)continue;
+    return {kind:"referral",who:who3,part:skill,evidence:[n.node_id],utt:`Para ${qt(idea.title)} deberías hablar con ${who(who3)}: sabe de ${skill}.`}}
+  for(const n of nodes){const s=spaceIn(n.description);if(!s||n.type==="chat"||s===idea.born.place)continue;if(!POSF.test(n.description))continue;
+    if(idea.versions.some(v=>v.kind==="place"&&v.place===s))continue;
+    return {kind:"place",place:s,evidence:[n.node_id],utt:`¿Y si lo probáis en ${SP[s].n}? ${n.description.replace(/^[^ ]+ /,m=>m)}`}}
+  const cp=compl(oth,spk).filter(x=>!have.has(x));
+  if(cp.length&&!idea.members.has(spk))return {kind:"part",part:cp[0],evidence:spk.projNode?[spk.projNode]:[],utt:`Yo le añadiría ${cp[0]}, que es lo mío.`};
+  return null;
+}
 const shared=(a,b)=>a.pf.interests.filter(i=>b.pf.interests.includes(i));
 const compl=(a,b)=>[...b.pf.skills.filter(s=>!a.pf.skills.includes(s)),...b.pf.interests.filter(i=>!a.pf.interests.includes(i))];
 function LLM_utterance(spk,oth,retrieved,curr_chat,ctx){
@@ -123,7 +143,8 @@ function LLM_utterance(spk,oth,retrieved,curr_chat,ctx){
     const sh=shared(A,B).length,cp=compl(A,B);if(!cp.length)return null;
     const p=Math.min(.55,(.07+.22*sh+.025*cp.length+(A.user||B.user?.1:0))*B.persuadable);
     if(Math.random()>p)return null;
-    const part=pick(cp),c=spc3(place);return newIdea(A,B,part,place,c.x,c.z)};
+    const fresh=cp.filter(x=>!IDEAS.some(i=>i.title===`${shortP(A.pf.project)} + ${x}`));if(!fresh.length)return null; // esa combinación ya existe
+    const part=pick(fresh),c=spc3(place);return newIdea(A,B,part,place,c.x,c.z)};
   if(turn===0){
     if(salient&&salient.type==="thought")return {utt:`Llevo pensando que ${lower(salient.description)}.`,end:false,evidence:[salient.node_id]};
     if(salient)return {utt:`Vengo de ver que ${lower(salient.description)}.`,end:false,evidence:[salient.node_id]};
@@ -136,7 +157,8 @@ function LLM_utterance(spk,oth,retrieved,curr_chat,ctx){
   if(turn===2){
     const mine=spk.ideas.slice(-1)[0];
     if(mine&&Math.random()<.5){ctx.props[spk.id]={kind:"idea",idea:mine,by:spk};const other=[...mine.members].find(m=>m!==spk);
-      return {utt:`Estoy con una idea${other?` con ${who(other)}`:""}: ${qt(mine.title)}.`,end:false,evidence:mine.node&&mine.node[spk.id]?[mine.node[spk.id]]:[],pitch:ctx.props[spk.id]}}
+      const lv=mine.versions[mine.versions.length-1],tail=lv.kind==="part"?`, ahora también con ${lv.part}`:lv.kind==="place"?`, que queremos probar en ${SP[lv.place].n}`:lv.kind==="referral"?`; nos falta alguien que sepa de ${lv.part}`:"";
+      return {utt:`Estoy con una idea${other?` con ${who(other)}`:""}: ${qt(mine.title)}${tail}.`,end:false,evidence:mine.node&&mine.node[spk.id]?[mine.node[spk.id]]:[],pitch:ctx.props[spk.id]}}
     ctx.props[spk.id]={kind:"project",by:spk};
     return {utt:`Yo estoy dándole vueltas a ${spk.pf.project}; lo mío es ${spk.pf.skills[0]}.`,end:false,evidence:spk.projNode?[spk.projNode]:[],pitch:ctx.props[spk.id]};
   }
@@ -145,8 +167,11 @@ function LLM_utterance(spk,oth,retrieved,curr_chat,ctx){
     if(pa.kind==="idea"){const idea=pa.idea;
       if(idea.members.has(spk)){ctx.agree=true;return {utt:"Ya estoy en esa; cuenta conmigo.",end:true,evidence:[],agree:true}}
       const ev=ideaEvidence(spk,retrieved,idea),aff=idea.tags.filter(t=>spk.pf.interests.includes(t)).length;
-      const score=(.5*aff+ev.w+Math.min(1.2,(spk.heardCount[idea.id]||0)*.4)+(oth.user?.3:0)+.4)*spk.persuadable;
-      if(score>.85){joinIdea(spk,idea,oth);ctx.adopt.push({who:spk,idea,from:oth});return {utt:`Me apunto: yo puedo poner ${spk.pf.skills[0]}.`,end:true,evidence:ev.ids,adopt:{who:spk,idea,from:oth}}}
+      const wanted=idea.wanted.has(spk.id)?1:0;
+      const score=(.5*aff+ev.w+Math.min(1.2,(spk.heardCount[idea.id]||0)*.4)+(oth.user?.3:0)+.4+wanted)*spk.persuadable;
+      const evo=Math.random()<.7?LLM_evolve(spk,oth,retrieved,idea):null;
+      if(evo&&evo.kind!=="part"){evolveIdea(idea,evo,spk,oth);ctx.evo.push({idea,evo,by:spk});return {utt:evo.utt,end:false,evidence:evo.evidence,evo:{idea,kind:evo.kind}}}
+      if(score>.85||evo){joinIdea(spk,idea,oth);if(evo)evolveIdea(idea,evo,spk,oth);ctx.adopt.push({who:spk,idea,from:oth});return {utt:evo?`Me apunto, y ${evo.utt.charAt(0).toLowerCase()+evo.utt.slice(1)}`:`Me apunto: yo puedo poner ${spk.pf.skills[0]}.`,end:true,evidence:evo?evo.evidence:ev.ids,adopt:{who:spk,idea,from:oth}}}
       ctx.props[spk.id]={kind:"project",by:spk};
       return {utt:`Lo veo, pero lo mío va por otro lado: ${spk.pf.project}.`,end:false,evidence:[],pitch:ctx.props[spk.id]};
     }
@@ -156,6 +181,7 @@ function LLM_utterance(spk,oth,retrieved,curr_chat,ctx){
     return {utt:`Lo mío va por otro lado: ${spk.pf.project}; sé de ${spk.pf.skills[0]}.`,end:false,evidence:spk.projNode?[spk.projNode]:[],pitch:ctx.props[spk.id]};
   }
   if(turn===4){
+    if(ctx.evo.length){const e=ctx.evo[0];return {utt:e.evo.kind==="referral"?`Buena idea, le busco. Lo apunto como versión ${e.idea.versions.length}.`:`Me gusta. Lo apunto como versión ${e.idea.versions.length}.`,end:true,evidence:[]}}
     if(ctx.born.length){const i=ctx.born[0];bornMemory(spk,oth,i);bornMemory(oth,spk,i);return {utt:"Me gusta. Lo apuntamos y seguimos hablando.",end:true,evidence:[],agree:false}}
     const pb=ctx.props[oth.id];
     if(pb&&pb.kind==="project"){const idea=tryBorn(oth,spk);if(idea){ctx.born.push(idea);return {utt:`Pues mira, ¿y si juntamos ${oth.pf.project} con ${idea.parts[1].text}? Saldría ${qt(idea.title)}.`,end:false,evidence:[],born:idea}}}
