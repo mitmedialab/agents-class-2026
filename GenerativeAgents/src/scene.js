@@ -206,6 +206,8 @@ const FR=[
 ["................",".....hhhhhh.....","....hhhhhhhh....","....hhssssshh...","....hsssssssh...","....hsesssesh...","....hsssssssh...",".....ssssss.....","......ssss......",".....tttttt.....","....tttttttt....","...sttttttttts..","..s.tttttttt.s..","....tttttttt....",".....tttttt.....",".....pppppp.....",".....pppppp.....","....ppp..pp.....","....pp...pp.....","....pp...pp.....","....bb...bb.....","...bbb...bbb....","................","................"]];
 const SKIN=["#F4C7A1","#E0A982","#C98B5E","#A66A3E","#7C4A2A","#5A3520"],HAIR=["#1E1A17","#4A2E1C","#8B5A2B","#C9A24C","#B14A2E","#2B2F6B","#6E6E78","#E7E1D0"],
   SHIRT=["#3D7FE0","#E0583D","#2FAF6A","#E8B33A","#9A4FD6","#F07AA8","#2BB5B5","#F2F0E6","#30343A","#D06A2C"],PANTS=["#263142","#3B3F48","#5A3A2A","#1F4A6E","#6B6F78","#2E5F3E"];
+const avatarIdx=i=>({t:i%SHIRT.length,h:Math.floor(i/SHIRT.length)%HAIR.length,s:(i*5+2)%SKIN.length,p:(i*7+3)%PANTS.length});
+function spriteFrom(av){const pal={h:HAIR[av.h%HAIR.length],s:SKIN[av.s%SKIN.length],e:"#17171B",t:SHIRT[av.t%SHIRT.length],p:PANTS[av.p%PANTS.length],b:"#15151A"};return FR.map(f=>pixTex(f,pal))}
 function spriteSet(i){const pal={h:HAIR[Math.floor(i/SHIRT.length)%HAIR.length],s:SKIN[(i*5+2)%SKIN.length],e:"#17171B",t:SHIRT[i%SHIRT.length],p:PANTS[(i*7+3)%PANTS.length],b:"#15151A"};return FR.map(f=>pixTex(f,pal))}
 const bubbleTex=(()=>{const c=document.createElement("canvas");c.width=18;c.height=14;const g=c.getContext("2d");
   g.fillStyle="#161616";g.fillRect(1,0,16,10);g.fillRect(0,1,18,8);g.fillRect(6,10,5,2);g.fillRect(6,12,2,1);

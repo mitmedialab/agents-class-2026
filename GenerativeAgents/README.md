@@ -7,20 +7,32 @@ reflect (3 questions → insights with evidence) and converse. When they talk th
 bring (project, interests, skills), and new ideas are born from that.
 
 Interface: **profile** (accept or modify your profile) → **simulation** (3D, each character's memory)
-→ **results** (idea heat map by space, conversations day by day, new ideas; Claude can write them
-from the conversations through the artifact's `sample` capability). The interface is in English by
+→ **results** (idea heat map by space, conversations day by day, new ideas). The interface is in English by
 default, with a Spanish switch at the top right.
 
-## Run it (nothing to install)
+## How to run the simulation
 
-1. Clone the repo and open `GenerativeAgents/`.
-2. Serve `src/` with any static server (needed because of the `<script src>` tags):
-   `python3 -m http.server 8000 --directory src`, then open `http://localhost:8000`.
-   Libraries (three.js) load from a CDN, so you need a connection.
-3. Or build the single file with `python3 build.py` and double-click `dist/placelab.html`
-   (also what you publish on GitHub Pages or as a claude.ai artifact).
+Three ways, from simplest to most complete:
 
-The profile you accept is stored in your browser (localStorage); nobody else sees it.
+1. **Nothing to install.** Clone the repo, open `GenerativeAgents/`, run `python3 build.py` once and
+   double-click `dist/placelab.html`. It is a single file with everything inside; it only needs an
+   internet connection to load three.js from a CDN. (`dist/` is git-ignored, which is why you build
+   it first; remove it from `.gitignore` if you want the ready-made HTML to travel with the repo.)
+2. **To develop or modify.** From `GenerativeAgents/`:
+   ```bash
+   python3 -m http.server 8000 --directory src
+   ```
+   then open `http://localhost:8000`. Edit the modules in `src/` (profiles, spaces, idea rules,
+   texts) and reload the page.
+3. **As a public web page.** Enable GitHub Pages for the repo (or copy `dist/placelab.html` to
+   `docs/index.html`) and it lives at `https://<user>.github.io/agents-class-2026/…`. It can also be
+   published as a claude.ai artifact.
+
+The profile you accept is stored in your browser (localStorage); nobody else sees it. The interface
+is in English by default, with a Spanish switch at the top right.
+
+To change the people: edit `tools/students.csv`, then run
+`python3 tools/roster2profiles.py tools/students.csv` and `python3 build.py`.
 
 ## Structure
 

@@ -18,8 +18,10 @@
         <div class="svform" id="pf-form">
           <label><span id="t-pfcode">tu código (sin nombres)</span><select id="pf-code"></select></label>
           <div class="svchar" id="pf-view" hidden></div>
+          <div class="avatar" id="pf-avatar" hidden></div>
           <div class="ctl" id="pf-actions" style="gap:8px" hidden><button class="go" type="button" id="pf-accept"><span id="t-pfaccept">acepto que se use mi perfil</span></button><button class="btn" type="button" id="pf-modify"><span id="t-pfmodify">modificar mi perfil</span></button></div>
           <div id="pf-edit" hidden style="display:flex;flex-direction:column;gap:10px">
+            <div id="pf-new" hidden style="display:flex;flex-direction:column;gap:10px"><label><span id="t-pfnname">your name</span><input id="pf-nname" type="text" maxlength="40"></label><label><span id="t-pfnteam">your group or school</span><input id="pf-nteam" type="text" maxlength="40"></label></div>
             <label><span id="t-pfproject">proyecto (una frase)</span><textarea id="pf-project" maxlength="140"></textarea></label>
             <label><span id="t-pfskills">habilidades (separadas por comas)</span><input id="pf-skills" type="text" maxlength="120"></label>
             <label><span id="t-pfinterests">intereses (separados por comas)</span><input id="pf-interests" type="text" maxlength="120"></label>
@@ -65,7 +67,7 @@
         <canvas id="spark" aria-label="Encuentros a lo largo del tiempo"></canvas>
       </div>
       <div class="ffbar" id="ff-bar" hidden><span id="ff-txt"></span><i><b id="ff-fill" style="width:0%"></b></i></div>
-      <div class="youstrip" id="you-strip" hidden><span class="ys-face" id="ys-face"></span><span class="ys-txt"><b id="ys-who"></b><span id="ys-act"></span></span><span class="ys-score"><b id="ys-n"></b><small id="t-ysn">apoyos</small></span></div>
+      <div class="youstrip" id="you-strip" hidden><span class="ys-face" id="ys-face"></span><span class="ys-txt"><b id="ys-who"></b><span id="ys-act"></span></span><span class="ys-pins" id="ys-pins"></span><span class="ys-score"><b id="ys-n"></b><small id="t-ysn">apoyos</small></span></div>
       <div class="key">
         <span><i class="dot" style="background:#FF4F12"></i><span id="t-k1">tu personaje · anillo naranja</span></span>
         <span><i class="dot" style="background:#FF8A5B"></i><span id="t-k3">calor de presencia</span></span>
@@ -109,7 +111,6 @@
       <div class="evh"><div><div class="lab" id="t-maplab">1 · mapa de calor de ideas</div><h2 class="evt" id="t-maptitle">dónde nacen y se discuten las ideas, y cómo cambia</h2></div><p class="hint" id="t-maphint"></p></div>
       <div class="ctl" style="gap:10px;flex-wrap:wrap"><input type="range" id="res-t" min="0" max="1000" value="1000" aria-label="momento de la simulación" style="flex:1;min-width:160px"><span class="mono" id="res-tlab"></span><button class="btn" id="res-play"><span id="t-resplay">reproducir</span></button></div>
       <canvas id="res-map" class="dmap" aria-label="mapa de calor de ideas por espacio"></canvas>
-      <div class="dthumbs" id="res-days"></div>
     </section>
 
     <section class="evid" style="margin-top:12px">
@@ -119,7 +120,6 @@
 
     <section class="evid" style="margin-top:12px">
       <div class="evh"><div><div class="lab" id="t-idlab">3 · ideas nuevas</div><h2 class="evt" id="t-idtitle">lo que ha salido de cruzarse</h2></div><p class="hint" id="t-idhint"></p></div>
-      <div class="ctl" style="gap:10px"><button class="btn orange" id="ideas-llm" hidden><span id="t-ideasllm">que Claude escriba las ideas</span></button><span class="hint" id="ideas-llm-msg"></span></div>
       <div id="res-ideas"></div>
     </section>
 
