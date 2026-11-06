@@ -53,6 +53,12 @@ sending its prompt. Application requests typed in chat are not matched against b
 API keywords; the agent recognizes the intent and opens the same canonical workspace with
 its registered tool during the first response.
 
+Schedule and Grading open directly in the workspace without an agent run. Schedule
+uses the agenda calendar; Grading opens the syllabus evaluation policy. Active credit
+students also see links to released graded weekly builds. Their own feedback is
+loaded beneath each assignment. Opening a link adds a user-origin workspace event
+without feedback text, so the next agent turn sees the action and workspace state.
+
 For authenticated students and instructors, **Contact** replaces Apply. It starts an ordinary
 agent turn to prepare a course-staff email for students or an instructor message to students.
 The agent gathers missing content and audience details through the existing authorized tools;

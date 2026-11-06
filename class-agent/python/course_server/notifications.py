@@ -85,6 +85,8 @@ class NotificationCenterItem(NotificationCenterModel):
     due_at: AwareDatetime | None = None
     action_label: str = Field(min_length=1, max_length=80)
     action_prompt: str = Field(min_length=1, max_length=1_000)
+    resource_uri: str | None = Field(default=None, min_length=1, max_length=500)
+    assignment_id: str | None = Field(default=None, min_length=1, max_length=80)
     submission_check_prompt: str | None = Field(default=None, min_length=1, max_length=1_000)
     unread: bool = False
     dismissible: bool = False
@@ -322,6 +324,7 @@ class NotificationCenterService:
                             else None
                         ),
                         action_label="View slides",
+                        resource_uri=resource.uri,
                         action_prompt=(
                             f"Open the lecture slides from {resource.uri} in the workspace."
                         ),
@@ -398,6 +401,7 @@ class NotificationCenterService:
                     detail=announcement.summary,
                     timestamp=announcement.published_at,
                     action_label="View details",
+                    resource_uri=metadata.uri,
                     action_prompt=_details_action_prompt(
                         item_type="course update",
                         title=metadata.title,
@@ -437,6 +441,7 @@ class NotificationCenterService:
                     detail=assignment.summary,
                     timestamp=assignment.release_at,
                     action_label="View details",
+                    assignment_id=assignment.assignment_id,
                     action_prompt=_details_action_prompt(
                         item_type="assignment update",
                         title=assignment.title,
@@ -736,6 +741,7 @@ class NotificationCenterService:
                     detail="Assignment deadline",
                     due_at=deadline.due_at,
                     action_label="View details",
+                    resource_uri=metadata.uri,
                     action_prompt=_details_action_prompt(
                         item_type="assignment deadline",
                         title=metadata.title,
@@ -759,6 +765,7 @@ class NotificationCenterService:
                     detail=assignment.summary,
                     due_at=assignment.due_at,
                     action_label="View details",
+                    assignment_id=assignment.assignment_id,
                     action_prompt=_details_action_prompt(
                         item_type="assignment deadline",
                         title=assignment.title,

@@ -38,6 +38,7 @@ from course_server.browser import (
     BrowserSnapshot,
 )
 from course_server.faq import FaqStore, InMemoryFaqStore, StudentNotificationService
+from course_server.grades import FileGradeBook
 from course_server.instructor_messages import (
     InMemoryInstructorMessageStore,
     InstructorMessageDraft,
@@ -329,6 +330,7 @@ def _build_client(
     ta_question_store: TAQuestionStore | None = None,
     faq_store: FaqStore | None = None,
     assignment_store: AssignmentStore | None = None,
+    grade_store: FileGradeBook | None = None,
     favicon_fetcher: Callable[[str], tuple[bytes, str] | None] | None = None,
 ) -> tuple[TestClient, str, RecordingRuntime]:
     auth_store = InMemoryAuthStore()
@@ -360,6 +362,8 @@ def _build_client(
             attention=notification_center,
         ),
         conversations=conversations,
+        assignments=assignment_store,
+        grades=grade_store,
         uploads=upload_store,
         browser=browser,
         ta_questions=(

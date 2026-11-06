@@ -100,6 +100,8 @@ export interface NotificationCenterItem {
   due_at: string | null;
   action_label: string;
   action_prompt: string;
+  resource_uri?: string | null;
+  assignment_id?: string | null;
   submission_check_prompt?: string | null;
   unread: boolean;
   dismissible: boolean;
@@ -159,6 +161,31 @@ export class ApiError extends Error {
     super(message);
     this.name = "ApiError";
   }
+}
+
+export interface WeeklyFeedback {
+  week: number;
+  date: string;
+  reviewer: string;
+  feedback: string;
+}
+
+export interface WeeklyBuildGrade {
+  assignment_id: string;
+  title: string;
+  has_feedback: boolean;
+}
+
+export function getMyWeeklyBuildGrades(): Promise<{ assignments: WeeklyBuildGrade[] }> {
+  return requestJson<{ assignments: WeeklyBuildGrade[] }>("/grades/mine");
+}
+
+export function getMyAssignmentFeedback(
+  assignmentId: string,
+): Promise<{ assignment_id: string; feedback: WeeklyFeedback | null }> {
+  return requestJson<{ assignment_id: string; feedback: WeeklyFeedback | null }>(
+    `/grades/mine/assignments/${encodeURIComponent(assignmentId)}`,
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -423,6 +450,22 @@ export function applyWorkspacePanelAction(
   return requestJson<Event>(`/conversations/${conversationId}/workspace/actions`, {
     method: "POST",
     body: JSON.stringify({ action, panel_id: panelId }),
+  });
+}
+
+export function openStaticWorkspace(
+  conversationId: Uuid,
+  target: "schedule" | "grading" | "notification" | "assignment",
+  notificationId?: Uuid,
+  assignmentId?: string,
+): Promise<Event> {
+  return requestJson<Event>(`/conversations/${conversationId}/workspace/open-static`, {
+    method: "POST",
+    body: JSON.stringify({
+      target,
+      ...(notificationId ? { notification_id: notificationId } : {}),
+      ...(assignmentId ? { assignment_id: assignmentId } : {}),
+    }),
   });
 }
 

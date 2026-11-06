@@ -26,10 +26,16 @@ import {
   browserPreviewSnapshotUrl,
   courseResourceAssetUrl,
   getCourseResourceContent,
+  getMyAssignmentFeedback,
+  getMyWeeklyBuildGrades,
+  ApiError,
   type CourseResourceContent,
+  type WeeklyFeedback,
+  type WeeklyBuildGrade,
 } from "./api.js";
 
 import { StreamingBrowserViewer } from "./StreamingBrowserViewer.js";
+import { splitWeeklyFeedback } from "./weeklyFeedback.js";
 
 interface WorkspaceProps {
   browserControlsReady?: boolean;
@@ -39,6 +45,7 @@ interface WorkspaceProps {
   onPanelAction: (action: "focus" | "close", panelId: string) => Promise<void>;
   onCloseWorkspace: () => Promise<void>;
   onCheckAssignment?: ((resourceUri: string) => void) | undefined;
+  onOpenAssignment?: ((assignmentId: string) => void) | undefined;
   onSubmitApplication?: (() => void) | undefined;
   onInteraction: (panelId: string, action: string, value: JsonValue) => Promise<void>;
   onBrowserScroll: (panelId: string, sessionId: string, deltaY: number) => Promise<void>;
@@ -60,6 +67,184 @@ const DEFAULT_COMPONENT_RESOURCES: Readonly<Record<string, string>> = {
   calendar: "course://schedule",
 };
 const ASSIGNMENT_RESOURCE_URI = /^course:\/\/assignment\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+function FeedbackCard({
+  assignmentId,
+  title,
+  feedback,
+  error = false,
+  loading = false,
+  onOpenAssignment,
+}: {
+  assignmentId: string;
+  title: string;
+  feedback: WeeklyFeedback | null;
+  error?: boolean;
+  loading?: boolean;
+  onOpenAssignment?: ((assignmentId: string) => void) | undefined;
+}) {
+  const sections = feedback ? splitWeeklyFeedback(feedback.feedback) : null;
+  const CardHeading = onOpenAssignment ? "h3" : "h2";
+  const SectionHeading = onOpenAssignment ? "h4" : "h3";
+  return (
+    <article aria-label={title === "Weekly build feedback" ? title : `${title} feedback`} className="workspace-feedback-card">
+      <header className="workspace-feedback-card-header">
+        <div>
+          <span className="workspace-feedback-eyebrow">TA feedback</span>
+          <CardHeading>{title}</CardHeading>
+          {feedback ? <p>{feedback.reviewer} · {feedback.date}</p> : null}
+        </div>
+        {onOpenAssignment ? (
+          <button onClick={() => onOpenAssignment(assignmentId)} type="button">
+            Open assignment <span aria-hidden="true">↗</span>
+          </button>
+        ) : null}
+      </header>
+      {loading ? <p className="workspace-feedback-message">Loading feedback…</p> : null}
+      {error ? <p className="workspace-feedback-message">Feedback could not be loaded. Please reopen this page.</p> : null}
+      {!loading && !error && feedback === null ? (
+        <p className="workspace-feedback-message">No TA feedback has been posted for this build yet.</p>
+      ) : null}
+      {sections ? (
+        <div className="workspace-feedback-card-body">
+          {sections.comments ? (
+            <section aria-label="TA comments section" className="workspace-feedback-comments">
+              <SectionHeading>Comments</SectionHeading>
+              <DocumentViewer resource={{
+                uri: `course://grades/mine/assignments/${assignmentId}/comments`,
+                title: "Comments",
+                mediaType: "text/markdown",
+                data: new TextEncoder().encode(sections.comments.replaceAll("\n", "  \n")),
+              }} />
+            </section>
+          ) : null}
+          {sections.checklist.length ? (
+            <section aria-label="Grading checklist" className="workspace-feedback-checklist">
+              <SectionHeading>Grading checklist</SectionHeading>
+              <ul>
+                {sections.checklist.map((item, index) => (
+                  <li data-status={item.status} key={`${index}-${item.text}`}>
+                    <span aria-hidden="true" className="workspace-feedback-mark">
+                      {item.status === "met" ? "✓" : item.status === "unmet" ? "✗" : "•"}
+                    </span>
+                    <span className="visually-hidden">
+                      {item.status === "met" ? "Met: " : item.status === "unmet" ? "Not met: " : "Item: "}
+                    </span>
+                    <span>{item.text}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function AssignmentFeedback({
+  assignmentId,
+  title = "Weekly build feedback",
+  showLoading = false,
+  onOpenAssignment,
+}: {
+  assignmentId: string;
+  title?: string;
+  showLoading?: boolean;
+  onOpenAssignment?: ((assignmentId: string) => void) | undefined;
+}) {
+  const [feedback, setFeedback] = useState<WeeklyFeedback | null | undefined>(undefined);
+  const [hidden, setHidden] = useState(false);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    let active = true;
+    setFeedback(undefined);
+    setHidden(false);
+    setError(false);
+    void getMyAssignmentFeedback(assignmentId).then(
+      ({ feedback: note }) => { if (active) setFeedback(note); },
+      (reason: unknown) => {
+        if (!active) return;
+        if (reason instanceof ApiError && reason.status === 404) setHidden(true);
+        else setError(true);
+      },
+    );
+    return () => { active = false; };
+  }, [assignmentId]);
+  if ((hidden && !showLoading) || (feedback === undefined && !error && !showLoading)) return null;
+  return (
+    <section aria-label="Weekly build feedback" className="workspace-assignment-feedback">
+      <FeedbackCard
+        assignmentId={assignmentId}
+        error={error || hidden}
+        feedback={feedback ?? null}
+        loading={feedback === undefined && !error && !hidden}
+        onOpenAssignment={onOpenAssignment}
+        title={title}
+      />
+    </section>
+  );
+}
+
+function GradingOverview({ onOpenAssignment }: {
+  onOpenAssignment?: ((assignmentId: string) => void) | undefined;
+}) {
+  const [assignments, setAssignments] = useState<WeeklyBuildGrade[] | null>(null);
+  useEffect(() => {
+    let active = true;
+    void getMyWeeklyBuildGrades().then(
+      ({ assignments: items }) => { if (active) setAssignments(items); },
+      () => { if (active) setAssignments(null); },
+    );
+    return () => { active = false; };
+  }, []);
+  if (!assignments) return null;
+  return (
+    <section aria-label="Weekly build feedback" className="workspace-grading-feedback">
+      <h2>Weekly build feedback</h2>
+      <p>TA feedback here covers weekly builds. Open an assignment to see its feedback beneath the instructions too.</p>
+      <div className="workspace-grading-cards">
+        {assignments.map((assignment) => (
+          assignment.has_feedback ? (
+            <AssignmentFeedback
+              assignmentId={assignment.assignment_id}
+              key={assignment.assignment_id}
+              onOpenAssignment={onOpenAssignment}
+              showLoading
+              title={assignment.title}
+            />
+          ) : (
+            <FeedbackCard
+              assignmentId={assignment.assignment_id}
+              feedback={null}
+              key={assignment.assignment_id}
+              onOpenAssignment={onOpenAssignment}
+              title={assignment.title}
+            />
+          )
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function gradingPolicyResource(resource: DocumentResource): DocumentResource {
+  if (resource.mediaType !== "text/markdown") return resource;
+  const content = new TextDecoder().decode(resource.data);
+  const start = /^##\s+.*Assignments and Evaluation.*$/im.exec(content);
+  if (!start) return resource;
+  const remaining = content.slice(start.index);
+  const next = /^##\s+/m.exec(remaining.slice(start[0].length));
+  const section = next
+    ? remaining.slice(0, start[0].length + next.index)
+    : remaining;
+  return {
+    ...resource,
+    data: new TextEncoder().encode(`# Grading\n\n${section.trim()}\n`),
+    title: "Grading",
+    uri: `${resource.uri}#grading`,
+  };
+}
 
 function CloseIcon() {
   return (
@@ -226,6 +411,7 @@ function ResourcePanel({
   onBrowserResize,
   onInteraction,
   onCheckAssignment,
+  onOpenAssignment,
   onSubmitApplication,
 }: {
   browserControlsReady: boolean;
@@ -247,6 +433,7 @@ function ResourcePanel({
   ) => Promise<void>;
   onInteraction: (panelId: string, action: string, value: JsonValue) => Promise<void>;
   onCheckAssignment?: ((resourceUri: string) => void) | undefined;
+  onOpenAssignment?: ((assignmentId: string) => void) | undefined;
   onSubmitApplication?: (() => void) | undefined;
 }) {
   const [resource, setResource] = useState<CourseResourceContent | null>(null);
@@ -483,6 +670,9 @@ function ResourcePanel({
               : undefined
           }
         />
+        {isAssignmentPanel && /^week-\d+$/.test(assignmentResourceUri.slice("course://assignment/".length)) ? (
+          <AssignmentFeedback assignmentId={assignmentResourceUri.slice("course://assignment/".length)} />
+        ) : null}
         {applicationFields && applicationProgress !== null && onSubmitApplication ? (
           <footer className="workspace-application-submit">
             <span
@@ -540,6 +730,16 @@ function ResourcePanel({
     );
   }
   if (panel.componentId === "document-viewer" && documentResource) {
+    if (panel.state.document_kind === "grading-overview") {
+      return (
+        <div className="workspace-grading-panel">
+          <DocumentViewer
+            resource={gradingPolicyResource(documentResource)}
+          />
+          <GradingOverview onOpenAssignment={onOpenAssignment} />
+        </div>
+      );
+    }
     return (
       <>
         <DocumentViewer
@@ -583,6 +783,7 @@ export function Workspace({
   onPanelAction,
   onCloseWorkspace,
   onCheckAssignment,
+  onOpenAssignment,
   onSubmitApplication,
   onInteraction,
   onBrowserScroll,
@@ -653,6 +854,7 @@ export function Workspace({
           onBrowserScroll={onBrowserScroll}
           onInteraction={onInteraction}
           onCheckAssignment={onCheckAssignment}
+          onOpenAssignment={onOpenAssignment}
           onSubmitApplication={onSubmitApplication}
           panel={focused}
         />

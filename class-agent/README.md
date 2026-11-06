@@ -4,7 +4,7 @@ Class Agent is the extensible Course Agent platform described in [CONSTITUTION.m
 
 For the Week 8 personalization build, use the
 [student fork setup](examples/memory_starter/README.md). It includes published
-assignments, fictional student and staff accounts, and offline project evidence
+assignments, fictional student and staff accounts, private sample feedback, and offline project evidence
 without the private course roster.
 
 The repository is currently at **Phase 7**, plus the explicitly authorized course-email workflow from Phase 10 and a student-only ChatGPT Course MCP pilot: validated native workspace components over the Phase 6 Course Agent, with an optional Gmail or Microsoft 365 mailbox worker for unanswered student questions and email-moderated FAQ publication. It contains stable core and workspace contracts, access-code and anonymous authentication, portable PostgreSQL conversation/event history, a `ToolCallingAgent` adapter, public course resources and search, private course applications, typed workspace tools, an event-derived panel workspace, visual compositions, a specific-artifact DocumentViewer, a month/agenda Calendar, and a role-scoped notification center for course releases, staff communications, and near assignment deadlines. It intentionally does not yet contain MCP Apps, Agent Bridge, or a browser extension. It loads standard `SKILL.md` bundles progressively: the model initially sees only login-authorized skill metadata and reads full instructions or references on demand.
@@ -115,6 +115,11 @@ agent and drive the notification center's release and fourteen-day deadline item
 the exact posted Markdown in the workspace. The application does not expose an assignment-authoring
 tool or editor. See
 [docs/ASSIGNMENTS.md](docs/ASSIGNMENTS.md) for the exact schema and operations.
+
+Active credit students can open **Grading** to see released graded weekly builds and
+their own private feedback beneath each assignment. The Course Agent has an
+own-feedback tool with no student selector. Feedback stays in a separate ignored
+gradebook and is not copied into workspace events. See [docs/GRADES.md](docs/GRADES.md).
 
 Logged-in instructors can look up active student names, usernames, and emails through the
 instructor-only student directory tool. They can also prepare an in-app message for all active students or a validated

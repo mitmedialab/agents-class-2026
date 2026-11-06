@@ -30,6 +30,7 @@ vi.mock("./api.js", () => ({
   login: vi.fn(),
   logout: vi.fn(),
   markNotificationCenterItemRead: vi.fn(),
+  openStaticWorkspace: vi.fn(),
   recordWorkspaceInteraction: vi.fn(),
   resizeBrowserSession: vi.fn(),
   scrollBrowserSession: vi.fn(),
@@ -127,6 +128,26 @@ beforeEach(() => {
   });
   vi.mocked(api.createConversation).mockResolvedValue(conversation);
   vi.mocked(api.applyWorkspacePanelAction).mockResolvedValue(previousEvent);
+  vi.mocked(api.openStaticWorkspace).mockImplementation(async (conversationId, target) => ({
+    ...previousEvent,
+    id: "30000000-0000-4000-8000-000000000030",
+    type: "workspace.panel.opened",
+    actor: "user",
+    conversation_id: conversationId,
+    payload: {
+      command: {
+        type: "open",
+        panel: {
+          id: "40000000-0000-4000-8000-000000000030",
+          component_id: target === "schedule" ? "calendar" : "document-viewer",
+          title: target === "schedule" ? "Course schedule" : "Grading",
+          resource_uri: target === "schedule" ? "course://schedule" : "course://syllabus",
+          props: target === "schedule" ? { view: "agenda" } : { find_text: "Assignments and Evaluation" },
+          state: {},
+        },
+      },
+    },
+  }));
   vi.mocked(api.ensureApplicationDraft).mockResolvedValue({
     ...previousEvent,
     id: "30000000-0000-4000-8000-000000000009",
@@ -480,13 +501,9 @@ describe("Course Agent interface", () => {
     expect(screen.getByRole("complementary", { name: "Notification center" })).not.toHaveAttribute("inert");
     fireEvent.click(screen.getByRole("button", { name: "Schedule" }));
     await waitFor(() =>
-      expect(api.streamAgentRun).toHaveBeenCalledWith(
-        conversation.id,
-        "Show me the course schedule.",
-        expect.any(Function),
-        expect.any(AbortSignal),
-      ),
+      expect(api.openStaticWorkspace).toHaveBeenCalledWith(conversation.id, "schedule", undefined),
     );
+    expect(api.streamAgentRun).not.toHaveBeenCalled();
     expect(document.querySelector(".course-agent")).toHaveAttribute("data-time-traveling", "false");
   });
 
@@ -567,13 +584,11 @@ describe("Course Agent interface", () => {
     expect(screen.getByRole("complementary", { name: "Notification center" })).not.toHaveAttribute("inert");
     fireEvent.click(historicalUpdate);
     await waitFor(() =>
-      expect(api.streamAgentRun).toHaveBeenCalledWith(
-        conversation.id,
-        "Explain this update.",
-        expect.any(Function),
-        expect.any(AbortSignal),
+      expect(api.openStaticWorkspace).toHaveBeenCalledWith(
+        conversation.id, "notification", "60000000-0000-4000-8000-000000000001",
       ),
     );
+    expect(api.streamAgentRun).not.toHaveBeenCalled();
     expect(document.querySelector(".course-agent")).toHaveAttribute("data-time-traveling", "false");
     expect(screen.getByRole("complementary", { name: "Workspace" })).toBeInTheDocument();
 
@@ -737,6 +752,30 @@ describe("Course Agent interface", () => {
     expect(
       screen.getByRole("form", { name: "Message Course Agent" }).parentElement,
     ).toBe(screen.getByTestId("workspace-shell"));
+  });
+
+  it("sends a typed message through the visible composer action", async () => {
+    render(<App />);
+    await openExistingConversation();
+
+    const composer = screen.getByRole("textbox", { name: "Message" });
+    const send = screen.getByRole("button", { name: "Send message" });
+    expect(send).toBeVisible();
+    expect(send).toBeDisabled();
+
+    fireEvent.change(composer, { target: { value: "What is due this week?" } });
+    expect(send).toBeEnabled();
+    fireEvent.click(send);
+
+    await waitFor(() =>
+      expect(api.streamAgentRun).toHaveBeenCalledWith(
+        conversation.id,
+        "What is due this week?",
+        expect.any(Function),
+        expect.any(AbortSignal),
+      ),
+    );
+    expect(composer).toHaveValue("");
   });
 
   it("requires the student to confirm question details without exposing email metadata", async () => {
@@ -1099,15 +1138,6 @@ describe("Course Agent interface", () => {
       conversation.id,
       expect.any(AbortSignal),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Schedule" }));
-    await waitFor(() =>
-      expect(api.streamAgentRun).toHaveBeenCalledWith(
-        conversation.id,
-        "Show me the course schedule.",
-        expect.any(Function),
-        expect.any(AbortSignal),
-      ),
-    );
     fireEvent.click(
       screen.getByRole("button", {
         name: "Mark “Which assignments use groups?” read",
@@ -1459,33 +1489,147 @@ describe("Course Agent interface", () => {
     },
   );
 
+  it("opens the application draft before starting its agent workflow", async () => {
+    render(<App />);
+    await openExistingConversation();
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    await waitFor(() =>
+      expect(api.streamAgentRun).toHaveBeenCalledWith(
+        conversation.id,
+        "I'd like to apply for the course.",
+        expect.any(Function),
+        expect.any(AbortSignal),
+      ),
+    );
+    expect(api.ensureApplicationDraft).toHaveBeenCalledWith(conversation.id);
+    expect(vi.mocked(api.ensureApplicationDraft).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(api.streamAgentRun).mock.invocationCallOrder[0]!,
+    );
+    expect(screen.getByRole("textbox", { name: "Name" })).toBeInTheDocument();
+  });
+
   it.each([
-    ["Apply", "I'd like to apply for the course."],
-    ["Schedule", "Show me the course schedule."],
-    ["Grading", "How is grading handled in this course?"],
-  ])("sends the %s shortcut through the agent conversation", async (label, prompt) => {
+    ["Schedule", "schedule"],
+    ["Grading", "grading"],
+  ] as const)("opens the %s shortcut directly and records its workspace event", async (label, target) => {
     render(<App />);
     await openExistingConversation();
 
     fireEvent.click(screen.getByRole("button", { name: label }));
 
     await waitFor(() =>
-      expect(api.streamAgentRun).toHaveBeenCalledWith(
-        conversation.id,
-        prompt,
-        expect.any(Function),
-        expect.any(AbortSignal),
-      ),
+      expect(api.openStaticWorkspace).toHaveBeenCalledWith(conversation.id, target, undefined),
     );
-    if (label === "Apply") {
-      expect(api.ensureApplicationDraft).toHaveBeenCalledWith(conversation.id);
-      expect(vi.mocked(api.ensureApplicationDraft).mock.invocationCallOrder[0]).toBeLessThan(
-        vi.mocked(api.streamAgentRun).mock.invocationCallOrder[0]!,
-      );
-      expect(screen.getByRole("textbox", { name: "Name" })).toBeInTheDocument();
-    } else {
-      expect(api.ensureApplicationDraft).not.toHaveBeenCalled();
-    }
+    expect(await screen.findByRole("complementary", { name: "Workspace" })).toBeVisible();
+    expect(api.streamAgentRun).not.toHaveBeenCalled();
+    expect(api.ensureApplicationDraft).not.toHaveBeenCalled();
+  });
+
+  it("opens Schedule from a fresh page without starting an agent run", async () => {
+    render(<App />);
+    await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole("button", { name: "Schedule" }));
+
+    await waitFor(() => expect(api.createConversation).toHaveBeenCalledWith("Schedule"));
+    expect(api.openStaticWorkspace).toHaveBeenCalledWith(conversation.id, "schedule", undefined);
+    expect(await screen.findByRole("complementary", { name: "Workspace" })).toBeVisible();
+    expect(api.streamAgentRun).not.toHaveBeenCalled();
+  });
+
+  it("keeps the current view when a direct open fails", async () => {
+    vi.mocked(api.openStaticWorkspace).mockRejectedValueOnce(new Error("unavailable"));
+    render(<App />);
+    await openExistingConversation();
+
+    fireEvent.click(screen.getByRole("button", { name: "Schedule" }));
+
+    await waitFor(() =>
+      expect(screen.getAllByText("Course item could not be opened").length).toBeGreaterThan(0),
+    );
+    expect(screen.queryByRole("complementary", { name: "Workspace" })).not.toBeInTheDocument();
+    expect(api.streamAgentRun).not.toHaveBeenCalled();
+  });
+
+  it("ignores a static open response after starting a new chat", async () => {
+    let finishOpen!: (event: Awaited<ReturnType<typeof api.openStaticWorkspace>>) => void;
+    vi.mocked(api.openStaticWorkspace).mockImplementationOnce(
+      () => new Promise((resolve) => { finishOpen = resolve; }),
+    );
+    render(<App />);
+    await openExistingConversation();
+
+    fireEvent.click(screen.getByRole("button", { name: "Schedule" }));
+    await waitFor(() => expect(api.openStaticWorkspace).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "New chat" }));
+    await act(async () => {
+      finishOpen({
+        ...previousEvent,
+        type: "workspace.panel.opened",
+        payload: { command: { type: "open", panel: {
+          id: "40000000-0000-4000-8000-000000000030",
+          component_id: "calendar",
+          title: "Course schedule",
+          resource_uri: "course://schedule",
+          props: { view: "agenda" },
+          state: {},
+        } } },
+      });
+    });
+
+    expect(screen.queryByRole("complementary", { name: "Workspace" })).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Message" })).toBeEnabled();
+  });
+
+  it("opens a course update as static detail and records the click", async () => {
+    vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
+    vi.mocked(api.listConversations).mockResolvedValue([]);
+    const itemId = "60000000-0000-4000-8000-000000000099";
+    vi.mocked(api.getNotificationCenter).mockResolvedValue({
+      generated_at: "2026-09-05T12:00:00Z",
+      unread_count: 1,
+      items: [{
+        id: itemId,
+        section: "notifications",
+        kind: "course_update",
+        state: "unread",
+        title: "Project update",
+        detail: "The project instructions changed.",
+        timestamp: "2026-09-05T12:00:00Z",
+        due_at: null,
+        action_label: "View details",
+        action_prompt: "Explain this update.",
+        unread: true,
+        dismissible: true,
+        sender: null,
+      }],
+    });
+    vi.mocked(api.openStaticWorkspace).mockImplementationOnce(async (conversationId) => ({
+      ...previousEvent,
+      type: "workspace.panel.opened",
+      actor: "user",
+      conversation_id: conversationId,
+      payload: { command: { type: "open", panel: {
+        id: "40000000-0000-4000-8000-000000000099",
+        component_id: "draft-document",
+        title: "Project update",
+        props: { title: "Project update", content: "The project instructions changed." },
+        state: { document_kind: "course-notification", notification_id: itemId },
+      } } },
+    }));
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "View details: Project update" }));
+
+    await waitFor(() =>
+      expect(api.openStaticWorkspace).toHaveBeenCalledWith(conversation.id, "notification", itemId),
+    );
+    expect(await screen.findByRole("complementary", { name: "Workspace" })).toBeVisible();
+    expect(screen.getByText("The project instructions changed.")).toBeVisible();
+    expect(api.streamAgentRun).not.toHaveBeenCalled();
+    expect(api.markNotificationCenterItemRead).toHaveBeenCalledWith(itemId);
   });
 
   it.each([
@@ -1721,7 +1865,7 @@ describe("Course Agent interface", () => {
     expect(screen.queryByText("Workspace interaction was not saved")).not.toBeInTheDocument();
   });
 
-  it("allows only one shortcut operation while an agent run is active", async () => {
+  it("blocks static shortcuts while an agent run is active", async () => {
     let finishRun = () => {};
     vi.mocked(api.streamAgentRun).mockImplementation(
       async (_id, _text, _onEvent, signal) =>
@@ -1733,10 +1877,14 @@ describe("Course Agent interface", () => {
     render(<App />);
     await openExistingConversation();
 
-    fireEvent.click(screen.getByRole("button", { name: "Schedule" }));
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    const composer = screen.getByRole("textbox", { name: "Message" });
+    fireEvent.change(composer, { target: { value: "Help me plan" } });
+    fireEvent.keyDown(composer, { key: "Enter" });
+    await waitFor(() => expect(api.streamAgentRun).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("button", { name: "Schedule" })).toBeDisabled();
 
     expect(api.streamAgentRun).toHaveBeenCalledTimes(1);
+    expect(api.openStaticWorkspace).not.toHaveBeenCalled();
     expect(api.ensureApplicationDraft).not.toHaveBeenCalled();
 
     finishRun();

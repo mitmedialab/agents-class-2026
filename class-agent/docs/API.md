@@ -208,6 +208,19 @@ and `close` for an existing panel UUID. It checks conversation ownership, recons
 workspace state, validates the operation against the registered component, and appends
 the resulting canonical event. It cannot introduce an arbitrary component or props.
 
+`POST /api/v1/conversations/{conversation_id}/workspace/open-static` accepts a
+`target` of `schedule`, `grading`, `assignment`, or `notification`. Assignment opens
+require an `assignment_id`; notification opens require an opaque `notification_id`
+from the caller's authorized notification projection. The server checks conversation
+ownership and resource or assignment access before appending a user-origin workspace
+open event. It does not run the agent or store feedback text in that event.
+
+`GET /api/v1/grades/mine` lists released graded weekly builds and feedback
+availability. `GET /api/v1/grades/mine/assignments/{assignment_id}` returns the
+authenticated student's own feedback, or `null` if none is posted. Both endpoints
+use private, no-store caching and return `404` outside the active credit roster.
+See [GRADES.md](GRADES.md).
+
 `POST /api/v1/conversations/{conversation_id}/workspace/interactions` records a
 schema-limited calendar selection/view change or document page/find action as
 `workspace.interaction`. The server verifies that the panel exists and that the action

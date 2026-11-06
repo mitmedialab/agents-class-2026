@@ -126,6 +126,14 @@ class CourseRoster(BaseModel):
         return frozenset(member.username.casefold() for member in self.active_members)
 
     @property
+    def active_credit_usernames(self) -> frozenset[str]:
+        return frozenset(
+            member.username.casefold()
+            for member in self.active_members
+            if member.enrollment_type == "credit"
+        )
+
+    @property
     def active_weekly_project_ids(self) -> frozenset[str]:
         return frozenset(
             member.project_id

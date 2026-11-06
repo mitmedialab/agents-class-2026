@@ -77,6 +77,7 @@ from course_server.faq import (
     LocalFaqKnowledgeStore,
     PublishedFaqResourceCatalog,
 )
+from course_server.grades import FileGradeBook, GetMyGradesTool
 from course_server.index_resources import index_resources
 from course_server.instructor_contacts import InstructorListStudentsTool
 from course_server.instructor_messages import (
@@ -173,6 +174,7 @@ def build_runtime(
     skills: SkillCatalog | None = None,
     ta_questions: TAQuestionService | None = None,
     assignments: AssignmentStore | None = None,
+    grades: FileGradeBook | None = None,
     instructor_messages: InstructorMessageService | None = None,
     student_communications: StudentCommunicationService | None = None,
     faq_updates: FaqKnowledgeStore | None = None,
@@ -197,6 +199,12 @@ def build_runtime(
         assignments
         if assignments is not None
         else FileAssignmentStore(settings.assignment_data_path)
+    )
+    grade_store = grades or FileGradeBook(
+        settings.grade_data_path,
+        credit_usernames=resolved_roster.active_credit_usernames
+        if resolved_roster is not None
+        else frozenset(),
     )
     component_registry = components or load_component_registry()
     student_project_aliases = (
@@ -236,6 +244,7 @@ def build_runtime(
         CourseSearchTool(course_resources),
         CourseListAssignmentsTool(assignment_store),
         CourseGetAssignmentTool(assignment_store),
+        GetMyGradesTool(grade_store),
         ReadTemporaryUploadTool(upload_store),
         DocumentInspectPageTool(
             course_resources,
@@ -394,6 +403,12 @@ async def _run_postgres_turn(
         course_roster = load_course_roster(settings.course_roster_path)
         if course_roster is not None:
             verify_roster_resources(course_roster, settings.course_data_path)
+        grade_store = FileGradeBook(
+            settings.grade_data_path,
+            credit_usernames=course_roster.active_credit_usernames
+            if course_roster is not None
+            else frozenset(),
+        )
         applicant_store = FileApplicantStore(settings.applicant_data_path)
         await initialize_student_application_access(
             applicant_store,
@@ -413,6 +428,7 @@ async def _run_postgres_turn(
                 skills=skills,
                 faq_updates=faq_knowledge,
                 applicants=applicant_store,
+                grades=grade_store,
                 course_roster=course_roster,
             ),
             auth_store=PostgresAuthStore(pool),
@@ -420,6 +436,8 @@ async def _run_postgres_turn(
             capability_policy=CourseCapabilityPolicy(
                 course_resources,
                 faq_updates_enabled=True,
+                grades_enabled=True,
+                grade_access=grade_store.can_access,
                 student_projects_enabled=(
                     settings.github_student_projects_enabled
                     or settings.student_project_fixtures_enabled

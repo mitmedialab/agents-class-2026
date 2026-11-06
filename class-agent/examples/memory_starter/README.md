@@ -66,9 +66,11 @@ The [fictional gradebook](grades/weekly-feedback.json) follows the deployment's
 private schema: Ada and Bo have different amounts of feedback, Cy has none, Dee is
 an active listener, and Eli is an inactive former credit student with historical
 feedback. Setup copies it to ignored `var/grades/weekly-feedback.json` with private
-file permissions and never replaces different local feedback. The current starter
-branch does not yet include the grading UI or API; this data is ready for that code
-when its work is merged. No actual student's feedback is included.
+file permissions and never replaces different local feedback. Active credit students
+can open **Grading** to see graded weekly builds and their own feedback beneath an
+assignment; the Course Agent can also read their own notes. Compare Ada, Bo, and Cy
+to test different feedback histories. Dee and Eli cannot access grades. See
+[gradebook documentation](../../docs/GRADES.md). No actual student's feedback is included.
 
 The historical assignments are reference material; the Week 8 build is the current
 task, due Monday, November 9 at 11:59 PM Eastern Time.

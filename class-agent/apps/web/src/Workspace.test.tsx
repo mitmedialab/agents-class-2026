@@ -1,9 +1,142 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { Workspace } from "./Workspace.js";
 
 describe("Workspace", () => {
+  it("shows private weekly feedback beneath the matching assignment", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({
+        assignment_id: "week-3",
+        feedback: {
+          week: 3,
+          date: "2026-10-17",
+          reviewer: "Course TA",
+          feedback: "Comments:\n\nPrivate Week 3 note\n\nGrading Checklist:\n✓ Code link\nx   Agent architecture",
+        },
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <Workspace
+        conversationId="20000000-0000-4000-8000-000000000001"
+        onBrowserActivate={vi.fn(async () => undefined)}
+        onBrowserResize={vi.fn(async () => undefined)}
+        onBrowserScroll={vi.fn(async () => undefined)}
+        onCloseWorkspace={vi.fn(async () => undefined)}
+        onInteraction={vi.fn(async () => undefined)}
+        onPanelAction={vi.fn(async () => undefined)}
+        state={{
+          focusedPanelId: "40000000-0000-4000-8000-000000000004",
+          panels: [{
+            id: "40000000-0000-4000-8000-000000000004",
+            componentId: "draft-document",
+            resourceUri: "course://assignment/week-3",
+            props: { title: "Week 3 Build", content: "# Week 3 Build\n\nBuild it." },
+            state: { document_kind: "course-assignment-view", assignment_id: "week-3" },
+          }],
+        }}
+      />,
+    );
+
+    const note = await screen.findByText("Private Week 3 note");
+    const assignment = screen.getByRole("heading", { name: "Week 3 Build" });
+    expect(assignment.compareDocumentPosition(note)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(screen.getByRole("heading", { name: "Weekly build feedback" })).toBeTruthy();
+    const comments = screen.getByRole("region", { name: "TA comments section" });
+    const checklist = screen.getByRole("region", { name: "Grading checklist" });
+    expect(within(comments).getByText("Private Week 3 note")).toBeTruthy();
+    expect(within(comments).queryByText("Code link")).toBeNull();
+    expect(within(checklist).getByText("Code link").closest("li")?.dataset.status).toBe("met");
+    expect(within(checklist).getByText("Agent architecture").closest("li")?.dataset.status).toBe("unmet");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/grades/mine/assignments/week-3",
+      expect.objectContaining({ credentials: "include" }),
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it("shows formatted weekly feedback below the grading policy and links to assignments", async () => {
+    const onOpenAssignment = vi.fn();
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url === "/api/v1/grades/mine") {
+        return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => ({ assignments: [
+              { assignment_id: "week-2", title: "Week 2 Build", has_feedback: false },
+              { assignment_id: "week-3", title: "Week 3 Build", has_feedback: true },
+            ] }),
+        });
+      }
+      if (url === "/api/v1/grades/mine/assignments/week-3") {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            assignment_id: "week-3",
+            feedback: {
+              week: 3,
+              date: "2026-10-17",
+              reviewer: "Course TA",
+              feedback: "Comments:\n\nPrivate Week 3 note\n\nGrading Checklist:\n✓ Code link",
+            },
+          }),
+        });
+      }
+      return Promise.resolve({
+            ok: true,
+            status: 200,
+            headers: new Headers({ "content-type": "text/markdown" }),
+            body: null,
+            arrayBuffer: async () => new TextEncoder().encode(
+              "# Syllabus\n\n## Assignments and Evaluation\n\nWeekly builds are graded.",
+            ).buffer,
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <Workspace
+        conversationId="20000000-0000-4000-8000-000000000001"
+        onBrowserActivate={vi.fn(async () => undefined)}
+        onBrowserResize={vi.fn(async () => undefined)}
+        onBrowserScroll={vi.fn(async () => undefined)}
+        onCloseWorkspace={vi.fn(async () => undefined)}
+        onInteraction={vi.fn(async () => undefined)}
+        onOpenAssignment={onOpenAssignment}
+        onPanelAction={vi.fn(async () => undefined)}
+        state={{
+          focusedPanelId: "40000000-0000-4000-8000-000000000005",
+          panels: [{
+            id: "40000000-0000-4000-8000-000000000005",
+            componentId: "document-viewer",
+            resourceUri: "course://syllabus",
+            props: { find_text: "Assignments and Evaluation" },
+            state: { document_kind: "grading-overview" },
+          }],
+        }}
+      />,
+    );
+
+    const note = await screen.findByText("Private Week 3 note");
+    const policy = screen.getByText("Weekly builds are graded.");
+    expect(policy.compareDocumentPosition(note)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    const card = screen.getByRole("article", { name: "Week 3 Build feedback" });
+    expect(within(card).getByRole("region", { name: "TA comments section" })).toBeTruthy();
+    expect(within(card).getByRole("region", { name: "Grading checklist" })).toBeTruthy();
+    expect(screen.getByRole("article", { name: "Week 2 Build feedback" })).toHaveTextContent(
+      "No TA feedback has been posted",
+    );
+    const link = within(card).getByRole("button", { name: /Open assignment/ });
+    fireEvent.click(link);
+    expect(onOpenAssignment).toHaveBeenCalledWith("week-3");
+    vi.unstubAllGlobals();
+  });
+
   it("shows a progress review after the due date in an open assignment", async () => {
     const onCheckAssignment = vi.fn();
 

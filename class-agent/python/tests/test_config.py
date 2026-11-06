@@ -24,6 +24,7 @@ def test_settings_accept_standard_openai_environment_without_exposing_secret() -
     assert settings.skills_path.name == "skills"
     assert settings.applicant_data_path.name == "applicants"
     assert settings.assignment_data_path.name == "assignments"
+    assert settings.grade_data_path.name == "weekly-feedback.json"
     assert settings.upload_data_path.name == "uploads"
     assert settings.published_faq_path.name == "published-faq.json"
     assert settings.browser_enabled is True
@@ -36,6 +37,37 @@ def test_settings_accept_standard_openai_environment_without_exposing_secret() -
     assert settings.github_token is None
     assert "test-secret-value" not in repr(settings)
     assert "test-brave-value" not in repr(settings)
+
+
+def test_grade_preview_requires_a_separate_test_account_and_data_file() -> None:
+    base = {
+        "DATABASE_URL": "postgresql://example",
+        "OPENAI_API_KEY": "test-secret-value",
+        "BRAVE_API_KEY": "test-brave-value",
+    }
+    settings = AgentSettings.from_environment(
+        base
+        | {
+            "GRADE_PREVIEW_USERNAME": "test-student2",
+            "GRADE_PREVIEW_DATA_PATH": "/private/test-student2-grades.json",
+            "GRADE_PREVIEW_ONLY": "true",
+        }
+    )
+    assert settings.grade_preview_username == "test-student2"
+    assert str(settings.grade_preview_data_path) == "/private/test-student2-grades.json"
+    assert settings.grade_preview_only
+    assert AgentSettings.from_environment(base).grade_preview_username is None
+    for invalid in (
+        {"GRADE_PREVIEW_USERNAME": "test-student2"},
+        {"GRADE_PREVIEW_DATA_PATH": "/private/test-student2-grades.json"},
+        {"GRADE_PREVIEW_ONLY": "true"},
+        {
+            "GRADE_PREVIEW_USERNAME": "real-student",
+            "GRADE_PREVIEW_DATA_PATH": "/private/test-student2-grades.json",
+        },
+    ):
+        with pytest.raises(ConfigurationError, match="GRADE_PREVIEW"):
+            AgentSettings.from_environment(base | invalid)
 
 
 def test_settings_load_read_only_github_student_project_scope_without_exposing_token() -> None:

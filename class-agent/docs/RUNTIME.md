@@ -84,6 +84,7 @@ course.submit_application
 course.ask_ta (configured, exact student role only)
 course.list_assignments (logged-in student, TA, or instructor)
 course.get_assignment (logged-in student, TA, or instructor)
+grades.get_mine (active credit student only; own weekly build feedback)
 instructor.message_students (exact instructor role only)
 instructor.list_students (exact instructor role only)
 course.list_student_projects (configured, authenticated course members only)

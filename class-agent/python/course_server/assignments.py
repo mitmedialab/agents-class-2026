@@ -515,23 +515,7 @@ class CourseGetAssignmentTool:
         if assignment is None:
             raise ToolValidationError("The assignment was not found or is not available.")
         resource_uri = f"course://assignment/{assignment.assignment_id}"
-        command = OpenWorkspaceCommand(
-            panel=WorkspacePanel(
-                id=uuid4(),
-                component_id="draft-document",
-                title=assignment.title,
-                resource_uri=resource_uri,
-                props={
-                    "title": assignment.title,
-                    "description": _assignment_deadline_description(assignment.due_at),
-                    "content": assignment.content_markdown,
-                },
-                state={
-                    "document_kind": "course-assignment-view",
-                    "assignment_id": assignment.assignment_id,
-                },
-            )
-        )
+        command = assignment_workspace_command(assignment)
         return ToolExecutionResult(
             content=assignment.model_dump(mode="json"),
             summary=f"Read authorized course assignment {assignment.assignment_id}.",
@@ -546,3 +530,24 @@ class CourseGetAssignmentTool:
                 )
             ],
         )
+
+
+def assignment_workspace_command(assignment: Assignment) -> OpenWorkspaceCommand:
+    """Use the same canonical presentation for agent and direct student opens."""
+    return OpenWorkspaceCommand(
+        panel=WorkspacePanel(
+            id=uuid4(),
+            component_id="draft-document",
+            title=assignment.title,
+            resource_uri=f"course://assignment/{assignment.assignment_id}",
+            props={
+                "title": assignment.title,
+                "description": _assignment_deadline_description(assignment.due_at),
+                "content": assignment.content_markdown,
+            },
+            state={
+                "document_kind": "course-assignment-view",
+                "assignment_id": assignment.assignment_id,
+            },
+        )
+    )
