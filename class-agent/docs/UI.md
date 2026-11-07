@@ -322,7 +322,9 @@ the prior answer when the model reaches its final response. Workspace tools add
 their verified operations to the same trace; DocumentViewer supports registered
 PDF resources with page navigation and document search.
 
-Press Enter to send and Shift+Enter for a newline. The composer is an ordinary
+The composer has a visible Send action beside the text field for touch and keyboard use.
+Desktop Enter sends and Shift+Enter adds a newline. Mobile Return may insert a newline;
+the Send action submits the draft. The composer is an ordinary
 accessible textarea despite having no visible input box. Typing a printable key
 while the page itself is focused moves focus into the composer. **Clear draft** removes
 ordinary unsent text and attachments without starting an agent run.

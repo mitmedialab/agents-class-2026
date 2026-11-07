@@ -2631,11 +2631,45 @@ textarea {
   width: 45%;
 }
 
+.composer-input-row {
+  align-items: center;
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: minmax(0, 1fr) auto;
+  width: 100%;
+}
+
 .composer-actions {
   display: flex;
   gap: var(--space-4);
   justify-content: center;
   margin-top: 1rem;
+}
+
+.composer-send-action.ca-button {
+  background: var(--color-text);
+  border: 1px solid var(--color-text);
+  color: var(--color-background);
+  font-size: 0.75rem;
+  font-weight: 600;
+  min-height: 2.75rem;
+  min-width: 4.75rem;
+  padding: 0.5rem 1rem;
+}
+
+.composer-send-action.ca-button:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+@media (min-width: 901px) {
+  .composer-input-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .composer-send-action.ca-button {
+    display: none;
+  }
 }
 
 .attachment-button,
@@ -2744,10 +2778,10 @@ textarea {
   line-height: 1.45;
   max-height: 10rem;
   max-width: 46rem;
-  min-height: 1.75rem;
+  min-height: 2.75rem;
   outline: 0;
   overflow-y: auto;
-  padding: 0;
+  padding: 0.5rem 0;
   resize: none;
   text-align: center;
   width: 100%;

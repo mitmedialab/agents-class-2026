@@ -756,6 +756,30 @@ describe("Course Agent interface", () => {
     ).toBe(screen.getByTestId("workspace-shell"));
   });
 
+  it("sends a typed message through the visible composer action", async () => {
+    render(<App />);
+    await openExistingConversation();
+
+    const composer = screen.getByRole("textbox", { name: "Message" });
+    const send = screen.getByRole("button", { name: "Send message" });
+    expect(send).toBeVisible();
+    expect(send).toBeDisabled();
+
+    fireEvent.change(composer, { target: { value: "What is due this week?" } });
+    expect(send).toBeEnabled();
+    fireEvent.click(send);
+
+    await waitFor(() =>
+      expect(api.streamAgentRun).toHaveBeenCalledWith(
+        conversation.id,
+        "What is due this week?",
+        expect.any(Function),
+        expect.any(AbortSignal),
+      ),
+    );
+    expect(composer).toHaveValue("");
+  });
+
   it("requires the student to confirm question details without exposing email metadata", async () => {
     const studentConversation = {
       ...conversation,

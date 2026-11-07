@@ -2470,38 +2470,58 @@ export default function App() {
                 ))}
               </ul>
             ) : null}
-            <textarea
-              ref={composerRef}
-              aria-label="Message"
-              autoComplete="off"
-              autoFocus={!isOpening}
-              className="composer-text"
-              disabled={
-                isInitializing ||
-                isRunning ||
-                isUploading ||
-                composerBlockedByConfirmation ||
-                isTimeTraveling ||
-                timelinePull !== null
-              }
-              enterKeyHint="send"
-              onChange={(event) => setMessage(event.target.value)}
-              onKeyDown={handleComposerKeyDown}
-              placeholder={
-                isTimeTraveling
-                  ? "Return to now to continue the conversation"
-                  : canRequestInstructorRevision
-                  ? "Ask the agent to revise this draft"
-                  : awaitingConfirmationAction
-                    ? "Review the draft above"
-                    : presentedCommunication
-                      ? "Ask the agent about this message"
-                      : "Start typing to interact with the agent"
-              }
-              rows={1}
-              spellCheck
-              value={message}
-            />
+            <div className="composer-input-row">
+              <textarea
+                ref={composerRef}
+                aria-label="Message"
+                autoComplete="off"
+                autoFocus={!isOpening}
+                className="composer-text"
+                disabled={
+                  isInitializing ||
+                  isRunning ||
+                  isOpeningStatic ||
+                  isUploading ||
+                  composerBlockedByConfirmation ||
+                  isTimeTraveling ||
+                  timelinePull !== null
+                }
+                enterKeyHint="send"
+                onChange={(event) => setMessage(event.target.value)}
+                onKeyDown={handleComposerKeyDown}
+                placeholder={
+                  isTimeTraveling
+                    ? "Return to now to continue the conversation"
+                    : canRequestInstructorRevision
+                    ? "Ask the agent to revise this draft"
+                    : awaitingConfirmationAction
+                      ? "Review the draft above"
+                      : presentedCommunication
+                        ? "Ask the agent about this message"
+                        : "Start typing to interact with the agent"
+                }
+                rows={1}
+                spellCheck
+                value={message}
+              />
+              <Button
+                aria-label="Send message"
+                className="composer-send-action"
+                disabled={
+                  (!message.trim() && uploads.length === 0) ||
+                  isInitializing ||
+                  isRunning ||
+                  isOpeningStatic ||
+                  isUploading ||
+                  composerBlockedByConfirmation ||
+                  isTimeTraveling ||
+                  timelinePull !== null
+                }
+                type="submit"
+              >
+                Send
+              </Button>
+            </div>
             {uploadError ? (
               <p className="upload-error" role="alert">
                 {uploadError}
@@ -2545,9 +2565,6 @@ export default function App() {
             </div>
           </div>
         </div>
-        <button aria-hidden="true" className="visually-hidden" tabIndex={-1} type="submit">
-          Send
-        </button>
           </form>
           </main>
         </>
