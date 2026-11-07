@@ -378,6 +378,15 @@ export interface AgentResponseProps {
   text: string;
 }
 
+/** The same formatting as a live response, without its sizing and animation. */
+export function ResponseText({ text }: { text: string }) {
+  return (
+    <div className="conversation-transcript-response">
+      {responseBlocks(text, false, false, 0)}
+    </div>
+  );
+}
+
 export function AgentResponse({
   fixedSize = false,
   initialCharacterDelayMs = 0,

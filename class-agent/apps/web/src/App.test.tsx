@@ -206,14 +206,35 @@ beforeEach(() => {
   });
 });
 
+async function closeFullChat(): Promise<void> {
+  fireEvent.click(await screen.findByRole("button", { name: "Continue this conversation" }));
+}
+
 async function openExistingConversation(): Promise<void> {
   await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
   fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
   fireEvent.click(await screen.findByRole("button", { name: /Week one/ }));
+  await closeFullChat();
   await screen.findByText("The earlier response.");
 }
 
 describe("Course Agent interface", () => {
+  it("shows the full chat when a conversation is opened and can reopen it", async () => {
+    render(<App />);
+    await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Week one/ }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Full conversation" });
+    expect(within(dialog).getByRole("heading", { name: "Week one" })).toBeInTheDocument();
+    expect(within(dialog).getByText("The earlier response.")).toBeInTheDocument();
+
+    await closeFullChat();
+    expect(screen.queryByRole("dialog", { name: "Full conversation" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Full chat" }));
+    expect(await screen.findByRole("dialog", { name: "Full conversation" })).toBeInTheDocument();
+  });
+
   it("introduces the course before revealing the interface", async () => {
     vi.useFakeTimers();
     try {
@@ -381,6 +402,7 @@ describe("Course Agent interface", () => {
     await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
     fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
     fireEvent.click(await screen.findByRole("button", { name: /Week one/ }));
+    await closeFullChat();
 
     expect(await screen.findByText("The current response.")).toBeInTheDocument();
     expect(within(document.querySelector(".timeline-message-group")!).getByText("Close the schedule and summarize it.")).toBeInTheDocument();
@@ -545,6 +567,7 @@ describe("Course Agent interface", () => {
     await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
     fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
     fireEvent.click(await screen.findByRole("button", { name: /Week one/ }));
+    await closeFullChat();
     expect(await screen.findByText("The schedule is open.")).toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "Workspace" })).toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Notification center" })).not.toBeInTheDocument();
@@ -602,6 +625,7 @@ describe("Course Agent interface", () => {
     await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
     fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
     fireEvent.click(await screen.findByRole("button", { name: /Week one/ }));
+    await closeFullChat();
     expect(await screen.findByText("The latest response.")).toBeInTheDocument();
 
     const stage = document.querySelector(".response-stage")!;
@@ -902,6 +926,7 @@ describe("Course Agent interface", () => {
     await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
     fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
     fireEvent.click(screen.getByRole("button", { name: /Week one/ }));
+    await closeFullChat();
 
     expect(
       await screen.findByText(

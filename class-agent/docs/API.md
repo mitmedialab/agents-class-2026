@@ -125,7 +125,9 @@ successful result, the server acknowledges that user's current one-time Updates 
 Communications and Upcoming are not consumed by the greeting.
 
 The conversation list remains newest-first and accepts optional bounded `limit` and non-negative
-`offset` query parameters. Omitting them preserves the complete-list compatibility behavior. The
+`offset` query parameters. `started_only=true` leaves out conversations with no student message,
+such as the greeting created on each visit. A missing or placeholder title is replaced in the
+response with text from the first student message; this is a projection and nothing is written. Omitting them preserves the complete-list compatibility behavior. The
 web history drawer requests six summaries at first, displays five, and uses the extra result only to
 decide whether another five can be revealed. Conversation events are fetched only after a user
 opens that conversation.

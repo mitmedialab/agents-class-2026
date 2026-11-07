@@ -62,6 +62,7 @@ import {
   projectConversationTimeline,
   timelineFade,
 } from "./ConversationTimeline.js";
+import { ConversationTranscript, formatConversationTime } from "./ConversationTranscript.js";
 import { historicalInteraction, historicalPanelAction } from "./historicalWorkspace.js";
 import {
   applyTAQuestionEvent,
@@ -179,7 +180,7 @@ function newestFirst(conversations: Conversation[]): Conversation[] {
   );
 }
 
-function conversationTitle(conversation: Conversation): string {
+function conversationTitle(conversation: Pick<Conversation, "title">): string {
   return conversation.title?.trim() || "Untitled conversation";
 }
 
@@ -239,13 +240,6 @@ function uploadValidationError(files: File[]): string | null {
   return unsupported
     ? `“${unsupported.name}” isn’t supported. Upload an image, PDF, text, CSV, JSON, or Markdown file.`
     : null;
-}
-
-function formatConversationDate(value: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-  }).format(new Date(value));
 }
 
 function workspaceFromEvents(events: Event[]): WorkspaceState {
@@ -316,6 +310,8 @@ export default function App() {
   const [pendingUploadCount, setPendingUploadCount] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
+  const closeTranscript = useCallback(() => setTranscriptOpen(false), []);
   const [aboutOpen, setAboutOpen] = useAboutRoute();
   const [syllabusPdfUrl, setSyllabusPdfUrl] = useState<string | undefined>();
   const [syllabusContent, setSyllabusContent] = useState<string | null>(null);
@@ -600,6 +596,7 @@ export default function App() {
       setPresentedCommunication(null);
       setHistoryOpen(false);
       setAboutOpen(false);
+      setTranscriptOpen(true);
       const pendingContinuation =
         pendingTAQuestionContinuation(detail.events) ??
         pendingInstructorMessageContinuation(detail.events);
@@ -2092,6 +2089,15 @@ export default function App() {
               <a className="about-link" href="/ai-connect">
                 Connect AI
               </a>
+              {selectedConversationId !== null && conversationEvents.length > 0 ? (
+                <Button
+                  aria-haspopup="dialog"
+                  className="about-link"
+                  onClick={() => setTranscriptOpen(true)}
+                >
+                  Full chat
+                </Button>
+              ) : null}
               <Button
                 aria-expanded={historyOpen}
                 aria-haspopup="dialog"
@@ -2476,6 +2482,15 @@ export default function App() {
         </>
       )}
 
+      {transcriptOpen ? (
+        <ConversationTranscript
+          events={conversationEvents}
+          onClose={closeTranscript}
+          title={conversationTitle(
+            conversations.find(({ id }) => id === selectedConversationId) ?? { title: null },
+          )}
+        />
+      ) : null}
       {historyOpen ? (
         <div
           className="drawer-backdrop"
@@ -2522,7 +2537,7 @@ export default function App() {
                       >
                         <span>{conversationTitle(conversation)}</span>
                         <time dateTime={conversation.updated_at}>
-                          {formatConversationDate(conversation.updated_at)}
+                          {formatConversationTime(conversation.updated_at)}
                         </time>
                       </Button>
                     </li>

@@ -197,3 +197,20 @@ class PostgresConversationStore:
             )
             rows = await cursor.fetchall()
         return [Event.model_validate(row) for row in rows]
+
+    async def first_user_messages(self, conversation_ids: list[UUID]) -> dict[UUID, str]:
+        async with self._pool.connection() as connection:
+            cursor = await connection.execute(
+                """
+                SELECT DISTINCT ON (conversation_id)
+                       conversation_id, payload->>'text' AS text
+                FROM events
+                WHERE conversation_id = ANY(%s)
+                  AND type = 'user.message'
+                  AND payload->>'text' IS NOT NULL
+                ORDER BY conversation_id, timestamp, id
+                """,
+                (conversation_ids,),
+            )
+            rows = await cursor.fetchall()
+        return {row["conversation_id"]: row["text"] for row in rows}

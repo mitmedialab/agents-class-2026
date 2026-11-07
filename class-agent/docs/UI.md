@@ -63,6 +63,11 @@ Other roles and anonymous visitors retain Apply.
 Submitting a new prompt immediately removes the prior answer and resets the
 activity trace, so only the new run's process is visible until its answer begins.
 Canonical history is still persisted as events and is available through the conversation drawer.
+Opening a conversation from the drawer shows the **full chat**: every student message and reply in
+order, each with its date and time, over the conversation. **Full chat** in the header reopens it,
+and **Continue this conversation** returns to the single-moment view. It is a browser projection of
+canonical events; workspace panels stay in the timeline. The drawer lists only conversations with a
+student message, titled from that message and showing the time of the latest activity.
 Open the About page from the right side of the header or link directly to `/about`.
 The browser URL and Back/Forward navigation remain synchronized with that page. Notifications and their desktop/mobile layout state are hidden while About is open and restored when returning to chat. It
 contains a concise description, new/history navigation, and student login or logout

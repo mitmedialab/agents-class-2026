@@ -915,6 +915,20 @@ def test_conversation_list_supports_bounded_pages() -> None:
     assert len(second_page.json()) == 2
 
 
+def test_conversation_list_can_leave_out_greetings_and_titles_the_rest() -> None:
+    client, _, _ = _build_client(anonymous_quota_policy=AnonymousQuotaPolicy(enabled=False))
+    greeting_only = _create_conversation(client, title="Course Agent welcome")
+    started = _create_conversation(client, title="Course Agent welcome")
+    response = client.post(f"/conversations/{started}/run", json={"text": "Plan my  build"})
+    assert response.status_code == 200
+
+    everything = client.get("/conversations").json()
+    assert {item["id"] for item in everything} == {greeting_only, started}
+
+    listed = client.get("/conversations", params={"started_only": "true"}).json()
+    assert [(item["id"], item["title"]) for item in listed] == [(started, "Plan my build")]
+
+
 def test_pending_action_route_returns_only_unresolved_owned_confirmation() -> None:
     client, _, _ = _build_client()
     principal = client.get("/auth/me").json()

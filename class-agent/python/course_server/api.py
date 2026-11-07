@@ -42,6 +42,7 @@ from course_server.agent import (
     SkillCatalog,
     ToolValidationError,
 )
+from course_server.agent.conversation_titles import with_readable_title
 from course_server.agent.store import principal_owns_conversation
 from course_server.agent_cli import build_runtime
 from course_server.anonymous_quotas import (
@@ -1448,13 +1449,20 @@ def create_app(
         principal: Annotated[PrincipalContext, Depends(_require_principal)],
         limit: Annotated[int | None, Query(ge=1, le=100)] = None,
         offset: Annotated[int, Query(ge=0)] = 0,
+        started_only: bool = False,
     ) -> list[Conversation]:
         state = _get_app_state(request)
         assert state.services is not None
-        conversations = await state.services.conversations.list_conversations(principal)
-        if limit is None:
-            return conversations[offset:]
-        return conversations[offset : offset + limit]
+        store = state.services.conversations
+        conversations = await store.list_conversations(principal)
+        first_messages = await store.first_user_messages([item.id for item in conversations])
+        if started_only:
+            conversations = [item for item in conversations if item.id in first_messages]
+        end = None if limit is None else offset + limit
+        return [
+            with_readable_title(item, first_messages.get(item.id))
+            for item in conversations[offset:end]
+        ]
 
     @router.get(
         "/conversations/pending-action",

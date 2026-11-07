@@ -232,7 +232,8 @@ export async function logout(): Promise<void> {
 export function listConversations(
   options: { limit?: number; offset?: number } = {},
 ): Promise<Conversation[]> {
-  const query = new URLSearchParams();
+  // The drawer lists conversations someone took part in, not the greeting from each visit.
+  const query = new URLSearchParams({ started_only: "true" });
   if (options.limit !== undefined) query.set("limit", String(options.limit));
   if (options.offset !== undefined) query.set("offset", String(options.offset));
   const suffix = query.size > 0 ? `?${query.toString()}` : "";
