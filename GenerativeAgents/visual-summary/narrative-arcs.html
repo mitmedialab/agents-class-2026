@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>placelab narrative arcs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Silkscreen:wght@400;700&display=swap">
+<style>
+/* Tokens copied from GenerativeAgents/src/styles.css; the dark set and line colors are proposals. */
+:root{
+  --bg:#FFFFFF; --panel:#F3F3F1; --raise:#FFFFFF; --ink:#000000; --muted:#6B6B68; --line:#D2D2CE;
+  --orange:#FF4F12; --leaf:#2B9A4C;
+  --o-born:#FF4F12; --o-join:#2B9A4C; --o-evo:#2F6FE0; --o-agr:#8C95A2; --o-ref:#17171B; --o-none:#B9BCC4;
+  --r-student:#6B5BD2; --r-prof:#E07B24; --r-ta:#1E8C8C;
+  --t0:#3A3A38; --t1:#1E8C8C; --t2:#B5832A; --t3:#6B5BD2; --t4:#C2410C; --t5:#2F6FE0; --t6:#2B9A4C;
+  --f-display:"Archivo","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --f-mono:"Silkscreen","Archivo",monospace;
+  color-scheme:light;
+}
+:root[data-theme="dark"]{
+  --bg:#0B0B0A; --panel:#141413; --raise:#1B1B1A; --ink:#F2EFE6; --muted:#8F8D86; --line:#2E2E2B;
+  --orange:#FF5A22; --leaf:#3DBA62;
+  --o-born:#FF5A22; --o-join:#3DBA62; --o-evo:#5B8EF0; --o-agr:#7E8692; --o-ref:#F2EFE6; --o-none:#5A5D64;
+  --r-student:#9D8FF0; --r-prof:#F2A04E; --r-ta:#3FC0C0;
+  --t0:#CFCBC0; --t1:#3FC0C0; --t2:#DDB15A; --t3:#9D8FF0; --t4:#F07A45; --t5:#5B8EF0; --t6:#3DBA62;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--ink);margin:0}
+body{font-family:var(--f-display);font-size:12.5px;line-height:1.5;padding:0 16px 40px}
+.wrap{max-width:1680px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+button,select{font:inherit;color:inherit}
+.band{background:#111;color:#fff;margin:0 -16px;padding:0 16px}
+.bandin{max-width:1680px;margin:0 auto;display:flex;align-items:center;gap:14px;padding-block:8px;flex-wrap:wrap}
+.bandt{font-size:12px}.bandt b{font-weight:600}
+.langsw{margin-left:auto;display:inline-flex;border:1px solid #555;border-radius:999px;overflow:hidden}
+.langsw button{font-size:11px;text-transform:uppercase;letter-spacing:.06em;background:transparent;color:#BDBDB7;border:0;padding:4px 10px;cursor:pointer}
+.langsw button[aria-pressed="true"]{background:#fff;color:#000}
+.mono7{display:inline-grid;grid-template-columns:repeat(7,4px);grid-auto-rows:4px;gap:1px;vertical-align:middle}
+.mono7 i{display:block;background:#2A2A2A}.mono7 i.on{background:#fff}
+header{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:8px 40px;padding-block:18px 14px;border-bottom:1px solid var(--ink)}
+@media (max-width:760px){header{grid-template-columns:minmax(0,1fr)}}
+h1{font-weight:400;font-size:clamp(24px,3vw,32px);line-height:1.1;margin:0;letter-spacing:-.015em;text-transform:lowercase}
+.ask{margin:0;font-size:13px;line-height:1.55;max-width:66ch;text-transform:lowercase;padding-top:4px}
+.lab{font-size:12px;text-transform:lowercase;color:var(--muted);margin-bottom:4px}
+.hint{color:var(--muted);font-size:12px;margin:0;text-transform:lowercase}
+.evid{display:flex;flex-direction:column;gap:12px;border:1px solid var(--line);border-radius:6px;padding:14px;background:var(--panel)}
+.evh{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:6px 40px;align-items:start}
+@media (max-width:760px){.evh{grid-template-columns:minmax(0,1fr)}}
+.evt{font-weight:400;font-size:18px;margin:0;text-transform:lowercase;letter-spacing:-.01em}
+.btn{font-size:12px;text-transform:lowercase;border:1.5px solid var(--ink);background:var(--raise);color:var(--ink);border-radius:999px;padding:5px 12px;cursor:pointer;box-shadow:0 1.5px 0 var(--ink);display:inline-flex;align-items:center;gap:6px}
+.btn:active{transform:translateY(1px);box-shadow:none}
+.btn[aria-pressed="true"]{background:var(--ink);color:var(--raise)}
+select{font-size:12px;font-weight:500;color:var(--ink);background:var(--raise);border:1.5px solid var(--ink);border-radius:999px;padding:5px 10px;box-shadow:0 1.5px 0 var(--ink);max-width:min(340px,100%)}
+.ctl{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center}
+.ctl label{display:inline-flex;align-items:center;gap:6px;max-width:100%;min-width:0}
+.ctl label select{min-width:0;flex:1 1 auto}
+.stats{display:flex;flex-wrap:wrap;gap:6px 22px}
+.stat{font-family:var(--f-mono);font-size:13px}
+.stat small{font-family:var(--f-display);font-size:11px;color:var(--muted);margin-left:6px;text-transform:lowercase}
+.face{width:12px;height:18px;image-rendering:pixelated;vertical-align:middle}
+.sw{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block;vertical-align:middle;opacity:.45}
+#outlegend .dot{opacity:1}
+#outlegend .dot.none{opacity:.3}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:11px;color:var(--muted);text-transform:lowercase}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend .nmx{text-transform:none}
+.topbar{justify-content:space-between}
+.topbar .legend{font-size:11.5px;color:var(--ink)}
+.ofb{display:inline-flex;align-items:center;gap:6px;font:inherit;color:inherit;text-transform:lowercase;background:none;border:1.5px solid transparent;border-radius:999px;padding:2px 9px 2px 6px;margin:-3.5px 0;cursor:pointer}
+.ofb:hover{border-color:var(--line)}
+.ofb[aria-pressed="true"]{border-color:var(--ink);background:var(--raise);box-shadow:0 1.5px 0 var(--ink)}
+.ofb:focus-visible{outline:2px solid var(--orange);outline-offset:1px}
+#outlegend.filtering .ofb[aria-pressed="false"]{opacity:.55}
+
+/* chart */
+.chartwrap{position:relative;overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--raise)}
+.chartwrap:focus-visible{outline-offset:-2px}
+#chart{display:block;min-width:760px}
+#chart text{font-family:var(--f-display);fill:var(--ink)}
+#chart .dayband{fill:var(--panel)}
+#chart .dayhit{fill:var(--ink);fill-opacity:0;cursor:pointer;transition:fill-opacity .15s}
+#chart .dayhit:hover{fill-opacity:.035}
+#chart .dayhd{cursor:pointer;outline:none}
+#chart .dayhd.open{cursor:default}
+#chart .dayhdbg{fill:var(--raise);fill-opacity:0;stroke:var(--line);stroke-opacity:0}
+#chart .dayhd:not(.open) .dayhdbg{fill-opacity:1;stroke-opacity:1}
+#chart .dayhd:not(.open):hover .dayhdbg,#chart .dayhd:focus-visible .dayhdbg{stroke:var(--ink);stroke-opacity:1}
+#chart .dayhd:focus-visible .dayhdbg{stroke:var(--orange);stroke-width:2}
+#chart .dayhd:not(.open) .daylab{fill:var(--ink)}
+#chart .daylab,#chart .tick,#chart .code{font-family:var(--f-mono);font-size:9px;fill:var(--muted)}
+#chart .nm{font-size:10.5px;fill:var(--muted)}
+#chart .lbl{cursor:pointer;outline:none}
+#chart .lblhit{fill:var(--ink);fill-opacity:0}
+#chart .lbl:hover .lblhit,#chart .lbl.hl .lblhit{fill-opacity:.05}
+#chart .lbl:hover .nm,#chart .lbl.hl .nm{fill:var(--ink)}
+#chart .lbl.on .nm{fill:var(--ink);font-weight:600}
+#chart .lbl.on .lblhit{fill-opacity:.08}
+#chart .lbl:focus-visible .lblhit{fill-opacity:0;stroke:var(--orange);stroke-width:2}
+#chart .blk{fill:none;stroke:var(--line);stroke-width:1}
+#chart .blkh{font-family:var(--f-display);font-size:10px;font-weight:600;fill:var(--muted)}
+#chart .tickln{stroke:var(--line);stroke-width:1;stroke-dasharray:2 4}
+#chart .halo{fill:none;stroke:var(--raise);stroke-width:4.5;stroke-linecap:round}
+#chart .ln{fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;stroke-opacity:.6}
+#chart.teamc .ln{stroke-opacity:.85}
+#chart .hit{fill:none;stroke:transparent;stroke-width:9;cursor:pointer}
+#chart .agent{transition:opacity .15s}
+#chart.focus .agent:not(.hl){opacity:.14}
+#chart.focus .agent.hl .ln{stroke-width:3;stroke-opacity:1}
+#chart .mk{cursor:pointer;transition:opacity .15s}
+#chart .mk circle.v{fill-opacity:calc(.38 * var(--k, 1));stroke:none}
+#chart[data-of] .mk circle.v{fill-opacity:calc(.12 * var(--k, 1))}
+#chart[data-of="born"] .mk circle.v.born,#chart[data-of="join"] .mk circle.v.join,#chart[data-of="evo"] .mk circle.v.evo,#chart[data-of="agr"] .mk circle.v.agr,#chart[data-of="ref"] .mk circle.v.ref,#chart[data-of="none"] .mk circle.v.none{fill-opacity:calc(.95 * var(--k, 1))}
+#chart .mk.ghost{pointer-events:none}
+#chart .mk.sel circle.v{fill-opacity:calc(.95 * var(--k, 1));stroke:var(--raise);stroke-width:1}
+#chart .mk circle.h{fill:transparent}
+#chart .mk.on circle.v{fill-opacity:var(--k, 1);stroke:var(--raise);stroke-width:1.5}
+#chart .mk.fade{opacity:.08}
+#chart .mk.dim{opacity:.35}
+#chart .born{fill:var(--o-born)}#chart .join{fill:var(--o-join)}#chart .evo{fill:var(--o-evo)}#chart .agr{fill:var(--o-agr)}#chart .ref{fill:var(--o-ref)}#chart .none{fill:var(--o-none)}
+.tip{position:absolute;z-index:2;width:min(340px,calc(100% - 16px));background:var(--raise);border:1.5px solid var(--ink);border-radius:6px;box-shadow:2px 2px 0 var(--ink);padding:10px 12px;display:flex;flex-direction:column;gap:6px;font-size:12px;pointer-events:none}
+.tip[hidden]{display:none}
+.tip.pinned{pointer-events:auto;border-width:2px}
+.tip .tiph{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.tip.pinned .tiph{cursor:grab;touch-action:none;user-select:none;margin:-10px -12px 0;padding:10px 12px 4px}
+.tip.pinned.dragging{cursor:grabbing;box-shadow:4px 4px 0 var(--ink)}
+.tip.pinned.dragging .tiph{cursor:grabbing}
+.tip .grip{display:inline-block;width:8px;height:12px;margin-right:6px;vertical-align:-1px;background:radial-gradient(circle,var(--muted) 1px,transparent 1.2px) 0 0/4px 4px}
+.tip .pinhint{font-size:10.5px;color:var(--muted);text-transform:lowercase}
+.tip .x{width:24px;height:24px;flex:none;display:grid;place-items:center;border-radius:50%;border:1.5px solid var(--ink);background:var(--raise);color:var(--ink);cursor:pointer;padding:0;font-size:15px;line-height:1;box-shadow:0 1.5px 0 var(--ink)}
+.tip .x:active{transform:translateY(1px);box-shadow:none}
+.tip.pinned .tx{max-height:260px;overflow:auto}
+.tip .clist{display:flex;flex-direction:column;gap:2px;border-top:1px solid var(--line);padding-top:6px}
+.tip.pinned .clist{max-height:280px;overflow:auto}
+.tip .ci{display:grid;grid-template-columns:9px 62px minmax(0,1fr);gap:6px;align-items:baseline;font:inherit;font-size:11.5px;line-height:1.35;text-align:left;background:none;border:0;border-radius:4px;padding:3px 4px;color:var(--ink)}
+.tip button.ci{cursor:pointer}
+.tip .ci.now{background:var(--panel);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.tip .tourbar{display:flex;align-items:center;gap:10px;min-height:28px}
+.tip .tourbar .btn{font-size:11.5px;padding:3px 11px}
+.tip .tournow{font-size:11px;color:var(--muted)}
+#chart .trail{fill:none;stroke-width:3.5;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+#chart.touring .agent.tourme .ln{stroke-opacity:.28}
+#chart .tourdot{pointer-events:none}
+.tip.gliding{transition:left .4s ease,top .4s ease}
+@media (prefers-reduced-motion: reduce){.tip.gliding{transition:none}}
+#chart .tourdot .ring{fill:var(--raise);stroke:var(--ink);stroke-width:2}
+.tip button.ci:hover{background:var(--panel)}
+.tip .ci i{width:9px;height:9px;border-radius:50%;display:inline-block;align-self:center}
+.tip .ci .mono{font-size:9px}
+.tip .ci b{font-weight:600}
+.tip .mono{font-family:var(--f-mono);font-size:9.5px;color:var(--muted)}
+.tip .tt{font-weight:600;font-size:13px;line-height:1.3}
+.tip .inf{font-size:10.5px;color:var(--muted);text-transform:lowercase}
+.tip .who{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11.5px}
+.tip .who span{display:inline-flex;align-items:center;gap:5px}
+.tip .whob{display:inline-flex;align-items:center;gap:5px;font:inherit;font-size:11.5px;color:var(--ink);background:none;border:1px solid transparent;border-radius:999px;padding:1px 8px 1px 4px;margin-left:-4px}
+.tip .whob b{font-weight:600}
+.tip.pinned .whob{cursor:pointer}
+.tip.pinned .whob:hover{border-color:var(--line);background:var(--panel)}
+.tip .tx{display:flex;flex-direction:column;gap:3px;border-top:1px solid var(--line);padding-top:6px;max-height:190px;overflow:hidden}
+.tip .tx div{display:grid;grid-template-columns:62px minmax(0,1fr);gap:6px;font-size:11.5px;line-height:1.35}
+.tip .tx strong.idea{font-weight:700;color:var(--ink)}
+.tip .tx b{font-weight:600;font-size:10.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.oc{display:inline-flex;align-items:center;gap:6px;font-size:11px;text-transform:lowercase}
+.oc i{width:9px;height:9px;border-radius:50%;display:inline-block}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.notes h3{margin:0 0 6px;font-size:12px;font-weight:600;text-transform:lowercase}
+.notes ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+code{font-family:ui-monospace,Menlo,monospace;font-size:11px;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="band"><div class="bandin"><span id="band-glyph"></span><span class="bandt"><b>GA Cognitive Agents</b> <span>· placelab · narrative arcs prototype</span></span>
+  <span class="langsw" role="group" aria-label="theme"><button data-theme-btn="light" aria-pressed="true">light</button><button data-theme-btn="dark" aria-pressed="false">dark</button></span></div></div>
+
+<div class="wrap">
+<header>
+  <div><div class="lab">placelab · results</div><h1>who talked to whom</h1></div>
+</header>
+
+<section class="evid">
+  <div class="stats" id="stats"></div>
+  <div class="ctl topbar">
+    <div class="legend" id="outlegend" aria-label="conversation outcomes"></div>
+  </div>
+  <div class="chartwrap" id="wrap" tabindex="0" aria-label="narrative chart; use left and right arrow keys to step through conversations">
+    <svg id="chart" role="img" aria-label="narrative chart of agent conversations over three days"></svg>
+    <div class="tip" id="tip" hidden></div>
+  </div>
+  <div class="legend" id="legend"></div>
+</section>
+
+<section class="notes">
+  <div><h3>where this data came from</h3><ul>
+    <li>a headless run of the repo's simulation (<code>GenerativeAgents/src</code>, unchanged) with every profile's <code>active</code> flag switched on. in the repo only four profiles are active.</li>
+    <li>each dot is one <code>CLOG</code> entry, with the transcript captured as the conversation happened. first names come from <code>profiles.js</code>.</li>
+    <li>the run is random: the next run will have different conversations.</li>
+  </ul></div>
+</section>
+</div>
+
+<script src="narrative-data.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const OUTN = { born: "idea born", join: "someone joins", evo: "idea evolves", ref: "referral", none: "no outcome" };
+const A = Object.fromEntries(RUN.agents.map(a => [a.id, a]));
+const IDEA = Object.fromEntries(RUN.ideas.map(i => [i.id, i]));
+const TEAMS = [...new Set(RUN.agents.map(a => a.team))];
+
+const PIX = { G: ["011","100","101","101","011"], A: ["010","101","111","101","101"] };
+$("band-glyph").innerHTML = `<span class="mono7" aria-hidden="true">${Array.from({ length: 49 }, (_, k) => { const r = k / 7 | 0, c = k % 7, i = c < 3 ? 0 : c > 3 ? 1 : -1;
+  const on = r >= 1 && r <= 5 && i >= 0 && PIX["GA"[i]][r - 1][c - (i ? 4 : 0)] === "1"; return `<i class="${on ? "on" : ""}"></i>`; }).join("")}</span>`;
+
+/* lanes grouped by role; within each role, each day gets its own order so that day's paths travel as little vertically as possible */
+const ROLES = [{ k: "student", n: "students" }, { k: "prof", n: "professors" }, { k: "ta", n: "TAs" }];
+/* an agreement leaves the idea unchanged, so it is shown as no outcome */
+const CONVS = [...RUN.convs].map(c => c.out === "agr" ? { ...c, out: "none" } : c).sort((p, q) => p.t - q.t);
+function orderFor(convs, groups) {
+  const travel = () => { const y = {}, cur = {}, day = {}; let k = 0, s = 0;
+    groups.forEach((g, gi) => g.forEach(a => { y[a.id] = cur[a.id] = k++ + gi * 1.5; day[a.id] = 0; }));
+    for (const c of convs) { const m = (y[c.a] + y[c.b]) / 2;
+      for (const id of [c.a, c.b]) { if (c.day > day[id] && day[id]) { s += Math.abs(cur[id] - y[id]); cur[id] = y[id]; } day[id] = c.day;
+        s += Math.abs(m - cur[id]); cur[id] = m; } }
+    for (const id in y) s += Math.abs(cur[id] - y[id]);
+    return s; };
+  let best = travel(), improved = true;
+  while (improved) { improved = false;
+    for (const g of groups) for (let i = 0; i < g.length; i++) for (let j = 0; j < g.length; j++) { if (i === j) continue;
+      const [x] = g.splice(i, 1); g.splice(j, 0, x); const c = travel();
+      if (c < best - 1e-9) { best = c; improved = true; } else { g.splice(j, 1); g.splice(i, 0, x); } } }
+  return groups;
+}
+const BASE = orderFor(CONVS, ROLES.map(r => RUN.agents.filter(a => a.role === r.k).sort((p, q) => p.name.localeCompare(q.name, undefined, { sensitivity: "base" }))));
+const ORDER = BASE.flat();
+const DAY_ORDER = Array.from({ length: RUN.days }, (_, d) => orderFor(CONVS.filter(c => c.day === d + 1), BASE.map(g => g.slice())));
+
+const LEFT = 150, RIGHT = 40, RET = 26, SQUIGGLE = 3, TOP = 34, LANE = 21, BOTTOM = 30, H = 2.5, HEAD = 18, BGAP = 12;
+const BLOCKS = []; { let y = TOP;
+  for (const r of ROLES) { const members = ORDER.filter(a => a.role === r.k); if (!members.length) continue;
+    const top = y, ri = ROLES.indexOf(r); y += HEAD; const slots = members.map(() => { const s = y + LANE / 2; y += LANE; return s; });
+    members.forEach(a => a.lyd = DAY_ORDER.map(g => slots[g[ri].indexOf(a)]));
+    BLOCKS.push({ ...r, n: r.n, count: members.length, top, bot: y }); y += BGAP; }
+  var LANES_BOTTOM = y - BGAP; }
+const END = RUN.days * RUN.dayLen;
+let G = null, focusIds = null, ideaSel = "", hideSmall = false, cur = -1, colorBy = "role", pinned = null, pinnedAgent = null, agentAnchor = null, agentPanel = false, convKeep = null;
+
+function lineColor(a) {
+  if (colorBy === "team") return `var(--t${TEAMS.indexOf(a.team) % 7})`;
+  return `var(--r-${a.role})`;
+}
+
+/* day accordion: one day is open, the others collapse to narrow columns */
+const DAYS = RUN.days;
+let openDay = 0, fr = null, tween = null, revealT = null;
+const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+const collapsedPx = plotW => Math.min(84, plotW * .11);
+function targetFr(d, plotW) { const c = collapsedPx(plotW), open = plotW - (DAYS - 1) * c;
+  return Array.from({ length: DAYS }, (_, i) => (i === d ? open : c) / plotW); }
+const ease = k => k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+const dayCounts = Array.from({ length: DAYS }, (_, d) => CONVS.filter(c => c.day === d + 1).length);
+
+function geometry() {
+  const width = Math.max(760, $("wrap").clientWidth), height = LANES_BOTTOM + BOTTOM, plotW = width - LEFT - RIGHT;
+  if (!fr) fr = targetFr(openDay, plotW);
+  const dw = fr.map(f => f * plotW), x0 = [], openW = plotW - (DAYS - 1) * collapsedPx(plotW);
+  dw.reduce((x, w, i) => (x0[i] = x, x + w), LEFT);
+  const sc = dw.map(w => Math.max(.08, Math.min(1, w / openW)));
+  /* amp: 0 when a day is fully collapsed (paths become small squiggles), 1 when open (true paths) */
+  const scMin = collapsedPx(plotW) / openW, amp = dw.map(w => { const k = (w / openW - scMin) / (1 - scMin); return Math.max(0, Math.min(1, k)); });
+  const tx = t => { const d = Math.min(DAYS - 1, Math.max(0, Math.floor(t / RUN.dayLen))); return x0[d] + ((t - d * RUN.dayLen) / RUN.dayLen) * dw[d]; };
+  /* the open day shows its own lane order; collapsed days and the labels follow it, so only one order is visible at a time */
+  const ampSum = amp.reduce((x, y) => x + y, 0), L = {};
+  for (const a of RUN.agents) { const base = ampSum > 0 ? a.lyd.reduce((x, y, d) => x + y * amp[d], 0) / ampSum : a.lyd[openDay];
+    L[a.id] = a.lyd.map((y, d) => base + (y - base) * amp[d]); }
+  const laneY = (a, d = 0) => L[a.id][d], pos = {};
+  for (const c of CONVS) { const d = c.day - 1, k = amp[d], ya = A[c.a].lyd[d], yb = A[c.b].lyd[d], mid = (ya + yb) / 2, s = ya < yb ? -1 : 1;
+    const eff = (L[c.a][d] + L[c.b][d]) / 2;
+    pos[c.id] = { x: tx(c.t), y: eff + (mid - eff) * k, ya: mid + s * 2, yb: mid - s * 2 }; }
+  return { width, height, plotW, tx, laneY, L, pos, dw, x0, sc, amp };
+}
+
+function agentPath(a, g) {
+  /* glide from conversation to conversation within a day; at each day's end, return to the agent's lane for that day */
+  const L = g.L[a.id], end = LEFT + g.plotW, dayEnd = d => g.x0[d - 1] + g.dw[d - 1];
+  const segs = [{ x0: LEFT, x1: LEFT, y: L[0] }];
+  const toY = (x, y) => { const prev = segs[segs.length - 1];
+    if (prev.y === y) prev.x1 = Math.max(prev.x1, x); else segs.push({ x0: Math.max(x - 1, prev.x1 + .5), x1: Math.max(x + 1, prev.x1 + 1.5), y }); };
+  let day = 1;
+  for (const c of CONVS) { if (c.a !== a.id && c.b !== a.id) continue;
+    for (; day < c.day; day++) toY(dayEnd(day), L[day - 1]);
+    const lane = L[c.day - 1], h = H * Math.max(.35, g.sc[c.day - 1]), p = g.pos[c.id], yTrue = c.a === a.id ? p.ya : p.yb, prev = segs[segs.length - 1];
+    const k = g.amp[c.day - 1], sq = (yTrue >= lane ? 1 : -1) * SQUIGGLE, y = lane + (yTrue - lane) * k + sq * (1 - k);
+    segs.push({ x0: Math.max(p.x - h, prev.x1 + .5), x1: Math.max(p.x + h, prev.x1 + .5 + 2 * h), y }); }
+  for (; day <= DAYS; day++) toY(day === DAYS ? end + RET : dayEnd(day), L[day - 1]);
+  toY(end + RET, L[DAYS - 1]);
+  let d = `M${segs[0].x0.toFixed(1)} ${segs[0].y} L${segs[0].x1.toFixed(1)} ${segs[0].y}`;
+  for (let i = 1; i < segs.length; i++) { const p = segs[i - 1], q = segs[i], m = ((p.x1 + q.x0) / 2).toFixed(1);
+    d += ` C${m} ${p.y} ${m} ${q.y} ${q.x0.toFixed(1)} ${q.y} L${Math.max(q.x0, q.x1).toFixed(1)} ${q.y}`; }
+  return d;
+}
+
+function render() {
+  G = geometry(); const { width, height, tx, plotW, dw, x0 } = G, svg = $("chart"), p = [];
+  svg.setAttribute("width", width); svg.setAttribute("height", height); svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  const rw = revealT == null ? width : tx(revealT) + 6;
+  p.push(`<defs><clipPath id="reveal"><rect id="revealRect" x="0" y="0" width="${rw}" height="${height}"/></clipPath></defs>`);
+  for (let d = 0; d < DAYS; d++) { const xa = x0[d], w = dw[d], open = d === openDay, wide = w > 230;
+    if (d % 2 === 0) p.push(`<rect class="dayband" x="${xa}" y="0" width="${w}" height="${height}"/>`);
+    if (!open) p.push(`<rect class="dayhit" data-day="${d}" x="${xa}" y="0" width="${w}" height="${height}"><title>expand day ${d + 1}</title></rect>`);
+    if (wide) for (const h of [9, 12, 15]) { const x = tx(d * RUN.dayLen + (h - 9) * 180);
+      if (h > 9) p.push(`<line class="tickln" x1="${x}" x2="${x}" y1="${TOP - 4}" y2="${height - BOTTOM + 4}"/>`);
+      p.push(`<text class="tick" x="${x + (h === 9 ? 8 : 0)}" y="${height - 10}" text-anchor="${h === 9 ? "start" : "middle"}">${h}:00</text>`); }
+    else p.push(`<text class="tick" x="${xa + w / 2}" y="${height - 10}" text-anchor="middle">${dayCounts[d]} talks</text>`);
+    p.push(`<g class="dayhd${open ? " open" : ""}" data-day="${d}" tabindex="${open ? -1 : 0}" role="button" aria-expanded="${open}" aria-label="day ${d + 1}, ${dayCounts[d]} conversations${open ? "" : ", press enter to expand"}">
+      <rect class="dayhdbg" x="${xa + 4}" y="8" width="${Math.max(8, w - 8)}" height="18" rx="9"/>
+      <text class="daylab" x="${wide ? xa + 12 : xa + w / 2}" y="20" text-anchor="${wide ? "start" : "middle"}">day ${d + 1}${wide ? ` · ${dayCounts[d]} talks` : ""}</text></g>`); }
+  BLOCKS.forEach(b => {
+    p.push(`<rect class="blk" x="4" y="${b.top + 2}" width="${LEFT - 12}" height="${b.bot - b.top + 2}" rx="6"/>`);
+    p.push(`<line x1="12" x2="24" y1="${b.top + 10.5}" y2="${b.top + 10.5}" style="stroke:var(--r-${b.k});stroke-width:3;stroke-linecap:round"/><text class="blkh" x="30" y="${b.top + 14}">${esc(b.n)} · ${b.count}</text>`);
+  });
+  p.push(`<g clip-path="url(#reveal)">`);
+  for (const a of ORDER) { const d = agentPath(a, G);
+    p.push(`<g class="agent" data-a="${a.id}"><path class="halo" d="${d}"/><path class="ln" style="stroke:${lineColor(a)}" d="${d}"/><path class="hit" d="${d}"><title>${esc(a.label)} · ${esc(a.team)}</title></path></g>`); }
+  if (tour) p.push(`<clipPath id="tourclip"><rect id="tourRect" x="0" y="0" width="0" height="${height}"/></clipPath><path id="trailPath" class="trail" clip-path="url(#tourclip)" style="stroke:${lineColor(A[tour.id])}" d="${agentPath(A[tour.id], G)}"/>`);
+  for (const c of CONVS) { const q = G.pos[c.id], k = G.amp[c.day - 1], r = 3.5 + 1.5 * k;
+    p.push(`<g class="mk${k < .35 ? " ghost" : ""}" data-c="${c.id}" style="--k:${k.toFixed(3)}"><circle class="v ${c.out}" cx="${q.x.toFixed(1)}" cy="${q.y}" r="${r.toFixed(2)}"/><circle class="h" cx="${q.x.toFixed(1)}" cy="${q.y}" r="8"/></g>`); }
+  p.push(`</g>`);
+  if (tour) p.push(`<g id="tourDot" class="tourdot"><circle class="ring" r="7"/><circle r="3.5" style="fill:${lineColor(A[tour.id])}"/></g>`);
+  for (const a of ORDER) { const y = G.L[a.id][0];
+    p.push(`<g class="lbl" data-agent="${a.id}" tabindex="0" role="button" aria-label="show ${esc(a.label)}'s conversations"><rect class="lblhit" x="8" y="${y - 10}" width="${LEFT - 24}" height="20" rx="4"/><image href="${a.img}" x="11" y="${y - 9}" width="12" height="18" style="image-rendering:pixelated"/><text class="nm" x="28" y="${y + 3.5}">${esc(a.label)}</text></g>`); }
+  const hadFocus = document.activeElement && document.activeElement.closest && document.activeElement.closest(".dayhd");
+  svg.innerHTML = p.join("");
+  svg.classList.toggle("touring", !!tour);
+  if (tour) drawTour();
+  svg.classList.toggle("teamc", colorBy === "team");
+  applyState();
+  if (hadFocus) $("wrap").focus({ preventScroll: true });
+}
+
+function setDay(d, instant) {
+  if (d === openDay && !tween) return;
+  openDay = d; const plotW = G.plotW, from = fr.slice(), to = targetFr(d, plotW);
+  if (tween) cancelAnimationFrame(tween.raf);
+  if (!anyPin()) hideTip();
+  if (instant || reduced()) { tween = null; fr = to; render(); afterLayout(); return; }
+  const t0 = performance.now(), dur = 700;
+  tween = { raf: 0 };
+  const step = now => { const k = ease(Math.min(1, (now - t0) / dur));
+    fr = from.map((f, i) => f + (to[i] - f) * k); render(); relayoutTip();
+    if (k < 1) tween.raf = requestAnimationFrame(step); else { tween = null; afterLayout(); } };
+  tween.raf = requestAnimationFrame(step);
+}
+function afterLayout() { if (pinned) showTip(CONVS.find(c => c.id === pinned)); else if (pinnedAgent != null && agentPanel) showAgentTip(A[pinnedAgent], agentAnchor); }
+
+function visibleConvs() { return CONVS.filter(c => !(hideSmall && c.out === "none") && (!ideaSel || c.idea === ideaSel)); }
+/* in a selected conversation between two same-colored agents, one keeps its color and the other takes the complementary hue */
+function cssColor(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+function complement(hex) {
+  const n = parseInt(hex.replace("#", ""), 16), r = (n >> 16 & 255) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+  let h = 0, s = 0;
+  if (d) { s = l > .5 ? d / (2 - mx - mn) : d / (mx + mn);
+    h = mx === r ? ((g - b) / d + (g < b ? 6 : 0)) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h *= 60; }
+  const dark = document.documentElement.dataset.theme === "dark";
+  return `hsl(${Math.round((h + 180) % 360)} ${Math.round(Math.max(.55, s) * 100)}% ${dark ? 66 : 46}%)`;
+}
+function strokeFor(id) {
+  if (tour && cur >= 0) { const t = CONVS[cur];
+    if ((t.a === tour.id || t.b === tour.id) && id !== tour.id && (id === t.a || id === t.b)) return complement(cssColor(`--r-${A[tour.id].role}`)); }
+  const c = pinned && CONVS.find(x => x.id === pinned);
+  if (c && convKeep != null && (id === c.a || id === c.b) && id !== convKeep && lineColor(A[c.a]) === lineColor(A[c.b])) return complement(cssColor(`--r-${A[convKeep].role}`));
+  return lineColor(A[id]);
+}
+
+function applyState() {
+  const svg = $("chart"), vis = new Set(visibleConvs().map(c => c.id));
+  let ids = focusIds;
+  if (!ids && ideaSel) ids = new Set(IDEA[ideaSel].members);
+  svg.classList.toggle("focus", !!ids);
+  svg.querySelectorAll(".agent").forEach(g => { g.classList.toggle("hl", !!ids && ids.has(+g.dataset.a)); g.querySelector(".ln").style.stroke = strokeFor(+g.dataset.a); g.classList.toggle("tourme", !!tour && tour.id === +g.dataset.a); });
+  svg.querySelectorAll(".lbl").forEach(l => { const id = +l.dataset.agent; l.classList.toggle("on", pinnedAgent === id); l.classList.toggle("hl", !!ids && ids.has(id)); });
+  svg.querySelectorAll(".mk").forEach(m => { const c = CONVS.find(x => x.id === m.dataset.c);
+    const involved = !focusIds || focusIds.has(c.a) || focusIds.has(c.b);
+    m.classList.toggle("fade", !vis.has(c.id)); m.classList.toggle("sel", pinnedAgent != null && (c.a === pinnedAgent || c.b === pinnedAgent)); m.classList.toggle("dim", vis.has(c.id) && !involved); m.classList.toggle("on", cur >= 0 && CONVS[cur].id === c.id); });
+}
+
+function showTip(c) {
+  const tip = $("tip");
+  const who = [c.a, c.b].map(id => `<button type="button" class="whob" data-pin-a="${id}" title="show ${esc(A[id].label)}'s conversations"><span class="sw" style="background:${strokeFor(id)}"></span><img class="face" alt="" src="${A[id].img}"><b>${esc(A[id].label)}</b> <span class="hint">${esc(A[id].short)}</span></button>`).join("");
+  const isPinned = pinned === c.id;
+  tip.classList.toggle("pinned", isPinned);
+  tip.innerHTML = `<div class="tiph"${isPinned ? ` title="drag to move"` : ""}><span class="mono">${isPinned ? `<i class="grip" aria-hidden="true"></i>` : ""}day ${c.day} · ${esc(c.clk)} · ${esc(c.place)}</span>${isPinned ? `<button class="x" type="button" aria-label="close conversation details">×</button>` : ""}</div>
+    <span class="tt">${esc(c.topic)}</span>${c.inferred ? `<span class="inf">topic inferred from their projects</span>` : ""}
+    <span class="oc"><i class="${c.out}" style="background:var(--o-${c.out})"></i>${OUTN[c.out]}</span>
+    <div class="who">${who}</div>
+    <div class="tx">${c.lines.slice(0, isPinned ? 99 : 8).map(l => `<div><b>${esc(A[l.w].name)}</b><span>${c.out === "born" ? esc(l.t).replace(/«[^»]+»/g, m => `<strong class="idea">${m}</strong>`) : esc(l.t)}</span></div>`).join("")}</div>`;
+  tip.hidden = false;
+  placeTip(c);
+}
+const ROLE_N = { student: "student", prof: "professor", ta: "TA" };
+function showAgentTip(a, anchor) {
+  const tip = $("tip"), isPinned = pinnedAgent === a.id, mine = CONVS.filter(c => c.a === a.id || c.b === a.id);
+  const ideas = RUN.ideas.filter(i => i.members.includes(a.id)).length, shown = isPinned ? mine : mine.slice(0, 6);
+  tip.classList.toggle("pinned", isPinned);
+  tip.innerHTML = `<div class="tiph"${isPinned ? ` title="drag to move"` : ""}><span class="mono">${isPinned ? `<i class="grip" aria-hidden="true"></i>` : ""}${esc(ROLE_N[a.role])} · ${esc(a.team.replace(/^staff · (instructor|TA) · /, ""))}</span>${isPinned ? `<button class="x" type="button" aria-label="hide details and keep this agent selected">×</button>` : ""}</div>
+    <span class="who"><span><img class="face" alt="" src="${a.img}"><span class="tt">${esc(a.label)}</span></span></span>
+    <span class="inf">${esc(a.project)}</span>
+    <span class="oc">${mine.length} conversations · ${ideas} ideas</span>
+    ${isPinned && mine.length ? `<div class="tourbar"><button type="button" class="btn" data-tour>${tour && tour.id === a.id ? "■ stop" : "▶ play their path"}</button><span class="tournow mono"></span></div>` : ""}
+    <div class="clist">${shown.map(c => { const o = A[c.a === a.id ? c.b : c.a];
+      return `<${isPinned ? `button type="button" data-pin-c="${c.id}"` : "div"} class="ci"><i style="background:var(--o-${c.out})"></i><span class="mono">d${c.day} ${esc(c.clk)}</span><span><b>${esc(o.label)}</b> · ${esc(c.topic)}</span></${isPinned ? "button" : "div"}>`; }).join("")}
+      ${!isPinned && mine.length > shown.length ? `<span class="inf">+ ${mine.length - shown.length} more · click the line to see all</span>` : ""}</div>`;
+  tip.hidden = false;
+  agentAnchor = anchor;
+  placeAt(...anchorXY(anchor));
+  if (tour && tour.id === a.id) updateTourUI();
+}
+const dayOf = t => Math.min(DAYS - 1, Math.max(0, Math.floor(t / RUN.dayLen)));
+function anchorXY(an) { const y = an.c != null ? G.pos[an.c].y : an.lab != null ? G.L[an.lab][0] : an.a != null ? G.L[an.a][dayOf(an.t)] + an.dy : an.y;
+  return [G.tx(an.t), y]; }
+const labelAnchor = a => ({ t: 0, lab: a.id });
+function tAtX(x) { for (let d = 0; d < DAYS; d++) { if (x <= G.x0[d] + G.dw[d] || d === DAYS - 1) return d * RUN.dayLen + Math.max(0, Math.min(1, (x - G.x0[d]) / G.dw[d])) * RUN.dayLen; } return 0; }
+function svgPoint(e) { const r = $("chart").getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+function placeTip(c) { const q = G.pos[c.id]; placeAt(q.x, q.y); }
+/* once the user drags a pinned panel, keep it where they put it (clamped inside the chart) */
+let tipDragged = false;
+function clampTip(left, top) {
+  const tip = $("tip"), wrap = $("wrap"), tw = tip.offsetWidth, th = tip.offsetHeight, sl = wrap.scrollLeft, vw = wrap.clientWidth;
+  return [Math.max(sl + 4, Math.min(left, sl + vw - tw - 4)), Math.max(4, Math.min(top, G.height - th - 4))];
+}
+function placeAt(x, y) {
+  const tip = $("tip"), wrap = $("wrap");
+  if (tipDragged) { const [l, t] = clampTip(parseFloat(tip.style.left) || 0, parseFloat(tip.style.top) || 0); tip.style.left = l + "px"; tip.style.top = t + "px"; return; }
+  const tw = tip.offsetWidth, th = tip.offsetHeight, vw = wrap.clientWidth, sl = wrap.scrollLeft;
+  let left = x + 14; if (left + tw > sl + vw - 8) left = x - tw - 14; left = Math.max(sl + 8, left);
+  let top = y - th / 2; top = Math.max(8, Math.min(top, G.height - th - 8));
+  tip.style.left = left + "px"; tip.style.top = top + "px";
+}
+function hideTip() { $("tip").hidden = true; }
+const anyPin = () => pinned != null || pinnedAgent != null;
+function relayoutTip() {
+  if (pinned) placeTip(CONVS.find(c => c.id === pinned));
+  else if (pinnedAgent != null && agentPanel && agentAnchor) placeAt(...anchorXY(agentAnchor));
+}
+function pin(c) {
+  stopTour();
+  tipDragged = false;
+  const prevKeep = pinnedAgent != null ? pinnedAgent : convKeep;
+  convKeep = prevKeep != null && (c.a === prevKeep || c.b === prevKeep) ? prevKeep : (G.L[c.a][c.day - 1] <= G.L[c.b][c.day - 1] ? c.a : c.b);
+  pinned = c.id; pinnedAgent = null; cur = CONVS.indexOf(c);
+  focusIds = new Set([c.a, c.b]);
+  applyState(); showTip(c);
+}
+function pinAgent(a, anchor) {
+  if (!tour || tour.id !== a.id) stopTour();
+  tipDragged = false;
+  pinnedAgent = a.id; pinned = null; cur = -1; agentPanel = true;
+  focusIds = new Set([a.id]);
+  applyState(); showAgentTip(a, anchor);
+}
+/* closing an agent's panel keeps the agent selected so its line stays highlighted */
+function closeAgentPanel() { agentPanel = false; hideTip(); $("wrap").focus({ preventScroll: true }); }
+function unpin() {
+  stopTour();
+  tipDragged = false;
+  pinned = null; pinnedAgent = null; agentAnchor = null; agentPanel = false; convKeep = null; hideTip(); cur = -1;
+  focusIds = null;
+  applyState(); $("wrap").focus({ preventScroll: true });
+}
+
+/* ---- play an agent's path: a marker travels along their line and stops at each conversation ---- */
+let tour = null;
+const TRAVEL_MS = [500, 1400], HOLD_MS = 1500, DAY_SWITCH_MS = 760;
+function startTour(a) {
+  stopTour();
+  const list = CONVS.filter(c => c.a === a.id || c.b === a.id); if (!list.length) return;
+  tour = { id: a.id, list, i: -1, t: 0, raf: 0, timer: 0 };
+  cur = -1; focusIds = new Set([a.id]);
+  render(); updateTourUI(); nextStop();
+}
+function stopTour() {
+  if (!tour) return;
+  const T = tour; cancelAnimationFrame(T.raf); clearTimeout(T.timer); tour = null;
+  if (pinnedAgent === T.id) { cur = -1; focusIds = new Set([T.id]); }
+  render(); updateTourUI(T.id);
+}
+function nextStop() {
+  const T = tour; if (!T) return; T.i++;
+  if (T.i >= T.list.length) { cur = -1; focusIds = new Set([T.id]); applyState(); updateTourUI();
+    return travel(DAYS * RUN.dayLen, () => { T.timer = setTimeout(stopTour, 600); }); }
+  const c = T.list[T.i], go = () => { keepClear(c); travel(c.t, () => arrive(c)); };
+  if (c.day - 1 !== openDay) { setDay(c.day - 1); T.timer = setTimeout(go, reduced() ? 0 : DAY_SWITCH_MS); } else go();
+}
+function travel(t1, done) {
+  const T = tour, t0 = T.t, dist = Math.abs(G.tx(t1) - G.tx(t0));
+  const dur = reduced() ? 0 : Math.min(TRAVEL_MS[1], TRAVEL_MS[0] + dist * 1.2), s0 = performance.now();
+  const step = now => { if (tour !== T) return;
+    const k = dur ? ease(Math.min(1, (now - s0) / dur)) : 1; T.t = t0 + (t1 - t0) * k; drawTour();
+    if (k < 1) T.raf = requestAnimationFrame(step); else done(); };
+  T.raf = requestAnimationFrame(step);
+}
+function arrive(c) {
+  const T = tour; cur = CONVS.indexOf(c); focusIds = new Set([c.a, c.b]);
+  applyState(); updateTourUI(); keepClear(c); T.timer = setTimeout(nextStop, HOLD_MS);
+}
+/* during playback, slide the agent panel to the nearest spot that leaves the current conversation uncovered */
+let glideTimer = 0;
+function keepClear(c) {
+  const tip = $("tip"); if (tip.hidden) return;
+  const q = G.pos[c.id], pad = 24, tw = tip.offsetWidth, th = tip.offsetHeight, wrap = $("wrap"), sl = wrap.scrollLeft, vw = wrap.clientWidth;
+  const l0 = parseFloat(tip.style.left) || 0, t0 = parseFloat(tip.style.top) || 0;
+  const covers = ([l, t]) => q.x > l - pad && q.x < l + tw + pad && q.y > t - pad && q.y < t + th + pad;
+  if (!covers([l0, t0])) return;
+  const near = [[q.x + pad + 4, t0], [q.x - tw - pad - 4, t0], [l0, q.y + pad + 4], [l0, q.y - th - pad - 4],
+    [q.x + pad + 4, q.y - th / 2], [q.x - tw - pad - 4, q.y - th / 2]];
+  const corners = [[sl + 4, 4], [sl + vw - tw - 4, 4], [sl + 4, G.height - th - 4], [sl + vw - tw - 4, G.height - th - 4]];
+  const ok = [...near, ...corners].map(([l, t]) => clampTip(l, t)).filter(p => !covers(p));
+  if (!ok.length) return;
+  const [l, t] = ok.sort((a, b) => Math.hypot(a[0] - l0, a[1] - t0) - Math.hypot(b[0] - l0, b[1] - t0))[0];
+  tip.classList.add("gliding"); tip.style.left = l + "px"; tip.style.top = t + "px"; tipDragged = true;
+  clearTimeout(glideTimer); glideTimer = setTimeout(() => tip.classList.remove("gliding"), 450);
+}
+function drawTour() {
+  const path = $("trailPath"), rect = $("tourRect"), dot = $("tourDot"); if (!tour || !path) return;
+  const x = Math.min(G.tx(Math.min(tour.t, DAYS * RUN.dayLen - 1e-6)), LEFT + G.plotW) + (tour.t >= DAYS * RUN.dayLen ? RET : 0);
+  rect.setAttribute("width", x);
+  let lo = 0, hi = path.getTotalLength();
+  for (let n = 0; n < 24; n++) { const m = (lo + hi) / 2; if (path.getPointAtLength(m).x < x) lo = m; else hi = m; }
+  const pt = path.getPointAtLength(hi); dot.setAttribute("transform", `translate(${pt.x.toFixed(1)} ${pt.y.toFixed(1)})`);
+}
+function updateTourUI(stoppedId) {
+  const tip = $("tip"); if (tip.hidden || pinnedAgent == null) return;
+  const btn = tip.querySelector("[data-tour]"), now = tip.querySelector(".tournow"); if (!btn) return;
+  const on = tour && tour.id === pinnedAgent;
+  btn.textContent = on ? "■ stop" : stoppedId === pinnedAgent ? "▶ play again" : "▶ play their path";
+  tip.querySelectorAll(".ci.now").forEach(r => r.classList.remove("now"));
+  if (!on) { now.textContent = ""; return; }
+  const c = tour.list[tour.i];
+  if (!c || tour.i < 0) { now.textContent = tour.i >= tour.list.length ? "end of the run" : "starting…"; return; }
+  now.textContent = `${tour.i + 1} of ${tour.list.length} · with ${A[c.a === tour.id ? c.b : c.a].label}`;
+  const row = tip.querySelector(`[data-pin-c="${c.id}"]`), list = tip.querySelector(".clist");
+  if (row) { row.classList.add("now");
+    if (row.offsetTop < list.scrollTop + list.offsetTop || row.offsetTop + row.offsetHeight > list.scrollTop + list.offsetTop + list.clientHeight)
+      list.scrollTop = row.offsetTop - list.offsetTop - list.clientHeight / 2 + row.offsetHeight / 2; }
+}
+
+/* ---- events ---- */
+const chart = $("chart");
+chart.addEventListener("click", e => { const m = e.target.closest(".mk");
+  if (m && !m.classList.contains("fade")) { const c = CONVS.find(x => x.id === m.dataset.c); pin(c); if (c.day - 1 !== openDay) setDay(c.day - 1); return; }
+  const lb = e.target.closest(".lbl");
+  if (lb) { const a = A[+lb.dataset.agent]; pinAgent(a, labelAnchor(a)); return; }
+  const g = e.target.closest(".agent");
+  if (g && e.target.classList.contains("hit")) { const pt = svgPoint(e); const id = +g.dataset.a, t = tAtX(pt.x); pinAgent(A[id], { t, a: id, dy: pt.y - G.L[id][dayOf(t)] }); return; }
+  const h = e.target.closest("[data-day]"); if (h) { setDay(+h.dataset.day); return; }
+  if (pinnedAgent != null && !agentPanel) unpin(); });
+{ const tip = $("tip"); let drag = null;
+  tip.addEventListener("pointerdown", e => {
+    if (!tip.classList.contains("pinned") || !e.target.closest(".tiph") || e.target.closest(".x")) return;
+    e.preventDefault(); try { tip.setPointerCapture(e.pointerId); } catch (err) {}
+    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, l: parseFloat(tip.style.left) || 0, t: parseFloat(tip.style.top) || 0 };
+    tip.classList.add("dragging"); });
+  tip.addEventListener("pointermove", e => { if (!drag || e.pointerId !== drag.id) return;
+    const [l, t] = clampTip(drag.l + e.clientX - drag.x, drag.t + e.clientY - drag.y);
+    tip.style.left = l + "px"; tip.style.top = t + "px"; tipDragged = true; });
+  const end = e => { if (!drag || e.pointerId !== drag.id) return; drag = null; tip.classList.remove("dragging"); };
+  tip.addEventListener("pointerup", end); tip.addEventListener("pointercancel", end); }
+$("tip").addEventListener("click", e => {
+  if (e.target.closest(".x")) return pinnedAgent != null ? closeAgentPanel() : unpin();
+  if (e.target.closest("[data-tour]")) return tour ? stopTour() : startTour(A[pinnedAgent]);
+  const w = e.target.closest("[data-pin-a]");
+  if (w) { const c = pinned && CONVS.find(x => x.id === pinned), a = A[+w.dataset.pinA];
+    pinAgent(a, c ? { t: c.t, c: c.id } : labelAnchor(a)); return; }
+  const b = e.target.closest("[data-pin-c]");
+  if (b) { const c = CONVS.find(x => x.id === b.dataset.pinC); pin(c); if (c.day - 1 !== openDay) setDay(c.day - 1); }
+});
+chart.addEventListener("mouseover", e => {
+  if (anyPin()) return;
+  const m = e.target.closest(".mk");
+  if (m && !m.classList.contains("fade")) { const c = CONVS.find(x => x.id === m.dataset.c); cur = CONVS.indexOf(c);
+    focusIds = new Set([c.a, c.b]); applyState(); return; }
+  const lb = e.target.closest(".lbl");
+  if (lb) { focusIds = new Set([+lb.dataset.agent]); applyState(); return; }
+  const g = e.target.closest(".agent");
+  if (g && e.target.classList.contains("hit")) { focusIds = new Set([+g.dataset.a]); applyState(); }
+});
+chart.addEventListener("mouseout", e => { if (anyPin()) return;
+  if (e.relatedTarget && chart.contains(e.relatedTarget) && e.relatedTarget.closest(".mk,.hit,.lbl")) return;
+  hideTip(); cur = -1; focusIds = null; applyState(); });
+$("wrap").addEventListener("keydown", e => {
+  if (e.target.closest && e.target.closest(".x,[data-pin-c],[data-pin-a]")) return;
+  const lk = e.target.closest && e.target.closest(".lbl");
+  if (lk && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); const a = A[+lk.dataset.agent]; pinAgent(a, labelAnchor(a)); return; }
+  const hd = e.target.closest && e.target.closest(".dayhd");
+  if (hd && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setDay(+hd.dataset.day); return; }
+  if ((e.key === "Enter" || e.key === " ") && cur >= 0) { e.preventDefault(); pin(CONVS[cur]); return; }
+  if (e.key !== "ArrowRight" && e.key !== "ArrowLeft" && e.key !== "Escape") return; e.preventDefault();
+  if (e.key === "Escape") { if (pinnedAgent != null && agentPanel) closeAgentPanel(); else if (anyPin()) unpin(); else { hideTip(); cur = -1; applyState(); } return; }
+  const vis = visibleConvs(); if (!vis.length) return;
+  const at = cur >= 0 ? vis.findIndex(c => c.id === CONVS[cur].id) : -1;
+  const next = vis[e.key === "ArrowRight" ? Math.min(vis.length - 1, at + 1) : Math.max(0, at < 0 ? vis.length - 1 : at - 1)];
+  const x = G.pos[next.id].x, w = $("wrap"); if (x < w.scrollLeft + 40 || x > w.scrollLeft + w.clientWidth - 40) w.scrollLeft = x - w.clientWidth / 2;
+  if (next.day - 1 !== openDay) setDay(next.day - 1);
+  pin(next);
+});
+
+
+
+let outFilter = null;
+$("outlegend").addEventListener("click", e => { const b = e.target.closest(".ofb"); if (!b) return;
+  outFilter = outFilter === b.dataset.of ? null : b.dataset.of; legend(); $("outlegend").querySelector(`[data-of="${b.dataset.of}"]`).focus(); });
+function legend() {
+  const out = Object.entries(OUTN).filter(([k]) => k !== "ref" || CONVS.some(c => c.out === "ref"))
+    .map(([k, n]) => `<button type="button" class="ofb" data-of="${k}" aria-pressed="${outFilter === k}" title="${outFilter === k ? "show all outcomes" : `highlight ${n} dots`}"><i class="dot ${k}" style="background:var(--o-${k})"></i>${n} · ${CONVS.filter(c => c.out === k).length}</button>`).join("");
+  const lines = colorBy === "role"
+    ? ROLES.map(r => `<span><span class="sw" style="background:var(--r-${r.k})"></span><span class="nmx">${esc(r.n)}</span></span>`).join("")
+    : TEAMS.map((t, i) => `<span><span class="sw" style="background:var(--t${i % 7})"></span>${esc(t)}</span>`).join("");
+  $("outlegend").innerHTML = out;
+  $("outlegend").classList.toggle("filtering", outFilter != null);
+  if (outFilter) $("chart").dataset.of = outFilter; else delete $("chart").dataset.of;
+  $("legend").innerHTML = lines;
+}
+$("stats").innerHTML = [[RUN.agents.length, "agents"], [CONVS.length, "conversations"], [RUN.ideas.length, "ideas born"]].map(([n, l]) => `<span class="stat">${n}<small>${l}</small></span>`).join("");
+
+function setTheme(t) { document.documentElement.dataset.theme = t; if (G) { applyState(); if (pinned) showTip(CONVS.find(c => c.id === pinned)); }
+  document.querySelectorAll("[data-theme-btn]").forEach(b => b.setAttribute("aria-pressed", b.dataset.themeBtn === t));
+  try { localStorage.setItem("sg-theme", t); } catch (e) {} }
+document.querySelectorAll("[data-theme-btn]").forEach(b => b.addEventListener("click", () => setTheme(b.dataset.themeBtn)));
+let saved = "light"; try { saved = localStorage.getItem("sg-theme") || "light"; } catch (e) {}
+setTheme(saved);
+let rz = null; new ResizeObserver(() => { clearTimeout(rz); rz = setTimeout(() => { if (!anyPin()) hideTip(); fr = null; render(); afterLayout(); }, 80); }).observe($("wrap"));
+legend(); render();
+</script>
+</body>
+</html>
