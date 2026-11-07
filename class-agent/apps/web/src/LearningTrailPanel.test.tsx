@@ -60,7 +60,7 @@ describe("LearningTrailPanel", () => {
 
     const row = await screen.findByRole("button", { name: /^Week 3\s*Voice agent/ });
     expect(screen.getByRole("button", { name: /^Week 1\s*First agent/ })).toHaveTextContent(
-      "Agent does not use this",
+      "Not used by the agent",
     );
     expect(screen.getByRole("button", { name: "Add a build for Week 2" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Open the build" })).not.toBeInTheDocument();
@@ -124,19 +124,19 @@ describe("LearningTrailPanel", () => {
     render(<LearningTrailPanel onAsk={onAsk} readOnly={false} />);
 
     const panel = within(await screen.findByRole("complementary", { name: /Voice agent/ }));
-    expect(await panel.findByRole("button", { name: "0.22 Tools, MCPs and Skills" })).toBeVisible();
+    expect(await panel.findByRole("button", { name: "Show Tools, MCPs and Skills" })).toBeVisible();
 
-    fireEvent.click(panel.getByRole("button", { name: /^0\.12\s*Sam's voice bot$/, expanded: false }));
+    fireEvent.click(panel.getByRole("button", { name: /^Sam's voice bot\s*Sam · Week 3$/, expanded: false }));
     expect(panel.getByText("Sam · Week 3")).toBeInTheDocument();
-    expect(panel.getByText("Both mention: latency")).toBeInTheDocument();
-    expect(panel.queryByRole("button", { name: "Ask the agent how these connect" })).toBeNull();
+    expect(panel.getByText("Shared words: latency")).toBeInTheDocument();
+    expect(panel.queryByRole("button", { name: "Ask how they connect" })).toBeNull();
 
-    fireEvent.click(panel.getByRole("button", { name: /^0\.22\s*Tools, MCPs and Skills$/, expanded: false }));
-    fireEvent.click(panel.getByRole("button", { name: "Ask the agent how these connect" }));
+    fireEvent.click(panel.getByRole("button", { name: /^Tools, MCPs and Skills$/, expanded: false }));
+    fireEvent.click(panel.getByRole("button", { name: "Ask how they connect" }));
     expect(onAsk).toHaveBeenLastCalledWith(expect.stringContaining("course://slides/week-02"));
 
-    fireEvent.click(panel.getByRole("button", { name: /^0\.31\s*First agent$/, expanded: false }));
-    fireEvent.click(panel.getByRole("button", { name: "See its connections" }));
+    fireEvent.click(panel.getByRole("button", { name: /^First agent\s*Week 1$/, expanded: false }));
+    fireEvent.click(panel.getByRole("button", { name: "Show its connections" }));
     expect(await screen.findByRole("complementary", { name: /First agent/ })).toBeInTheDocument();
   });
 
@@ -186,7 +186,7 @@ describe("LearningTrailPanel", () => {
     render(<LearningTrailPanel readOnly={false} />);
 
     fireEvent.click(await screen.findByRole("button", { name: /^Week 3\s*Voice agent/ }));
-    fireEvent.click(screen.getByRole("checkbox", { name: /The agent can use this/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Agent can use this/ }));
 
     await waitFor(() =>
       expect(api.updateLearningTrailEntry).toHaveBeenCalledWith(entry().id, {
@@ -283,7 +283,7 @@ describe("LearningTrailPanel", () => {
     fireEvent.click(await screen.findByRole("button", { name: /^Week 3\s*Voice agent/ }));
     expect(screen.getByText(/TA · Sam · Pasted by you/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Add feedback you received" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add feedback" }));
     fireEvent.change(screen.getByLabelText("Feedback, pasted from the email"), {
       target: { value: "Good work." },
     });

@@ -150,7 +150,7 @@ Not included yet:
 Known limits:
 
 - Connections compare words with TF-IDF cosine similarity in pure Python, so they need no model or
-  embedding provider. Two builds about the same idea in different words score low, and a score says
+  embedding provider. Two builds about the same idea in different words rank low, and the order says
   how much the wording overlaps, not how related the ideas are. Chinese is compared by character
   pairs. Embeddings would do better and would add a provider and a cost.
 - On a narrow screen the connections panel sits below the list of weeks.
@@ -203,7 +203,7 @@ One interaction in which saved information changes a later reply:
 3. As a TA, open **Student builds**, select the student, and write feedback on that entry.
 4. Back as the student, start a new conversation and ask the same question. The reply should name the
    earlier build and the TA's feedback, and say where each came from.
-5. Untick **The agent can use this** on that build and ask again. The reply should stop relying on it.
+5. Untick **Agent can use this** on that build and ask again. The reply should stop relying on it.
 
 To see connections, save two or more builds and open **My builds**. Select a build, then expand a row
 in the list. A second student who ticks **Classmates can see this** on a build appears on the map as

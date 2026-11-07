@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 
 import { Button } from "./Button.js";
 import { TextInput } from "./TextInput.js";
@@ -366,6 +366,7 @@ function EntryDetails({
   entry,
   onAddFeedback,
   onAsk,
+  onCollapse,
   onDelete,
   onDeleteFeedback,
   onEdit,
@@ -375,6 +376,7 @@ function EntryDetails({
   readOnly,
 }: {
   entry: LearningTrailEntry;
+  onCollapse: () => void;
   readOnly: boolean;
 } & Pick<
   LearningTrailProps,
@@ -449,7 +451,10 @@ function EntryDetails({
       {readOnly || mode === "feedback" ? null : (
         <>
           <div className="ca-trail-toggles">
-            <label className="ca-trail-toggle">
+            <label
+              className="ca-trail-toggle"
+              title="Turn off to keep the note here without it affecting the agent's help."
+            >
               <input
                 checked={entry.still_relevant}
                 onChange={(event) => {
@@ -458,12 +463,12 @@ function EntryDetails({
                 }}
                 type="checkbox"
               />
-              <span>
-                The agent can use this
-                <small>Turn off to keep the note here without it affecting the agent&rsquo;s help.</small>
-              </span>
+              Agent can use this
             </label>
-            <label className="ca-trail-toggle">
+            <label
+              className="ca-trail-toggle"
+              title="A TA or instructor can read it and comment."
+            >
               <input
                 checked={entry.shared_with_staff}
                 onChange={(event) => {
@@ -472,12 +477,12 @@ function EntryDetails({
                 }}
                 type="checkbox"
               />
-              <span>
-                TAs can see this
-                <small>Turn on if you want a TA or instructor to read it and comment.</small>
-              </span>
+              TAs can see this
             </label>
-            <label className="ca-trail-toggle">
+            <label
+              className="ca-trail-toggle"
+              title="Classmates see your name, title, link, and a short excerpt. Feedback stays private."
+            >
               <input
                 checked={entry.shared_with_class}
                 onChange={(event) => {
@@ -486,13 +491,7 @@ function EntryDetails({
                 }}
                 type="checkbox"
               />
-              <span>
-                Classmates can see this
-                <small>
-                  Shows your name, title, link, and a short excerpt in their connections. Feedback
-                  stays private.
-                </small>
-              </span>
+              Classmates can see this
             </label>
           </div>
           <div className="ca-trail-actions">
@@ -502,7 +501,7 @@ function EntryDetails({
               </Button>
             ) : null}
             <Button className="ca-trail-action" onClick={() => setMode("feedback")}>
-              Add feedback you received
+              Add feedback
             </Button>
             <Button className="ca-trail-action" onClick={() => setMode("edit")}>
               Edit
@@ -528,46 +527,57 @@ function EntryDetails({
           </div>
         </>
       )}
+      <div className="ca-trail-actions ca-trail-entry-end">
+        <Button
+          className="ca-trail-action ca-trail-jump"
+          onClick={() =>
+            document
+              .getElementById("ca-trail-connections")
+              ?.scrollIntoView?.({ behavior: "smooth", block: "start" })
+          }
+        >
+          See connections
+        </Button>
+        <Button className="ca-trail-action" onClick={onCollapse}>
+          Collapse
+        </Button>
+      </div>
     </div>
   );
 }
 
-function entryStatus(entry: LearningTrailEntry): string {
+/** Rows show only what departs from the usual, so a plain row means "the agent uses it". */
+function entryStatus(entry: LearningTrailEntry): string | null {
   const feedback = entry.feedback.length;
-  return [
-    entry.still_relevant ? "Agent uses this" : "Agent does not use this",
-    entry.shared_with_class
-      ? "Classmates can see"
-      : entry.shared_with_staff
-        ? "TAs can see"
-        : "Only you",
+  const notes = [
+    ...(entry.still_relevant ? [] : ["Not used by the agent"]),
     ...(feedback > 0 ? [`${feedback} feedback`] : []),
-  ].join(" · ");
+  ];
+  return notes.length > 0 ? notes.join(" · ") : null;
 }
 
-const CONNECTION_KIND_LABELS = {
-  build: "Your build",
-  class: "Class material",
-  classmate: "Classmate",
-} as const;
+const CONNECTION_GROUPS = [
+  { kind: "build", label: "Your builds" },
+  { kind: "class", label: "Class slides and readings" },
+  { kind: "classmate", label: "Classmates" },
+] as const;
 
 const MAP_NODE_LIMIT = 12;
 
 /** Stronger connections sit closer to the centre. Angles spread by the golden angle. */
 function mapPosition(index: number, score: number, lowest: number, highest: number) {
   const strength = highest > lowest ? (score - lowest) / (highest - lowest) : 1;
-  const radius = 44 - 24 * strength;
+  const radius = 42 - 24 * strength;
   const angle = ((index * 137.508 - 90) * Math.PI) / 180;
   return { left: 50 + radius * Math.cos(angle), top: 50 + radius * 0.86 * Math.sin(angle) };
 }
 
-function connectionPlace(connection: LearningTrailConnection): string {
+function connectionPlace(connection: LearningTrailConnection): string | null {
   const week = connection.week ? `Week ${connection.week}` : null;
   if (connection.kind === "classmate") {
-    return [connection.owner_name, week].filter(Boolean).join(" · ");
+    return [connection.owner_name, week].filter(Boolean).join(" · ") || null;
   }
-  if (connection.kind === "build") return `Your ${week ?? "build"}`;
-  return CONNECTION_KIND_LABELS.class;
+  return connection.kind === "build" ? week : null;
 }
 
 function ConnectionMap({
@@ -590,6 +600,7 @@ function ConnectionMap({
     ...mapPosition(index, connection.score, lowest, highest),
   }));
   const highlighted = shown.find(({ target_id }) => target_id === highlightedId);
+  const place = highlighted ? connectionPlace(highlighted) : null;
 
   return (
     <div className="ca-trail-map" onMouseLeave={() => onHighlight(undefined)}>
@@ -609,7 +620,7 @@ function ConnectionMap({
       <span aria-hidden="true" className="ca-trail-map-center" />
       {nodes.map(({ connection, left, top }) => (
         <button
-          aria-label={`${connection.score.toFixed(2)} ${connection.title}`}
+          aria-label={`Show ${connection.title}`}
           className="ca-trail-map-node"
           data-active={connection.target_id === highlightedId}
           data-kind={connection.kind}
@@ -620,12 +631,11 @@ function ConnectionMap({
           style={{ left: `${left}%`, top: `${top}%` }}
           type="button"
         >
-          <span className="ca-trail-map-score">{connection.score.toFixed(2)}</span>
           <span aria-hidden="true" className="ca-trail-map-mark" />
         </button>
       ))}
-      <p className="ca-trail-map-caption">
-        {highlighted ? `${connectionPlace(highlighted)}: ${highlighted.title}` : " "}
+      <p aria-hidden="true" className="ca-trail-map-caption">
+        {highlighted ? [place, highlighted.title].filter(Boolean).join(" · ") : " "}
       </p>
     </div>
   );
@@ -644,117 +654,170 @@ function ConnectionsPanel({
 }) {
   const [openId, setOpenId] = useState<string | undefined>();
   const [highlightedId, setHighlightedId] = useState<string | undefined>();
+  const [mapShown, setMapShown] = useState(true);
+  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setOpenId(undefined);
     setHighlightedId(undefined);
   }, [entry.id]);
 
+  useEffect(() => {
+    if (openId === undefined) return;
+    const row = listRef.current?.querySelector(`[data-connection-id="${CSS.escape(openId)}"]`);
+    row?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+  }, [openId]);
+
+  const hasConnections = connections !== undefined && connections.length > 0;
+
   return (
-    <aside aria-label={`Connections for ${entry.build_title}`} className="ca-trail-connections">
+    <aside
+      aria-label={`Connections for ${entry.build_title}`}
+      className="ca-trail-connections"
+      id="ca-trail-connections"
+    >
       <header className="ca-trail-connections-header">
-        <p className="ca-trail-kicker">Connected to Week {entry.week}</p>
-        <h3>{entry.build_title}</h3>
+        <h3>Week {entry.week} connects to</h3>
+        {hasConnections ? (
+          <Button
+            aria-expanded={mapShown}
+            className="ca-trail-action"
+            onClick={() => setMapShown(!mapShown)}
+          >
+            {mapShown ? "Hide map" : "Show map"}
+          </Button>
+        ) : null}
       </header>
       {connections === undefined ? (
         <p className="ca-trail-note">Finding connections…</p>
       ) : connections.length === 0 ? (
         <p className="ca-trail-note">
-          Nothing connects yet. Connections come from the words in your notes, so longer notes find
-          more.
+          Nothing yet. Connections come from the words in your notes, so longer notes find more.
         </p>
       ) : (
         <>
-          <ConnectionMap
-            connections={connections}
-            highlightedId={highlightedId}
-            onHighlight={setHighlightedId}
-            onOpen={(connection) => {
-              setOpenId(connection.target_id);
-              setHighlightedId(connection.target_id);
-            }}
-          />
-          <p aria-hidden="true" className="ca-trail-legend">
-            <span data-kind="build">Your builds</span>
-            <span data-kind="class">Class</span>
-            <span data-kind="classmate">Classmates</span>
-          </p>
-          <ol className="ca-trail-connection-list">
-            {connections.map((connection) => {
-              const isOpen = openId === connection.target_id;
+          {mapShown ? (
+            <ConnectionMap
+              connections={connections}
+              highlightedId={highlightedId}
+              onHighlight={setHighlightedId}
+              onOpen={(connection) => {
+                setOpenId(connection.target_id);
+                setHighlightedId(connection.target_id);
+              }}
+            />
+          ) : null}
+          <div className="ca-trail-connection-groups" ref={listRef}>
+            {CONNECTION_GROUPS.map(({ kind, label }) => {
+              const items = connections.filter((connection) => connection.kind === kind);
+              if (items.length === 0) return null;
               return (
-                <li
-                  data-active={highlightedId === connection.target_id}
-                  key={connection.target_id}
-                  onMouseEnter={() => setHighlightedId(connection.target_id)}
-                >
-                  <button
-                    aria-expanded={isOpen}
-                    className="ca-trail-connection-row"
-                    onClick={() => setOpenId(isOpen ? undefined : connection.target_id)}
-                    type="button"
-                  >
-                    <span aria-hidden="true" className="ca-trail-chevron" data-open={isOpen} />
-                    <span className="ca-trail-score">{connection.score.toFixed(2)}</span>
-                    <span className="ca-trail-connection-title">{connection.title}</span>
-                  </button>
-                  {isOpen ? (
-                    <div className="ca-trail-connection-details">
-                      <p className="ca-trail-kicker">{connectionPlace(connection)}</p>
-                      <p className="ca-trail-excerpt-full">{connection.excerpt}</p>
-                      {connection.shared_terms.length > 0 ? (
-                        <p className="ca-trail-status">
-                          Both mention: {connection.shared_terms.join(", ")}
-                        </p>
-                      ) : null}
-                      <div className="ca-trail-actions">
-                        {connection.url ? (
-                          <a
-                            className="ca-trail-link"
-                            href={connection.url}
-                            rel="noreferrer"
-                            target="_blank"
-                          >
-                            Open the build
-                          </a>
-                        ) : null}
-                        {connection.kind === "build" ? (
-                          <Button
-                            className="ca-trail-action"
-                            onClick={() => onSelectBuild(connection.target_id)}
-                          >
-                            See its connections
-                          </Button>
-                        ) : null}
-                        {connection.kind === "class" && onAsk ? (
-                          <Button
-                            className="ca-trail-action"
-                            onClick={() => onAsk(`Open ${connection.target_id} for me.`)}
-                          >
-                            Open in chat
-                          </Button>
-                        ) : null}
-                        {connection.kind !== "classmate" && onAsk ? (
-                          <Button
-                            className="ca-trail-action"
-                            onClick={() => onAsk(connectionQuestion(entry, connection))}
-                          >
-                            Ask the agent how these connect
-                          </Button>
-                        ) : null}
-                      </div>
-                    </div>
-                  ) : null}
-                </li>
+                <section aria-label={label} className="ca-trail-connection-group" key={kind}>
+                  <h4 data-kind={kind}>{label}</h4>
+                  <ol className="ca-trail-connection-list">
+                    {items.map((connection) => (
+                      <ConnectionRow
+                        connection={connection}
+                        entry={entry}
+                        highlighted={highlightedId === connection.target_id}
+                        isOpen={openId === connection.target_id}
+                        key={connection.target_id}
+                        onAsk={onAsk}
+                        onHighlight={setHighlightedId}
+                        onSelectBuild={onSelectBuild}
+                        onToggle={() =>
+                          setOpenId(openId === connection.target_id ? undefined : connection.target_id)
+                        }
+                      />
+                    ))}
+                  </ol>
+                </section>
               );
             })}
-          </ol>
-          <p className="ca-trail-status">
-            Scores measure how much the wording overlaps, from 0 to 1. They do not judge the work.
-          </p>
+          </div>
         </>
       )}
     </aside>
+  );
+}
+
+function ConnectionRow({
+  connection,
+  entry,
+  highlighted,
+  isOpen,
+  onAsk,
+  onHighlight,
+  onSelectBuild,
+  onToggle,
+}: {
+  connection: LearningTrailConnection;
+  entry: LearningTrailEntry;
+  highlighted: boolean;
+  isOpen: boolean;
+  onAsk: ((message: string) => void) | undefined;
+  onHighlight: (id: string | undefined) => void;
+  onSelectBuild: (entryId: string) => void;
+  onToggle: () => void;
+}) {
+  const place = connectionPlace(connection);
+  return (
+    <li
+      data-active={highlighted}
+      data-connection-id={connection.target_id}
+      data-open={isOpen}
+      onMouseEnter={() => onHighlight(connection.target_id)}
+    >
+      <button
+        aria-expanded={isOpen}
+        className="ca-trail-connection-row"
+        onClick={onToggle}
+        type="button"
+      >
+        <span className="ca-trail-connection-title">{connection.title}</span>
+        {place ? <span className="ca-trail-connection-place">{place}</span> : null}
+        <span aria-hidden="true" className="ca-trail-chevron" data-open={isOpen} />
+      </button>
+      {isOpen ? (
+        <div className="ca-trail-connection-details">
+          <p className="ca-trail-excerpt-full">{connection.excerpt}</p>
+          {connection.shared_terms.length > 0 ? (
+            <p className="ca-trail-status">Shared words: {connection.shared_terms.join(", ")}</p>
+          ) : null}
+          <div className="ca-trail-actions">
+            {connection.url ? (
+              <a className="ca-trail-link" href={connection.url} rel="noreferrer" target="_blank">
+                Open the build
+              </a>
+            ) : null}
+            {connection.kind === "build" ? (
+              <Button
+                className="ca-trail-action"
+                onClick={() => onSelectBuild(connection.target_id)}
+              >
+                Show its connections
+              </Button>
+            ) : null}
+            {connection.kind === "class" && onAsk ? (
+              <Button
+                className="ca-trail-action"
+                onClick={() => onAsk(`Open ${connection.target_id} for me.`)}
+              >
+                Open in chat
+              </Button>
+            ) : null}
+            {connection.kind !== "classmate" && onAsk ? (
+              <Button
+                className="ca-trail-action"
+                onClick={() => onAsk(connectionQuestion(entry, connection))}
+              >
+                Ask how they connect
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </li>
   );
 }
 
@@ -781,6 +844,7 @@ export function LearningTrail({
   const [composingWeek, setComposingWeek] = useState<number | null>(null);
   const [openEntryId, setOpenEntryId] = useState<string | undefined>(focusEntryId);
   const [selectedEntryId, setSelectedEntryId] = useState<string | undefined>(focusEntryId);
+  const weeksRef = useRef<HTMLOListElement>(null);
 
   useEffect(() => {
     // Follow the agent when it points at another entry; a later save must not move the reader.
@@ -789,6 +853,13 @@ export function LearningTrail({
       setSelectedEntryId(focusEntryId);
     }
   }, [focusEntryId]);
+
+  useEffect(() => {
+    // Opening a build closes the one before it, so bring the new one into view.
+    if (openEntryId === undefined) return;
+    const row = weeksRef.current?.querySelector(`[data-entry-id="${CSS.escape(openEntryId)}"]`);
+    row?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+  }, [openEntryId]);
 
   const latestWeek = entries.reduce((latest, entry) => Math.max(latest, entry.week), 0);
   const savedWeeks = new Set(entries.map((entry) => entry.week));
@@ -810,34 +881,28 @@ export function LearningTrail({
   return (
     <section aria-label="Learning trail" className="ca-learning-trail">
       <header className="ca-trail-header">
-        <p className="ca-trail-kicker">Learning trail</p>
         <h2>My builds</h2>
-        <p className="ca-trail-note">
-          Your notes on each weekly build, and how they connect to each other, to the class, and to
-          classmates who share theirs. The Course Agent reads your notes when it helps you. Only
-          you can change them.
-        </p>
-      </header>
-      {readOnly ? null : (
-        <div className="ca-trail-actions">
-          <Button
-            className="ca-trail-action"
-            onClick={() => setComposingWeek(latestWeek + 1)}
-            variant={entries.length === 0 ? "outline" : "plain"}
-          >
-            Add a build
-          </Button>
-          {onAsk && entries.length > 0 ? (
+        {readOnly ? null : (
+          <div className="ca-trail-actions">
             <Button
               className="ca-trail-action"
-              onClick={() => onAsk(NEXT_BUILD_QUESTION)}
-              variant="outline"
+              onClick={() => setComposingWeek(latestWeek + 1)}
+              variant={entries.length === 0 ? "outline" : "plain"}
             >
-              Ask the agent about my next build
+              Add a build
             </Button>
-          ) : null}
-        </div>
-      )}
+            {onAsk && entries.length > 0 ? (
+              <Button
+                className="ca-trail-action"
+                onClick={() => onAsk(NEXT_BUILD_QUESTION)}
+                variant="outline"
+              >
+                Ask the agent about my next build
+              </Button>
+            ) : null}
+          </div>
+        )}
+      </header>
       {composingWeek !== null ? (
         <EntryForm
           initialWeek={composingWeek}
@@ -851,76 +916,81 @@ export function LearningTrail({
       ) : null}
       {rows.length > 0 ? (
         <div className="ca-trail-columns">
-          <ol className="ca-trail-weeks">
-            {rows.map(({ week, entry }) =>
-              entry === undefined ? (
-                <li data-state="empty" key={`week-${week}`}>
-                  <div className="ca-trail-row ca-trail-row--empty">
-                    <span className="ca-trail-kicker">Week {week}</span>
-                    <span className="ca-trail-row-body">
-                      <span>Nothing saved</span>
-                      {readOnly ? null : (
-                        <Button
-                          aria-label={`Add a build for Week ${week}`}
-                          className="ca-trail-action"
-                          onClick={() => setComposingWeek(week)}
-                        >
-                          Add
-                        </Button>
-                      )}
-                    </span>
-                  </div>
-                </li>
-              ) : (
-                <li
-                  data-selected={entry.id === selectedEntry?.id}
-                  data-state={entry.still_relevant ? "used" : "unused"}
-                  key={entry.id}
-                >
-                  <button
-                    aria-expanded={openEntryId === entry.id}
-                    className="ca-trail-row"
-                    onClick={() => toggleRow(entry.id)}
-                    type="button"
+          <div className="ca-trail-column">
+            <ol className="ca-trail-weeks" ref={weeksRef}>
+              {rows.map(({ week, entry }) => {
+                if (entry === undefined) {
+                  return (
+                    <li data-state="empty" key={`week-${week}`}>
+                      <div className="ca-trail-row ca-trail-row--empty">
+                        <span className="ca-trail-row-week">Week {week}</span>
+                        {readOnly ? (
+                          <span className="ca-trail-row-body">Nothing saved</span>
+                        ) : (
+                          <Button
+                            aria-label={`Add a build for Week ${week}`}
+                            className="ca-trail-action ca-trail-row-body"
+                            onClick={() => setComposingWeek(week)}
+                          >
+                            Add a build
+                          </Button>
+                        )}
+                      </div>
+                    </li>
+                  );
+                }
+                const isOpen = openEntryId === entry.id;
+                const status = entryStatus(entry);
+                return (
+                  <li
+                    data-entry-id={entry.id}
+                    data-open={isOpen}
+                    data-selected={entry.id === selectedEntry?.id}
+                    data-state={entry.still_relevant ? "used" : "unused"}
+                    key={entry.id}
                   >
-                    <span className="ca-trail-kicker">Week {entry.week}</span>
-                    <span className="ca-trail-row-body">
-                      <span className="ca-trail-row-title">
-                        <span
-                          aria-hidden="true"
-                          className="ca-trail-chevron"
-                          data-open={openEntryId === entry.id}
-                        />
-                        {entry.build_title}
+                    <button
+                      aria-expanded={isOpen}
+                      className="ca-trail-row"
+                      onClick={() => toggleRow(entry.id)}
+                      type="button"
+                    >
+                      <span className="ca-trail-row-week">Week {entry.week}</span>
+                      <span className="ca-trail-row-body">
+                        <span className="ca-trail-row-title">{entry.build_title}</span>
+                        {isOpen ? null : (
+                          <span className="ca-trail-excerpt">{entry.reflection}</span>
+                        )}
+                        {status ? <span className="ca-trail-status">{status}</span> : null}
                       </span>
-                      {openEntryId === entry.id ? null : (
-                        <span className="ca-trail-excerpt">{entry.reflection}</span>
-                      )}
-                      <span className="ca-trail-status">{entryStatus(entry)}</span>
-                    </span>
-                  </button>
-                  {openEntryId === entry.id ? (
-                    <EntryDetails
-                      entry={entry}
-                      onAsk={onAsk}
-                      readOnly={readOnly}
-                      {...entryActions}
-                    />
-                  ) : null}
-                </li>
-              ),
-            )}
-          </ol>
+                      <span aria-hidden="true" className="ca-trail-chevron" data-open={isOpen} />
+                    </button>
+                    {isOpen ? (
+                      <EntryDetails
+                        entry={entry}
+                        onAsk={onAsk}
+                        onCollapse={() => setOpenEntryId(undefined)}
+                        readOnly={readOnly}
+                        {...entryActions}
+                      />
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
           {selectedEntry ? (
-            <ConnectionsPanel
-              connections={connections?.[selectedEntry.id]}
-              entry={selectedEntry}
-              onAsk={onAsk}
-              onSelectBuild={(entryId) => {
-                setSelectedEntryId(entryId);
-                setOpenEntryId(entryId);
-              }}
-            />
+            <div className="ca-trail-column">
+              <ConnectionsPanel
+                connections={connections?.[selectedEntry.id]}
+                entry={selectedEntry}
+                onAsk={onAsk}
+                onSelectBuild={(entryId) => {
+                  setSelectedEntryId(entryId);
+                  setOpenEntryId(entryId);
+                }}
+              />
+            </div>
           ) : null}
         </div>
       ) : composingWeek !== null ? null : (

@@ -2769,8 +2769,9 @@ textarea {
 
 .trail-dialog .ca-learning-trail {
   flex: 1;
+  gap: var(--space-6);
   height: auto;
-  padding-top: 0.5rem;
+  padding-top: var(--space-2);
 }
 
 .course-agent[data-log-chat="true"] .response-stage {
