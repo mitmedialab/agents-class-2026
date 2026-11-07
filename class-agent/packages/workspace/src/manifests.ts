@@ -610,7 +610,7 @@ export const LEARNING_TRAIL_MANIFEST: ComponentManifest = {
   version: "1.0.0",
   title: "Learning Trail",
   description:
-    "Lets a logged-in student read, write, and manage their own weekly build reflections and attached feedback. The panel loads the data itself; never pass reflection text in props.",
+    "Lets a logged-in student read, write, and manage their own weekly build reflections and feedback, and lets TAs and instructors read entries students shared and write feedback. The panel loads the data itself; never pass reflection text in props.",
   propsSchema: {
     type: "object",
     properties: {

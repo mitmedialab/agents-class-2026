@@ -1,6 +1,8 @@
 """A student's own weekly build reflections and the feedback attached to them."""
 
 from .models import (
+    SharedTrailSummary,
+    StaffFeedbackDraft,
     TrailEntry,
     TrailEntryDraft,
     TrailEntryPatch,
@@ -20,6 +22,8 @@ __all__ = [
     "LEARNING_TRAIL_MEMORY_KIND",
     "FileTrailStore",
     "LearningTrailService",
+    "SharedTrailSummary",
+    "StaffFeedbackDraft",
     "TrailAccessDenied",
     "TrailEntry",
     "TrailEntryDraft",

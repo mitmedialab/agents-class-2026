@@ -150,7 +150,7 @@ const INSTRUCTOR_CONTACT_PROMPT = {
 };
 const LEARNING_TRAIL_PROMPT = {
   label: "Trail",
-  message: "Open my learning trail.",
+  message: "Open the learning trail.",
 };
 const EMPTY_NOTIFICATION_CENTER: NotificationCenterData = {
   generated_at: "1970-01-01T00:00:00Z",
@@ -1997,7 +1997,8 @@ export default function App() {
     ...HEADER_PROMPTS.map((prompt) =>
       prompt.label === "Apply" && contactPrompt ? contactPrompt : prompt,
     ),
-    ...(principal?.authenticated && principal.roles.includes("student")
+    ...(principal?.authenticated &&
+    principal.roles.some((role) => role === "student" || role === "ta" || role === "instructor")
       ? [LEARNING_TRAIL_PROMPT]
       : []),
   ];

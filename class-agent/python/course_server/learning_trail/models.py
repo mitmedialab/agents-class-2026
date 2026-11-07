@@ -20,7 +20,7 @@ MAX_FEEDBACK_PER_ENTRY = 16
 MAX_WEEK = 20
 
 FeedbackRole = Literal["instructor", "ta"]
-FeedbackSource = Literal["pasted_by_student"]
+FeedbackSource = Literal["pasted_by_student", "staff"]
 
 
 def _require_https(value: str) -> str:
@@ -53,8 +53,9 @@ class TrailModel(BaseModel):
 class TrailFeedback(TrailModel):
     """Staff feedback attached to an entry.
 
-    `source` records provenance for the agent and the reader: the text was pasted by the
-    student from an email, so the platform has not verified that staff wrote it.
+    `source` records provenance for the agent and the reader. `staff` means a logged-in TA or
+    instructor wrote it here. `pasted_by_student` means the student copied it from an email, so
+    the platform has not verified that staff wrote it.
     """
 
     id: UUID
@@ -62,7 +63,7 @@ class TrailFeedback(TrailModel):
     from_name: PersonName | None = None
     body: FeedbackBody
     received_at: AwareDatetime | None = None
-    source: FeedbackSource = "pasted_by_student"
+    source: FeedbackSource
     added_at: AwareDatetime
 
 
@@ -75,6 +76,7 @@ class TrailEntry(TrailModel):
     build_url: BuildUrl | None = None
     reflection: Reflection
     still_relevant: bool = True
+    shared_with_staff: bool = False
     feedback: list[TrailFeedback] = Field(default_factory=list, max_length=MAX_FEEDBACK_PER_ENTRY)
     created_at: AwareDatetime
     updated_at: AwareDatetime
@@ -85,6 +87,7 @@ class TrailEntryDraft(TrailModel):
     build_title: BuildTitle
     build_url: BuildUrl | None = None
     reflection: Reflection
+    shared_with_staff: bool = False
 
 
 class TrailEntryPatch(TrailModel):
@@ -95,6 +98,7 @@ class TrailEntryPatch(TrailModel):
     build_url: BuildUrl | None = None
     reflection: Reflection | None = None
     still_relevant: bool | None = None
+    shared_with_staff: bool | None = None
 
     @model_validator(mode="after")
     def validate_patch(self) -> Self:
@@ -112,6 +116,21 @@ class TrailFeedbackDraft(TrailModel):
     from_name: PersonName | None = None
     body: FeedbackBody
     received_at: AwareDatetime | None = None
+
+
+class StaffFeedbackDraft(TrailModel):
+    """The author and role come from the staff member's session, never from the request."""
+
+    body: FeedbackBody
+
+
+class SharedTrailSummary(TrailModel):
+    """What staff see in the list of students who have shared at least one entry."""
+
+    student_id: UUID
+    student_name: str
+    shared_entries: int
+    latest_week: int
 
 
 class TrailDocument(TrailModel):

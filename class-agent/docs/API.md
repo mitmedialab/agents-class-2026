@@ -22,6 +22,10 @@ PATCH  /api/v1/learning-trail/entries/{entry_id}
 DELETE /api/v1/learning-trail/entries/{entry_id}
 POST   /api/v1/learning-trail/entries/{entry_id}/feedback
 DELETE /api/v1/learning-trail/entries/{entry_id}/feedback/{feedback_id}
+GET    /api/v1/learning-trail/students
+GET    /api/v1/learning-trail/students/{student_id}/entries
+POST   /api/v1/learning-trail/students/{student_id}/entries/{entry_id}/feedback
+DELETE /api/v1/learning-trail/students/{student_id}/entries/{entry_id}/feedback/{feedback_id}
 
 GET  /api/v1/notification-center
 POST /api/v1/notification-center/{item_id}/read

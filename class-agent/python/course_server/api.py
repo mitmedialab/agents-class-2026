@@ -66,6 +66,7 @@ from course_server.application_roster import initialize_student_application_acce
 from course_server.assignments import FileAssignmentStore
 from course_server.auth import (
     AuthenticationService,
+    AuthStore,
     InvalidCredentials,
     InvalidSession,
     LoginRateLimited,
@@ -426,6 +427,11 @@ async def _consume_anonymous_upload_quota(
             detail=f"anonymous {error.metric.replace('_', ' ')} limit reached; sign in to continue",
             headers={"Retry-After": "604800"},
         ) from error
+
+
+async def _display_name(auth: AuthStore, user_id: UUID) -> str | None:
+    user = await auth.get_user_by_id(user_id)
+    return None if user is None else user.display_name
 
 
 def _delete_cookie(response: Response, name: str) -> None:
@@ -886,7 +892,8 @@ def create_app(
         )
         assignment_store = FileAssignmentStore(resolved_settings.assignment_data_path)
         learning_trail = LearningTrailService(
-            FileTrailStore(resolved_settings.learning_trail_data_path)
+            FileTrailStore(resolved_settings.learning_trail_data_path),
+            student_name=lambda user_id: _display_name(auth_store, user_id),
         )
         instructor_message_store = PostgresInstructorMessageStore(pool)
         instructor_message_service = InstructorMessageService(

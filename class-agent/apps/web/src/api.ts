@@ -3,6 +3,7 @@ import type {
   LearningTrailEntry,
   LearningTrailEntryDraft,
   LearningTrailFeedbackDraft,
+  LearningTrailStudent,
 } from "@class-agent/ui";
 import type { JsonValue } from "@class-agent/workspace";
 import {
@@ -409,6 +410,46 @@ export function deleteLearningTrailFeedback(
 ): Promise<LearningTrailEntry> {
   return requestJson<LearningTrailEntry>(
     `/learning-trail/entries/${encodeURIComponent(entryId)}/feedback/${encodeURIComponent(feedbackId)}`,
+    { method: "DELETE" },
+  );
+}
+
+export async function listLearningTrailStudents(): Promise<LearningTrailStudent[]> {
+  const { students } = await requestJson<{ students: LearningTrailStudent[] }>(
+    "/learning-trail/students",
+  );
+  return students;
+}
+
+export async function listSharedLearningTrail(studentId: Uuid): Promise<LearningTrailEntry[]> {
+  const { entries } = await requestJson<{ entries: LearningTrailEntry[] }>(
+    `/learning-trail/students/${encodeURIComponent(studentId)}/entries`,
+  );
+  return entries;
+}
+
+function sharedFeedbackPath(studentId: Uuid, entryId: Uuid): string {
+  return `/learning-trail/students/${encodeURIComponent(studentId)}/entries/${encodeURIComponent(entryId)}/feedback`;
+}
+
+export function addStaffLearningTrailFeedback(
+  studentId: Uuid,
+  entryId: Uuid,
+  body: string,
+): Promise<LearningTrailEntry> {
+  return requestJson<LearningTrailEntry>(sharedFeedbackPath(studentId, entryId), {
+    method: "POST",
+    body: JSON.stringify({ body }),
+  });
+}
+
+export function deleteStaffLearningTrailFeedback(
+  studentId: Uuid,
+  entryId: Uuid,
+  feedbackId: Uuid,
+): Promise<LearningTrailEntry> {
+  return requestJson<LearningTrailEntry>(
+    `${sharedFeedbackPath(studentId, entryId)}/${encodeURIComponent(feedbackId)}`,
     { method: "DELETE" },
   );
 }

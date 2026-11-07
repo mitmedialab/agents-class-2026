@@ -27,6 +27,7 @@ from course_server.learning_trail import (
     LEARNING_TRAIL_MEMORY_KIND,
     FileTrailStore,
     LearningTrailService,
+    StaffFeedbackDraft,
     TrailAccessDenied,
     TrailEntry,
     TrailEntryDraft,
@@ -214,6 +215,113 @@ def test_feedback_source_cannot_be_claimed_by_the_client() -> None:
         TrailFeedbackDraft.model_validate(
             {"from_role": "ta", "body": "Text", "source": "verified_by_staff"}
         )
+
+
+def test_staff_reach_only_shared_entries_and_their_writes_are_attributed(tmp_path: Path) -> None:
+    alice = student()
+    assert alice.user_id is not None
+    owner = alice.user_id
+    ta = staff("ta").model_copy(update={"display_name": "Sam TA"})
+    note = StaffFeedbackDraft(body="Try streaming.")
+
+    async def run() -> None:
+        trail = LearningTrailService(
+            FileTrailStore(tmp_path / "trail"),
+            student_name=lambda _user_id: _named("Alice Example"),
+        )
+        private = await trail.create(alice, draft(week=1, title="Private"))
+        shared = await trail.create(
+            alice,
+            TrailEntryDraft(
+                week=2,
+                build_title="Shared",
+                reflection="Shared text.",
+                shared_with_staff=True,
+            ),
+        )
+
+        students = await trail.list_shared_students(ta)
+        assert [item.student_name for item in students] == ["Alice Example"]
+        assert students[0].shared_entries == 1
+        visible = await trail.list_shared_entries(ta, owner)
+        assert [entry.build_title for entry in visible] == ["Shared"]
+
+        with pytest.raises(TrailEntryNotFound):
+            await trail.add_staff_feedback(ta, owner, private.id, note)
+
+        updated = await trail.add_staff_feedback(ta, owner, shared.id, note)
+        written = updated.feedback[0]
+        assert written.source == "staff"
+        assert written.from_role == "ta"
+        assert written.from_name == "Sam TA"
+
+        # The student sees it, cannot delete it, and the agent receives it with its provenance.
+        with pytest.raises(TrailAccessDenied):
+            await trail.delete_feedback(alice, shared.id, written.id)
+        memories = await trail.select_memories(alice)
+        by_title = {memory.metadata["build_title"]: memory for memory in memories}
+        feedback = by_title["Shared"].metadata["feedback"]
+        assert isinstance(feedback, list)
+        assert isinstance(feedback[0], dict)
+        assert feedback[0]["source"] == "staff"
+
+        # Staff cannot remove what the student pasted, and access ends when sharing ends.
+        pasted = await trail.add_feedback(
+            alice, shared.id, TrailFeedbackDraft(from_role="ta", body="Pasted.")
+        )
+        pasted_id = next(i.id for i in pasted.feedback if i.source == "pasted_by_student")
+        with pytest.raises(TrailEntryNotFound):
+            await trail.delete_staff_feedback(ta, owner, shared.id, pasted_id)
+        await trail.update(alice, shared.id, TrailEntryPatch(shared_with_staff=False))
+        assert await trail.list_shared_entries(ta, owner) == []
+        assert await trail.list_shared_students(ta) == []
+        with pytest.raises(TrailEntryNotFound):
+            await trail.add_staff_feedback(ta, owner, shared.id, note)
+
+    asyncio.run(run())
+
+
+async def _named(name: str) -> str:
+    return name
+
+
+@pytest.mark.parametrize("principal", [anonymous(), student(), staff("admin")])
+def test_only_tas_and_instructors_have_staff_access(
+    tmp_path: Path,
+    principal: PrincipalContext,
+) -> None:
+    alice = student()
+    assert alice.user_id is not None
+    owner = alice.user_id
+
+    async def run() -> None:
+        trail = service(tmp_path)
+        entry = await trail.create(alice, draft())
+        with pytest.raises(TrailAccessDenied):
+            await trail.list_shared_students(principal)
+        with pytest.raises(TrailAccessDenied):
+            await trail.list_shared_entries(principal, owner)
+        with pytest.raises(TrailAccessDenied):
+            await trail.add_staff_feedback(
+                principal, owner, entry.id, StaffFeedbackDraft(body="Hi")
+            )
+
+    asyncio.run(run())
+
+
+def test_one_unreadable_trail_does_not_hide_other_students_from_staff(tmp_path: Path) -> None:
+    alice = student()
+
+    async def run() -> None:
+        trail = service(tmp_path)
+        await trail.create(
+            alice,
+            TrailEntryDraft(week=1, build_title="B", reflection="R", shared_with_staff=True),
+        )
+        (tmp_path / "trail" / f"{uuid4()}.json").write_text("not json", encoding="utf-8")
+        assert len(await trail.list_shared_students(staff("instructor"))) == 1
+
+    asyncio.run(run())
 
 
 def test_entry_limit_is_enforced(tmp_path: Path) -> None:
@@ -474,6 +582,27 @@ def test_api_full_lifecycle_for_a_logged_in_student(tmp_path: Path) -> None:
     assert client.delete(f"{base}/entries/{entry_id}").status_code == 204
     assert client.delete(f"{base}/entries/{entry_id}").status_code == 404
     assert client.get(base).json() == {"entries": []}
+
+
+def test_api_staff_routes_require_a_staff_session(tmp_path: Path) -> None:
+    client, access_code = _client(tmp_path)
+    base = f"{API_PREFIX}/learning-trail"
+
+    assert client.get(f"{base}/students").status_code == 403
+
+    client.post(
+        f"{API_PREFIX}/auth/login",
+        json={"username": "alice", "access_code": access_code},
+    )
+    assert client.get(f"{base}/students").status_code == 403
+    assert client.get(f"{base}/students/{uuid4()}/entries").status_code == 403
+    assert (
+        client.post(
+            f"{base}/students/{uuid4()}/entries/{uuid4()}/feedback",
+            json={"body": "Hi"},
+        ).status_code
+        == 403
+    )
 
 
 def test_api_rejects_anonymous_visitors_and_invalid_input(tmp_path: Path) -> None:

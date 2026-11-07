@@ -2534,3 +2534,7 @@
   outline: 1px solid var(--color-text);
   outline-offset: 2px;
 }
+
+.ca-trail-student-row {
+  grid-template-columns: 1fr auto;
+}

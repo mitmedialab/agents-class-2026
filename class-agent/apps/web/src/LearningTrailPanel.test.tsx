@@ -9,10 +9,13 @@ import { LearningTrailPanel } from "./LearningTrailPanel.js";
 vi.mock("./api.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api.js")>()),
   addLearningTrailFeedback: vi.fn(),
+  addStaffLearningTrailFeedback: vi.fn(),
   createLearningTrailEntry: vi.fn(),
   deleteLearningTrailEntry: vi.fn(),
   deleteLearningTrailFeedback: vi.fn(),
   listLearningTrail: vi.fn(),
+  listLearningTrailStudents: vi.fn(),
+  listSharedLearningTrail: vi.fn(),
   updateLearningTrailEntry: vi.fn(),
 }));
 
@@ -24,6 +27,7 @@ function entry(overrides: Partial<LearningTrailEntry> = {}): LearningTrailEntry 
     build_url: "https://example.com/voice",
     reflection: "Latency mattered more than I expected.",
     still_relevant: true,
+    shared_with_staff: false,
     feedback: [],
     created_at: "2026-10-01T00:00:00Z",
     updated_at: "2026-10-01T00:00:00Z",
@@ -82,6 +86,7 @@ describe("LearningTrailPanel", () => {
         build_title: "Voice agent",
         build_url: null,
         reflection: "Latency mattered.",
+        shared_with_staff: true,
       }),
     );
     expect(await screen.findByRole("link", { name: "Voice agent" })).toBeInTheDocument();
@@ -97,6 +102,72 @@ describe("LearningTrailPanel", () => {
       expect(api.updateLearningTrailEntry).toHaveBeenCalledWith(entry().id, {
         still_relevant: false,
       }),
+    );
+  });
+
+  it("lets the student stop sharing an entry with staff", async () => {
+    vi.mocked(api.listLearningTrail).mockResolvedValue([entry({ shared_with_staff: true })]);
+    render(<LearningTrailPanel readOnly={false} />);
+
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Shared with staff" }));
+
+    await waitFor(() =>
+      expect(api.updateLearningTrailEntry).toHaveBeenCalledWith(entry().id, {
+        shared_with_staff: false,
+      }),
+    );
+  });
+
+  it("does not let a student remove feedback staff wrote", async () => {
+    vi.mocked(api.listLearningTrail).mockResolvedValue([
+      entry({
+        feedback: [
+          {
+            id: "20000000-0000-4000-8000-000000000002",
+            from_role: "instructor",
+            from_name: "Pat",
+            body: "Strong tradeoff analysis.",
+            source: "staff",
+            added_at: "2026-10-02T00:00:00Z",
+          },
+        ],
+      }),
+    ]);
+    render(<LearningTrailPanel readOnly={false} />);
+
+    expect(await screen.findByText("Strong tradeoff analysis.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Remove feedback/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Pasted by you/)).not.toBeInTheDocument();
+  });
+
+  it("shows staff the students who shared and sends feedback on an entry", async () => {
+    const shared = entry({ shared_with_staff: true });
+    const student = {
+      student_id: "30000000-0000-4000-8000-000000000003",
+      student_name: "Alice Example",
+      shared_entries: 1,
+      latest_week: 3,
+    };
+    vi.mocked(api.listLearningTrail).mockRejectedValue(new ApiError("denied", 403));
+    vi.mocked(api.listLearningTrailStudents).mockResolvedValue([student]);
+    vi.mocked(api.listSharedLearningTrail).mockResolvedValue([shared]);
+    vi.mocked(api.addStaffLearningTrailFeedback).mockResolvedValue(shared);
+    render(<LearningTrailPanel readOnly={false} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Alice Example/ }));
+    expect(await screen.findByText(shared.reflection)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Write feedback"), {
+      target: { value: "Try streaming." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send to student" }));
+
+    await waitFor(() =>
+      expect(api.addStaffLearningTrailFeedback).toHaveBeenCalledWith(
+        student.student_id,
+        shared.id,
+        "Try streaming.",
+      ),
     );
   });
 
@@ -170,10 +241,11 @@ describe("LearningTrailPanel", () => {
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 
-  it("explains that the trail needs a student login", async () => {
+  it("explains that the trail needs a course login", async () => {
     vi.mocked(api.listLearningTrail).mockRejectedValue(new ApiError("denied", 403));
+    vi.mocked(api.listLearningTrailStudents).mockRejectedValue(new ApiError("denied", 403));
     render(<LearningTrailPanel readOnly={false} />);
 
-    expect(await screen.findByText(/student account/)).toBeInTheDocument();
+    expect(await screen.findByText(/course account/)).toBeInTheDocument();
   });
 });

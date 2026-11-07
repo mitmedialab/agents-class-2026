@@ -30,6 +30,10 @@ class TrailStoreError(MemoryUnavailable):
 class TrailStore(Protocol):
     async def read(self, user_id: UUID) -> list[TrailEntry]: ...
 
+    async def owners(self) -> list[UUID]:
+        """Every student who has a saved trail."""
+        ...
+
     async def update(
         self,
         user_id: UUID,
@@ -49,6 +53,9 @@ class FileTrailStore:
     async def read(self, user_id: UUID) -> list[TrailEntry]:
         return await asyncio.to_thread(self._read, user_id)
 
+    async def owners(self) -> list[UUID]:
+        return await asyncio.to_thread(self._owners)
+
     async def update(
         self,
         user_id: UUID,
@@ -58,6 +65,17 @@ class FileTrailStore:
 
     def _path(self, user_id: UUID) -> Path:
         return self._directory / f"{user_id}.json"
+
+    def _owners(self) -> list[UUID]:
+        if not self._directory.is_dir():
+            return []
+        owners: list[UUID] = []
+        for path in self._directory.glob("*.json"):
+            try:
+                owners.append(UUID(path.stem))
+            except ValueError:
+                continue
+        return owners
 
     def _update(
         self,

@@ -9,7 +9,14 @@ from pydantic import BaseModel
 
 from agent_core import PrincipalContext
 
-from .models import TrailEntry, TrailEntryDraft, TrailEntryPatch, TrailFeedbackDraft
+from .models import (
+    SharedTrailSummary,
+    StaffFeedbackDraft,
+    TrailEntry,
+    TrailEntryDraft,
+    TrailEntryPatch,
+    TrailFeedbackDraft,
+)
 from .service import (
     LearningTrailService,
     TrailAccessDenied,
@@ -23,9 +30,13 @@ class TrailResponse(BaseModel):
     entries: list[TrailEntry]
 
 
+class SharedStudentsResponse(BaseModel):
+    students: list[SharedTrailSummary]
+
+
 def _http_error(error: Exception) -> HTTPException:
     if isinstance(error, TrailAccessDenied):
-        return HTTPException(status.HTTP_403_FORBIDDEN, "student login required")
+        return HTTPException(status.HTTP_403_FORBIDDEN, str(error))
     if isinstance(error, TrailEntryNotFound):
         return HTTPException(status.HTTP_404_NOT_FOUND, "not found")
     if isinstance(error, TrailLimitExceeded):
@@ -119,6 +130,66 @@ def build_learning_trail_router(
     ) -> TrailEntry:
         try:
             return await service_for(request).delete_feedback(principal, entry_id, feedback_id)
+        except _HANDLED as error:
+            raise _http_error(error) from error
+
+    @router.get("/students", response_model=SharedStudentsResponse)
+    async def list_shared_students(
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(require_principal)],
+    ) -> SharedStudentsResponse:
+        try:
+            students = await service_for(request).list_shared_students(principal)
+        except _HANDLED as error:
+            raise _http_error(error) from error
+        return SharedStudentsResponse(students=students)
+
+    @router.get("/students/{student_id}/entries", response_model=TrailResponse)
+    async def list_shared_entries(
+        student_id: UUID,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(require_principal)],
+    ) -> TrailResponse:
+        try:
+            entries = await service_for(request).list_shared_entries(principal, student_id)
+        except _HANDLED as error:
+            raise _http_error(error) from error
+        return TrailResponse(entries=entries)
+
+    @router.post(
+        "/students/{student_id}/entries/{entry_id}/feedback",
+        response_model=TrailEntry,
+        status_code=status.HTTP_201_CREATED,
+    )
+    async def add_staff_feedback(
+        student_id: UUID,
+        entry_id: UUID,
+        draft: StaffFeedbackDraft,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(require_principal)],
+    ) -> TrailEntry:
+        try:
+            return await service_for(request).add_staff_feedback(
+                principal, student_id, entry_id, draft
+            )
+        except _HANDLED as error:
+            raise _http_error(error) from error
+
+    @router.delete(
+        "/students/{student_id}/entries/{entry_id}/feedback/{feedback_id}",
+        response_model=TrailEntry,
+    )
+    async def delete_staff_feedback(
+        student_id: UUID,
+        entry_id: UUID,
+        feedback_id: UUID,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(require_principal)],
+    ) -> TrailEntry:
+        try:
+            return await service_for(request).delete_staff_feedback(
+                principal, student_id, entry_id, feedback_id
+            )
         except _HANDLED as error:
             raise _http_error(error) from error
 
