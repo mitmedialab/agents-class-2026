@@ -17,6 +17,7 @@ playwright-report/
 test-results/
 var/applicants/
 var/assignments/
+var/grades/
 var/backups/
 var/course-knowledge/
 var/log/

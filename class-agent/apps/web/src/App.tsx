@@ -25,6 +25,7 @@ import {
   login,
   logout,
   markNotificationCenterItemRead,
+  openStaticWorkspace,
   recordWorkspaceInteraction,
   resizeBrowserSession,
   scrollBrowserSession,
@@ -137,8 +138,8 @@ const SUPPORTED_UPLOAD_MEDIA_TYPES = new Set([
 ]);
 const HEADER_PROMPTS = [
   { label: "Apply", message: "I'd like to apply for the course." },
-  { label: "Schedule", message: "Show me the course schedule." },
-  { label: "Grading", message: "How is grading handled in this course?" },
+  { label: "Schedule", staticTarget: "schedule" },
+  { label: "Grading", staticTarget: "grading" },
 ] as const;
 const STUDENT_CONTACT_PROMPT = {
   label: "Contact",
@@ -298,6 +299,7 @@ export default function App() {
   const [message, setMessage] = useState("");
   const [isInitializing, setIsInitializing] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
+  const [isOpeningStatic, setIsOpeningStatic] = useState(false);
   const [isStreamingText, setIsStreamingText] = useState(false);
   const [isOpening, setIsOpening] = useState(() =>
     typeof window !== "undefined" && typeof window.matchMedia === "function"
@@ -341,6 +343,7 @@ export default function App() {
   const responseStageRef = useRef<HTMLElement>(null);
   const workspaceShellRef = useRef<HTMLElement>(null);
   const activeRun = useRef<AbortController | null>(null);
+  const staticOpenGeneration = useRef(0);
   const timelineGestureReset = useRef<number | null>(null);
   const timelineSettleCommit = useRef<number | null>(null);
   const timelinePullRef = useRef<{ targetOffset: number; progress: number } | null>(null);
@@ -549,6 +552,7 @@ export default function App() {
   const startNewConversation = useCallback(() => {
     activeRun.current?.abort();
     activeRun.current = null;
+    staticOpenGeneration.current += 1;
     operationInFlight.current = false;
     applicationReturnResponse.current = null;
     setSelectedConversationId(null);
@@ -565,6 +569,7 @@ export default function App() {
     setInstructorMessage(null);
     setInstructorEmailDelivery(null);
     setIsRunning(false);
+    setIsOpeningStatic(false);
     setIsStreamingText(false);
     setHistoryOpen(false);
     setNotificationHistoryExpanded(false);
@@ -575,6 +580,9 @@ export default function App() {
   }, [showWelcomeMessage]);
 
   async function showConversation(conversation: Conversation): Promise<void> {
+    staticOpenGeneration.current += 1;
+    operationInFlight.current = false;
+    setIsOpeningStatic(false);
     setCurrentAction("Loading conversation");
     setConversationEvents([]);
     setTimelineOffset(0);
@@ -658,6 +666,9 @@ export default function App() {
         showWelcomeMessage();
         return;
       }
+      staticOpenGeneration.current += 1;
+      operationInFlight.current = false;
+      setIsOpeningStatic(false);
       setLatestResponse("");
       setConversationEvents([]);
       setTimelineOffset(0);
@@ -975,6 +986,7 @@ export default function App() {
       (!visibleText && pendingUploads.length === 0) ||
       isInitializing ||
       isRunning ||
+      isOpeningStatic ||
       isUploading ||
       (isTimeTraveling && !isSuggestedPrompt) ||
       (!operationAlreadyClaimed && operationInFlight.current)
@@ -1213,6 +1225,70 @@ export default function App() {
     }
   }
 
+  async function openStatic(
+    target: "schedule" | "grading" | "notification" | "assignment",
+    notification?: NotificationCenterItem,
+    assignmentId?: string,
+  ): Promise<boolean> {
+    if (
+      isInitializing ||
+      isRunning ||
+      isOpeningStatic ||
+      isUploading ||
+      awaitingConfirmationAction ||
+      operationInFlight.current
+    ) {
+      return false;
+    }
+    operationInFlight.current = true;
+    setIsOpeningStatic(true);
+    const generation = ++staticOpenGeneration.current;
+    let conversationId = selectedConversationId;
+    let createdConversation = false;
+    try {
+      if (!conversationId) {
+        const title = notification?.title ?? (target === "grading" ? "Grading" : target === "assignment" ? "Weekly build" : "Schedule");
+        const created = await createConversation(titleFromMessage(title));
+        if (generation !== staticOpenGeneration.current) return false;
+        conversationId = created.id;
+        createdConversation = true;
+        setSelectedConversationId(created.id);
+        setConversations((current) => newestFirst([created, ...current]));
+      }
+      const event = target === "assignment"
+        ? await openStaticWorkspace(conversationId, target, undefined, assignmentId)
+        : await openStaticWorkspace(conversationId, target, notification?.id);
+      if (generation !== staticOpenGeneration.current) return false;
+      setConversationEvents((current) =>
+        createdConversation ? [event] : [...current, event],
+      );
+      setWorkspaceState((current) =>
+        builtInComponentRegistry.apply(current, event.payload.command),
+      );
+      setTimelineOffset(0);
+      setAboutOpen(false);
+      setHistoryOpen(false);
+      setPresentedCommunication(null);
+      setMobileView("workspace");
+      void loadConversationList(conversationDisplayLimit).catch(() => undefined);
+      if (notification?.dismissible) await handleNotificationRead(notification.id);
+      return true;
+    } catch {
+      if (generation === staticOpenGeneration.current) {
+        setActivities((current) => [
+          ...current,
+          { kind: "error", label: "Course item could not be opened" },
+        ]);
+      }
+      return false;
+    } finally {
+      if (generation === staticOpenGeneration.current) {
+        operationInFlight.current = false;
+        setIsOpeningStatic(false);
+      }
+    }
+  }
+
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
@@ -1294,6 +1370,9 @@ export default function App() {
       requestAnimationFrame(() => composerRef.current?.focus());
       return;
     }
+    staticOpenGeneration.current += 1;
+    operationInFlight.current = false;
+    setIsOpeningStatic(false);
     setHistoryOpen(false);
     setMobileView("chat");
     setAboutOpen(true);
@@ -1573,8 +1652,8 @@ export default function App() {
     setAboutOpen(false);
     setHistoryOpen(false);
     setNotificationHistoryExpanded(false);
-    setMobileView("chat");
     if (item.section === "communications") {
+      setMobileView("chat");
       setPresentedCommunication(item);
       setLatestResponse("");
       setActivities([]);
@@ -1583,12 +1662,7 @@ export default function App() {
       requestAnimationFrame(() => composerRef.current?.focus());
       return;
     }
-    const completed = await sendMessage(
-      item.action_prompt,
-      undefined,
-      false,
-    );
-    if (completed && item.dismissible) await handleNotificationRead(item.id);
+    await openStatic("notification", item);
   }
 
   function handleClosePresentedCommunication(): void {
@@ -2058,16 +2132,22 @@ export default function App() {
                   disabled={
                     isInitializing ||
                     isRunning ||
+                    isOpeningStatic ||
                     isUploading ||
                     awaitingConfirmationAction ||
                     timelinePull !== null
                   }
                   key={prompt.label}
-                  onClick={() =>
-                    prompt.label === "Apply"
-                      ? void startApplication()
-                      : (setAboutOpen(false), void sendMessage(prompt.message))
-                  }
+                  onClick={() => {
+                    if (prompt.label === "Apply") {
+                      void startApplication();
+                    } else if ("staticTarget" in prompt) {
+                      void openStatic(prompt.staticTarget);
+                    } else {
+                      setAboutOpen(false);
+                      void sendMessage(prompt.message);
+                    }
+                  }}
                 >
                   {prompt.label}
                 </Button>
@@ -2087,6 +2167,9 @@ export default function App() {
                 aria-haspopup="dialog"
                 className="logs-link"
                 onClick={() => {
+                  staticOpenGeneration.current += 1;
+                  operationInFlight.current = false;
+                  setIsOpeningStatic(false);
                   setAboutOpen(false);
                   setMobileView("chat");
                   setHistoryOpen(true);
@@ -2112,7 +2195,7 @@ export default function App() {
 
       {notificationCenterVisible ? (
         <NotificationCenter
-          busy={isInitializing || isRunning || isUploading || awaitingConfirmationAction || timelinePull !== null}
+          busy={isInitializing || isRunning || isOpeningStatic || isUploading || awaitingConfirmationAction || timelinePull !== null}
           data={notificationCenterForDisplay}
           historyExpanded={notificationHistoryExpanded}
           inert={timelinePull !== null}
@@ -2283,6 +2366,9 @@ export default function App() {
                           void sendMessage(assignmentSubmissionCheckPrompt(resourceUri))
                       : undefined
                   }
+                  onOpenAssignment={
+                    isTimeTraveling ? undefined : (assignmentId) => void openStatic("assignment", undefined, assignmentId)
+                  }
                   onSubmitApplication={
                     isTimeTraveling
                       ? undefined
@@ -2428,6 +2514,7 @@ export default function App() {
                 disabled={
                   isInitializing ||
                   isRunning ||
+                  isOpeningStatic ||
                   isUploading ||
                   composerBlockedByConfirmation ||
                   isTimeTraveling

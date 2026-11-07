@@ -26,7 +26,7 @@ local exploration without appending events or changing the present workspace; li
 and submissions are unavailable in history. A notification snapshot is captured even when the
 present workspace hides it; it stays pinned beside chat-only moments and is hidden whenever that
 moment has a workspace. Header shortcuts and notification cards become usable as soon as a
-moment settles; live actions return to the present before running. Composing remains paused in
+moment settles; live actions return to the present before opening or running. Composing remains paused in
 history. This is a browser projection
 of canonical events, not a second persisted conversation or workspace history. Platform-added
 upload receipts and communication context are excluded from the displayed student message.
@@ -52,6 +52,12 @@ The header's Apply shortcut opens the canonical application workspace directly b
 sending its prompt. Application requests typed in chat are not matched against browser or
 API keywords; the agent recognizes the intent and opens the same canonical workspace with
 its registered tool during the first response.
+Schedule and Grading open directly in the workspace without an agent run. Schedule uses
+the agenda calendar. Grading opens the official syllabus at its evaluation section.
+Active credit students also see weekly-build feedback cards below the policy; the same
+feedback is loaded beneath each assignment. Each assignment-card click appends a user-origin workspace open event without feedback text, so the next
+turn sees the same canonical workspace state and the user's action. Typed questions still
+use the agent.
 
 For authenticated students and instructors, **Contact** replaces Apply. It starts an ordinary
 agent turn to prepare a course-staff email for students or an instructor message to students.
@@ -59,6 +65,13 @@ The agent gathers missing content and audience details through the existing auth
 the shortcut does not send anything. Student email requires mail to be enabled, and instructor
 messages use the existing in-app delivery. Both retain the platform's Send/Cancel confirmation.
 Other roles and anonymous visitors retain Apply.
+
+Communications for an answered course-staff question open the full human discussion in the
+main interface. The student and course staff can exchange follow-up replies there without
+sending a Course Agent prompt. New replies appear in Communications for the other side;
+anonymous questions remain anonymous to staff throughout the follow-up. The normal desktop
+agent composer continues to use Enter, while a visible Send control is reserved for narrow
+mobile layouts whose keyboard Enter key inserts a line break.
 
 Submitting a new prompt immediately removes the prior answer and resets the
 activity trace, so only the new run's process is visible until its answer begins.
@@ -201,14 +214,13 @@ published deck, while **See more** lists every authorized published deck in desc
 Each card places the registered deck title beneath its lecture number and uses a first-slide thumbnail
 in place of the generic icon. Thumbnails fill and crop to the same tile dimensions as Upcoming
 deadlines; Updates tiles use those same dimensions. Existing card spacing and interaction styles remain. Its
-**View slides** action asks the Course Agent to open the registered deck in the workspace.
+**View slides** action opens the registered deck directly in the workspace.
 Slides remain available in history after viewing and are excluded from unread counts and greeting reminders.
 
-Every non-communication notification other than a lecture slide has a bounded details action that
-starts an ordinary Course Agent turn. That turn may retrieve additional facts from an authorized
-source, but it must not solve the issue, draft a response, recommend or take an action, or infer the
-user's intent. It ends by asking what the user wants to do. Selecting a Communications item instead
-performs no agent run: it presents the complete trusted card in the conversation without its stack
+Every non-communication notification has a details action that opens its authorized course
+resource, complete released assignment, or trusted update text directly in the workspace.
+It records the user-origin open event without generating a chat response. Selecting a
+Communications item presents the complete trusted card in the conversation without its stack
 truncation or repeated action control and focuses the composer. The selected card remains visible and
 becomes trusted context only when the user explicitly sends a query about it. Its source text remains
 data rather than instructions, and existing authorization and confirmation boundaries still apply.

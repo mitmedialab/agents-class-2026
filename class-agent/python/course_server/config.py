@@ -169,6 +169,10 @@ class AgentSettings(BaseModel):
     skills_path: Path = Path(__file__).resolve().parents[2] / "skills"
     applicant_data_path: Path = Path(__file__).resolve().parents[2] / "var/applicants"
     assignment_data_path: Path = Path(__file__).resolve().parents[2] / "var/assignments"
+    grade_data_path: Path = Path(__file__).resolve().parents[2] / "var/grades/weekly-feedback.json"
+    grade_preview_username: str | None = None
+    grade_preview_data_path: Path | None = None
+    grade_preview_only: bool = False
     upload_data_path: Path = Path(__file__).resolve().parents[2] / "var/uploads"
     published_faq_path: Path = DEFAULT_PUBLISHED_FAQ_PATH
     browser_enabled: bool = True
@@ -271,6 +275,31 @@ class AgentSettings(BaseModel):
             if raw_assignment_path and raw_assignment_path.strip()
             else Path(__file__).resolve().parents[2] / "var/assignments"
         )
+        raw_grade_path = values.get("GRADE_DATA_PATH")
+        grade_data_path = (
+            Path(raw_grade_path.strip()).expanduser()
+            if raw_grade_path and raw_grade_path.strip()
+            else Path(__file__).resolve().parents[2] / "var/grades/weekly-feedback.json"
+        )
+        grade_preview_username = values.get("GRADE_PREVIEW_USERNAME", "").strip().casefold()
+        raw_grade_preview_path = values.get("GRADE_PREVIEW_DATA_PATH", "").strip()
+        if bool(grade_preview_username) != bool(raw_grade_preview_path):
+            raise ConfigurationError(
+                "GRADE_PREVIEW_USERNAME and GRADE_PREVIEW_DATA_PATH must be set together"
+            )
+        if grade_preview_username and not re.fullmatch(
+            r"test-[a-z0-9._-]+", grade_preview_username
+        ):
+            raise ConfigurationError("GRADE_PREVIEW_USERNAME must name a test account")
+        grade_preview_data_path = (
+            Path(raw_grade_preview_path).expanduser() if raw_grade_preview_path else None
+        )
+        raw_grade_preview_only = values.get("GRADE_PREVIEW_ONLY", "false").strip().casefold()
+        if raw_grade_preview_only not in {"true", "false", "1", "0", "yes", "no"}:
+            raise ConfigurationError("GRADE_PREVIEW_ONLY must be true or false")
+        grade_preview_only = raw_grade_preview_only in {"true", "1", "yes"}
+        if grade_preview_only and not grade_preview_username:
+            raise ConfigurationError("GRADE_PREVIEW_ONLY requires GRADE_PREVIEW_USERNAME")
         raw_upload_path = values.get("UPLOAD_DATA_PATH")
         upload_data_path = (
             Path(raw_upload_path.strip()).expanduser()
@@ -346,6 +375,10 @@ class AgentSettings(BaseModel):
             skills_path=skills_path,
             applicant_data_path=applicant_data_path,
             assignment_data_path=assignment_data_path,
+            grade_data_path=grade_data_path,
+            grade_preview_username=grade_preview_username or None,
+            grade_preview_data_path=grade_preview_data_path,
+            grade_preview_only=grade_preview_only,
             upload_data_path=upload_data_path,
             published_faq_path=published_faq_path,
             browser_enabled=browser_enabled in {"true", "1", "yes"},

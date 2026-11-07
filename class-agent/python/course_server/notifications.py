@@ -32,6 +32,7 @@ from course_server.instructor_messages import (
 )
 from course_server.mail import TAQuestion, TAQuestionStore, parse_staff_answer_reply
 from course_server.notification_portraits import StudentNotificationPortraitRegistry
+from course_server.question_discussions import QuestionReplyStore
 from course_server.slide_thumbnails import FIRST_SLIDE_ASSET_ID
 
 UPCOMING_WINDOW = timedelta(days=14)
@@ -41,11 +42,19 @@ NotificationKind = Literal[
     "instructor_message",
     "pending_message",
     "staff_reply",
+    "question_reply",
     "pending_student_question",
     "assignment_deadline",
 ]
 NotificationState = Literal["unread", "read", "pending", "responded", "upcoming", "past"]
-READ_ACKNOWLEDGEABLE_KINDS = frozenset({"course_update", "instructor_message", "staff_reply"})
+READ_ACKNOWLEDGEABLE_KINDS = frozenset(
+    {
+        "course_update",
+        "instructor_message",
+        "staff_reply",
+        "question_reply",
+    }
+)
 
 
 def _clock() -> datetime:
@@ -85,6 +94,9 @@ class NotificationCenterItem(NotificationCenterModel):
     due_at: AwareDatetime | None = None
     action_label: str = Field(min_length=1, max_length=80)
     action_prompt: str = Field(min_length=1, max_length=1_000)
+    resource_uri: str | None = Field(default=None, min_length=1, max_length=500)
+    assignment_id: str | None = Field(default=None, min_length=1, max_length=80)
+    question_id: UUID | None = None
     submission_check_prompt: str | None = Field(default=None, min_length=1, max_length=1_000)
     unread: bool = False
     dismissible: bool = False
@@ -168,6 +180,7 @@ class NotificationCenterService:
         assignments: AssignmentStore | None = None,
         instructor_messages: InstructorMessageStore | None = None,
         questions: TAQuestionStore | None = None,
+        question_replies: QuestionReplyStore | None = None,
         clock: Callable[[], datetime] = _clock,
     ) -> None:
         self._faqs = faqs
@@ -180,6 +193,7 @@ class NotificationCenterService:
         self._assignments = assignments
         self._instructor_messages = instructor_messages
         self._questions = questions
+        self._question_replies = question_replies
         self._clock = clock
 
     async def get(self, principal: PrincipalContext) -> NotificationCenter:
@@ -322,6 +336,7 @@ class NotificationCenterService:
                             else None
                         ),
                         action_label="View slides",
+                        resource_uri=resource.uri,
                         action_prompt=(
                             f"Open the lecture slides from {resource.uri} in the workspace."
                         ),
@@ -398,6 +413,7 @@ class NotificationCenterService:
                     detail=announcement.summary,
                     timestamp=announcement.published_at,
                     action_label="View details",
+                    resource_uri=metadata.uri,
                     action_prompt=_details_action_prompt(
                         item_type="course update",
                         title=metadata.title,
@@ -437,6 +453,7 @@ class NotificationCenterService:
                     detail=assignment.summary,
                     timestamp=assignment.release_at,
                     action_label="View details",
+                    assignment_id=assignment.assignment_id,
                     action_prompt=_details_action_prompt(
                         item_type="assignment update",
                         title=assignment.title,
@@ -470,6 +487,13 @@ class NotificationCenterService:
                 student_user_id=user.id,
                 limit=None,
             )
+            replies = (
+                await self._question_replies.list_for_questions(
+                    [thread.question.id for thread in threads]
+                )
+                if self._question_replies is not None
+                else []
+            )
             reply_ids = {thread.answer.id for thread in threads if thread.answer is not None}
             read_ids = await self._reads.list_read(user_id=user.id, item_ids=reply_ids)
             for thread in threads:
@@ -483,6 +507,7 @@ class NotificationCenterService:
                             id=answer.id,
                             section="communications",
                             kind="staff_reply",
+                            question_id=question.id,
                             state="responded",
                             title=question.subject,
                             detail=answer_text,
@@ -507,6 +532,7 @@ class NotificationCenterService:
                         id=question.id,
                         section="communications",
                         kind="pending_message",
+                        question_id=question.id,
                         state="pending",
                         title=question.subject,
                         detail=question.question_text,
@@ -519,19 +545,45 @@ class NotificationCenterService:
                         ),
                     )
                 )
+            questions_by_id = {thread.question.id: thread.question for thread in threads}
+            reply_ids = {reply.id for reply in replies if reply.sender_role == "staff"}
+            read_ids = await self._reads.list_read(user_id=user.id, item_ids=reply_ids)
+            for reply in replies:
+                if reply.sender_role != "staff":
+                    continue
+                question = questions_by_id[reply.question_id]
+                unread = reply.id not in read_ids
+                items.append(
+                    NotificationCenterItem(
+                        id=reply.id,
+                        section="communications",
+                        kind="question_reply",
+                        state="unread" if unread else "read",
+                        question_id=question.id,
+                        title=question.subject,
+                        detail=reply.body,
+                        timestamp=reply.created_at,
+                        action_label="View conversation",
+                        action_prompt="Open the course-staff conversation.",
+                        unread=unread,
+                        dismissible=unread,
+                    )
+                )
             return items
         if self._questions is None:
             return []
         if user.role not in {"ta", "instructor"}:
             return []
         items = []
-        for question in await self._questions.list_questions(limit=None):
+        questions = await self._questions.list_questions(limit=None)
+        for question in questions:
             pending = question.status in {"queued", "open"}
             items.append(
                 NotificationCenterItem(
                     id=question.id,
                     section="communications",
                     kind="pending_student_question",
+                    question_id=question.id,
                     state="pending" if pending else "responded",
                     title=question.subject,
                     detail=question.question_text,
@@ -550,6 +602,36 @@ class NotificationCenterService:
                             "Check authorized course sources only for additional context."
                         ),
                     ),
+                    sender=await self._student_question_sender(principal, question),
+                )
+            )
+        replies = (
+            await self._question_replies.list_for_questions([question.id for question in questions])
+            if self._question_replies is not None
+            else []
+        )
+        questions_by_id = {question.id: question for question in questions}
+        reply_ids = {reply.id for reply in replies if reply.sender_role == "student"}
+        read_ids = await self._reads.list_read(user_id=user.id, item_ids=reply_ids)
+        for reply in replies:
+            if reply.sender_role != "student":
+                continue
+            question = questions_by_id[reply.question_id]
+            unread = reply.id not in read_ids
+            items.append(
+                NotificationCenterItem(
+                    id=reply.id,
+                    section="communications",
+                    kind="question_reply",
+                    state="unread" if unread else "read",
+                    question_id=question.id,
+                    title=question.subject,
+                    detail=reply.body,
+                    timestamp=reply.created_at,
+                    action_label="View conversation",
+                    action_prompt="Open the student conversation.",
+                    unread=unread,
+                    dismissible=unread,
                     sender=await self._student_question_sender(principal, question),
                 )
             )
@@ -736,6 +818,7 @@ class NotificationCenterService:
                     detail="Assignment deadline",
                     due_at=deadline.due_at,
                     action_label="View details",
+                    resource_uri=metadata.uri,
                     action_prompt=_details_action_prompt(
                         item_type="assignment deadline",
                         title=metadata.title,
@@ -759,6 +842,7 @@ class NotificationCenterService:
                     detail=assignment.summary,
                     due_at=assignment.due_at,
                     action_label="View details",
+                    assignment_id=assignment.assignment_id,
                     action_prompt=_details_action_prompt(
                         item_type="assignment deadline",
                         title=assignment.title,

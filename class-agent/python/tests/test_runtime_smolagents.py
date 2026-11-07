@@ -942,6 +942,47 @@ def test_application_guide_and_web_action_are_retained_as_natural_history() -> N
     asyncio.run(scenario())
 
 
+def test_user_opened_static_workspace_is_available_in_agent_history() -> None:
+    principal = public_principal()
+    conversation_id = uuid4()
+    panel_id = uuid4()
+    context = AgentContext(
+        principal=principal,
+        conversation_id=conversation_id,
+        recent_events=[
+            Event(
+                type="workspace.panel.opened",
+                actor="user",
+                anonymous_session_id=principal.anonymous_session_id,
+                conversation_id=conversation_id,
+                payload={
+                    "command": {
+                        "type": "open",
+                        "panel": {
+                            "id": str(panel_id),
+                            "component_id": "calendar",
+                            "title": "Course Schedule",
+                            "resource_uri": "course://schedule",
+                            "props": {"view": "agenda"},
+                        },
+                    }
+                },
+            ),
+            Event(
+                type="workspace.panel.closed",
+                actor="user",
+                anonymous_session_id=principal.anonymous_session_id,
+                conversation_id=conversation_id,
+                payload={"command": {"type": "close", "panel_id": str(panel_id)}},
+            ),
+        ],
+    )
+
+    history = _conversation_history(context)
+    assert "User opened a workspace view: Course Schedule (course://schedule)" in history
+    assert "User closed a workspace view." in history
+
+
 def test_runtime_loads_authorized_skill_body_only_after_explicit_tool_call() -> None:
     async def scenario() -> None:
         model = ScriptedSkillModel()

@@ -83,6 +83,12 @@ MCP tool call after the daily pruning interval. The staff-side aggregate report 
 returns individual digests. Database backups may retain older copies according to their
 separate retention policy.
 
+Migration `0019_course_question_replies` adds durable follow-up messages to answered
+course-staff questions. Each row retains the authenticated sender for access checks and
+recipient notifications, but the student-facing/staff-facing discussion projection masks
+student identity when the original question was anonymous. It does not change portable
+conversation events or the existing email message workflow.
+
 ## Course assignments
 
 `ASSIGNMENT_DATA_PATH` defaults to `var/assignments/`. Each assignment directory contains a

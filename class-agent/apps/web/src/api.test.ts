@@ -4,11 +4,14 @@ import {
   confirmTAQuestion,
   continueAgentAfterEvent,
   getCourseResourceContent,
+  getMyAssignmentFeedback,
+  getMyWeeklyBuildGrades,
   getInstructorMessageEmailDelivery,
   getPendingActionConversation,
   linkFaviconUrl,
   notificationSenderImageUrl,
   listConversations,
+  openStaticWorkspace,
   recordWorkspaceInteraction,
   streamAgentRun,
   uploadFile,
@@ -50,6 +53,84 @@ describe("conversation history", () => {
       2,
       "/api/v1/conversations/pending-action",
       expect.objectContaining({ credentials: "include" }),
+    );
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("static workspace opens", () => {
+  it("loads the signed-in student's build index and assignment feedback privately", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({ assignments: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getMyWeeklyBuildGrades();
+    await getMyAssignmentFeedback("week-3");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/v1/grades/mine",
+      expect.objectContaining({ credentials: "include" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/v1/grades/mine/assignments/week-3",
+      expect.objectContaining({ credentials: "include" }),
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it("posts a bounded target and notification ID with the session cookie", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({ type: "workspace.panel.opened" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await openStaticWorkspace(
+      "20000000-0000-4000-8000-000000000001",
+      "notification",
+      "60000000-0000-4000-8000-000000000001",
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/conversations/20000000-0000-4000-8000-000000000001/workspace/open-static",
+      expect.objectContaining({
+        credentials: "include",
+        method: "POST",
+        body: JSON.stringify({
+          target: "notification",
+          notification_id: "60000000-0000-4000-8000-000000000001",
+        }),
+      }),
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it("opens a weekly assignment from the Grading links", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({ type: "workspace.panel.opened" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await openStaticWorkspace(
+      "20000000-0000-4000-8000-000000000001",
+      "assignment",
+      undefined,
+      "week-3",
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/conversations/20000000-0000-4000-8000-000000000001/workspace/open-static",
+      expect.objectContaining({
+        body: JSON.stringify({ target: "assignment", assignment_id: "week-3" }),
+      }),
     );
     vi.unstubAllGlobals();
   });

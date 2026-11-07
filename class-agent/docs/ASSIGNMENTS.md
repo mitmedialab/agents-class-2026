@@ -70,8 +70,8 @@ timestamps deliberately, and pass the assignment tests before deployment.
 A published assignment creates an unread release item once `release_at` has passed. It also appears
 under Upcoming from fourteen days before `due_at` until the deadline, with its countdown computed
 by the server. The release item ID includes the assignment revision, so an intentional revision can
-produce a fresh notification. The notification action asks the Course Agent to read the same
-authorized assignment record before explaining it or suggesting a plan. Student release and
+produce a fresh notification. View details opens the complete authorized assignment directly
+and records the click in canonical workspace history without an agent run. Student release and
 deadline cards also keep **Review my progress** visible. The same action appears directly below the
 due date in an assignment opened in the workspace. It loads the student-only submission-check
 workflow, compares the official criteria with current identity-scoped repository/code and

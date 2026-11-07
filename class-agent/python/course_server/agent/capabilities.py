@@ -83,6 +83,7 @@ READ_UPLOAD_TOOL_ID = "upload.read"
 DOCUMENT_INSPECT_PAGE_TOOL_ID = "document.inspect_page"
 COURSE_INSPECT_SLIDE_PAGE_TOOL_ID = "course.inspect_slide_page"
 LIST_PRIVATE_RESOURCES_TOOL_ID = "course.list_private_resources"
+GET_MY_GRADES_TOOL_ID = "grades.get_mine"
 READ_PRIVATE_RESOURCE_TOOL_ID = "course.read_private_resource"
 INSTRUCTOR_LIST_APPLICATIONS_TOOL_ID = "instructor.list_applications"
 INSTRUCTOR_READ_APPLICATION_TOOL_ID = "instructor.read_application"
@@ -2711,6 +2712,8 @@ class CourseCapabilityPolicy:
         browser_enabled: bool = False,
         mail_enabled: bool = False,
         assignments_enabled: bool = False,
+        grades_enabled: bool = False,
+        grade_access: Callable[[PrincipalContext], bool] | None = None,
         instructor_messaging_enabled: bool = False,
         student_communications_enabled: bool = False,
         faq_updates_enabled: bool = False,
@@ -2720,6 +2723,8 @@ class CourseCapabilityPolicy:
         self._browser_enabled = browser_enabled
         self._mail_enabled = mail_enabled
         self._assignments_enabled = assignments_enabled
+        self._grades_enabled = grades_enabled
+        self._grade_access = grade_access
         self._instructor_messaging_enabled = instructor_messaging_enabled
         self._student_communications_enabled = student_communications_enabled
         self._faq_updates_enabled = faq_updates_enabled
@@ -2820,6 +2825,13 @@ class CourseCapabilityPolicy:
                 ),
                 *instructor_tools,
                 *assignment_tools,
+                *(
+                    (GET_MY_GRADES_TOOL_ID,)
+                    if self._grades_enabled
+                    and self._grade_access is not None
+                    and self._grade_access(principal)
+                    else ()
+                ),
                 *(
                     (LIST_MY_COMMUNICATIONS_TOOL_ID, READ_MY_COMMUNICATION_TOOL_ID)
                     if self._student_communications_enabled

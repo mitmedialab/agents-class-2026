@@ -15,7 +15,7 @@ from uuid import UUID, uuid4
 
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, Response, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from psycopg_pool import AsyncConnectionPool
 from pydantic import (
     BaseModel,
@@ -63,7 +63,7 @@ from course_server.application_draft import (
     updated_application_draft_from_user,
 )
 from course_server.application_roster import initialize_student_application_access
-from course_server.assignments import FileAssignmentStore
+from course_server.assignments import AssignmentStore, FileAssignmentStore
 from course_server.auth import (
     AuthenticationService,
     InvalidCredentials,
@@ -95,6 +95,7 @@ from course_server.faq import (
     PublishedFaqResourceCatalog,
     StudentNotificationService,
 )
+from course_server.grades import FileGradeBook
 from course_server.index_resources import index_resources
 from course_server.instructor_messages import (
     InstructorMessageAccessDenied,
@@ -121,6 +122,11 @@ from course_server.notifications import (
 )
 from course_server.postgres.auth_store import PostgresAuthStore, create_auth_pool
 from course_server.postgres.conversation_store import PostgresConversationStore
+from course_server.question_discussions import (
+    PostgresQuestionReplyStore,
+    QuestionDiscussionError,
+    QuestionDiscussionService,
+)
 from course_server.student_communications import StudentCommunicationService
 from course_server.uploads import (
     MAX_UPLOAD_BYTES,
@@ -140,6 +146,11 @@ from course_server.workspace import (
     WorkspaceValidationError,
     load_component_registry,
     project_workspace_events,
+)
+from course_server.workspace.static_open import (
+    StaticOpenTarget,
+    StaticWorkspaceUnavailable,
+    static_open_command,
 )
 
 logger = logging.getLogger(__name__)
@@ -197,6 +208,20 @@ class WorkspacePanelActionRequest(ApiModel):
     panel_id: UUID
 
 
+class StaticWorkspaceOpenRequest(ApiModel):
+    target: StaticOpenTarget
+    notification_id: UUID | None = None
+    assignment_id: str | None = None
+
+    @model_validator(mode="after")
+    def notification_id_matches_target(self) -> StaticWorkspaceOpenRequest:
+        if (self.target == "notification") != (self.notification_id is not None):
+            raise ValueError("notification_id is required only for a notification")
+        if (self.target == "assignment") != (self.assignment_id is not None):
+            raise ValueError("assignment_id is required only for an assignment")
+        return self
+
+
 class WorkspaceInteractionRequest(ApiModel):
     panel_id: UUID
     action: Literal[
@@ -223,6 +248,10 @@ class TAQuestionConfirmationRequest(ApiModel):
         if "question" in self.model_fields_set and self.question is None:
             raise ValueError("question cannot be null")
         return self
+
+
+class QuestionReplyRequest(ApiModel):
+    body: str = Field(min_length=1, max_length=10_000)
 
 
 class InstructorMessageConfirmationRequest(ApiModel):
@@ -328,6 +357,8 @@ class AppServices:
     )
     applicants: ApplicantStore | None = None
     course_resources: CourseResourceCatalog | None = None
+    assignments: AssignmentStore | None = None
+    grades: FileGradeBook | None = None
     uploads: TemporaryUploadStore | None = None
     workspace_registry: ComponentRegistry | None = None
     browser: BrowserSessionService | None = None
@@ -335,6 +366,7 @@ class AppServices:
     instructor_messages: InstructorMessageService | None = None
     notifications: StudentNotificationService | None = None
     notification_center: NotificationCenterService | None = None
+    question_discussions: QuestionDiscussionService | None = None
     anonymous_quotas: AnonymousQuotaStore = dataclass_field(
         default_factory=InMemoryAnonymousQuotaStore
     )
@@ -882,6 +914,15 @@ def create_app(
             resolved_settings.applicant_data_path / "student-notification-portraits.json"
         )
         assignment_store = FileAssignmentStore(resolved_settings.assignment_data_path)
+        grade_store = FileGradeBook(
+            resolved_settings.grade_data_path,
+            credit_usernames=course_roster.active_credit_usernames
+            if course_roster is not None
+            else frozenset(),
+            preview_username=resolved_settings.grade_preview_username,
+            preview_path=resolved_settings.grade_preview_data_path,
+            preview_only=resolved_settings.grade_preview_only,
+        )
         instructor_message_store = PostgresInstructorMessageStore(pool)
         instructor_message_service = InstructorMessageService(
             messages=instructor_message_store,
@@ -898,6 +939,12 @@ def create_app(
             auth=auth_store,
             questions=question_store,
             instructor_messages=instructor_message_store,
+        )
+        question_reply_store = PostgresQuestionReplyStore(pool)
+        question_discussions = QuestionDiscussionService(
+            auth=auth_store,
+            questions=question_store,
+            replies=question_reply_store,
         )
         course_resources = PublishedFaqResourceCatalog(
             FileResourceProvider.from_registry(
@@ -919,6 +966,7 @@ def create_app(
             assignments=assignment_store,
             instructor_messages=instructor_message_store,
             questions=question_store,
+            question_replies=question_reply_store,
         )
         browser_service: BrowserSessionService | None = None
         if resolved_settings.browser_enabled:
@@ -958,6 +1006,7 @@ def create_app(
                     skills=skills,
                     ta_questions=ta_question_service,
                     assignments=assignment_store,
+                    grades=grade_store,
                     instructor_messages=instructor_message_service,
                     student_communications=student_communication_service,
                     faq_updates=faq_knowledge,
@@ -969,6 +1018,8 @@ def create_app(
                     browser_enabled=browser_service is not None,
                     mail_enabled=ta_question_service is not None,
                     assignments_enabled=True,
+                    grades_enabled=True,
+                    grade_access=grade_store.can_access,
                     instructor_messaging_enabled=True,
                     student_communications_enabled=True,
                     faq_updates_enabled=True,
@@ -983,6 +1034,8 @@ def create_app(
             applicants=applicant_store,
             application_access=application_access,
             course_resources=course_resources,
+            assignments=assignment_store,
+            grades=grade_store,
             uploads=upload_store,
             workspace_registry=component_registry,
             browser=browser_service,
@@ -990,6 +1043,7 @@ def create_app(
             instructor_messages=instructor_message_service,
             notifications=StudentNotificationService(faqs=faq_store, auth=auth_store),
             notification_center=notification_center,
+            question_discussions=question_discussions,
             anonymous_quotas=PostgresAnonymousQuotaStore(pool),
             anonymous_quota_policy=AnonymousQuotaPolicy(
                 enabled=resolved_settings.anonymous_quotas_enabled,
@@ -1162,6 +1216,41 @@ def create_app(
                 detail="course login required",
             ) from error
 
+    @router.get("/course-questions/{question_id}/discussion")
+    async def get_question_discussion(
+        question_id: UUID,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> dict[str, Any]:
+        state = _get_app_state(request)
+        assert state.services is not None
+        service = state.services.question_discussions
+        if service is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+        try:
+            return await service.get(principal, question_id)
+        except QuestionDiscussionError as error:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+
+    @router.post("/course-questions/{question_id}/discussion")
+    async def send_question_reply(
+        question_id: UUID,
+        payload: QuestionReplyRequest,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> dict[str, Any]:
+        state = _get_app_state(request)
+        assert state.services is not None
+        service = state.services.question_discussions
+        if service is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+        try:
+            return await service.send(principal, question_id, payload.body)
+        except QuestionDiscussionError as error:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)
+            ) from error
+
     @router.post(
         "/notification-center/{item_id}/read",
         status_code=status.HTTP_204_NO_CONTENT,
@@ -1213,6 +1302,77 @@ def create_app(
         return Response(
             content=photo.data,
             media_type=photo.media_type,
+            headers={
+                "Cache-Control": "private, no-store",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+
+    @router.get("/grades/mine", response_model=None)
+    async def read_my_grades(
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> Response:
+        state = _get_app_state(request)
+        assert state.services is not None
+        grades = state.services.grades
+        assignments = state.services.assignments
+        if grades is None or assignments is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+        try:
+            graded_ids, feedback_weeks = grades.weekly_build_summary(principal)
+            weekly_build_ids = set(graded_ids)
+        except PermissionError as error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="not found"
+            ) from error
+        visible = await assignments.list_for_principal(principal, now=datetime.now(UTC))
+        entries = [
+            {
+                "assignment_id": assignment.assignment_id,
+                "title": assignment.title,
+                "has_feedback": int(assignment.assignment_id[5:]) in feedback_weeks,
+            }
+            for assignment in visible
+            if assignment.assignment_id in weekly_build_ids
+        ]
+        entries.sort(key=lambda item: int(str(item["assignment_id"])[5:]))
+        return JSONResponse(
+            content={"assignments": entries},
+            headers={
+                "Cache-Control": "private, no-store",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+
+    @router.get("/grades/mine/assignments/{assignment_id}", response_model=None)
+    async def read_my_assignment_feedback(
+        assignment_id: str,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> Response:
+        state = _get_app_state(request)
+        assert state.services is not None
+        grades = state.services.grades
+        assignments = state.services.assignments
+        if grades is None or assignments is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+        try:
+            note = grades.feedback_for_assignment(principal, assignment_id)
+        except (PermissionError, KeyError) as error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="not found"
+            ) from error
+        assignment = await assignments.get_for_principal(
+            assignment_id, principal, now=datetime.now(UTC)
+        )
+        if assignment is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+        return JSONResponse(
+            content={
+                "assignment_id": assignment_id,
+                "feedback": note.model_dump() if note else None,
+            },
             headers={
                 "Cache-Control": "private, no-store",
                 "X-Content-Type-Options": "nosniff",
@@ -1520,6 +1680,59 @@ def create_app(
             focus_existing=True,
         )
         assert event is not None
+        return event
+
+    @router.post(
+        "/conversations/{conversation_id}/workspace/open-static",
+        response_model=Event,
+    )
+    async def open_static_workspace(
+        conversation_id: UUID,
+        payload: StaticWorkspaceOpenRequest,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> Event:
+        state = _get_app_state(request)
+        await _require_owned_conversation(
+            state=state,
+            principal=principal,
+            conversation_id=conversation_id,
+        )
+        assert state.services is not None
+        services = state.services
+        resources = services.course_resources or FileResourceProvider.from_registry()
+        try:
+            command = await static_open_command(
+                target=payload.target,
+                notification_id=payload.notification_id,
+                assignment_id=payload.assignment_id,
+                principal=principal,
+                resources=resources,
+                notifications=services.notification_center,
+                assignments=services.assignments,
+            )
+        except StaticWorkspaceUnavailable as error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="not found"
+            ) from error
+        registry = services.workspace_registry or load_component_registry()
+        events = await services.conversations.list_events(conversation_id)
+        try:
+            registry.apply(project_workspace_events(events, registry), command)
+        except WorkspaceValidationError as error:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="invalid workspace presentation",
+            ) from error
+        event = Event(
+            type="workspace.panel.opened",
+            actor="user",
+            principal_user_id=principal.user_id,
+            anonymous_session_id=principal.anonymous_session_id,
+            conversation_id=conversation_id,
+            payload={"command": command.model_dump(mode="json", exclude_none=True)},
+        )
+        await services.conversations.append_events(conversation_id, [event])
         return event
 
     @router.post(

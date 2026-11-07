@@ -2,7 +2,7 @@
 
 Class Agent is the extensible Course Agent platform described in [CONSTITUTION.md](CONSTITUTION.md). It is designed for an MIT Media Lab course and favors explicit, portable contracts that students can inspect and extend.
 
-The repository is currently at **Phase 7**, plus the explicitly authorized course-email workflow from Phase 10 and a student-only ChatGPT Course MCP pilot: validated native workspace components over the Phase 6 Course Agent, with an optional Gmail or Microsoft 365 mailbox worker for unanswered student questions and email-moderated FAQ publication. It contains stable core and workspace contracts, access-code and anonymous authentication, portable PostgreSQL conversation/event history, a `ToolCallingAgent` adapter, public course resources and search, private course applications, typed workspace tools, an event-derived panel workspace, visual compositions, a specific-artifact DocumentViewer, a month/agenda Calendar, and a role-scoped notification center for course releases, staff communications, and near assignment deadlines. It intentionally does not yet contain MCP Apps, Agent Bridge, or a browser extension. It loads standard `SKILL.md` bundles progressively: the model initially sees only login-authorized skill metadata and reads full instructions or references on demand.
+The repository is currently at **Phase 7**, plus the explicitly authorized course-email workflow from Phase 10, private weekly feedback from Phase 9, and a student-only ChatGPT Course MCP pilot: validated native workspace components over the Phase 6 Course Agent, with an optional Gmail or Microsoft 365 mailbox worker for unanswered student questions and email-moderated FAQ publication. It contains stable core and workspace contracts, access-code and anonymous authentication, portable PostgreSQL conversation/event history, a `ToolCallingAgent` adapter, public course resources and search, private course applications, typed workspace tools, an event-derived panel workspace, visual compositions, a specific-artifact DocumentViewer, a month/agenda Calendar, and a role-scoped notification center for course releases, staff communications, and near assignment deadlines. It intentionally does not yet contain MCP Apps, Agent Bridge, or a browser extension. It loads standard `SKILL.md` bundles progressively: the model initially sees only login-authorized skill metadata and reads full instructions or references on demand.
 
 ## Requirements
 
@@ -129,6 +129,11 @@ separate `APPLICANT_DATA_PATH/student-access.json` security registry. Initial pr
 projects accepted identities from the canonical roster, but never replaces an existing UUID
 allowlist. See [docs/COURSE_ROSTER.md](docs/COURSE_ROSTER.md) and
 [docs/STORAGE.md](docs/STORAGE.md).
+
+Weekly TA feedback is stored in a separate private gradebook. Active credit students
+see their own notes beneath weekly build assignments linked from Grading. The Course
+Agent has a matching `grades.get_mine` tool. See [docs/GRADES.md](docs/GRADES.md) for the file format and
+operations.
 
 Role-scoped course resources live under `COURSE_DATA_PATH` (default `data/`): student
 resources are available to logged-in students and instructors, while instructor resources

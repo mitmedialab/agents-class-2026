@@ -121,7 +121,16 @@ def _principal_references(principal: PrincipalContext) -> dict[str, UUID | None]
 def _recent_context_events(events: list[Event]) -> list[Event]:
     """Keep dialogue and useful actions without spending context on run bookkeeping."""
     dialogue = [event for event in events if event.type in _DIALOGUE_EVENT_TYPES]
-    supporting = [event for event in events if event.type in _SUPPORTING_EVENT_TYPES]
+    supporting = [
+        event
+        for event in events
+        if event.type in _SUPPORTING_EVENT_TYPES
+        or (
+            event.type
+            in {"workspace.panel.opened", "workspace.panel.updated", "workspace.panel.closed"}
+            and event.actor == "user"
+        )
+    ]
     retained_ids = {
         event.id
         for event in [

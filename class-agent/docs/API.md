@@ -18,6 +18,8 @@ POST /api/v1/notifications/{notification_id}/read
 GET  /api/v1/notification-center
 POST /api/v1/notification-center/{item_id}/read
 GET  /api/v1/notification-center/{item_id}/sender-image
+GET  /api/v1/course-questions/{question_id}/discussion
+POST /api/v1/course-questions/{question_id}/discussion
 
 GET  /api/v1/course/resources
 GET  /api/v1/course/resources/content?uri={resource_uri}
@@ -29,6 +31,7 @@ GET  /api/v1/conversations?limit={limit}&offset={offset}
 GET  /api/v1/conversations/pending-action
 POST /api/v1/conversations
 GET  /api/v1/conversations/{conversation_id}
+POST /api/v1/conversations/{conversation_id}/workspace/open-static
 POST /api/v1/conversations/{conversation_id}/workspace/actions
 POST /api/v1/conversations/{conversation_id}/workspace/interactions
 POST /api/v1/conversations/{conversation_id}/ta-questions/{question_id}/confirmation
@@ -144,11 +147,14 @@ Students see their own sent question threads and
 confirmed instructor messages addressed to them; an answer replaces its pending question item. TAs and instructors see queued/open student questions; other roles do
 not. Course releases come from authorized resource metadata and released structured assignments;
 upcoming assignment deadlines come from the same role-filtered assignment store used by the agent.
+Static course-resource and slide items include a `resource_uri`; structured assignment items include
+an `assignment_id`. These identifiers are reauthorized when opened.
 Structured assignment release and deadline items include a student-only
 `submission_check_prompt`. The browser can submit only that bounded prompt; staff projections and
 unrelated notifications receive `null`. The review prompt requires the registered
 `assignment-submission-check` skill and the identity-scoped project tools.
-Only unread course updates, staff replies, and delivered instructor messages are dismissible.
+Only unread course updates, staff replies, question follow-ups, and delivered instructor
+messages are dismissible.
 Historical items are derived from the same durable source records and acknowledgement state; the
 browser does not create a second canonical history. Mark-read first verifies that the
 item exists in the caller's current authorized projection; it never accepts a user ID or arbitrary
@@ -161,6 +167,14 @@ returns that representative image to TAs or instructors with `private, no-store`
 questions expose neither sender metadata nor an image, and missing or ambiguous profile links fail
 closed with `404`. Responses never expose email addresses, applicant UUIDs, arbitrary image URLs, or
 filesystem paths.
+
+The question discussion routes expose the original question, staff answer, and subsequent
+human replies only to the question's student owner or active teaching staff. Posting a
+nonblank reply is an explicit send action available after the initial staff answer. The
+reply author is authenticated server-side; the client cannot choose a sender or recipient.
+Anonymous question threads keep the student unnamed in staff projections and notifications.
+New replies are projected as independently acknowledgeable Communication items for the
+other side, while the original question remains available in history.
 
 There is intentionally no general assignment filesystem route. Assignment records are available
 through the Course Agent's role-scoped `course.list_assignments` and `course.get_assignment` tools,
@@ -207,6 +221,23 @@ an `applicant://{application_id}/photo` URI issued by the instructor image-inspe
 and `close` for an existing panel UUID. It checks conversation ownership, reconstructs
 workspace state, validates the operation against the registered component, and appends
 the resulting canonical event. It cannot introduce an arbitrary component or props.
+
+`POST /api/v1/conversations/{conversation_id}/workspace/open-static` accepts a
+`target` of `schedule`, `grading`, `assignment`, or `notification`. Assignment opens
+require an `assignment_id`; notification opens require an
+opaque `notification_id` from the caller's authorized notification projection. The
+server checks conversation ownership, resource or assignment access, and the registered
+workspace command before appending one `workspace.panel.opened` event with `actor="user"`.
+It returns that event without an agent run; missing, foreign, or no longer available items
+return `404`. The next agent turn receives the user action and resulting workspace state
+from canonical history.
+
+`GET /api/v1/grades/mine` returns released graded weekly build titles and feedback
+availability for an active credit student. `GET /api/v1/grades/mine/assignments/{id}`
+returns that student's feedback, or `null` if no note is recorded. Both endpoints
+use `private, no-store` caching and return `404` for other principals. Grading opens
+the syllabus evaluation policy and links to those assignments. Feedback is fetched
+below the assignment and is absent from canonical workspace events.
 
 `POST /api/v1/conversations/{conversation_id}/workspace/interactions` records a
 schema-limited calendar selection/view change or document page/find action as

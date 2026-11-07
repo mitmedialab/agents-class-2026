@@ -99,6 +99,13 @@ Calendar selection/view changes and document page/find actions emit validated
 storing DOM details. A PDF page change also updates the document panel's canonical `page` prop in
 the same append, so the focused page survives reloads and is supplied to the next run as trusted
 workspace state rather than inferred from recent prose.
+Explicit Schedule and Grading shortcuts and non-communication notification cards use a
+server-authorized static open. The server resolves the trusted target, validates the same
+registered open command, and appends `workspace.panel.opened` with `actor="user"`. The agent
+receives that event in recent action history and the resulting workspace state on its next
+turn. No model run or synthetic agent message is required for the click. Notification IDs
+are resolved against the current role-scoped notification projection; assignments are read
+again through the principal-scoped assignment store before opening.
 
 Visual Composition `1.1.0` adds a backward-compatible registered-image form. An image
 may still carry a verified HTTPS `url`, or it may carry an `asset_id` returned by the

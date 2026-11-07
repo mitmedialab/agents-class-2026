@@ -77,6 +77,7 @@ from course_server.faq import (
     LocalFaqKnowledgeStore,
     PublishedFaqResourceCatalog,
 )
+from course_server.grades import FileGradeBook, GetMyGradesTool
 from course_server.index_resources import index_resources
 from course_server.instructor_contacts import InstructorListStudentsTool
 from course_server.instructor_messages import (
@@ -172,6 +173,7 @@ def build_runtime(
     skills: SkillCatalog | None = None,
     ta_questions: TAQuestionService | None = None,
     assignments: AssignmentStore | None = None,
+    grades: FileGradeBook | None = None,
     instructor_messages: InstructorMessageService | None = None,
     student_communications: StudentCommunicationService | None = None,
     faq_updates: FaqKnowledgeStore | None = None,
@@ -196,6 +198,12 @@ def build_runtime(
         assignments
         if assignments is not None
         else FileAssignmentStore(settings.assignment_data_path)
+    )
+    grade_store = grades or FileGradeBook(
+        settings.grade_data_path,
+        credit_usernames=resolved_roster.active_credit_usernames
+        if resolved_roster is not None
+        else frozenset(),
     )
     component_registry = components or load_component_registry()
     student_project_aliases = (
@@ -231,6 +239,7 @@ def build_runtime(
         CourseSearchTool(course_resources),
         CourseListAssignmentsTool(assignment_store),
         CourseGetAssignmentTool(assignment_store),
+        GetMyGradesTool(grade_store),
         ReadTemporaryUploadTool(upload_store),
         DocumentInspectPageTool(
             course_resources,

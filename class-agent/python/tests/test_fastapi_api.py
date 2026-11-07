@@ -19,6 +19,7 @@ from course_server.agent import (
     INSTRUCTOR_LIST_APPLICATIONS_TOOL_ID,
     CourseAgentService,
     CourseCapabilityPolicy,
+    CourseResourceCatalog,
     FileApplicantStore,
     FileResourceProvider,
     InMemoryConversationStore,
@@ -27,7 +28,12 @@ from course_server.agent import (
 from course_server.anonymous_quotas import AnonymousQuotaPolicy
 from course_server.api import API_PREFIX, AppServices, create_app
 from course_server.application_access import ApplicationAccessPolicy
-from course_server.assignments import AssignmentDraft, AssignmentStore, FileAssignmentStore
+from course_server.assignments import (
+    Assignment,
+    AssignmentDraft,
+    AssignmentStore,
+    FileAssignmentStore,
+)
 from course_server.auth import AuthenticationService, InMemoryAuthStore, UserAdminService
 from course_server.browser import (
     BrowserPage,
@@ -38,6 +44,7 @@ from course_server.browser import (
     BrowserSnapshot,
 )
 from course_server.faq import FaqStore, InMemoryFaqStore, StudentNotificationService
+from course_server.grades import FileGradeBook
 from course_server.instructor_messages import (
     InMemoryInstructorMessageStore,
     InstructorMessageDraft,
@@ -48,6 +55,7 @@ from course_server.notifications import (
     InMemoryNotificationItemReadStore,
     NotificationCenterService,
 )
+from course_server.question_discussions import QuestionDiscussionService, QuestionReply
 from course_server.uploads import FileTemporaryUploadStore, TemporaryUploadStore
 from course_server.web_search import fetch_public_favicon
 
@@ -146,6 +154,40 @@ class RecordingRuntime:
         for event in result.events:
             event_observer(event)
         return result
+
+
+class StaticAssignmentStore:
+    """Small in-memory store for route tests that exercise presentation, not disk I/O."""
+
+    def __init__(self, assignment: Assignment) -> None:
+        self.assignment = assignment
+
+    async def create(self, draft: AssignmentDraft, *, created_by_user_id: UUID) -> Assignment:
+        raise NotImplementedError
+
+    async def list_all(self) -> list[Assignment]:
+        return [self.assignment]
+
+    async def list_for_principal(
+        self, principal: PrincipalContext, *, now: datetime
+    ) -> list[Assignment]:
+        if not principal.authenticated or not {"student", "ta", "instructor"}.intersection(
+            principal.roles
+        ):
+            return []
+        if "instructor" in principal.roles:
+            return [self.assignment]
+        return (
+            [self.assignment]
+            if self.assignment.status == "published" and self.assignment.release_at <= now
+            else []
+        )
+
+    async def get_for_principal(
+        self, assignment_id: str, principal: PrincipalContext, *, now: datetime
+    ) -> Assignment | None:
+        available = await self.list_for_principal(principal, now=now)
+        return next((item for item in available if item.assignment_id == assignment_id), None)
 
 
 class SnapshotBrowserService:
@@ -329,7 +371,11 @@ def _build_client(
     ta_question_store: TAQuestionStore | None = None,
     faq_store: FaqStore | None = None,
     assignment_store: AssignmentStore | None = None,
+    grade_store: FileGradeBook | None = None,
+    course_resources: CourseResourceCatalog | None = None,
     favicon_fetcher: Callable[[str], tuple[bytes, str] | None] | None = None,
+    question_reply_store: Any = None,
+    username: str = "alice",
 ) -> tuple[TestClient, str, RecordingRuntime]:
     auth_store = InMemoryAuthStore()
     conversations = InMemoryConversationStore()
@@ -337,9 +383,9 @@ def _build_client(
     admin = UserAdminService(auth_store)
     issued = asyncio.run(
         admin.create_user(
-            username="alice",
-            display_name="Alice Example",
-            email="alice@mit.edu",
+            username=username,
+            display_name="Test Student 2" if username == "test-student2" else "Alice Example",
+            email="alice@mit.edu" if username == "alice" else f"{username}@example.edu",
             role="student",
         )
     )
@@ -348,18 +394,28 @@ def _build_client(
         faqs=faq_store or InMemoryFaqStore(),
         reads=InMemoryNotificationItemReadStore(),
         auth=auth_store,
+        resources=course_resources,
         assignments=assignment_store,
         questions=ta_question_store,
+        question_replies=question_reply_store,
     )
     services = AppServices(
         authentication=authentication,
         agent=CourseAgentService(
             runtime=runtime,
             conversations=conversations,
+            capability_policy=CourseCapabilityPolicy(
+                course_resources,
+                grades_enabled=grade_store is not None,
+                grade_access=grade_store.can_access if grade_store else None,
+            ),
             uploads=upload_store,
             attention=notification_center,
         ),
         conversations=conversations,
+        course_resources=course_resources,
+        assignments=assignment_store,
+        grades=grade_store,
         uploads=upload_store,
         browser=browser,
         ta_questions=(
@@ -373,6 +429,15 @@ def _build_client(
             else None
         ),
         notification_center=notification_center,
+        question_discussions=(
+            QuestionDiscussionService(
+                auth=auth_store,
+                questions=ta_question_store,
+                replies=question_reply_store,
+            )
+            if ta_question_store is not None and question_reply_store is not None
+            else None
+        ),
         anonymous_quota_policy=anonymous_quota_policy or AnonymousQuotaPolicy(),
         favicon_fetcher=favicon_fetcher or fetch_public_favicon,
     )
@@ -381,6 +446,77 @@ def _build_client(
         issued.access_code,
         runtime,
     )
+
+
+def test_question_discussion_routes_require_login_and_retain_thread() -> None:
+    class Replies:
+        def __init__(self) -> None:
+            self.items: list[QuestionReply] = []
+
+        async def list_for_questions(self, question_ids: list[UUID]) -> list[QuestionReply]:
+            return [item for item in self.items if item.question_id in question_ids]
+
+        async def create(
+            self, *, question_id: UUID, sender_user_id: UUID, sender_role: str, body: str
+        ) -> QuestionReply:
+            reply = QuestionReply(
+                id=uuid4(),
+                question_id=question_id,
+                sender_user_id=sender_user_id,
+                sender_role=sender_role,
+                body=body,
+                created_at=datetime.now(UTC),
+            )
+            self.items.append(reply)
+            return reply
+
+    questions = InMemoryTAQuestionStore()
+    replies = Replies()
+    client, access_code, _ = _build_client(
+        ta_question_store=questions,
+        question_reply_store=replies,
+    )
+    question_id = uuid4()
+    route = f"{API_PREFIX}/course-questions/{question_id}/discussion"
+    assert client.get(route).status_code == 404
+    _login(client, access_code, prefix=API_PREFIX)
+    student_id = UUID(client.get(f"{API_PREFIX}/auth/me").json()["user_id"])
+
+    async def make_answered_question() -> UUID:
+        question = await questions.create_question(
+            student_user_id=student_id,
+            conversation_id=uuid4(),
+            subject="Project scope",
+            question_text="Can I use a local model?",
+            context_text=None,
+            created_at=datetime.now(UTC),
+        )
+        queued = await questions.transition_question(
+            question.id,
+            expected="pending_confirmation",
+            status="queued",
+            changed_at=datetime.now(UTC),
+            reporter_visibility="anonymous",
+        )
+        assert queued is not None
+        await questions.record_online_answer(
+            queued,
+            instructor_message_id=uuid4(),
+            responder_email="ta@mit.edu",
+            answer_text="Yes, document it.",
+            publication="private",
+            processed_at=datetime.now(UTC),
+        )
+        return question.id
+
+    actual_id = asyncio.run(make_answered_question())
+    route = f"{API_PREFIX}/course-questions/{actual_id}/discussion"
+    assert client.get(route).json()["answer"] == "Yes, document it."
+    sent = client.post(route, json={"body": "Would a small model work?"})
+    assert sent.status_code == 200
+    assert sent.json()["replies"][0]["body"] == "Would a small model work?"
+    assert client.get(route).json()["replies"][0]["sender_label"] == "You"
+    assert client.post(route, json={"body": " "}).status_code == 400
 
 
 def _login(client: TestClient, access_code: str, *, prefix: str = "") -> None:
@@ -547,6 +683,8 @@ def test_public_course_resource_catalog_marks_schedule_provisional() -> None:
         "course://slides/week-03",
         "course://slides/week-04",
         "course://slides/week-06",
+        "course://slides/week-07",
+        "course://slides/week-08",
         "course://readings/software-agents-bradshaw",
     ]
     schedule = next(
@@ -1081,6 +1219,460 @@ def test_workspace_actions_validate_existing_panels_and_persist_events() -> None
         ).status_code
         == 400
     )
+
+
+def test_static_shortcuts_open_canonical_workspace_without_an_agent_run() -> None:
+    client, _, runtime = _build_client()
+
+    async def scenario() -> None:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=client.app), base_url="https://testserver"
+        ) as site:
+            created = await site.post("/conversations", json={"title": "Course views"})
+            conversation_id = created.json()["id"]
+            path = f"/conversations/{conversation_id}/workspace/open-static"
+
+            schedule = await site.post(path, json={"target": "schedule"})
+            assert schedule.status_code == 200
+            assert schedule.json()["type"] == "workspace.panel.opened"
+            assert schedule.json()["actor"] == "user"
+            assert schedule.json()["payload"]["command"]["panel"]["resource_uri"] == (
+                "course://schedule"
+            )
+            assert schedule.json()["payload"]["command"]["panel"]["component_id"] == "calendar"
+
+            grading = await site.post(path, json={"target": "grading"})
+            assert grading.status_code == 200
+            panel = grading.json()["payload"]["command"]["panel"]
+            assert panel["component_id"] == "document-viewer"
+            assert panel["resource_uri"] == "course://syllabus"
+            assert panel["props"]["find_text"] == "Assignments and Evaluation"
+            assert runtime.contexts == []
+
+            detail = (await site.get(f"/conversations/{conversation_id}")).json()
+            assert [event["type"] for event in detail["events"]] == [
+                "workspace.panel.opened",
+                "workspace.panel.opened",
+            ]
+            response = await site.post(
+                f"/conversations/{conversation_id}/run", json={"text": "What is open?"}
+            )
+            assert response.status_code == 200
+            context = runtime.contexts[-1]
+            assert [event.type for event in context.recent_events if event.actor == "user"] == [
+                "workspace.panel.opened",
+                "workspace.panel.opened",
+            ]
+            workspace = cast(dict[str, Any], context.metadata["workspace_state"])
+            assert workspace["panels"][0]["resource_uri"] == "course://syllabus"
+
+    asyncio.run(scenario())
+
+
+def test_grading_shortcut_shows_only_owned_feedback_without_event_content(tmp_path: Path) -> None:
+    now = datetime.now(UTC)
+    assignments = StaticAssignmentStore(
+        Assignment(
+            assignment_id="week-3",
+            revision=1,
+            status="published",
+            title="Week 3 Build",
+            summary="Build instructions",
+            content_markdown="# Week 3 Build\n\nBuild the agent.",
+            release_at=now - timedelta(days=1),
+            due_at=now + timedelta(days=1),
+            created_at=now,
+            updated_at=now,
+            created_by_user_id=uuid4(),
+        )
+    )
+    grade_path = tmp_path / "weekly-feedback.json"
+    grade_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "weekly_build_assignment_ids": ["week-3"],
+                "students": {
+                    "alice": [
+                        {
+                            "week": 3,
+                            "date": "2026-10-17",
+                            "reviewer": "Course TA",
+                            "feedback": "Alice private feedback",
+                        }
+                    ],
+                    "bob": [
+                        {
+                            "week": 3,
+                            "date": "2026-10-17",
+                            "reviewer": "Course TA",
+                            "feedback": "Bob private feedback",
+                        }
+                    ],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    client, access_code, _ = _build_client(
+        grade_store=FileGradeBook(grade_path, credit_usernames=frozenset({"alice", "bob"})),
+        assignment_store=assignments,
+    )
+
+    async def scenario() -> None:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=client.app), base_url="https://testserver"
+        ) as site:
+            assert (await site.get("/grades/mine")).status_code == 404
+            login = await site.post(
+                "/auth/login", json={"username": "alice", "access_code": access_code}
+            )
+            assert login.status_code == 200
+
+            response = await site.get("/grades/mine")
+            assert response.status_code == 200
+            assert response.headers["cache-control"] == "private, no-store"
+            assert response.json() == {
+                "assignments": [
+                    {"assignment_id": "week-3", "title": "Week 3 Build", "has_feedback": True}
+                ]
+            }
+            assert "Alice private feedback" not in response.text
+            assert "Bob private feedback" not in response.text
+            note = await site.get("/grades/mine/assignments/week-3")
+            assert note.status_code == 200
+            assert note.json()["feedback"]["feedback"] == "Alice private feedback"
+            assert (await site.get("/grades/mine/assignments/week-1")).status_code == 404
+            assert (await site.get("/grades/mine/assignments/week-7")).status_code == 404
+            other_route = await site.get(
+                "/course/resources/content", params={"uri": "course://grades/mine"}
+            )
+            assert other_route.status_code == 404
+
+            conversation_id = (await site.post("/conversations", json={"title": "Grading"})).json()[
+                "id"
+            ]
+            opened = await site.post(
+                f"/conversations/{conversation_id}/workspace/open-static",
+                json={"target": "grading"},
+            )
+            assert opened.status_code == 200
+            panel = opened.json()["payload"]["command"]["panel"]
+            assert panel["resource_uri"] == "course://syllabus"
+            assert panel["state"]["document_kind"] == "grading-overview"
+            assert "feedback" not in opened.text.casefold()
+            assignment_opened = await site.post(
+                f"/conversations/{conversation_id}/workspace/open-static",
+                json={"target": "assignment", "assignment_id": "week-3"},
+            )
+            assert assignment_opened.status_code == 200
+            assert (
+                assignment_opened.json()["payload"]["command"]["panel"]["resource_uri"]
+                == "course://assignment/week-3"
+            )
+            assert "Alice private feedback" not in assignment_opened.text
+            events = (await site.get(f"/conversations/{conversation_id}")).json()["events"]
+            assert "Alice private feedback" not in json.dumps(events)
+            assert "Bob private feedback" not in json.dumps(events)
+
+    asyncio.run(scenario())
+
+
+def test_listener_cannot_read_weekly_build_grades(tmp_path: Path) -> None:
+    path = tmp_path / "grades.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "weekly_build_assignment_ids": ["week-3"],
+                "students": {
+                    "alice": [
+                        {"week": 3, "date": "2026-10-17", "reviewer": "TA", "feedback": "Private"}
+                    ]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    client, access_code, _ = _build_client(
+        grade_store=FileGradeBook(path, credit_usernames=frozenset()),
+        assignment_store=StaticAssignmentStore(
+            Assignment(
+                assignment_id="week-3",
+                revision=1,
+                status="published",
+                title="Week 3",
+                summary="Build",
+                content_markdown="# Week 3\n\nBuild.",
+                release_at=datetime.now(UTC) - timedelta(days=1),
+                due_at=datetime.now(UTC) + timedelta(days=1),
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+                created_by_user_id=uuid4(),
+            )
+        ),
+    )
+
+    async def scenario() -> None:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=client.app), base_url="https://testserver"
+        ) as site:
+            assert (
+                await site.post(
+                    "/auth/login", json={"username": "alice", "access_code": access_code}
+                )
+            ).status_code == 200
+            assert (await site.get("/grades/mine")).status_code == 404
+            assert (await site.get("/grades/mine/assignments/week-3")).status_code == 404
+
+    asyncio.run(scenario())
+
+
+def test_preview_student_sees_sample_feedback_through_grading_routes(tmp_path: Path) -> None:
+    now = datetime.now(UTC)
+    assignments = StaticAssignmentStore(
+        Assignment(
+            assignment_id="week-3",
+            revision=1,
+            status="published",
+            title="Week 3 Build",
+            summary="Build instructions",
+            content_markdown="# Week 3 Build\n\nBuild the agent.",
+            release_at=now - timedelta(days=1),
+            due_at=now + timedelta(days=1),
+            created_at=now,
+            updated_at=now,
+            created_by_user_id=uuid4(),
+        )
+    )
+    real_path = tmp_path / "real.json"
+    preview_path = tmp_path / "preview.json"
+    for path, username, message in (
+        (real_path, "alice", "Alice private grade"),
+        (preview_path, "test-student2", "SAMPLE preview feedback"),
+    ):
+        path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 2,
+                    "weekly_build_assignment_ids": ["week-3"],
+                    "students": {
+                        username: [
+                            {
+                                "week": 3,
+                                "date": "2026-11-05",
+                                "reviewer": "Demo TA",
+                                "feedback": message,
+                            }
+                        ]
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+    grades = FileGradeBook(
+        real_path,
+        credit_usernames=frozenset({"alice"}),
+        preview_username="test-student2",
+        preview_path=preview_path,
+        preview_only=True,
+    )
+    client, access_code, _ = _build_client(
+        grade_store=grades, assignment_store=assignments, username="test-student2"
+    )
+
+    async def scenario() -> None:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=client.app), base_url="https://testserver"
+        ) as site:
+            login = await site.post(
+                "/auth/login", json={"username": "test-student2", "access_code": access_code}
+            )
+            assert login.status_code == 200
+            overview = await site.get("/grades/mine")
+            assert overview.status_code == 200
+            assert overview.json()["assignments"][0]["has_feedback"] is True
+            note = await site.get("/grades/mine/assignments/week-3")
+            assert note.status_code == 200
+            assert note.json()["feedback"]["feedback"] == "SAMPLE preview feedback"
+            assert "Alice private grade" not in note.text
+            assert note.headers["cache-control"] == "private, no-store"
+
+    asyncio.run(scenario())
+
+
+def test_static_open_rejects_unowned_and_unknown_targets_without_events() -> None:
+    client, _, _ = _build_client()
+
+    async def scenario() -> None:
+        transport = httpx.ASGITransport(app=client.app)
+        async with (
+            httpx.AsyncClient(transport=transport, base_url="https://testserver") as site,
+            httpx.AsyncClient(transport=transport, base_url="https://testserver") as other,
+        ):
+            created = await site.post("/conversations", json={"title": "Course views"})
+            conversation_id = created.json()["id"]
+            path = f"/conversations/{conversation_id}/workspace/open-static"
+            assert (await other.post(path, json={"target": "schedule"})).status_code == 404
+            assert (
+                await site.post(
+                    path, json={"target": "notification", "notification_id": str(uuid4())}
+                )
+            ).status_code == 404
+            assert (
+                await site.post(path, json={"target": "grading", "notification_id": str(uuid4())})
+            ).status_code == 422
+            assert (await site.post(path, json={"target": "other"})).status_code == 422
+            assert (await site.get(f"/conversations/{conversation_id}")).json()["events"] == []
+
+    asyncio.run(scenario())
+
+
+def test_static_shortcut_respects_resource_visibility(tmp_path: Path) -> None:
+    private_schedule = tmp_path / "schedule.md"
+    private_schedule.write_text("# Private schedule", encoding="utf-8")
+    resources = FileResourceProvider(
+        [
+            ResourceDefinition(
+                uri="course://schedule",
+                title="Private schedule",
+                media_type="text/markdown",
+                path=private_schedule,
+                visibility="students",
+            )
+        ]
+    )
+    client, access_code, _ = _build_client(course_resources=resources)
+
+    async def scenario() -> None:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=client.app), base_url="https://testserver"
+        ) as site:
+            created = await site.post("/conversations", json={"title": "Private schedule"})
+            anonymous_id = created.json()["id"]
+            path = f"/conversations/{anonymous_id}/workspace/open-static"
+            assert (await site.post(path, json={"target": "schedule"})).status_code == 404
+            assert (await site.get(f"/conversations/{anonymous_id}")).json()["events"] == []
+
+            logged_in = await site.post(
+                "/auth/login", json={"username": "alice", "access_code": access_code}
+            )
+            assert logged_in.status_code == 200
+            student_conversation = await site.post(
+                "/conversations", json={"title": "Private schedule"}
+            )
+            student_id = student_conversation.json()["id"]
+            student_open = await site.post(
+                f"/conversations/{student_id}/workspace/open-static",
+                json={"target": "schedule"},
+            )
+            assert student_open.status_code == 200
+            assert student_open.json()["payload"]["command"]["panel"]["resource_uri"] == (
+                "course://schedule"
+            )
+
+    asyncio.run(scenario())
+
+
+def test_notification_objects_open_authorized_slides_and_assignments_directly() -> None:
+    now = datetime.now(UTC)
+    assignments = StaticAssignmentStore(
+        Assignment(
+            assignment_id="direct-open-assignment",
+            revision=1,
+            status="published",
+            title="Direct open assignment",
+            summary="Read the complete instructions.",
+            content_markdown="# Direct open assignment\n\nRead the complete instructions.",
+            release_at=now - timedelta(hours=1),
+            due_at=now + timedelta(days=12),
+            created_at=now,
+            updated_at=now,
+            created_by_user_id=uuid4(),
+        )
+    )
+    client, access_code, runtime = _build_client(
+        assignment_store=assignments,
+        course_resources=FileResourceProvider.from_registry(),
+    )
+
+    async def scenario() -> None:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=client.app), base_url="https://testserver"
+        ) as site:
+            logged_in = await site.post(
+                "/auth/login", json={"username": "alice", "access_code": access_code}
+            )
+            assert logged_in.status_code == 200
+            created = await site.post("/conversations", json={"title": "Course items"})
+            conversation_id = created.json()["id"]
+            items = (await site.get("/notification-center")).json()["history_items"]
+            slide = next(item for item in items if item["section"] == "lecture_slides")
+            assignment = next(item for item in items if item["assignment_id"] is not None)
+            path = f"/conversations/{conversation_id}/workspace/open-static"
+
+            slide_open = await site.post(
+                path, json={"target": "notification", "notification_id": slide["id"]}
+            )
+            assert slide_open.status_code == 200
+            slide_panel = slide_open.json()["payload"]["command"]["panel"]
+            assert slide_panel["component_id"] == "document-viewer"
+            assert slide_panel["resource_uri"] == slide["resource_uri"]
+
+            assignment_open = await site.post(
+                path, json={"target": "notification", "notification_id": assignment["id"]}
+            )
+            assert assignment_open.status_code == 200
+            assignment_panel = assignment_open.json()["payload"]["command"]["panel"]
+            assert assignment_panel["component_id"] == "draft-document"
+            assert assignment_panel["props"]["content"] == (
+                "# Direct open assignment\n\nRead the complete instructions."
+            )
+            assert runtime.contexts == []
+
+    asyncio.run(scenario())
+
+
+def test_faq_update_opens_its_trusted_static_detail() -> None:
+    faqs = InMemoryFaqStore()
+    asyncio.run(
+        faqs.publish(
+            source_question_id=uuid4(),
+            question="May we work in pairs?",
+            answer="Pairs are allowed.",
+            published_by_user_id=None,
+            published_at=datetime.now(UTC),
+        )
+    )
+    client, access_code, runtime = _build_client(faq_store=faqs)
+
+    async def scenario() -> None:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=client.app), base_url="https://testserver"
+        ) as site:
+            logged_in = await site.post(
+                "/auth/login", json={"username": "alice", "access_code": access_code}
+            )
+            assert logged_in.status_code == 200
+            conversation_id = (
+                await site.post("/conversations", json={"title": "Course update"})
+            ).json()["id"]
+            item = next(
+                item
+                for item in (await site.get("/notification-center")).json()["items"]
+                if item["title"] == "May we work in pairs?"
+            )
+            opened = await site.post(
+                f"/conversations/{conversation_id}/workspace/open-static",
+                json={"target": "notification", "notification_id": item["id"]},
+            )
+            assert opened.status_code == 200
+            panel = opened.json()["payload"]["command"]["panel"]
+            assert panel["component_id"] == "draft-document"
+            assert panel["props"]["content"] == "Pairs are allowed."
+            assert runtime.contexts == []
+
+    asyncio.run(scenario())
 
 
 def test_document_page_interaction_persists_canonical_workspace_page() -> None:

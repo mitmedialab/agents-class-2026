@@ -649,6 +649,24 @@ def _conversation_history(context: AgentContext) -> str:
                     f"{json.dumps(value, ensure_ascii=False)}"
                 )
             continue
+        if event.actor == "user" and event.type.startswith("workspace.panel."):
+            if event.type == "workspace.panel.opened":
+                command = event.payload.get("command")
+                panel = command.get("panel") if isinstance(command, dict) else None
+                if isinstance(panel, dict):
+                    title = panel.get("title")
+                    uri = panel.get("resource_uri")
+                    if isinstance(title, str):
+                        lines.append(
+                            "User opened a workspace view: "
+                            + title
+                            + (f" ({uri})" if isinstance(uri, str) else "")
+                        )
+            elif event.type == "workspace.panel.closed":
+                lines.append("User closed a workspace view.")
+            elif event.type == "workspace.panel.updated":
+                lines.append("User focused a workspace view.")
+            continue
         if event.type != "agent.tool.completed":
             continue
         tool_id = event.payload.get("tool_id")

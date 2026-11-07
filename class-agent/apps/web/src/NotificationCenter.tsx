@@ -7,6 +7,7 @@ import type {
   NotificationCenterSection,
 } from "./api.js";
 import { courseResourceAssetUrl, notificationSenderImageUrl } from "./api.js";
+import { QuestionDiscussion } from "./QuestionDiscussion.js";
 
 const SECTIONS: ReadonlyArray<{
   id: NotificationCenterSection;
@@ -77,6 +78,7 @@ function NotificationKindIcon({ kind }: { kind: NotificationCenterItem["kind"] }
       );
       break;
     case "staff_reply":
+    case "question_reply":
       drawing = (
         <>
           <path d="M4.25 5.75h15.5v10.5H9l-4.75 3z" />
@@ -152,11 +154,12 @@ function senderName(item: NotificationCenterItem): string | null {
     !item.sender ||
     item.kind !== "instructor_message" &&
     item.kind !== "staff_reply" &&
+    item.kind !== "question_reply" &&
     item.kind !== "pending_student_question"
   ) {
     return null;
   }
-  return item.kind === "pending_student_question"
+  return item.kind === "pending_student_question" || item.kind === "question_reply"
     ? (item.sender.display_name ?? item.sender.first_name)
     : item.sender.first_name;
 }
@@ -338,11 +341,14 @@ export function CommunicationDetailCard({
         <CloseIcon />
       </Button>
       <div className="notification-card-primary communication-detail-card-body">
-        <StandardNotificationCardContent
-          generatedAt={generatedAt}
-          item={item}
-          showAction={false}
-        />
+        {item.question_id && item.kind !== "pending_message" &&
+          (item.kind !== "pending_student_question" || item.state === "responded")
+          ? <QuestionDiscussion key={item.question_id} questionId={item.question_id} />
+          : <StandardNotificationCardContent
+              generatedAt={generatedAt}
+              item={item}
+              showAction={false}
+            />}
       </div>
     </article>
   );

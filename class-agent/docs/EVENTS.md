@@ -37,6 +37,10 @@ Phase 3's sample syllabus uses `server_full`. The tool adapter already honors `s
 - `workspace.interaction`: the existing panel ID/component ID, a permitted semantic
   interaction name, and its validated JSON value.
 
+Agent tools and explicit site controls use the same validated `workspace.panel.opened`
+command. A direct Schedule, Grading, or notification click records `actor="user"`;
+the next agent turn receives that action alongside the projected workspace state.
+
 Each payload has exactly one `command` object conforming to
 `shared/schemas/v1/workspace.schema.json`. Panel state is reconstructed by reducing
 these events in order. The durable representation contains component IDs, resource

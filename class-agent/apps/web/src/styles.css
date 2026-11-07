@@ -556,6 +556,218 @@ textarea {
   overflow: visible;
 }
 
+.workspace-panel:has(> .workspace-assignment-feedback)
+  > .ca-draft-document[data-content-only="true"] {
+  min-height: 0;
+}
+
+.workspace-panel > .workspace-assignment-feedback {
+  border-top: 1px solid var(--color-border);
+  margin-top: 1.5rem;
+  overflow: visible;
+  padding: 1.5rem 0;
+}
+
+.workspace-feedback-card {
+  background: #242424;
+  border: 1px solid #3c3c3c;
+  border-radius: 0.875rem;
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  padding: clamp(1rem, 2vw, 1.5rem);
+}
+
+.workspace-feedback-card-header {
+  align-items: start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.workspace-feedback-eyebrow {
+  color: #bababa;
+  display: block;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  margin-bottom: 0.65rem;
+  text-transform: uppercase;
+}
+
+.workspace-feedback-card-header h2 {
+  font-size: 1.4rem;
+  line-height: 1.18;
+  margin: 0;
+}
+
+.workspace-feedback-card-header h3 {
+  font-size: 1.05rem;
+  line-height: 1.18;
+  margin: 0;
+}
+
+.workspace-feedback-card-header p {
+  color: #bdbdbd;
+  font-size: 0.875rem;
+  margin: 0.5rem 0 0;
+}
+
+.workspace-feedback-card-header button {
+  background: transparent;
+  border: 1px solid #626262;
+  border-radius: 0.4rem;
+  color: inherit;
+  cursor: pointer;
+  flex: none;
+  font-size: 0.8125rem;
+  line-height: 1.3;
+  padding: 0.6rem 0.8rem;
+}
+
+.workspace-feedback-card-header button:hover,
+.workspace-feedback-card-header button:focus-visible {
+  background: #363636;
+  border-color: #aaa;
+}
+
+.workspace-feedback-message {
+  color: #c6c6c6;
+  line-height: 1.65;
+  margin: 1rem 0 0;
+}
+
+.workspace-feedback-card-body {
+  display: grid;
+  gap: 1.25rem;
+  margin-top: 1.25rem;
+}
+
+.workspace-feedback-card-body h3 {
+  font-size: 1.05rem;
+  line-height: 1.18;
+  margin: 0 0 0.7rem;
+}
+
+.workspace-feedback-card-body h4 {
+  font-size: 0.9375rem;
+  line-height: 1.18;
+  margin: 0 0 0.7rem;
+}
+
+.workspace-feedback-comments .ca-document-viewer {
+  background: transparent;
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+}
+
+.workspace-feedback-comments .ca-viewer-toolbar {
+  display: none;
+}
+
+.workspace-feedback-comments .ca-document-content {
+  overflow: visible;
+  padding: 0;
+}
+
+.workspace-feedback-comments .ca-document-markdown {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  margin: 0;
+  max-width: none;
+}
+
+.workspace-feedback-checklist {
+  border-top: 1px solid #454545;
+  padding-top: 1.25rem;
+}
+
+.workspace-feedback-checklist ul {
+  background: #1b1b1b;
+  border: 1px solid #3d3d3d;
+  border-radius: 0.65rem;
+  list-style: none;
+  margin: 0;
+  padding: 0.2rem 0.85rem;
+}
+
+.workspace-feedback-checklist li {
+  align-items: start;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: 1.25rem minmax(0, 1fr);
+  line-height: 1.45;
+  padding: 0.55rem 0;
+}
+
+.workspace-feedback-checklist li + li {
+  border-top: 1px solid #363636;
+}
+
+.workspace-feedback-checklist li[data-status="met"] .workspace-feedback-mark {
+  color: #b9dfba;
+}
+
+.workspace-feedback-checklist li[data-status="unmet"] .workspace-feedback-mark {
+  color: #f0b0a9;
+}
+
+.workspace-feedback-mark {
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.workspace-panel > .workspace-grading-panel {
+  overflow: visible;
+}
+
+.workspace-grading-panel > .ca-document-viewer {
+  background: transparent;
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+}
+
+.workspace-grading-panel > .ca-document-viewer .ca-viewer-toolbar {
+  display: none;
+}
+
+.workspace-grading-panel > .ca-document-viewer .ca-document-content {
+  overflow: visible;
+}
+
+.workspace-grading-feedback {
+  border-top: 1px solid var(--color-border);
+  padding: 1.5rem clamp(1.25rem, 4vw, 3.5rem) 3rem;
+}
+
+.workspace-grading-feedback > h2 {
+  font-size: 1.4rem;
+  line-height: 1.18;
+  margin: 0 0 0.55rem;
+}
+
+.workspace-grading-feedback > p {
+  color: #bdbdbd;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  margin: 0 0 1.5rem;
+}
+
+.workspace-grading-cards {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (max-width: 640px) {
+  .workspace-feedback-card-header {
+    flex-direction: column;
+  }
+}
+
 .workspace-panel
   > .ca-draft-document[data-content-only="true"]
   .ca-draft-content,
@@ -1639,6 +1851,67 @@ textarea {
   -webkit-line-clamp: unset;
   display: block;
   overflow: visible;
+}
+
+.communication-detail-card:has(.question-discussion) {
+  max-height: min(62dvh, 36rem);
+}
+
+.question-discussion h3 {
+  font-size: 1.125rem;
+  margin: 0 0 var(--space-4);
+}
+
+.question-discussion-messages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.question-discussion-messages li {
+  border-top: 1px solid var(--color-border);
+  padding: var(--space-3) 0;
+}
+
+.question-discussion-messages li span,
+.question-discussion-form label {
+  color: var(--color-text-muted);
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.question-discussion-messages p {
+  margin: var(--space-2) 0 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.question-discussion-form {
+  border-top: 1px solid var(--color-border);
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+}
+
+.question-discussion-form textarea {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  font: inherit;
+  min-height: 5rem;
+  padding: var(--space-3);
+  resize: vertical;
+  width: 100%;
+}
+
+.question-discussion-form .ca-button {
+  justify-self: end;
+}
+
+.question-discussion-error,
+.question-discussion-status {
+  font-size: 0.875rem;
 }
 
 .notification-card-layout {
