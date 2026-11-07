@@ -129,7 +129,7 @@ from course_server.workspace.tools import (
     WorkspaceReviewPresentationTool,
     WorkspaceUpdateComponentTool,
 )
-from runtime_smolagents import OpenAIModelProvider, SmolagentsRuntime
+from runtime_smolagents import AnthropicModelProvider, OpenAIModelProvider, SmolagentsRuntime
 
 _SAFE_PROVIDER_FIELD = re.compile(r"^[A-Za-z0-9_.\[\]-]{1,120}$")
 
@@ -161,6 +161,14 @@ async def run_cli_turn(
         text=text,
     )
     return conversation, result
+
+
+def _openai_key(settings: AgentSettings) -> str:
+    """These image tools call OpenAI directly, so a Claude key must never reach them."""
+
+    if settings.model_provider != "openai":
+        raise RuntimeError("image inspection requires MODEL_PROVIDER=openai")
+    return settings.model_api_key.get_secret_value()
 
 
 def build_runtime(
@@ -246,7 +254,7 @@ def build_runtime(
                 image,
                 prompt,
                 model_id=settings.model_id,
-                api_key=settings.model_api_key.get_secret_value(),
+                api_key=_openai_key(settings),
             ),
         ),
         CourseInspectSlidePageTool(
@@ -255,7 +263,7 @@ def build_runtime(
                 image,
                 prompt,
                 model_id=settings.model_id,
-                api_key=settings.model_api_key.get_secret_value(),
+                api_key=_openai_key(settings),
             ),
         ),
         CourseSubmitApplicationTool(applicant_store, upload_store),
@@ -267,7 +275,7 @@ def build_runtime(
                 [(photo.media_type, photo.data) for photo in photos],
                 prompt,
                 model_id=settings.model_id,
-                api_key=settings.model_api_key.get_secret_value(),
+                api_key=_openai_key(settings),
             ),
             application_access,
         ),
@@ -283,7 +291,7 @@ def build_runtime(
                 urls,
                 prompt,
                 model_id=settings.model_id,
-                api_key=settings.model_api_key.get_secret_value(),
+                api_key=_openai_key(settings),
             ),
             probe_public_image_url,
         ),
@@ -363,7 +371,10 @@ def build_runtime(
             ]
         )
     tools = ToolCatalog(executable_tools)
-    provider = OpenAIModelProvider(
+    provider_type = (
+        AnthropicModelProvider if settings.model_provider == "anthropic" else OpenAIModelProvider
+    )
+    provider = provider_type(
         model_id=settings.model_id,
         api_key=settings.model_api_key,
     )

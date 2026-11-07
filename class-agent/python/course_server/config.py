@@ -156,7 +156,7 @@ class AgentSettings(BaseModel):
     agent_id: Literal["course-agent"] = "course-agent"
     agent_name: str = "Class Agent"
     runtime_id: Literal["smolagents-toolcalling"] = "smolagents-toolcalling"
-    model_provider: Literal["openai"] = "openai"
+    model_provider: Literal["openai", "anthropic"] = "openai"
     model_id: str = "gpt-5.6-terra"
     model_api_key: SecretStr = Field(repr=False)
     brave_search_api_key: SecretStr = Field(repr=False)
@@ -200,14 +200,15 @@ class AgentSettings(BaseModel):
     ) -> AgentSettings:
         values = environment if environment is not None else os.environ
         provider = values.get("MODEL_PROVIDER", "openai").strip().casefold()
-        if provider != "openai":
+        if provider not in ("openai", "anthropic"):
             raise ConfigurationError(f"unsupported MODEL_PROVIDER: {provider}")
 
         # MODEL_API_KEY is accepted for compatibility with the Phase 2 example.
-        # OPENAI_API_KEY is the canonical name and is never written to history/logs.
-        raw_api_key = values.get("OPENAI_API_KEY") or values.get("MODEL_API_KEY")
+        # The provider's own name is canonical and is never written to history/logs.
+        key_name = "ANTHROPIC_API_KEY" if provider == "anthropic" else "OPENAI_API_KEY"
+        raw_api_key = values.get(key_name) or values.get("MODEL_API_KEY")
         if not raw_api_key:
-            raise ConfigurationError("OPENAI_API_KEY is required")
+            raise ConfigurationError(f"{key_name} is required")
         api_key = raw_api_key.strip()
         if (
             not api_key
@@ -216,7 +217,7 @@ class AgentSettings(BaseModel):
             or r"\n" in api_key
             or r"\r" in api_key
         ):
-            raise ConfigurationError("OPENAI_API_KEY must be a non-empty single line")
+            raise ConfigurationError(f"{key_name} must be a non-empty single line")
 
         raw_brave_search_api_key = values.get("BRAVE_API_KEY")
         if not raw_brave_search_api_key:
@@ -238,7 +239,8 @@ class AgentSettings(BaseModel):
         if not database_url:
             raise ConfigurationError("DATABASE_URL is required")
 
-        model_id = values.get("MODEL_ID", "gpt-5.6-terra").strip()
+        default_model_id = "claude-opus-5-5" if provider == "anthropic" else "gpt-5.6-terra"
+        model_id = values.get("MODEL_ID", default_model_id).strip()
         if not model_id:
             raise ConfigurationError("MODEL_ID must not be blank")
 
@@ -342,7 +344,7 @@ class AgentSettings(BaseModel):
         )
 
         return cls(
-            model_provider="openai",
+            model_provider="anthropic" if provider == "anthropic" else "openai",
             model_id=model_id,
             model_api_key=SecretStr(api_key),
             brave_search_api_key=SecretStr(brave_search_api_key),

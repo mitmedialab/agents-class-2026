@@ -45,6 +45,17 @@ BRAVE_API_KEY=your-brave-search-key-here
 MODEL_ID=gpt-5.6-terra
 ```
 
+To run the agent on Claude instead, set these and leave `OPENAI_API_KEY` out:
+
+```dotenv
+MODEL_PROVIDER=anthropic
+MODEL_ID=claude-opus-5-5
+ANTHROPIC_API_KEY=your-key-here
+```
+
+On Claude, a reply appears all at once rather than word by word, and the tools that inspect images
+and document pages are unavailable because they call OpenAI directly.
+
 Anonymous visitors are limited for the lifetime of their seven-day session. The production
 defaults are three conversations, ten agent runs, five uploads, and 20 MiB of uploads. Tune
 `ANONYMOUS_MAX_CONVERSATIONS`, `ANONYMOUS_MAX_AGENT_RUNS`, `ANONYMOUS_MAX_UPLOADS`, and
