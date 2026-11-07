@@ -107,7 +107,11 @@ from course_server.instructor_messages import (
     InstructorMessageStateError,
     PostgresInstructorMessageStore,
 )
-from course_server.learning_trail import FileTrailStore, LearningTrailService
+from course_server.learning_trail import (
+    ConnectionDocument,
+    FileTrailStore,
+    LearningTrailService,
+)
 from course_server.learning_trail.routes import build_learning_trail_router
 from course_server.mail import (
     PostgresTAQuestionStore,
@@ -433,6 +437,39 @@ async def _consume_anonymous_upload_quota(
 async def _display_name(auth: AuthStore, user_id: UUID) -> str | None:
     user = await auth.get_user_by_id(user_id)
     return None if user is None else user.display_name
+
+
+def _course_material_loader(
+    catalog: Callable[[], CourseResourceCatalog],
+) -> Callable[[], Awaitable[list[ConnectionDocument]]]:
+    """Slides and readings for learning-trail connections, read once because they rarely change."""
+
+    cached: list[ConnectionDocument] | None = None
+
+    async def load() -> list[ConnectionDocument]:
+        nonlocal cached
+        if cached is None:
+            documents: list[ConnectionDocument] = []
+            for resource in catalog().list_public():
+                if not resource.uri.startswith(("course://slides/", "course://readings/")):
+                    continue
+                try:
+                    contents = await catalog().read(resource.uri)
+                except (ResourceNotFound, OSError, ValueError):
+                    logger.warning("Skipping unreadable course material %s", resource.uri)
+                    continue
+                documents.append(
+                    ConnectionDocument(
+                        kind="class",
+                        target_id=resource.uri,
+                        title=resource.title,
+                        text=contents.text,
+                    )
+                )
+            cached = documents
+        return cached
+
+    return load
 
 
 def _delete_cookie(response: Response, name: str) -> None:
@@ -895,6 +932,7 @@ def create_app(
         learning_trail = LearningTrailService(
             FileTrailStore(resolved_settings.learning_trail_data_path),
             student_name=lambda user_id: _display_name(auth_store, user_id),
+            course_materials=_course_material_loader(lambda: course_resources),
         )
         instructor_message_store = PostgresInstructorMessageStore(pool)
         instructor_message_service = InstructorMessageService(

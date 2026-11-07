@@ -1,9 +1,9 @@
 import type { Event } from "@class-agent/protocol";
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { render, screen, within } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 
 import {
-  ConversationTranscript,
+  ConversationChat,
   projectConversationTranscript,
 } from "./ConversationTranscript.js";
 
@@ -31,28 +31,46 @@ const events = [
   event("user.message", { text: "Question with no reply" }, 5),
 ];
 
-describe("ConversationTranscript", () => {
-  it("keeps every message in order, including one that never got a reply", () => {
+describe("ConversationChat", () => {
+  const events = [
+    event("user.message", { text: "What should I watch?" }, 1),
+    event("tool.call", { tool_id: "memory.get_mine" }, 2),
+    event("agent.message", { text: "Your Week 5 notes say to watch pass rates." }, 3),
+    event("user.message", { text: "<user_request>And then?</user_request>" }, 4),
+  ];
+
+  it("projects student and agent messages in order and leaves out tool activity", () => {
     expect(projectConversationTranscript(events).map(({ from, text }) => [from, text])).toEqual([
-      ["agent", "Hello."],
-      ["student", "First question"],
-      ["agent", "First **answer**."],
-      ["student", "Question with no reply"],
+      ["student", "What should I watch?"],
+      ["agent", "Your Week 5 notes say to watch pass rates."],
+      ["student", "And then?"],
     ]);
   });
 
-  it("shows the title and all messages, and closes", () => {
-    const onClose = vi.fn();
-    render(<ConversationTranscript events={events} onClose={onClose} title="Planning my build" />);
+  it("shows every message, including a question that got no reply", () => {
+    render(<ConversationChat events={events} latestResponse="" pendingMessage={null} />);
 
-    const dialog = screen.getByRole("dialog", { name: "Full conversation" });
-    expect(within(dialog).getByRole("heading", { name: "Planning my build" })).toBeInTheDocument();
-    expect(within(dialog).getAllByRole("listitem")).toHaveLength(4);
-    expect(within(dialog).getByText("answer").tagName).toBe("STRONG");
+    const chat = within(screen.getByRole("list", { name: "Chat history" }));
+    expect(chat.getByText("What should I watch?")).toBeInTheDocument();
+    expect(chat.getByText("Your Week 5 notes say to watch pass rates.")).toBeInTheDocument();
+    expect(chat.getByText("And then?")).toBeInTheDocument();
+  });
 
-    fireEvent.click(within(dialog).getByRole("button", { name: "Continue this conversation" }));
-    expect(onClose).toHaveBeenCalledTimes(1);
-    fireEvent.keyDown(window, { key: "Escape" });
-    expect(onClose).toHaveBeenCalledTimes(2);
+  it("adds a run in progress below the saved messages without repeating saved ones", () => {
+    const { rerender } = render(
+      <ConversationChat events={events} latestResponse="Working" pendingMessage="One more" />,
+    );
+    expect(screen.getByText("One more")).toBeInTheDocument();
+    expect(screen.getByText("Working")).toBeInTheDocument();
+
+    rerender(
+      <ConversationChat
+        events={events}
+        latestResponse="Your Week 5 notes say to watch pass rates."
+        pendingMessage="And then?"
+      />,
+    );
+    expect(screen.getAllByText("And then?")).toHaveLength(1);
+    expect(screen.getAllByText("Your Week 5 notes say to watch pass rates.")).toHaveLength(1);
   });
 });

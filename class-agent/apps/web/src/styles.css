@@ -2756,7 +2756,7 @@ textarea {
   flex-direction: column;
   height: 100%;
   margin-left: auto;
-  max-width: 52rem;
+  max-width: 76rem;
   width: 100%;
 }
 
@@ -2773,69 +2773,60 @@ textarea {
   padding-top: 0.5rem;
 }
 
-.conversation-transcript {
-  background: var(--color-surface);
-  border-left: 1px solid var(--color-border);
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  height: 100%;
-  margin-left: auto;
-  max-width: 44rem;
+.course-agent[data-log-chat="true"] .response-stage {
+  align-items: stretch;
+  justify-content: flex-start;
   overflow-y: auto;
-  padding: 1.5rem;
-  width: 100%;
+  text-align: left;
+  transform: none;
 }
 
-.conversation-transcript-heading {
+.course-agent[data-log-chat="true"] .response-stage-header {
   align-items: flex-start;
-  border-bottom: 1px solid var(--color-border);
-  display: flex;
-  gap: 1rem;
-  justify-content: space-between;
-  padding-bottom: 1rem;
+  background: var(--color-background);
+  margin: 0 auto;
+  max-width: 44rem;
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
-.conversation-transcript-heading h2 {
-  font-size: 1.125rem;
-  font-weight: 400;
-  margin: 0 0 0.25rem;
-  overflow-wrap: anywhere;
+/* Each message already names who wrote it, so the header keeps only the live activity trace. */
+.course-agent[data-log-chat="true"] .response-agent-name {
+  display: none;
 }
 
-.conversation-transcript-heading time,
-.conversation-transcript-meta {
-  color: var(--color-text-muted);
-  font-size: 0.6875rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+.course-agent[data-log-chat="true"] .morphing-line-figure {
+  display: none;
 }
 
-.conversation-transcript-heading button {
-  flex: none;
-}
-
-.conversation-transcript-messages {
+.conversation-chat {
   display: flex;
   flex-direction: column;
   gap: 2rem;
   list-style: none;
-  margin: 0;
-  padding: 0;
+  margin: 1.5rem auto 0;
+  max-width: 44rem;
+  padding: 0 0 3rem;
+  width: 100%;
 }
 
-.conversation-transcript-meta {
+.conversation-chat-meta {
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  letter-spacing: 0.1em;
   margin: 0 0 0.5rem;
+  text-transform: uppercase;
 }
 
-.conversation-transcript-student,
+.conversation-chat-student,
 .conversation-transcript-response {
   font-size: 0.9375rem;
   line-height: 1.55;
   overflow-wrap: anywhere;
 }
 
-.conversation-transcript-student {
+.conversation-chat-student {
   color: var(--color-text-muted);
   margin: 0;
   white-space: pre-wrap;
@@ -3290,10 +3281,6 @@ textarea {
 }
 
 @media (max-width: 640px) {
-  .conversation-transcript-heading {
-    flex-direction: column;
-  }
-
   .course-agent[data-conversation-reading="true"][data-timeline-transition="true"]
     .workspace-shell {
     padding: calc(5.5rem + 1.5rem * var(--timeline-workspace-presence))

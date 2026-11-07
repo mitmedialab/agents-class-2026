@@ -2,6 +2,7 @@ import {
   Button,
   LearningTrail,
   LearningTrailStaff,
+  type LearningTrailConnection,
   type LearningTrailEntry,
   type LearningTrailStudent,
 } from "@class-agent/ui";
@@ -16,6 +17,7 @@ import {
   deleteLearningTrailFeedback,
   deleteStaffLearningTrailFeedback,
   listLearningTrail,
+  listLearningTrailConnections,
   listLearningTrailStudents,
   listSharedLearningTrail,
   updateLearningTrailEntry,
@@ -40,10 +42,26 @@ function StudentView({
   readOnly,
 }: LearningTrailPanelProps & { entries: LearningTrailEntry[] }) {
   const [entries, setEntries] = useState(initialEntries);
-  const reload = async () => setEntries(await listLearningTrail());
+  const [connections, setConnections] = useState<Record<string, LearningTrailConnection[]>>();
+  const loadConnections = useCallback(async () => {
+    // The trail stays usable if connections fail, so a failure leaves them out.
+    try {
+      setConnections(await listLearningTrailConnections());
+    } catch {
+      setConnections({});
+    }
+  }, []);
+  useEffect(() => {
+    void loadConnections();
+  }, [loadConnections]);
+  const reload = async () => {
+    setEntries(await listLearningTrail());
+    void loadConnections();
+  };
 
   return (
     <LearningTrail
+      connections={connections}
       entries={entries}
       focusEntryId={focusEntryId}
       onAsk={onAsk}
@@ -73,6 +91,10 @@ function StudentView({
       }}
       onSetShared={async (entryId, shared) => {
         await updateLearningTrailEntry(entryId, { shared_with_staff: shared });
+        await reload();
+      }}
+      onSetSharedWithClass={async (entryId, shared) => {
+        await updateLearningTrailEntry(entryId, { shared_with_class: shared });
         await reload();
       }}
       readOnly={readOnly}

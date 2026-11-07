@@ -3,7 +3,9 @@
 A student saves one reflection per weekly build, and marks it as still relevant or not. Staff feedback
 reaches an entry in two ways: a TA or instructor writes it on an entry the student shared, or the
 student pastes it from an email. The Course Agent reads those entries, so that help with a later
-assignment can build on earlier weeks and say where it got that from.
+assignment can build on earlier weeks and say where it got that from. **My builds** also shows how
+each build connects to the student's other builds, to class slides and readings, and to classmates
+who chose to share.
 
 Status: initial version. `make check` passes. Scope and open questions are at the end.
 
@@ -36,6 +38,7 @@ For anything more, such as a truncated entry or one the student set aside, the a
 | --- | --- | --- |
 | Data and memory logic | `models.py`, `store.py`, `service.py`, `retrieval.py` | `TrailStore` protocol; `select_trail_memories` |
 | The panels | `packages/ui/src/LearningTrail.tsx`, `apps/web/src/LearningTrailPanel.tsx`, `apps/web/src/api.ts`, `routes.py` | The JSON shape of `TrailEntry` |
+| Connections | `connections.py`, the map and list in `LearningTrail.tsx` | `TrailConnection` |
 | What the agent says | `skills/learning-trail/SKILL.md`, `tools.py`, the memory section of `_agent_instructions` in `python/runtime_smolagents/runtime.py` | `Memory.metadata` fields; the `memory.get_mine` result |
 
 Handy starting points:
@@ -66,6 +69,10 @@ Feedback a TA or instructor wrote stays theirs in the sense that its author and 
   An entry left unshared never appears to staff, and staff cannot tell that it exists.
 - The Course Agent, during that student's own runs. Selected text goes to the configured model
   provider as part of the prompt. No agent tool reads another student's trail, including for staff.
+- Classmates, for the entries that student marked **Classmates can see this**. This is a separate
+  per-entry choice, and it is off by default. A classmate sees the student's name, the build title
+  and link, and a short excerpt, and only as a connection from one of their own builds. They never
+  see feedback, and the agent never receives a classmate's text.
 - Anyone with file access to the server can read the files. They are not encrypted at rest.
 
 **Who can change it.**
@@ -90,7 +97,7 @@ reply that quoted it stays in that conversation's history, like any other messag
 - **Platform code:** identity, ownership, role filtering, validation, bounds, and which entries are
   selected. None of this depends on a prompt.
 - **Student:** the words, the relevance mark, which removes an entry from automatic context, and
-  whether staff can see each entry.
+  whether staff and classmates can see each entry.
 - **TA or instructor:** the feedback they write.
 - **Bounds:** the constants in `models.py` and `retrieval.py` are safety and context limits, sized so
   a full course of roughly one entry per week fits.
@@ -129,19 +136,24 @@ contract tests must pass.
 ## Scope of this version
 
 Included: reflections per build, feedback written by staff or pasted by the student, per-entry
-sharing with staff, the relevance mark, automatic context and citation, a page listing the weeks with
-buttons that ask the agent, plus a staff view of shared entries.
+sharing with staff and with classmates, the relevance mark, automatic context and citation, a page
+listing the weeks with a map of connections and buttons that ask the agent, plus a staff view of
+shared entries.
 
 Not included yet:
 
-- **Connection view.** The stretch goal. `TrailEntry` has no explicit links between entries yet; the
-  agent connects them in conversation.
+- **Connections by meaning.** See the first known limit.
 - **Saving from chat.** The constitution also names `memory.save_mine`. It is left out so that the
   agent cannot write in a student's voice; a confirmation step like the email one could add it.
 - **Course MCP.** External AI apps connected through the Course MCP do not see the trail.
 
 Known limits:
 
+- Connections compare words with TF-IDF cosine similarity in pure Python, so they need no model or
+  embedding provider. Two builds about the same idea in different words score low, and a score says
+  how much the wording overlaps, not how related the ideas are. Chinese is compared by character
+  pairs. Embeddings would do better and would add a provider and a cost.
+- On a narrow screen the connections panel sits below the list of weeks.
 - `FileTrailStore` serializes writes with an in-process lock, which suits the single API process
   in `deploy/`. Several API workers would need a different store.
 - Up to 16,000 characters of entries are added to each run for students who have saved many, which
@@ -192,3 +204,7 @@ One interaction in which saved information changes a later reply:
 4. Back as the student, start a new conversation and ask the same question. The reply should name the
    earlier build and the TA's feedback, and say where each came from.
 5. Untick **The agent can use this** on that build and ask again. The reply should stop relying on it.
+
+To see connections, save two or more builds and open **My builds**. Select a build, then expand a row
+in the list. A second student who ticks **Classmates can see this** on a build appears on the map as
+a diamond.

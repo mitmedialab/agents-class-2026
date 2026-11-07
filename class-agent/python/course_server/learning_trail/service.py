@@ -14,11 +14,13 @@ from uuid import UUID, uuid4
 
 from agent_core import Memory, PrincipalContext
 
+from .connections import ConnectionDocument, find_connections
 from .models import (
     MAX_ENTRIES_PER_STUDENT,
     MAX_FEEDBACK_PER_ENTRY,
     SharedTrailSummary,
     StaffFeedbackDraft,
+    TrailConnection,
     TrailEntry,
     TrailEntryDraft,
     TrailEntryPatch,
@@ -31,6 +33,7 @@ from .store import TrailStore, TrailStoreError
 logger = logging.getLogger(__name__)
 
 StudentNameLookup = Callable[[UUID], Awaitable[str | None]]
+CourseMaterialLoader = Callable[[], Awaitable[list[ConnectionDocument]]]
 
 
 class TrailAccessDenied(PermissionError):
@@ -94,11 +97,13 @@ class LearningTrailService:
         store: TrailStore,
         *,
         student_name: StudentNameLookup | None = None,
+        course_materials: CourseMaterialLoader | None = None,
         clock: Callable[[], datetime] = _clock,
         id_factory: Callable[[], UUID] = uuid4,
     ) -> None:
         self._store = store
         self._student_name = student_name
+        self._course_materials = course_materials
         self._clock = clock
         self._id_factory = id_factory
 
@@ -120,6 +125,7 @@ class LearningTrailService:
                 build_url=draft.build_url,
                 reflection=draft.reflection,
                 shared_with_staff=draft.shared_with_staff,
+                shared_with_class=draft.shared_with_class,
                 created_at=now,
                 updated_at=now,
             )
@@ -202,6 +208,54 @@ class LearningTrailService:
         remaining = [item for item in entry.feedback if item.id != feedback_id]
         updated = entry.model_copy(update={"feedback": remaining, "updated_at": self._clock()})
         return _replace(entries, updated), updated
+
+    async def connections(self, principal: PrincipalContext) -> dict[UUID, list[TrailConnection]]:
+        """For each of this student's builds: their other builds, course materials, and the
+        builds of classmates who chose to share. Feedback and unshared work never take part."""
+
+        owner = _owner(principal)
+        own = [
+            ConnectionDocument(
+                kind="build",
+                target_id=str(entry.id),
+                title=entry.build_title,
+                text=entry.reflection,
+                week=entry.week,
+                url=entry.build_url,
+            )
+            for entry in await self._store.read(owner)
+        ]
+        others = [*await self._classmate_documents(owner)]
+        if self._course_materials is not None:
+            others.extend(await self._course_materials())
+        return {UUID(source.target_id): find_connections(source, [*own, *others]) for source in own}
+
+    async def _classmate_documents(self, owner: UUID) -> list[ConnectionDocument]:
+        documents: list[ConnectionDocument] = []
+        for student_id in await self._store.owners():
+            if student_id == owner:
+                continue
+            try:
+                shared = [e for e in await self._store.read(student_id) if e.shared_with_class]
+            except TrailStoreError:
+                logger.warning("Skipping an unreadable learning trail", exc_info=True)
+                continue
+            if not shared:
+                continue
+            name = await self._student_name(student_id) if self._student_name else None
+            documents.extend(
+                ConnectionDocument(
+                    kind="classmate",
+                    target_id=str(entry.id),
+                    title=entry.build_title,
+                    text=entry.reflection,
+                    week=entry.week,
+                    url=entry.build_url,
+                    owner_name=name or "A classmate",
+                )
+                for entry in shared
+            )
+        return documents
 
     async def list_shared_students(self, principal: PrincipalContext) -> list[SharedTrailSummary]:
         """List students with at least one shared entry. One unreadable file hides only itself."""

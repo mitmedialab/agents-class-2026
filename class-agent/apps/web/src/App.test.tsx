@@ -28,6 +28,7 @@ vi.mock("./api.js", () => ({
   getPrincipal: vi.fn(),
   listConversations: vi.fn(),
   listLearningTrail: vi.fn(),
+  listLearningTrailConnections: vi.fn(),
   login: vi.fn(),
   logout: vi.fn(),
   markNotificationCenterItemRead: vi.fn(),
@@ -207,33 +208,32 @@ beforeEach(() => {
   });
 });
 
-async function closeFullChat(): Promise<void> {
-  fireEvent.click(await screen.findByRole("button", { name: "Continue this conversation" }));
-}
-
 async function openExistingConversation(): Promise<void> {
   await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
   fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
   fireEvent.click(await screen.findByRole("button", { name: /Week one/ }));
-  await closeFullChat();
   await screen.findByText("The earlier response.");
 }
 
+/** Reaches the moment view, which a conversation opened from the logs does not use. */
+function startInConversationMoments(): void {
+  vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
+  vi.mocked(api.getPendingActionConversation).mockImplementation(() =>
+    api.getConversation(conversation.id),
+  );
+}
+
 describe("Course Agent interface", () => {
-  it("shows the full chat when a conversation is opened and can reopen it", async () => {
+  it("shows a log's whole chat in place, with no separate view", async () => {
     render(<App />);
     await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
     fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
     fireEvent.click(await screen.findByRole("button", { name: /Week one/ }));
 
-    const dialog = await screen.findByRole("dialog", { name: "Full conversation" });
-    expect(within(dialog).getByRole("heading", { name: "Week one" })).toBeInTheDocument();
-    expect(within(dialog).getByText("The earlier response.")).toBeInTheDocument();
-
-    await closeFullChat();
+    const chat = await screen.findByRole("list", { name: "Chat history" });
+    expect(within(chat).getByText("The earlier response.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Full chat" })).toBeNull();
     expect(screen.queryByRole("dialog", { name: "Full conversation" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Full chat" }));
-    expect(await screen.findByRole("dialog", { name: "Full conversation" })).toBeInTheDocument();
   });
 
   it("introduces the course before revealing the interface", async () => {
@@ -399,12 +399,10 @@ describe("Course Agent interface", () => {
       ],
     });
 
+    startInConversationMoments();
     render(<App />);
     await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
-    fireEvent.click(await screen.findByRole("button", { name: /Week one/ }));
-    await closeFullChat();
-
+  
     expect(await screen.findByText("The current response.")).toBeInTheDocument();
     expect(within(document.querySelector(".timeline-message-group")!).getByText("Close the schedule and summarize it.")).toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Workspace" })).not.toBeInTheDocument();
@@ -564,12 +562,10 @@ describe("Course Agent interface", () => {
       ],
     });
 
+    startInConversationMoments();
     render(<App />);
     await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
-    fireEvent.click(await screen.findByRole("button", { name: /Week one/ }));
-    await closeFullChat();
-    expect(await screen.findByText("The schedule is open.")).toBeInTheDocument();
+      expect(await screen.findByText("The schedule is open.")).toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "Workspace" })).toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Notification center" })).not.toBeInTheDocument();
 
@@ -622,12 +618,10 @@ describe("Course Agent interface", () => {
       ],
     });
 
+    startInConversationMoments();
     render(<App />);
     await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
-    fireEvent.click(await screen.findByRole("button", { name: /Week one/ }));
-    await closeFullChat();
-    expect(await screen.findByText("The latest response.")).toBeInTheDocument();
+      expect(await screen.findByText("The latest response.")).toBeInTheDocument();
 
     const stage = document.querySelector(".response-stage")!;
     Object.defineProperty(stage, "scrollHeight", { configurable: true, value: 300 });
@@ -927,8 +921,7 @@ describe("Course Agent interface", () => {
     await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
     fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
     fireEvent.click(screen.getByRole("button", { name: /Week one/ }));
-    await closeFullChat();
-
+  
     expect(
       await screen.findByText(
         "The question is with course staff. Let's continue with your other topic.",
@@ -1554,11 +1547,13 @@ describe("Course Agent interface", () => {
         reflection: "The baseline was stale.",
         still_relevant: true,
         shared_with_staff: false,
+        shared_with_class: false,
         feedback: [],
         created_at: "2026-10-01T00:00:00Z",
         updated_at: "2026-10-01T00:00:00Z",
       },
     ]);
+    vi.mocked(api.listLearningTrailConnections).mockResolvedValue({});
     vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
     render(<App />);
     await openExistingConversation();
@@ -1819,8 +1814,9 @@ describe("Course Agent interface", () => {
       onEvent({ kind: "text_final", text: "The new response." });
       onEvent({ kind: "done" });
     });
+    startInConversationMoments();
     render(<App />);
-    await openExistingConversation();
+    await waitFor(() => expect(api.getPendingActionConversation).toHaveBeenCalled());
 
     const composer = screen.getByRole("textbox", { name: "Message" });
     fireEvent.change(composer, { target: { value: "What is due?" } });
@@ -1846,8 +1842,9 @@ describe("Course Agent interface", () => {
       onEvent({ kind: "text_final", text: "Now done." });
       onEvent({ kind: "done" });
     });
+    startInConversationMoments();
     render(<App />);
-    await openExistingConversation();
+    await waitFor(() => expect(api.getPendingActionConversation).toHaveBeenCalled());
 
     const composer = screen.getByRole("textbox", { name: "Message" });
     fireEvent.change(composer, { target: { value: "Stream the answer" } });

@@ -1,6 +1,5 @@
 import type { Event } from "@class-agent/protocol";
-import { Button } from "@class-agent/ui";
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 
 import { ResponseText } from "./AgentResponse.js";
 import { responseFromEvent, visibleUserMessage } from "./ConversationTimeline.js";
@@ -38,71 +37,68 @@ export function formatConversationTime(value: string): string {
   }).format(new Date(value));
 }
 
-interface ConversationTranscriptProps {
+const NEAR_BOTTOM_PX = 160;
+
+interface ConversationChatProps {
   events: readonly Event[];
-  title: string;
-  onClose: () => void;
+  /** The question of a run still in progress, which is not an event until the run finishes. */
+  pendingMessage: string | null;
+  /** The reply being written, or an error, when it is not yet the last saved message. */
+  latestResponse: string;
 }
 
-export function ConversationTranscript({ events, title, onClose }: ConversationTranscriptProps) {
-  const dialogRef = useRef<HTMLElement>(null);
+/** A log opened from the drawer: the whole chat, in place, newest at the bottom. */
+export function ConversationChat({ events, latestResponse, pendingMessage }: ConversationChatProps) {
+  const chatRef = useRef<HTMLOListElement>(null);
   const messages = projectConversationTranscript(events);
+  const newestFirst = [...messages].reverse();
+  const lastStudent = newestFirst.find((message) => message.from === "student");
+  const lastAgent = newestFirst.find((message) => message.from === "agent");
+  const showPending = pendingMessage !== null && pendingMessage !== lastStudent?.text;
+  // A saved reply with a platform note added below it should not repeat the reply.
+  const latestAddition = lastAgent && latestResponse.startsWith(lastAgent.text)
+    ? latestResponse.slice(lastAgent.text.length).trim()
+    : latestResponse;
+  const lengthRef = useRef(0);
 
-  useEffect(() => {
-    dialogRef.current?.querySelector("button")?.focus();
-    function closeOnEscape(event: globalThis.KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
+  useLayoutEffect(() => {
+    const stage = chatRef.current?.closest<HTMLElement>(".response-stage");
+    if (!stage) return;
+    const added = messages.length + (showPending ? 1 : 0) !== lengthRef.current;
+    lengthRef.current = messages.length + (showPending ? 1 : 0);
+    const nearBottom =
+      stage.scrollHeight - stage.scrollTop - stage.clientHeight < NEAR_BOTTOM_PX;
+    if (added || nearBottom) stage.scrollTop = stage.scrollHeight;
+  });
 
   return (
-    <div className="drawer-backdrop" onClick={onClose} role="presentation">
-      <section
-        aria-label="Full conversation"
-        aria-modal="true"
-        className="conversation-transcript"
-        onClick={(event) => event.stopPropagation()}
-        ref={dialogRef}
-        role="dialog"
-      >
-        <header className="conversation-transcript-heading">
-          <div>
-            <h2>{title}</h2>
-            {messages[0] ? (
-              <time dateTime={messages[0].timestamp}>
-                {formatConversationTime(messages[0].timestamp)}
-              </time>
-            ) : null}
-          </div>
-          <Button onClick={onClose} variant="outline">
-            Continue this conversation
-          </Button>
-        </header>
-        {messages.length === 0 ? (
-          <p className="empty-list">No messages in this conversation yet.</p>
-        ) : (
-          <ol className="conversation-transcript-messages">
-            {messages.map((message) => (
-              <li data-from={message.from} key={message.id}>
-                <p className="conversation-transcript-meta">
-                  {message.from === "student" ? "You" : "Course Agent"}
-                  {" · "}
-                  <time dateTime={message.timestamp}>
-                    {formatConversationTime(message.timestamp)}
-                  </time>
-                </p>
-                {message.from === "student" ? (
-                  <p className="conversation-transcript-student">{message.text}</p>
-                ) : (
-                  <ResponseText text={message.text} />
-                )}
-              </li>
-            ))}
-          </ol>
-        )}
-      </section>
-    </div>
+    <ol aria-label="Chat history" className="conversation-chat" ref={chatRef}>
+      {messages.map((message) => (
+        <li data-from={message.from} key={message.id}>
+          <p className="conversation-chat-meta">
+            {message.from === "student" ? "You" : "Course Agent"}
+            {" · "}
+            <time dateTime={message.timestamp}>{formatConversationTime(message.timestamp)}</time>
+          </p>
+          {message.from === "student" ? (
+            <p className="conversation-chat-student">{message.text}</p>
+          ) : (
+            <ResponseText text={message.text} />
+          )}
+        </li>
+      ))}
+      {showPending ? (
+        <li data-from="student">
+          <p className="conversation-chat-meta">You</p>
+          <p className="conversation-chat-student">{pendingMessage}</p>
+        </li>
+      ) : null}
+      {latestAddition ? (
+        <li data-from="agent">
+          <p className="conversation-chat-meta">Course Agent</p>
+          <ResponseText text={latestAddition} />
+        </li>
+      ) : null}
+    </ol>
   );
 }

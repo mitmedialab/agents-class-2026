@@ -21,6 +21,7 @@ MAX_WEEK = 20
 
 FeedbackRole = Literal["instructor", "ta"]
 FeedbackSource = Literal["pasted_by_student", "staff"]
+ConnectionKind = Literal["build", "class", "classmate"]
 
 
 def _require_https(value: str) -> str:
@@ -77,6 +78,7 @@ class TrailEntry(TrailModel):
     reflection: Reflection
     still_relevant: bool = True
     shared_with_staff: bool = False
+    shared_with_class: bool = False
     feedback: list[TrailFeedback] = Field(default_factory=list, max_length=MAX_FEEDBACK_PER_ENTRY)
     created_at: AwareDatetime
     updated_at: AwareDatetime
@@ -88,6 +90,7 @@ class TrailEntryDraft(TrailModel):
     build_url: BuildUrl | None = None
     reflection: Reflection
     shared_with_staff: bool = False
+    shared_with_class: bool = False
 
 
 class TrailEntryPatch(TrailModel):
@@ -99,6 +102,7 @@ class TrailEntryPatch(TrailModel):
     reflection: Reflection | None = None
     still_relevant: bool | None = None
     shared_with_staff: bool | None = None
+    shared_with_class: bool | None = None
 
     @model_validator(mode="after")
     def validate_patch(self) -> Self:
@@ -122,6 +126,20 @@ class StaffFeedbackDraft(TrailModel):
     """The author and role come from the staff member's session, never from the request."""
 
     body: FeedbackBody
+
+
+class TrailConnection(TrailModel):
+    """One thing that resembles a build. A classmate's appears only if they chose to share it."""
+
+    kind: ConnectionKind
+    target_id: str
+    title: str
+    week: int | None = None
+    url: str | None = None
+    owner_name: str | None = None
+    excerpt: str
+    score: float
+    shared_terms: list[str]
 
 
 class SharedTrailSummary(TrailModel):

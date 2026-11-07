@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { LearningTrailEntry } from "@class-agent/ui";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -14,6 +14,7 @@ vi.mock("./api.js", async (importOriginal) => ({
   deleteLearningTrailEntry: vi.fn(),
   deleteLearningTrailFeedback: vi.fn(),
   listLearningTrail: vi.fn(),
+  listLearningTrailConnections: vi.fn(),
   listLearningTrailStudents: vi.fn(),
   listSharedLearningTrail: vi.fn(),
   updateLearningTrailEntry: vi.fn(),
@@ -28,6 +29,7 @@ function entry(overrides: Partial<LearningTrailEntry> = {}): LearningTrailEntry 
     reflection: "Latency mattered more than I expected.",
     still_relevant: true,
     shared_with_staff: false,
+    shared_with_class: false,
     feedback: [],
     created_at: "2026-10-01T00:00:00Z",
     updated_at: "2026-10-01T00:00:00Z",
@@ -46,6 +48,7 @@ const OLDER = entry({
 describe("LearningTrailPanel", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.mocked(api.listLearningTrailConnections).mockResolvedValue({});
     vi.mocked(api.createLearningTrailEntry).mockResolvedValue(entry());
     vi.mocked(api.updateLearningTrailEntry).mockResolvedValue(entry());
     vi.mocked(api.addLearningTrailFeedback).mockResolvedValue(entry());
@@ -55,8 +58,8 @@ describe("LearningTrailPanel", () => {
     vi.mocked(api.listLearningTrail).mockResolvedValue([entry(), OLDER]);
     render(<LearningTrailPanel readOnly={false} />);
 
-    const row = await screen.findByRole("button", { name: /Voice agent/ });
-    expect(screen.getByRole("button", { name: /First agent/ })).toHaveTextContent(
+    const row = await screen.findByRole("button", { name: /^Week 3\s*Voice agent/ });
+    expect(screen.getByRole("button", { name: /^Week 1\s*First agent/ })).toHaveTextContent(
       "Agent does not use this",
     );
     expect(screen.getByRole("button", { name: "Add a build for Week 2" })).toBeInTheDocument();
@@ -70,18 +73,87 @@ describe("LearningTrailPanel", () => {
     );
   });
 
-  it("explains how the trail works and asks the agent when requested", async () => {
+  it("asks the agent when requested", async () => {
     const onAsk = vi.fn();
     vi.mocked(api.listLearningTrail).mockResolvedValue([entry()]);
     render(<LearningTrailPanel onAsk={onAsk} readOnly={false} />);
 
-    expect(await screen.findByRole("list", { name: "How it works" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Ask the agent about my next build" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Ask the agent about my next build" }));
     expect(onAsk).toHaveBeenLastCalledWith(expect.stringContaining("my next build"));
 
-    fireEvent.click(screen.getByRole("button", { name: /Voice agent/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Week 3\s*Voice agent/ }));
     fireEvent.click(screen.getByRole("button", { name: "Ask about this week" }));
     expect(onAsk).toHaveBeenLastCalledWith(expect.stringContaining("Week 3 (Voice agent)"));
+  });
+
+  it("maps connections, expands one, and follows a build to its own connections", async () => {
+    const onAsk = vi.fn();
+    vi.mocked(api.listLearningTrail).mockResolvedValue([entry(), OLDER]);
+    vi.mocked(api.listLearningTrailConnections).mockResolvedValue({
+      [entry().id]: [
+        {
+          kind: "build",
+          target_id: OLDER.id,
+          title: "First agent",
+          week: 1,
+          excerpt: "Tools were harder than prompts.",
+          score: 0.31,
+          shared_terms: ["tools"],
+        },
+        {
+          kind: "class",
+          target_id: "course://slides/week-02",
+          title: "Tools, MCPs and Skills",
+          excerpt: "Tools let the agent act.",
+          score: 0.22,
+          shared_terms: ["tools"],
+        },
+        {
+          kind: "classmate",
+          target_id: "10000000-0000-4000-8000-000000000009",
+          title: "Sam's voice bot",
+          week: 3,
+          owner_name: "Sam",
+          excerpt: "Latency again.",
+          score: 0.12,
+          shared_terms: ["latency"],
+        },
+      ],
+      [OLDER.id]: [],
+    });
+    render(<LearningTrailPanel onAsk={onAsk} readOnly={false} />);
+
+    const panel = within(await screen.findByRole("complementary", { name: /Voice agent/ }));
+    expect(await panel.findByRole("button", { name: "0.22 Tools, MCPs and Skills" })).toBeVisible();
+
+    fireEvent.click(panel.getByRole("button", { name: /^0\.12\s*Sam's voice bot$/, expanded: false }));
+    expect(panel.getByText("Sam · Week 3")).toBeInTheDocument();
+    expect(panel.getByText("Both mention: latency")).toBeInTheDocument();
+    expect(panel.queryByRole("button", { name: "Ask the agent how these connect" })).toBeNull();
+
+    fireEvent.click(panel.getByRole("button", { name: /^0\.22\s*Tools, MCPs and Skills$/, expanded: false }));
+    fireEvent.click(panel.getByRole("button", { name: "Ask the agent how these connect" }));
+    expect(onAsk).toHaveBeenLastCalledWith(expect.stringContaining("course://slides/week-02"));
+
+    fireEvent.click(panel.getByRole("button", { name: /^0\.31\s*First agent$/, expanded: false }));
+    fireEvent.click(panel.getByRole("button", { name: "See its connections" }));
+    expect(await screen.findByRole("complementary", { name: /First agent/ })).toBeInTheDocument();
+  });
+
+  it("lets the student share an entry with classmates, off by default", async () => {
+    vi.mocked(api.listLearningTrail).mockResolvedValue([entry()]);
+    render(<LearningTrailPanel readOnly={false} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /^Week 3\s*Voice agent/ }));
+    const box = screen.getByRole("checkbox", { name: /Classmates can see this/ });
+    expect(box).not.toBeChecked();
+    fireEvent.click(box);
+
+    await waitFor(() =>
+      expect(api.updateLearningTrailEntry).toHaveBeenCalledWith(entry().id, {
+        shared_with_class: true,
+      }),
+    );
   });
 
   it("saves a new reflection and reloads the trail", async () => {
@@ -103,16 +175,17 @@ describe("LearningTrailPanel", () => {
         build_url: null,
         reflection: "Latency mattered.",
         shared_with_staff: true,
+        shared_with_class: false,
       }),
     );
-    expect(await screen.findByRole("button", { name: /Voice agent/ })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /^Week 3\s*Voice agent/ })).toBeInTheDocument();
   });
 
   it("marks an entry as no longer relevant", async () => {
     vi.mocked(api.listLearningTrail).mockResolvedValue([entry()]);
     render(<LearningTrailPanel readOnly={false} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /Voice agent/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Week 3\s*Voice agent/ }));
     fireEvent.click(screen.getByRole("checkbox", { name: /The agent can use this/ }));
 
     await waitFor(() =>
@@ -126,7 +199,7 @@ describe("LearningTrailPanel", () => {
     vi.mocked(api.listLearningTrail).mockResolvedValue([entry({ shared_with_staff: true })]);
     render(<LearningTrailPanel readOnly={false} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /Voice agent/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Week 3\s*Voice agent/ }));
     fireEvent.click(screen.getByRole("checkbox", { name: /TAs can see this/ }));
 
     await waitFor(() =>
@@ -153,7 +226,7 @@ describe("LearningTrailPanel", () => {
     ]);
     render(<LearningTrailPanel readOnly={false} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /Voice agent/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Week 3\s*Voice agent/ }));
     expect(screen.getByText("Strong tradeoff analysis.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Remove feedback/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/Pasted by you/)).not.toBeInTheDocument();
@@ -207,7 +280,7 @@ describe("LearningTrailPanel", () => {
     ]);
     render(<LearningTrailPanel readOnly={false} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /Voice agent/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Week 3\s*Voice agent/ }));
     expect(screen.getByText(/TA · Sam · Pasted by you/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Add feedback you received" }));
@@ -230,7 +303,7 @@ describe("LearningTrailPanel", () => {
     vi.mocked(api.listLearningTrail).mockResolvedValue([entry()]);
     render(<LearningTrailPanel readOnly={false} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /Voice agent/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Week 3\s*Voice agent/ }));
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     expect(api.deleteLearningTrailEntry).not.toHaveBeenCalled();
 
@@ -257,7 +330,7 @@ describe("LearningTrailPanel", () => {
     vi.mocked(api.listLearningTrail).mockResolvedValue([entry()]);
     render(<LearningTrailPanel readOnly />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /Voice agent/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Week 3\s*Voice agent/ }));
     expect(screen.getByText(entry().reflection)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add a build" })).not.toBeInTheDocument();
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();

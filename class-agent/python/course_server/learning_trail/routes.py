@@ -12,6 +12,7 @@ from agent_core import PrincipalContext
 from .models import (
     SharedTrailSummary,
     StaffFeedbackDraft,
+    TrailConnection,
     TrailEntry,
     TrailEntryDraft,
     TrailEntryPatch,
@@ -28,6 +29,10 @@ from .store import TrailStoreError
 
 class TrailResponse(BaseModel):
     entries: list[TrailEntry]
+
+
+class TrailConnectionsResponse(BaseModel):
+    connections: dict[UUID, list[TrailConnection]]
 
 
 class SharedStudentsResponse(BaseModel):
@@ -67,6 +72,18 @@ def build_learning_trail_router(
     ) -> TrailResponse:
         try:
             return TrailResponse(entries=await service_for(request).list_mine(principal))
+        except _HANDLED as error:
+            raise _http_error(error) from error
+
+    @router.get("/connections", response_model=TrailConnectionsResponse)
+    async def list_connections(
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(require_principal)],
+    ) -> TrailConnectionsResponse:
+        try:
+            return TrailConnectionsResponse(
+                connections=await service_for(request).connections(principal)
+            )
         except _HANDLED as error:
             raise _http_error(error) from error
 

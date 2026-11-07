@@ -1,8 +1,10 @@
 """A student's own weekly build reflections and the feedback attached to them."""
 
+from .connections import ConnectionDocument, find_connections
 from .models import (
     SharedTrailSummary,
     StaffFeedbackDraft,
+    TrailConnection,
     TrailEntry,
     TrailEntryDraft,
     TrailEntryPatch,
@@ -20,11 +22,13 @@ from .store import FileTrailStore, TrailStore, TrailStoreError
 
 __all__ = [
     "LEARNING_TRAIL_MEMORY_KIND",
+    "ConnectionDocument",
     "FileTrailStore",
     "LearningTrailService",
     "SharedTrailSummary",
     "StaffFeedbackDraft",
     "TrailAccessDenied",
+    "TrailConnection",
     "TrailEntry",
     "TrailEntryDraft",
     "TrailEntryNotFound",
@@ -34,5 +38,6 @@ __all__ = [
     "TrailLimitExceeded",
     "TrailStore",
     "TrailStoreError",
+    "find_connections",
     "select_trail_memories",
 ]

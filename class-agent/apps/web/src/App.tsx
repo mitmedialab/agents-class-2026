@@ -62,7 +62,7 @@ import {
   projectConversationTimeline,
   timelineFade,
 } from "./ConversationTimeline.js";
-import { ConversationTranscript, formatConversationTime } from "./ConversationTranscript.js";
+import { ConversationChat, formatConversationTime } from "./ConversationTranscript.js";
 import { LearningTrailDialog } from "./LearningTrailPanel.js";
 import { historicalInteraction, historicalPanelAction } from "./historicalWorkspace.js";
 import {
@@ -307,8 +307,8 @@ export default function App() {
   const [pendingUploadCount, setPendingUploadCount] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [transcriptOpen, setTranscriptOpen] = useState(false);
-  const closeTranscript = useCallback(() => setTranscriptOpen(false), []);
+  const [logChatOpen, setLogChatOpen] = useState(false);
+  const [pendingLogMessage, setPendingLogMessage] = useState<string | null>(null);
   const [trailOpen, setTrailOpen] = useState(false);
   const closeTrail = useCallback(() => setTrailOpen(false), []);
   const [aboutOpen, setAboutOpen] = useAboutRoute();
@@ -550,6 +550,8 @@ export default function App() {
     activeRun.current = null;
     operationInFlight.current = false;
     applicationReturnResponse.current = null;
+    setLogChatOpen(false);
+    setPendingLogMessage(null);
     setSelectedConversationId(null);
     setConversationEvents([]);
     setTimelineOffset(0);
@@ -573,7 +575,9 @@ export default function App() {
     requestAnimationFrame(() => composerRef.current?.focus());
   }, [showWelcomeMessage]);
 
-  async function showConversation(conversation: Conversation): Promise<void> {
+  async function showConversation(conversation: Conversation, asLog = false): Promise<void> {
+    setLogChatOpen(asLog);
+    setPendingLogMessage(null);
     setCurrentAction("Loading conversation");
     setConversationEvents([]);
     setTimelineOffset(0);
@@ -595,7 +599,6 @@ export default function App() {
       setPresentedCommunication(null);
       setHistoryOpen(false);
       setAboutOpen(false);
-      setTranscriptOpen(true);
       const pendingContinuation =
         pendingTAQuestionContinuation(detail.events) ??
         pendingInstructorMessageContinuation(detail.events);
@@ -1022,6 +1025,7 @@ export default function App() {
       setUploads([]);
       setUploadError(null);
     }
+    setPendingLogMessage(visibleText);
     setIsRunning(true);
     setIsStreamingText(false);
     setCurrentAction("Preparing conversation context");
@@ -1857,7 +1861,9 @@ export default function App() {
     }, delay);
   };
   const handleTimelineWheel = (event: globalThis.WheelEvent) => {
-    if (isRunning || Math.abs(event.deltaY) < 0.1 || timelineMoments.length < 2) return;
+    if (logChatOpen || isRunning || Math.abs(event.deltaY) < 0.1 || timelineMoments.length < 2) {
+      return;
+    }
     const stage = responseStageRef.current;
     if (!stage) return;
     const wheelPixels = event.deltaY *
@@ -1907,7 +1913,9 @@ export default function App() {
     scheduleTimelineSettle(nextProgress >= 1 ? 70 : 150);
   };
   const handleTimelineTouchStart = (event: globalThis.TouchEvent) => {
-    if (isRunning || timelineMoments.length < 2 || event.touches.length !== 1) return;
+    if (logChatOpen || isRunning || timelineMoments.length < 2 || event.touches.length !== 1) {
+      return;
+    }
     if (timelineGestureReset.current !== null) window.clearTimeout(timelineGestureReset.current);
     if (timelineSettleCommit.current !== null) window.clearTimeout(timelineSettleCommit.current);
     const stage = responseStageRef.current;
@@ -2000,6 +2008,7 @@ export default function App() {
       className="course-agent"
       data-about-open={aboutOpen}
       data-conversation-reading={selectedConversationId !== null}
+      data-log-chat={logChatOpen}
       data-file-drag-active={isFileDragActive}
       data-mobile-notifications-open={
         notificationCenterVisible && activeMobileView === "updates"
@@ -2090,15 +2099,6 @@ export default function App() {
               <a className="about-link" href="/ai-connect">
                 Connect AI
               </a>
-              {selectedConversationId !== null && conversationEvents.length > 0 ? (
-                <Button
-                  aria-haspopup="dialog"
-                  className="about-link"
-                  onClick={() => setTranscriptOpen(true)}
-                >
-                  Full chat
-                </Button>
-              ) : null}
               <Button
                 aria-expanded={historyOpen}
                 aria-haspopup="dialog"
@@ -2188,14 +2188,16 @@ export default function App() {
               <ActivityTrace activities={activities} currentLabel={currentAction} />
             </div>
           </div>
-          <ConversationTimeline
-            disabled={isRunning}
-            moments={timelineMoments}
-            offset={timelineOffset}
-            previewOffset={timelinePull?.targetOffset ?? null}
-            progress={timelinePull?.progress ?? 0}
-            onOffsetChange={handleTimelineOffsetChange}
-          />
+          {logChatOpen ? null : (
+            <ConversationTimeline
+              disabled={isRunning}
+              moments={timelineMoments}
+              offset={timelineOffset}
+              previewOffset={timelinePull?.targetOffset ?? null}
+              progress={timelinePull?.progress ?? 0}
+              onOffsetChange={handleTimelineOffsetChange}
+            />
+          )}
           {!isTimeTraveling && presentedCommunication ? (
             <CommunicationDetailCard
               generatedAt={notificationCenter.generated_at}
@@ -2203,7 +2205,13 @@ export default function App() {
               onClose={handleClosePresentedCommunication}
             />
           ) : null}
-          {displayedResponse ? (
+          {logChatOpen ? (
+            <ConversationChat
+              events={conversationEvents}
+              latestResponse={latestResponse}
+              pendingMessage={isRunning ? pendingLogMessage : null}
+            />
+          ) : displayedResponse ? (
             <div className="timeline-message-stack">
               <div
                 className="timeline-message-group"
@@ -2491,19 +2499,9 @@ export default function App() {
           onAsk={(question) => {
             setTrailOpen(false);
             setAboutOpen(false);
-            setTranscriptOpen(false);
             void sendMessage(question);
           }}
           onClose={closeTrail}
-        />
-      ) : null}
-      {transcriptOpen ? (
-        <ConversationTranscript
-          events={conversationEvents}
-          onClose={closeTranscript}
-          title={conversationTitle(
-            conversations.find(({ id }) => id === selectedConversationId) ?? { title: null },
-          )}
         />
       ) : null}
       {historyOpen ? (
@@ -2548,7 +2546,7 @@ export default function App() {
                           selectedConversationId === conversation.id ? "page" : undefined
                         }
                         className="conversation-link"
-                        onClick={() => void showConversation(conversation)}
+                        onClick={() => void showConversation(conversation, true)}
                       >
                         <span>{conversationTitle(conversation)}</span>
                         <time dateTime={conversation.updated_at}>

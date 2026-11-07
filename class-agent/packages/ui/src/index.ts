@@ -40,6 +40,7 @@ export {
 export {
   LearningTrail,
   LearningTrailStaff,
+  type LearningTrailConnection,
   type LearningTrailEntry,
   type LearningTrailEntryDraft,
   type LearningTrailFeedback,

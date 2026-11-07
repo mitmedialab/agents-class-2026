@@ -25,6 +25,7 @@ from course_server.api import API_PREFIX, AppServices, create_app
 from course_server.auth import AuthenticationService, InMemoryAuthStore, UserAdminService
 from course_server.learning_trail import (
     LEARNING_TRAIL_MEMORY_KIND,
+    ConnectionDocument,
     FileTrailStore,
     LearningTrailService,
     StaffFeedbackDraft,
@@ -36,6 +37,7 @@ from course_server.learning_trail import (
     TrailFeedbackDraft,
     TrailLimitExceeded,
     TrailStoreError,
+    find_connections,
     select_trail_memories,
 )
 from course_server.learning_trail.models import MAX_ENTRIES_PER_STUDENT
@@ -641,3 +643,83 @@ def test_api_rejects_anonymous_visitors_and_invalid_input(tmp_path: Path) -> Non
         ).status_code
         == 422
     )
+
+
+def _document(kind: str, target_id: str, text: str) -> ConnectionDocument:
+    return ConnectionDocument(kind=kind, target_id=target_id, title=target_id, text=text)  # type: ignore[arg-type]
+
+
+def test_connections_rank_by_shared_wording_and_name_the_words() -> None:
+    source = _document("build", "a", "The stale baseline made the headband agent wait all night.")
+    related = _document("build", "b", "A stale baseline again: the headband reading drifted.")
+    unrelated = _document("build", "c", "Bread recipes with flour and butter for breakfast.")
+    material = _document("class", "course://slides/x", "Calibrate a baseline for each headband.")
+
+    connections = find_connections(source, [source, related, unrelated, material])
+
+    assert [item.target_id for item in connections] == ["b", "course://slides/x"]
+    assert connections[0].score > connections[1].score
+    assert {"stale", "baseline"} <= set(connections[0].shared_terms)
+
+
+def test_connections_compare_chinese_notes() -> None:
+    source = _document("build", "a", "这周我发现记忆和梦境的关系很重要")
+    related = _document("build", "b", "梦境记忆是下周的重点")
+    unrelated = _document("build", "c", "面包和黄油的做法")
+
+    assert [item.target_id for item in find_connections(source, [related, unrelated])] == ["b"]
+
+
+def test_connections_show_classmates_only_what_they_chose_to_share(tmp_path: Path) -> None:
+    async def name_of(_: UUID) -> str:
+        return "Sam"
+
+    trail = LearningTrailService(FileTrailStore(tmp_path), student_name=name_of)
+    me, sharer, private = student(), student(), student()
+    text = "The stale baseline made the headband agent wait."
+
+    async def run() -> None:
+        mine = await trail.create(me, draft(week=6, reflection=text))
+        shared = await trail.create(
+            sharer,
+            TrailEntryDraft(week=5, build_title="Shared", reflection=text, shared_with_class=True),
+        )
+        await trail.add_feedback(
+            sharer,
+            shared.id,
+            TrailFeedbackDraft(from_role="ta", body="A private remark about baselines."),
+        )
+        await trail.create(
+            private,
+            TrailEntryDraft(
+                week=5, build_title="Staff only", reflection=text, shared_with_staff=True
+            ),
+        )
+
+        result = (await trail.connections(me))[mine.id]
+
+        assert [(item.kind, item.title) for item in result] == [("classmate", "Shared")]
+        assert result[0].owner_name == "Sam"
+        assert "private remark" not in result[0].excerpt
+        assert await trail.connections(private) is not None
+
+        with pytest.raises(TrailAccessDenied):
+            await trail.connections(staff())
+
+    asyncio.run(run())
+
+
+def test_connections_include_course_materials_when_available(tmp_path: Path) -> None:
+    material = _document("class", "course://slides/x", "Calibrate a stale baseline carefully.")
+
+    async def materials() -> list[ConnectionDocument]:
+        return [material]
+
+    trail = LearningTrailService(FileTrailStore(tmp_path), course_materials=materials)
+    me = student()
+
+    async def run() -> None:
+        mine = await trail.create(me, draft(week=6, reflection="A stale baseline stopped it."))
+        assert [item.kind for item in (await trail.connections(me))[mine.id]] == ["class"]
+
+    asyncio.run(run())

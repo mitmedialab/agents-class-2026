@@ -17,6 +17,7 @@ GET  /api/v1/notifications
 POST /api/v1/notifications/{notification_id}/read
 
 GET    /api/v1/learning-trail
+GET    /api/v1/learning-trail/connections
 POST   /api/v1/learning-trail/entries
 PATCH  /api/v1/learning-trail/entries/{entry_id}
 DELETE /api/v1/learning-trail/entries/{entry_id}

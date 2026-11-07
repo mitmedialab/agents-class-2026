@@ -2,6 +2,7 @@ import type { Conversation, Event, PrincipalContext, Uuid } from "@class-agent/p
 import type {
   LearningTrailEntry,
   LearningTrailEntryDraft,
+  LearningTrailConnection,
   LearningTrailFeedbackDraft,
   LearningTrailStudent,
 } from "@class-agent/ui";
@@ -364,6 +365,15 @@ export async function markNotificationCenterItemRead(itemId: Uuid): Promise<void
 export async function listLearningTrail(): Promise<LearningTrailEntry[]> {
   const { entries } = await requestJson<{ entries: LearningTrailEntry[] }>("/learning-trail");
   return entries;
+}
+
+export async function listLearningTrailConnections(): Promise<
+  Record<string, LearningTrailConnection[]>
+> {
+  const { connections } = await requestJson<{
+    connections: Record<string, LearningTrailConnection[]>;
+  }>("/learning-trail/connections");
+  return connections;
 }
 
 export function createLearningTrailEntry(
