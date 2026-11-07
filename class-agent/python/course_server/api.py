@@ -105,6 +105,8 @@ from course_server.instructor_messages import (
     InstructorMessageStateError,
     PostgresInstructorMessageStore,
 )
+from course_server.learning_trail import FileTrailStore, LearningTrailService
+from course_server.learning_trail.routes import build_learning_trail_router
 from course_server.mail import (
     PostgresTAQuestionStore,
     TAQuestionAccessDenied,
@@ -335,6 +337,7 @@ class AppServices:
     instructor_messages: InstructorMessageService | None = None
     notifications: StudentNotificationService | None = None
     notification_center: NotificationCenterService | None = None
+    learning_trail: LearningTrailService | None = None
     anonymous_quotas: AnonymousQuotaStore = dataclass_field(
         default_factory=InMemoryAnonymousQuotaStore
     )
@@ -882,6 +885,9 @@ def create_app(
             resolved_settings.applicant_data_path / "student-notification-portraits.json"
         )
         assignment_store = FileAssignmentStore(resolved_settings.assignment_data_path)
+        learning_trail = LearningTrailService(
+            FileTrailStore(resolved_settings.learning_trail_data_path)
+        )
         instructor_message_store = PostgresInstructorMessageStore(pool)
         instructor_message_service = InstructorMessageService(
             messages=instructor_message_store,
@@ -962,6 +968,7 @@ def create_app(
                     student_communications=student_communication_service,
                     faq_updates=faq_knowledge,
                     course_roster=course_roster,
+                    learning_trail=learning_trail,
                 ),
                 conversations=conversation_store,
                 capability_policy=CourseCapabilityPolicy(
@@ -973,11 +980,13 @@ def create_app(
                     student_communications_enabled=True,
                     faq_updates_enabled=True,
                     student_projects_enabled=(resolved_settings.github_student_projects_enabled),
+                    learning_trail_enabled=True,
                 ),
                 skills=skills,
                 workspace_registry=component_registry,
                 uploads=upload_store,
                 attention=notification_center,
+                memories=learning_trail,
             ),
             conversations=conversation_store,
             applicants=applicant_store,
@@ -990,6 +999,7 @@ def create_app(
             instructor_messages=instructor_message_service,
             notifications=StudentNotificationService(faqs=faq_store, auth=auth_store),
             notification_center=notification_center,
+            learning_trail=learning_trail,
             anonymous_quotas=PostgresAnonymousQuotaStore(pool),
             anonymous_quota_policy=AnonymousQuotaPolicy(
                 enabled=resolved_settings.anonymous_quotas_enabled,
@@ -2469,6 +2479,16 @@ def create_app(
         )
         return RunResponse.from_result(result)
 
+    def _learning_trail_service(request: Request) -> LearningTrailService | None:
+        services = _get_app_state(request).services
+        return None if services is None else services.learning_trail
+
+    router.include_router(
+        build_learning_trail_router(
+            require_principal=_require_principal,
+            get_service=_learning_trail_service,
+        )
+    )
     app.include_router(router, prefix=API_PREFIX)
     app.include_router(router, include_in_schema=False)
     return app

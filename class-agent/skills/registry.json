@@ -32,6 +32,11 @@
       "audience": "students"
     },
     {
+      "id": "learning-trail",
+      "directory": "learning-trail",
+      "audience": "students"
+    },
+    {
       "id": "instructor-application-review",
       "directory": "instructor-application-review",
       "audience": "instructors"

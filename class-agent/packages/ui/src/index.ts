@@ -37,6 +37,14 @@ export {
   type DraftFieldInputType,
   type DraftFieldStatus,
 } from "./DraftDocument.js";
+export {
+  LearningTrail,
+  type LearningTrailEntry,
+  type LearningTrailEntryDraft,
+  type LearningTrailFeedback,
+  type LearningTrailFeedbackDraft,
+  type LearningTrailProps,
+} from "./LearningTrail.js";
 export { Spinner } from "./Spinner.js";
 export { TextInput, type TextInputProps } from "./TextInput.js";
 export {

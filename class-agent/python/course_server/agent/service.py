@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -16,6 +17,7 @@ from agent_core import (
     Capability,
     Conversation,
     Event,
+    Memory,
     PrincipalContext,
 )
 from course_server.uploads import TemporaryUploadStore, UploadError
@@ -35,7 +37,14 @@ from .skills import (
     READ_SKILL_TOOL_ID,
     SkillCatalog,
 )
-from .store import ConversationAccessDenied, ConversationStore, principal_owns_conversation
+from .store import (
+    ConversationAccessDenied,
+    ConversationStore,
+    MemoryUnavailable,
+    principal_owns_conversation,
+)
+
+logger = logging.getLogger(__name__)
 
 RECENT_DIALOGUE_EVENT_LIMIT = 24
 RECENT_SUPPORTING_EVENT_LIMIT = 16
@@ -111,6 +120,12 @@ class AgentAttentionProvider(Protocol):
     async def mark_updates_seen(self, principal: PrincipalContext) -> None: ...
 
 
+class MemorySelector(Protocol):
+    """Supplies the current principal's own memories for one run's context."""
+
+    async def select_memories(self, principal: PrincipalContext) -> list[Memory]: ...
+
+
 def _principal_references(principal: PrincipalContext) -> dict[str, UUID | None]:
     return {
         "principal_user_id": principal.user_id,
@@ -183,6 +198,7 @@ class CourseAgentService:
         workspace_registry: ComponentRegistry | None = None,
         uploads: TemporaryUploadStore | None = None,
         attention: AgentAttentionProvider | None = None,
+        memories: MemorySelector | None = None,
     ) -> None:
         self._runtime = runtime
         self._conversations = conversations
@@ -191,6 +207,7 @@ class CourseAgentService:
         self._workspace_registry = workspace_registry or load_component_registry()
         self._uploads = uploads
         self._attention = attention
+        self._memories = memories
 
     async def _authorized_upload_uris(
         self,
@@ -436,10 +453,19 @@ class CourseAgentService:
             if self._attention is not None and principal.authenticated
             else []
         )
+        selected_memories: list[Memory] = []
+        memory_unavailable = False
+        if self._memories is not None and principal.authenticated:
+            try:
+                selected_memories = await self._memories.select_memories(principal)
+            except MemoryUnavailable:
+                logger.warning("Selected memories are unavailable for this run", exc_info=True)
+                memory_unavailable = True
         context = AgentContext(
             principal=principal,
             conversation_id=conversation_id,
             recent_events=_recent_context_events(previous_events),
+            selected_memories=selected_memories,
             capabilities=[
                 Capability(id=tool_id, status="available") for tool_id in permitted_tool_ids
             ],
@@ -457,6 +483,7 @@ class CourseAgentService:
                     for skill in authorized_skills
                 ],
                 "attention_items": attention_items,
+                **({"memory_unavailable": True} if memory_unavailable else {}),
             },
         )
         observed_method = getattr(self._runtime, "run_observed", None)

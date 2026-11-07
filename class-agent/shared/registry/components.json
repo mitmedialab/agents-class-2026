@@ -571,6 +571,25 @@
       },
       "supported_operations": ["open", "update", "focus", "close"],
       "default_size": { "width": 760, "height": 720 }
+    },
+    {
+      "id": "learning-trail",
+      "version": "1.0.0",
+      "title": "Learning Trail",
+      "description": "Lets a logged-in student read, write, and manage their own weekly build reflections and attached feedback. The panel loads the data itself; never pass reflection text in props.",
+      "props_schema": {
+        "type": "object",
+        "properties": {
+          "focus_entry_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "maxLength": 36
+          }
+        },
+        "additionalProperties": false
+      },
+      "supported_operations": ["open", "update", "focus", "close"],
+      "default_size": { "width": 720, "height": 720 }
     }
   ]
 }

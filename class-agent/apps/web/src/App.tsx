@@ -148,6 +148,10 @@ const INSTRUCTOR_CONTACT_PROMPT = {
   label: "Contact",
   message: "I'd like to contact students. Help me prepare a message using the instructor messaging tool, asking for the audience and message details you need.",
 };
+const LEARNING_TRAIL_PROMPT = {
+  label: "Trail",
+  message: "Open my learning trail.",
+};
 const EMPTY_NOTIFICATION_CENTER: NotificationCenterData = {
   generated_at: "1970-01-01T00:00:00Z",
   unread_count: 0,
@@ -1989,9 +1993,14 @@ export default function App() {
         ? STUDENT_CONTACT_PROMPT
         : null
     : null;
-  const headerPrompts = HEADER_PROMPTS.map((prompt) =>
-    prompt.label === "Apply" && contactPrompt ? contactPrompt : prompt,
-  );
+  const headerPrompts = [
+    ...HEADER_PROMPTS.map((prompt) =>
+      prompt.label === "Apply" && contactPrompt ? contactPrompt : prompt,
+    ),
+    ...(principal?.authenticated && principal.roles.includes("student")
+      ? [LEARNING_TRAIL_PROMPT]
+      : []),
+  ];
   return (
     <div
       className="course-agent"

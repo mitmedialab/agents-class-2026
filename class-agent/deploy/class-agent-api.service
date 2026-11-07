@@ -28,6 +28,8 @@ ProtectKernelTunables=true
 ProtectSystem=strict
 ReadWritePaths=/home/wazeer/agents-class-2026/class-agent/var/applicants
 ReadWritePaths=/home/wazeer/agents-class-2026/class-agent/var/uploads
+# Optional so an existing deployment still starts before the directory has been created.
+ReadWritePaths=-/home/wazeer/agents-class-2026/class-agent/var/learning-trail
 CapabilityBoundingSet=
 LockPersonality=true
 # Chromium's JIT requires executable memory mappings.

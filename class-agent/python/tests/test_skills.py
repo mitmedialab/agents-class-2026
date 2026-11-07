@@ -69,12 +69,14 @@ def test_skill_catalog_scans_metadata_and_filters_before_disclosure() -> None:
     assert "instructor-application-review" not in public_ids
     assert student_ids == public_ids | {
         "assignment-submission-check",
+        "learning-trail",
         "student-course-resources",
     }
     assert instructor_ids == public_ids | {
         "instructor-messaging",
         "weekly-build-showcase",
         "assignment-submission-check",
+        "learning-trail",
         "student-course-resources",
         "instructor-application-review",
     }

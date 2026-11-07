@@ -169,6 +169,7 @@ class AgentSettings(BaseModel):
     skills_path: Path = Path(__file__).resolve().parents[2] / "skills"
     applicant_data_path: Path = Path(__file__).resolve().parents[2] / "var/applicants"
     assignment_data_path: Path = Path(__file__).resolve().parents[2] / "var/assignments"
+    learning_trail_data_path: Path = Path(__file__).resolve().parents[2] / "var/learning-trail"
     upload_data_path: Path = Path(__file__).resolve().parents[2] / "var/uploads"
     published_faq_path: Path = DEFAULT_PUBLISHED_FAQ_PATH
     browser_enabled: bool = True
@@ -271,6 +272,12 @@ class AgentSettings(BaseModel):
             if raw_assignment_path and raw_assignment_path.strip()
             else Path(__file__).resolve().parents[2] / "var/assignments"
         )
+        raw_learning_trail_path = values.get("LEARNING_TRAIL_DATA_PATH")
+        learning_trail_data_path = (
+            Path(raw_learning_trail_path.strip()).expanduser()
+            if raw_learning_trail_path and raw_learning_trail_path.strip()
+            else Path(__file__).resolve().parents[2] / "var/learning-trail"
+        )
         raw_upload_path = values.get("UPLOAD_DATA_PATH")
         upload_data_path = (
             Path(raw_upload_path.strip()).expanduser()
@@ -346,6 +353,7 @@ class AgentSettings(BaseModel):
             skills_path=skills_path,
             applicant_data_path=applicant_data_path,
             assignment_data_path=assignment_data_path,
+            learning_trail_data_path=learning_trail_data_path,
             upload_data_path=upload_data_path,
             published_faq_path=published_faq_path,
             browser_enabled=browser_enabled in {"true", "1", "yes"},

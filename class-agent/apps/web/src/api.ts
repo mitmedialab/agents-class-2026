@@ -1,4 +1,9 @@
 import type { Conversation, Event, PrincipalContext, Uuid } from "@class-agent/protocol";
+import type {
+  LearningTrailEntry,
+  LearningTrailEntryDraft,
+  LearningTrailFeedbackDraft,
+} from "@class-agent/ui";
 import type { JsonValue } from "@class-agent/workspace";
 import {
   confirmationFromPayload,
@@ -352,6 +357,60 @@ export async function markNotificationCenterItemRead(itemId: Uuid): Promise<void
   if (!response.ok) {
     throw await responseError(response);
   }
+}
+
+export async function listLearningTrail(): Promise<LearningTrailEntry[]> {
+  const { entries } = await requestJson<{ entries: LearningTrailEntry[] }>("/learning-trail");
+  return entries;
+}
+
+export function createLearningTrailEntry(
+  draft: LearningTrailEntryDraft,
+): Promise<LearningTrailEntry> {
+  return requestJson<LearningTrailEntry>("/learning-trail/entries", {
+    method: "POST",
+    body: JSON.stringify(draft),
+  });
+}
+
+export function updateLearningTrailEntry(
+  entryId: Uuid,
+  patch: Partial<LearningTrailEntryDraft> & { still_relevant?: boolean },
+): Promise<LearningTrailEntry> {
+  return requestJson<LearningTrailEntry>(
+    `/learning-trail/entries/${encodeURIComponent(entryId)}`,
+    { method: "PATCH", body: JSON.stringify(patch) },
+  );
+}
+
+export async function deleteLearningTrailEntry(entryId: Uuid): Promise<void> {
+  const response = await fetch(
+    `${API_BASE_URL}/learning-trail/entries/${encodeURIComponent(entryId)}`,
+    { method: "DELETE", credentials: "include" },
+  );
+  if (!response.ok) {
+    throw await responseError(response);
+  }
+}
+
+export function addLearningTrailFeedback(
+  entryId: Uuid,
+  draft: LearningTrailFeedbackDraft,
+): Promise<LearningTrailEntry> {
+  return requestJson<LearningTrailEntry>(
+    `/learning-trail/entries/${encodeURIComponent(entryId)}/feedback`,
+    { method: "POST", body: JSON.stringify(draft) },
+  );
+}
+
+export function deleteLearningTrailFeedback(
+  entryId: Uuid,
+  feedbackId: Uuid,
+): Promise<LearningTrailEntry> {
+  return requestJson<LearningTrailEntry>(
+    `/learning-trail/entries/${encodeURIComponent(entryId)}/feedback/${encodeURIComponent(feedbackId)}`,
+    { method: "DELETE" },
+  );
 }
 
 export async function getCourseResourceContent(

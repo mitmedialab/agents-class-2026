@@ -12,6 +12,10 @@ class ConversationAccessDenied(RuntimeError):
     """A conversation does not exist for the current principal."""
 
 
+class MemoryUnavailable(RuntimeError):
+    """Selected memories could not be loaded for this run."""
+
+
 class EventAlreadyExists(ValueError):
     """A canonical event with this stable ID was already persisted."""
 

@@ -15,6 +15,14 @@ GET  /api/v1/auth/me
 
 GET  /api/v1/notifications
 POST /api/v1/notifications/{notification_id}/read
+
+GET    /api/v1/learning-trail
+POST   /api/v1/learning-trail/entries
+PATCH  /api/v1/learning-trail/entries/{entry_id}
+DELETE /api/v1/learning-trail/entries/{entry_id}
+POST   /api/v1/learning-trail/entries/{entry_id}/feedback
+DELETE /api/v1/learning-trail/entries/{entry_id}/feedback/{feedback_id}
+
 GET  /api/v1/notification-center
 POST /api/v1/notification-center/{item_id}/read
 GET  /api/v1/notification-center/{item_id}/sender-image

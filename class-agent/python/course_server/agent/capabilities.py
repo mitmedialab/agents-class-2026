@@ -76,6 +76,7 @@ READ_FAQ_UPDATE_TOOL_ID = "course.read_faq_update"
 SEARCH_COURSE_TOOL_ID = "course.search"
 LIST_MY_COMMUNICATIONS_TOOL_ID = "course.list_my_communications"
 READ_MY_COMMUNICATION_TOOL_ID = "course.read_my_communication"
+MEMORY_GET_MINE_TOOL_ID = "memory.get_mine"
 SUBMIT_APPLICATION_TOOL_ID = "course.submit_application"
 ASK_TA_TOOL_ID = "course.ask_ta"
 READ_UPLOAD_TOOL_ID = "upload.read"
@@ -2698,6 +2699,7 @@ class CourseCapabilityPolicy:
         student_communications_enabled: bool = False,
         faq_updates_enabled: bool = False,
         student_projects_enabled: bool = False,
+        learning_trail_enabled: bool = False,
     ) -> None:
         self._resources = resources
         self._browser_enabled = browser_enabled
@@ -2707,6 +2709,7 @@ class CourseCapabilityPolicy:
         self._student_communications_enabled = student_communications_enabled
         self._faq_updates_enabled = faq_updates_enabled
         self._student_projects_enabled = student_projects_enabled
+        self._learning_trail_enabled = learning_trail_enabled
 
     def authorize(self, principal: PrincipalContext) -> AuthorizedCapabilities:
         if self._resources is None:
@@ -2815,6 +2818,13 @@ class CourseCapabilityPolicy:
                     if self._instructor_messaging_enabled
                     and principal.authenticated
                     and "instructor" in principal.roles
+                    else ()
+                ),
+                *(
+                    (MEMORY_GET_MINE_TOOL_ID,)
+                    if self._learning_trail_enabled
+                    and principal.authenticated
+                    and "student" in principal.roles
                     else ()
                 ),
                 *course_member_project_tools,

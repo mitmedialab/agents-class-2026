@@ -29,6 +29,7 @@ import {
   type CourseResourceContent,
 } from "./api.js";
 
+import { LearningTrailPanel } from "./LearningTrailPanel.js";
 import { StreamingBrowserViewer } from "./StreamingBrowserViewer.js";
 
 interface WorkspaceProps {
@@ -312,7 +313,8 @@ function ResourcePanel({
       panel.componentId === "browser-viewer" ||
       panel.componentId === "page-cards" ||
       panel.componentId === "visual-composition" ||
-      panel.componentId === "draft-document"
+      panel.componentId === "draft-document" ||
+      panel.componentId === "learning-trail"
     ) {
       return;
     }
@@ -400,6 +402,14 @@ function ResourcePanel({
         mode={webpageMode === "live" ? "live" : "reader"}
         title={panel.title ?? "Web page"}
         url={webpageUrl}
+      />
+    );
+  }
+  if (panel.componentId === "learning-trail") {
+    return (
+      <LearningTrailPanel
+        focusEntryId={stringProp(panel.props, "focus_entry_id")}
+        readOnly={historical}
       />
     );
   }
