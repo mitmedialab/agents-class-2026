@@ -62,7 +62,11 @@ import {
   projectConversationTimeline,
   timelineFade,
 } from "./ConversationTimeline.js";
-import { ConversationChat, formatConversationTime } from "./ConversationTranscript.js";
+import {
+  ConversationChat,
+  formatConversationTime,
+  projectConversationTranscript,
+} from "./ConversationTranscript.js";
 import { LearningTrailDialog } from "./LearningTrailPanel.js";
 import { historicalInteraction, historicalPanelAction } from "./historicalWorkspace.js";
 import {
@@ -307,8 +311,8 @@ export default function App() {
   const [pendingUploadCount, setPendingUploadCount] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [logChatOpen, setLogChatOpen] = useState(false);
   const [pendingLogMessage, setPendingLogMessage] = useState<string | null>(null);
+  const [logOpened, setLogOpened] = useState(false);
   const [trailOpen, setTrailOpen] = useState(false);
   const closeTrail = useCallback(() => setTrailOpen(false), []);
   const [aboutOpen, setAboutOpen] = useAboutRoute();
@@ -384,6 +388,15 @@ export default function App() {
   const timelineMoments = useMemo(
     () => projectConversationTimeline(conversationEvents),
     [conversationEvents],
+  );
+  // Once a student has written, or opens a log, the conversation reads as one chat that
+  // scrolls up and down.
+  const chatView = useMemo(
+    () =>
+      logOpened ||
+      (isRunning && pendingLogMessage !== null) ||
+      projectConversationTranscript(conversationEvents).some(({ from }) => from === "student"),
+    [conversationEvents, isRunning, logOpened, pendingLogMessage],
   );
   const historicalMoment =
     timelineOffset > 0 ? momentAtOffset(timelineMoments, timelineOffset) : null;
@@ -550,8 +563,8 @@ export default function App() {
     activeRun.current = null;
     operationInFlight.current = false;
     applicationReturnResponse.current = null;
-    setLogChatOpen(false);
     setPendingLogMessage(null);
+    setLogOpened(false);
     setSelectedConversationId(null);
     setConversationEvents([]);
     setTimelineOffset(0);
@@ -575,9 +588,9 @@ export default function App() {
     requestAnimationFrame(() => composerRef.current?.focus());
   }, [showWelcomeMessage]);
 
-  async function showConversation(conversation: Conversation, asLog = false): Promise<void> {
-    setLogChatOpen(asLog);
+  async function showConversation(conversation: Conversation, fromLogs = false): Promise<void> {
     setPendingLogMessage(null);
+    setLogOpened(fromLogs);
     setCurrentAction("Loading conversation");
     setConversationEvents([]);
     setTimelineOffset(0);
@@ -1861,7 +1874,7 @@ export default function App() {
     }, delay);
   };
   const handleTimelineWheel = (event: globalThis.WheelEvent) => {
-    if (logChatOpen || isRunning || Math.abs(event.deltaY) < 0.1 || timelineMoments.length < 2) {
+    if (chatView || isRunning || Math.abs(event.deltaY) < 0.1 || timelineMoments.length < 2) {
       return;
     }
     const stage = responseStageRef.current;
@@ -1913,7 +1926,7 @@ export default function App() {
     scheduleTimelineSettle(nextProgress >= 1 ? 70 : 150);
   };
   const handleTimelineTouchStart = (event: globalThis.TouchEvent) => {
-    if (logChatOpen || isRunning || timelineMoments.length < 2 || event.touches.length !== 1) {
+    if (chatView || isRunning || timelineMoments.length < 2 || event.touches.length !== 1) {
       return;
     }
     if (timelineGestureReset.current !== null) window.clearTimeout(timelineGestureReset.current);
@@ -2008,7 +2021,7 @@ export default function App() {
       className="course-agent"
       data-about-open={aboutOpen}
       data-conversation-reading={selectedConversationId !== null}
-      data-log-chat={logChatOpen}
+      data-log-chat={chatView}
       data-file-drag-active={isFileDragActive}
       data-mobile-notifications-open={
         notificationCenterVisible && activeMobileView === "updates"
@@ -2188,7 +2201,7 @@ export default function App() {
               <ActivityTrace activities={activities} currentLabel={currentAction} />
             </div>
           </div>
-          {logChatOpen ? null : (
+          {chatView ? null : (
             <ConversationTimeline
               disabled={isRunning}
               moments={timelineMoments}
@@ -2205,7 +2218,7 @@ export default function App() {
               onClose={handleClosePresentedCommunication}
             />
           ) : null}
-          {logChatOpen ? (
+          {chatView ? (
             <ConversationChat
               events={conversationEvents}
               latestResponse={latestResponse}
