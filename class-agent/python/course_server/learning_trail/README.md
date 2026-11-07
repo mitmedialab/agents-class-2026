@@ -112,8 +112,9 @@ pnpm dev                                 # terminal 2, http://localhost:5173
 ```
 
 No migration is needed for this feature, and entries appear under `var/learning-trail/`. Log in as
-the student and use the **Trail** shortcut in the header, or ask the agent to open your learning
-trail. To see citations, save two or three reflections, then ask for help with a later assignment.
+the student and click **My builds** in the header, which opens the page at once with no agent run, or
+ask the agent to open your learning trail. To see citations, save two or three builds, then press
+**Ask the agent about my next build**. Staff see the same button as **Student builds**.
 
 Run the feature's tests:
 
@@ -128,8 +129,8 @@ contract tests must pass.
 ## Scope of this version
 
 Included: reflections per build, feedback written by staff or pasted by the student, per-entry
-sharing with staff, the relevance mark, automatic context and citation, and the panel with a
-most-recent view and a timeline, plus a staff view of shared entries.
+sharing with staff, the relevance mark, automatic context and citation, a page listing the weeks with
+buttons that ask the agent, plus a staff view of shared entries.
 
 Not included yet:
 
@@ -185,9 +186,9 @@ agent.
 One interaction in which saved information changes a later reply:
 
 1. Log in as a student and ask for help planning a later assignment. Note the generic reply.
-2. Open **Trail** and save a reflection for an earlier week, such as what broke in a build and what
+2. Open **My builds** and save a build for an earlier week, such as what broke in a build and what
    you would do differently.
-3. As a TA, open **Trail**, select the student, and write feedback on that entry.
+3. As a TA, open **Student builds**, select the student, and write feedback on that entry.
 4. Back as the student, start a new conversation and ask the same question. The reply should name the
    earlier build and the TA's feedback, and say where each came from.
-5. Mark the entry as no longer relevant and ask again. The reply should stop relying on it.
+5. Untick **The agent can use this** on that build and ask again. The reply should stop relying on it.

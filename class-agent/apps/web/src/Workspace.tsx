@@ -40,6 +40,7 @@ interface WorkspaceProps {
   onPanelAction: (action: "focus" | "close", panelId: string) => Promise<void>;
   onCloseWorkspace: () => Promise<void>;
   onCheckAssignment?: ((resourceUri: string) => void) | undefined;
+  onAskAboutTrail?: ((message: string) => void) | undefined;
   onSubmitApplication?: (() => void) | undefined;
   onInteraction: (panelId: string, action: string, value: JsonValue) => Promise<void>;
   onBrowserScroll: (panelId: string, sessionId: string, deltaY: number) => Promise<void>;
@@ -227,6 +228,7 @@ function ResourcePanel({
   onBrowserResize,
   onInteraction,
   onCheckAssignment,
+  onAskAboutTrail,
   onSubmitApplication,
 }: {
   browserControlsReady: boolean;
@@ -248,6 +250,7 @@ function ResourcePanel({
   ) => Promise<void>;
   onInteraction: (panelId: string, action: string, value: JsonValue) => Promise<void>;
   onCheckAssignment?: ((resourceUri: string) => void) | undefined;
+  onAskAboutTrail?: ((message: string) => void) | undefined;
   onSubmitApplication?: (() => void) | undefined;
 }) {
   const [resource, setResource] = useState<CourseResourceContent | null>(null);
@@ -409,6 +412,7 @@ function ResourcePanel({
     return (
       <LearningTrailPanel
         focusEntryId={stringProp(panel.props, "focus_entry_id")}
+        onAsk={onAskAboutTrail}
         readOnly={historical}
       />
     );
@@ -593,6 +597,7 @@ export function Workspace({
   onPanelAction,
   onCloseWorkspace,
   onCheckAssignment,
+  onAskAboutTrail,
   onSubmitApplication,
   onInteraction,
   onBrowserScroll,
@@ -663,6 +668,7 @@ export function Workspace({
           onBrowserScroll={onBrowserScroll}
           onInteraction={onInteraction}
           onCheckAssignment={onCheckAssignment}
+          onAskAboutTrail={onAskAboutTrail}
           onSubmitApplication={onSubmitApplication}
           panel={focused}
         />

@@ -2749,6 +2749,30 @@ textarea {
   text-transform: uppercase;
 }
 
+.trail-dialog {
+  background: var(--color-surface);
+  border-left: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  margin-left: auto;
+  max-width: 52rem;
+  width: 100%;
+}
+
+.trail-dialog-close {
+  align-self: flex-end;
+  flex: none;
+  font-size: 0.8125rem;
+  margin: 1rem 1.5rem 0;
+}
+
+.trail-dialog .ca-learning-trail {
+  flex: 1;
+  height: auto;
+  padding-top: 0.5rem;
+}
+
 .conversation-transcript {
   background: var(--color-surface);
   border-left: 1px solid var(--color-border);

@@ -1,4 +1,5 @@
 import {
+  Button,
   LearningTrail,
   LearningTrailStaff,
   type LearningTrailEntry,
@@ -22,6 +23,7 @@ import {
 
 interface LearningTrailPanelProps {
   focusEntryId?: string | undefined;
+  onAsk?: ((message: string) => void) | undefined;
   readOnly: boolean;
 }
 
@@ -34,6 +36,7 @@ function isForbidden(error: unknown): boolean {
 function StudentView({
   entries: initialEntries,
   focusEntryId,
+  onAsk,
   readOnly,
 }: LearningTrailPanelProps & { entries: LearningTrailEntry[] }) {
   const [entries, setEntries] = useState(initialEntries);
@@ -43,6 +46,7 @@ function StudentView({
     <LearningTrail
       entries={entries}
       focusEntryId={focusEntryId}
+      onAsk={onAsk}
       onAddFeedback={async (entryId, draft) => {
         await addLearningTrailFeedback(entryId, draft);
         await reload();
@@ -140,7 +144,7 @@ async function loadTrail(): Promise<Loaded> {
 }
 
 /** Trail data is fetched here, not carried in workspace props, so it stays out of chat history. */
-export function LearningTrailPanel({ focusEntryId, readOnly }: LearningTrailPanelProps) {
+export function LearningTrailPanel({ focusEntryId, onAsk, readOnly }: LearningTrailPanelProps) {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -167,5 +171,42 @@ export function LearningTrailPanel({ focusEntryId, readOnly }: LearningTrailPane
   if (loaded.view === "staff") {
     return <StaffView readOnly={readOnly} students={loaded.students} />;
   }
-  return <StudentView entries={loaded.entries} focusEntryId={focusEntryId} readOnly={readOnly} />;
+  return (
+    <StudentView
+      entries={loaded.entries}
+      focusEntryId={focusEntryId}
+      onAsk={onAsk}
+      readOnly={readOnly}
+    />
+  );
+}
+
+/** Opens the trail directly, so that looking at it needs no agent run. */
+export function LearningTrailDialog({
+  onAsk,
+  onClose,
+}: {
+  onAsk: (message: string) => void;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    function closeOnEscape(event: KeyboardEvent) {
+      // Escape in a form field must not throw away what the student was writing.
+      const field = event.target instanceof HTMLElement && event.target.closest("input, textarea, select");
+      if (event.key === "Escape" && !field) onClose();
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  return (
+    <div className="drawer-backdrop" role="presentation">
+      <section aria-label="My builds" aria-modal="true" className="trail-dialog" role="dialog">
+        <Button autoFocus className="trail-dialog-close" onClick={onClose}>
+          Close
+        </Button>
+        <LearningTrailPanel onAsk={onAsk} readOnly={false} />
+      </section>
+    </div>
+  );
 }

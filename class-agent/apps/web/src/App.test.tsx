@@ -27,6 +27,7 @@ vi.mock("./api.js", () => ({
   getPendingActionConversation: vi.fn(),
   getPrincipal: vi.fn(),
   listConversations: vi.fn(),
+  listLearningTrail: vi.fn(),
   login: vi.fn(),
   logout: vi.fn(),
   markNotificationCenterItemRead: vi.fn(),
@@ -1541,6 +1542,43 @@ describe("Course Agent interface", () => {
     expect(api.ensureApplicationDraft).not.toHaveBeenCalled();
     expect(api.confirmTAQuestion).not.toHaveBeenCalled();
     expect(api.confirmInstructorMessage).not.toHaveBeenCalled();
+  });
+
+  it("opens My builds without an agent run and sends a question from it", async () => {
+    vi.mocked(api.listLearningTrail).mockResolvedValue([
+      {
+        id: "10000000-0000-4000-8000-000000000001",
+        week: 6,
+        build_title: "Bedside agent",
+        build_url: null,
+        reflection: "The baseline was stale.",
+        still_relevant: true,
+        shared_with_staff: false,
+        feedback: [],
+        created_at: "2026-10-01T00:00:00Z",
+        updated_at: "2026-10-01T00:00:00Z",
+      },
+    ]);
+    vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
+    render(<App />);
+    await openExistingConversation();
+
+    fireEvent.click(screen.getByRole("button", { name: "My builds" }));
+
+    expect(await screen.findByRole("button", { name: /Bedside agent/ })).toBeInTheDocument();
+    expect(api.streamAgentRun).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Ask the agent about my next build" }));
+
+    await waitFor(() =>
+      expect(api.streamAgentRun).toHaveBeenCalledWith(
+        conversation.id,
+        expect.stringContaining("my next build"),
+        expect.any(Function),
+        expect.any(AbortSignal),
+      ),
+    );
+    expect(screen.queryByRole("dialog", { name: "My builds" })).not.toBeInTheDocument();
   });
 
   it("does not open the application draft from typed message text", async () => {

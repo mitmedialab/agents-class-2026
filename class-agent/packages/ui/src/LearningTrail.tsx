@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 
 import { Button } from "./Button.js";
 import { TextInput } from "./TextInput.js";
@@ -61,11 +61,30 @@ export interface LearningTrailProps {
   onDelete: (entryId: string) => Promise<void>;
   onAddFeedback: (entryId: string, draft: LearningTrailFeedbackDraft) => Promise<void>;
   onDeleteFeedback: (entryId: string, feedbackId: string) => Promise<void>;
+  /** Sends a question to the Course Agent. Left out where asking is not possible. */
+  onAsk?: ((message: string) => void) | undefined;
 }
 
 const SAVE_ERROR = "That could not be saved. Please try again.";
 
 const FEEDBACK_ROLE_LABELS = { instructor: "Instructor", ta: "TA" } as const;
+
+const NEXT_BUILD_QUESTION =
+  "I'm starting my next build. Using my saved builds, what should I watch out for? " +
+  "Tell me which weeks you drew on.";
+
+const HOW_IT_WORKS = [
+  { title: "Save", text: "After each build, write down what you made and what you learned." },
+  { title: "Get feedback", text: "Let TAs see a build if you want them to comment on it." },
+  { title: "Ask", text: "Ask the agent for help. It uses your notes and says which week it used." },
+] as const;
+
+function weekQuestion(entry: LearningTrailEntry): string {
+  return (
+    `What did I learn in Week ${entry.week} (${entry.build_title}), ` +
+    "and how does it bear on what I'm working on now?"
+  );
+}
 
 function formatDate(value: string): string {
   return new Date(value).toLocaleDateString(undefined, {
@@ -78,14 +97,16 @@ function formatDate(value: string): string {
 
 function EntryForm({
   entry,
+  initialWeek,
   onCancel,
   onSubmit,
 }: {
   entry?: LearningTrailEntry | undefined;
+  initialWeek?: number | undefined;
   onCancel: () => void;
   onSubmit: (draft: LearningTrailEntryDraft) => Promise<void>;
 }) {
-  const [week, setWeek] = useState(entry ? String(entry.week) : "");
+  const [week, setWeek] = useState(String(entry?.week ?? initialWeek ?? ""));
   const [title, setTitle] = useState(entry?.build_title ?? "");
   const [url, setUrl] = useState(entry?.build_url ?? "");
   const [reflection, setReflection] = useState(entry?.reflection ?? "");
@@ -114,7 +135,7 @@ function EntryForm({
 
   return (
     <form
-      aria-label={entry ? "Edit reflection" : "New reflection"}
+      aria-label={entry ? "Edit build" : "Add a build"}
       className="ca-trail-form"
       onSubmit={(event) => void submit(event)}
     >
@@ -131,7 +152,7 @@ function EntryForm({
         />
         <TextInput
           id={`${fieldId}-title`}
-          label="Build"
+          label="What did you build?"
           maxLength={200}
           onChange={(event) => setTitle(event.currentTarget.value)}
           required
@@ -149,7 +170,7 @@ function EntryForm({
         value={url}
       />
       <label className="ca-field" htmlFor={`${fieldId}-reflection`}>
-        <span className="ca-field__label">Reflection</span>
+        <span className="ca-field__label">What did you learn, or what would you change?</span>
         <textarea
           className="ca-input ca-trail-textarea"
           id={`${fieldId}-reflection`}
@@ -166,7 +187,7 @@ function EntryForm({
           onChange={(event) => setShared(event.currentTarget.checked)}
           type="checkbox"
         />
-        Share with course staff
+        TAs can see this
       </label>
       {error ? (
         <p className="ca-trail-error" role="alert">
@@ -219,10 +240,22 @@ function FeedbackForm({
 
   return (
     <form
-      aria-label="Add feedback"
+      aria-label="Add feedback you received"
       className="ca-trail-form"
       onSubmit={(event) => void submit(event)}
     >
+      <label className="ca-field" htmlFor={`${fieldId}-body`}>
+        <span className="ca-field__label">Feedback, pasted from the email</span>
+        <textarea
+          className="ca-input ca-trail-textarea"
+          id={`${fieldId}-body`}
+          maxLength={10_000}
+          onChange={(event) => setBody(event.currentTarget.value)}
+          required
+          rows={5}
+          value={body}
+        />
+      </label>
       <div className="ca-trail-form-row">
         <label className="ca-field" htmlFor={`${fieldId}-role`}>
           <span className="ca-field__label">From</span>
@@ -253,18 +286,6 @@ function FeedbackForm({
           value={received}
         />
       </div>
-      <label className="ca-field" htmlFor={`${fieldId}-body`}>
-        <span className="ca-field__label">Feedback, pasted from the email</span>
-        <textarea
-          className="ca-input ca-trail-textarea"
-          id={`${fieldId}-body`}
-          maxLength={10_000}
-          onChange={(event) => setBody(event.currentTarget.value)}
-          required
-          rows={5}
-          value={body}
-        />
-      </label>
       {error ? (
         <p className="ca-trail-error" role="alert">
           {error}
@@ -272,7 +293,7 @@ function FeedbackForm({
       ) : null}
       <div className="ca-trail-actions">
         <Button className="ca-trail-action" disabled={saving} type="submit" variant="outline">
-          Attach
+          Save feedback
         </Button>
         <Button className="ca-trail-action" disabled={saving} onClick={onCancel}>
           Cancel
@@ -282,7 +303,7 @@ function FeedbackForm({
   );
 }
 
-function EntryBody({
+function EntryFeedback({
   canRemove,
   entry,
   onRemove,
@@ -293,56 +314,37 @@ function EntryBody({
   onRemove?: (feedbackId: string) => void;
   pastedLabel: string;
 }) {
+  if (entry.feedback.length === 0) return null;
   return (
-    <>
-      <header className="ca-trail-entry-header">
-        <p className="ca-trail-kicker">
-          Week {entry.week}
-          {entry.still_relevant ? null : " · Set aside"}
-          {entry.shared_with_staff ? " · Shared with staff" : ""}
-        </p>
-        <h3>
-          {entry.build_url ? (
-            <a href={entry.build_url} rel="noreferrer" target="_blank">
-              {entry.build_title}
-            </a>
-          ) : (
-            entry.build_title
-          )}
-        </h3>
-      </header>
-      <p className="ca-trail-text">{entry.reflection}</p>
-      {entry.feedback.length > 0 ? (
-        <section aria-label={`Feedback on ${entry.build_title}`} className="ca-trail-feedback">
-          {entry.feedback.map((feedback) => (
-            <div className="ca-trail-feedback-item" key={feedback.id}>
-              <p className="ca-trail-kicker">
-                {FEEDBACK_ROLE_LABELS[feedback.from_role]}
-                {feedback.from_name ? ` · ${feedback.from_name}` : ""}
-                {feedback.received_at ? ` · ${formatDate(feedback.received_at)}` : ""}
-                {feedback.source === "pasted_by_student" ? ` · ${pastedLabel}` : ""}
-              </p>
-              <p className="ca-trail-text">{feedback.body}</p>
-              {onRemove && canRemove?.(feedback) ? (
-                <Button
-                  aria-label={`Remove feedback from ${FEEDBACK_ROLE_LABELS[feedback.from_role]}`}
-                  className="ca-trail-action"
-                  onClick={() => onRemove(feedback.id)}
-                >
-                  Remove
-                </Button>
-              ) : null}
-            </div>
-          ))}
-        </section>
-      ) : null}
-    </>
+    <section aria-label={`Feedback on ${entry.build_title}`} className="ca-trail-feedback">
+      {entry.feedback.map((feedback) => (
+        <div className="ca-trail-feedback-item" key={feedback.id}>
+          <p className="ca-trail-kicker">
+            {FEEDBACK_ROLE_LABELS[feedback.from_role]}
+            {feedback.from_name ? ` · ${feedback.from_name}` : ""}
+            {feedback.received_at ? ` · ${formatDate(feedback.received_at)}` : ""}
+            {feedback.source === "pasted_by_student" ? ` · ${pastedLabel}` : ""}
+          </p>
+          <p className="ca-trail-text">{feedback.body}</p>
+          {onRemove && canRemove?.(feedback) ? (
+            <Button
+              aria-label={`Remove feedback from ${FEEDBACK_ROLE_LABELS[feedback.from_role]}`}
+              className="ca-trail-action"
+              onClick={() => onRemove(feedback.id)}
+            >
+              Remove
+            </Button>
+          ) : null}
+        </div>
+      ))}
+    </section>
   );
 }
 
-function Entry({
+function EntryDetails({
   entry,
   onAddFeedback,
+  onAsk,
   onDelete,
   onDeleteFeedback,
   onEdit,
@@ -354,7 +356,13 @@ function Entry({
   readOnly: boolean;
 } & Pick<
   LearningTrailProps,
-  "onAddFeedback" | "onDelete" | "onDeleteFeedback" | "onEdit" | "onSetRelevant" | "onSetShared"
+  | "onAddFeedback"
+  | "onAsk"
+  | "onDelete"
+  | "onDeleteFeedback"
+  | "onEdit"
+  | "onSetRelevant"
+  | "onSetShared"
 >) {
   const [mode, setMode] = useState<"read" | "edit" | "feedback">("read");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -383,8 +391,14 @@ function Entry({
   }
 
   return (
-    <article className="ca-trail-entry" data-set-aside={!entry.still_relevant}>
-      <EntryBody
+    <div className="ca-trail-entry">
+      <p className="ca-trail-text">{entry.reflection}</p>
+      {entry.build_url ? (
+        <a className="ca-trail-link" href={entry.build_url} rel="noreferrer" target="_blank">
+          Open the build
+        </a>
+      ) : null}
+      <EntryFeedback
         entry={entry}
         pastedLabel="Pasted by you"
         {...(readOnly
@@ -410,154 +424,213 @@ function Entry({
         </p>
       ) : null}
       {readOnly || mode === "feedback" ? null : (
-        <div className="ca-trail-actions">
-          <label className="ca-trail-relevant">
-            <input
-              checked={entry.still_relevant}
-              onChange={(event) => {
-                const stillRelevant = event.currentTarget.checked;
-                void attempt(() => onSetRelevant(entry.id, stillRelevant));
-              }}
-              type="checkbox"
-            />
-            Still relevant
-          </label>
-          <label className="ca-trail-relevant">
-            <input
-              checked={entry.shared_with_staff}
-              onChange={(event) => {
-                const shared = event.currentTarget.checked;
-                void attempt(() => onSetShared(entry.id, shared));
-              }}
-              type="checkbox"
-            />
-            Shared with staff
-          </label>
-          <Button className="ca-trail-action" onClick={() => setMode("feedback")}>
-            Add feedback
-          </Button>
-          <Button className="ca-trail-action" onClick={() => setMode("edit")}>
-            Edit
-          </Button>
-          {confirmingDelete ? (
-            <>
-              <Button
-                className="ca-trail-action"
-                onClick={() => void attempt(() => onDelete(entry.id))}
-                variant="outline"
-              >
-                Confirm delete
+        <>
+          <div className="ca-trail-toggles">
+            <label className="ca-trail-toggle">
+              <input
+                checked={entry.still_relevant}
+                onChange={(event) => {
+                  const stillRelevant = event.currentTarget.checked;
+                  void attempt(() => onSetRelevant(entry.id, stillRelevant));
+                }}
+                type="checkbox"
+              />
+              <span>
+                The agent can use this
+                <small>Turn off to keep the note here without it affecting the agent&rsquo;s help.</small>
+              </span>
+            </label>
+            <label className="ca-trail-toggle">
+              <input
+                checked={entry.shared_with_staff}
+                onChange={(event) => {
+                  const shared = event.currentTarget.checked;
+                  void attempt(() => onSetShared(entry.id, shared));
+                }}
+                type="checkbox"
+              />
+              <span>
+                TAs can see this
+                <small>Turn on if you want a TA or instructor to read it and comment.</small>
+              </span>
+            </label>
+          </div>
+          <div className="ca-trail-actions">
+            {onAsk ? (
+              <Button className="ca-trail-action" onClick={() => onAsk(weekQuestion(entry))}>
+                Ask about this week
               </Button>
-              <Button className="ca-trail-action" onClick={() => setConfirmingDelete(false)}>
-                Keep
-              </Button>
-            </>
-          ) : (
-            <Button className="ca-trail-action" onClick={() => setConfirmingDelete(true)}>
-              Delete
+            ) : null}
+            <Button className="ca-trail-action" onClick={() => setMode("feedback")}>
+              Add feedback you received
             </Button>
-          )}
-        </div>
+            <Button className="ca-trail-action" onClick={() => setMode("edit")}>
+              Edit
+            </Button>
+            {confirmingDelete ? (
+              <>
+                <Button
+                  className="ca-trail-action"
+                  onClick={() => void attempt(() => onDelete(entry.id))}
+                  variant="outline"
+                >
+                  Confirm delete
+                </Button>
+                <Button className="ca-trail-action" onClick={() => setConfirmingDelete(false)}>
+                  Keep
+                </Button>
+              </>
+            ) : (
+              <Button className="ca-trail-action" onClick={() => setConfirmingDelete(true)}>
+                Delete
+              </Button>
+            )}
+          </div>
+        </>
       )}
-    </article>
+    </div>
   );
+}
+
+function entryStatus(entry: LearningTrailEntry): string {
+  const feedback = entry.feedback.length;
+  return [
+    entry.still_relevant ? "Agent uses this" : "Agent does not use this",
+    entry.shared_with_staff ? "TAs can see" : "Only you",
+    ...(feedback > 0 ? [`${feedback} feedback`] : []),
+  ].join(" · ");
 }
 
 export function LearningTrail({
   entries,
   focusEntryId,
+  onAsk,
   onCreate,
   readOnly = false,
   ...entryActions
 }: LearningTrailProps) {
-  const [view, setView] = useState<"recent" | "all">(
-    focusEntryId !== undefined && focusEntryId !== entries[0]?.id ? "all" : "recent",
-  );
-  const [composing, setComposing] = useState(false);
+  const [composingWeek, setComposingWeek] = useState<number | null>(null);
   const [openEntryId, setOpenEntryId] = useState<string | undefined>(focusEntryId);
-  const latestIdRef = useRef(entries[0]?.id);
-  latestIdRef.current = entries[0]?.id;
 
   useEffect(() => {
     // Follow the agent when it points at another entry; a later save must not move the reader.
-    if (focusEntryId === undefined) return;
-    setOpenEntryId(focusEntryId);
-    setView(focusEntryId === latestIdRef.current ? "recent" : "all");
+    if (focusEntryId !== undefined) setOpenEntryId(focusEntryId);
   }, [focusEntryId]);
 
-  const latest = entries[0];
+  const latestWeek = entries.reduce((latest, entry) => Math.max(latest, entry.week), 0);
+  const savedWeeks = new Set(entries.map((entry) => entry.week));
+  const missingWeeks = Array.from({ length: latestWeek }, (_, index) => index + 1).filter(
+    (week) => !savedWeeks.has(week),
+  );
+  const rows = [
+    ...entries.map((entry) => ({ week: entry.week, entry })),
+    ...missingWeeks.map((week) => ({ week, entry: undefined })),
+  ].sort((a, b) => b.week - a.week);
 
   return (
     <section aria-label="Learning trail" className="ca-learning-trail">
       <header className="ca-trail-header">
-        <h2>Learning trail</h2>
+        <p className="ca-trail-kicker">Learning trail</p>
+        <h2>My builds</h2>
         <p className="ca-trail-note">
-          Yours to keep, change, or delete. TAs and instructors can read the entries you share and
-          write feedback on them. When you chat, the Course Agent reads the entries you keep as
-          relevant, through the course&rsquo;s model provider, to connect your work across weeks.
-          It cannot change them.
+          Your notes on each weekly build. The Course Agent reads them when it helps you, so its
+          help can build on what you have already done. Only you can change them.
         </p>
-        <div className="ca-trail-actions">
-          {readOnly ? null : (
-            <Button
-              className="ca-trail-action"
-              onClick={() => setComposing(true)}
-              variant="outline"
-            >
-              New reflection
-            </Button>
-          )}
-          {entries.length > 1 ? (
-            <Button
-              aria-pressed={view === "all"}
-              className="ca-trail-action"
-              onClick={() => setView(view === "all" ? "recent" : "all")}
-            >
-              {view === "all" ? "Show most recent" : `View all ${entries.length}`}
-            </Button>
-          ) : null}
-        </div>
       </header>
-      {composing ? (
-        <EntryForm
-          onCancel={() => setComposing(false)}
-          onSubmit={async (draft) => {
-            await onCreate(draft);
-            setComposing(false);
-            setView("recent");
-          }}
-        />
-      ) : null}
-      {latest === undefined ? (
-        composing ? null : (
-          <p className="ca-trail-note">
-            Nothing saved yet. Write a reflection after each build, in your own words.
-          </p>
-        )
-      ) : view === "recent" ? (
-        <Entry entry={latest} key={latest.id} readOnly={readOnly} {...entryActions} />
-      ) : (
-        <ol className="ca-trail-timeline">
-          {entries.map((entry) => (
-            <li data-set-aside={!entry.still_relevant} key={entry.id}>
-              <button
-                aria-expanded={openEntryId === entry.id}
-                className="ca-trail-row"
-                onClick={() => setOpenEntryId(openEntryId === entry.id ? undefined : entry.id)}
-                type="button"
-              >
-                <span className="ca-trail-kicker">Week {entry.week}</span>
-                <span>{entry.build_title}</span>
-                <span className="ca-trail-kicker">
-                  {entry.still_relevant ? "" : "Set aside"}
-                </span>
-              </button>
-              {openEntryId === entry.id ? (
-                <Entry entry={entry} readOnly={readOnly} {...entryActions} />
-              ) : null}
+      {readOnly ? null : (
+        <ol aria-label="How it works" className="ca-trail-steps">
+          {HOW_IT_WORKS.map((step, index) => (
+            <li key={step.title}>
+              <span className="ca-trail-kicker">{index + 1}</span>
+              <strong>{step.title}</strong>
+              <span>{step.text}</span>
             </li>
           ))}
         </ol>
+      )}
+      {readOnly ? null : (
+        <div className="ca-trail-actions">
+          <Button
+            className="ca-trail-action"
+            onClick={() => setComposingWeek(latestWeek + 1)}
+            variant={entries.length === 0 ? "outline" : "plain"}
+          >
+            Add a build
+          </Button>
+          {onAsk && entries.length > 0 ? (
+            <Button
+              className="ca-trail-action"
+              onClick={() => onAsk(NEXT_BUILD_QUESTION)}
+              variant="outline"
+            >
+              Ask the agent about my next build
+            </Button>
+          ) : null}
+        </div>
+      )}
+      {composingWeek !== null ? (
+        <EntryForm
+          initialWeek={composingWeek}
+          key={composingWeek}
+          onCancel={() => setComposingWeek(null)}
+          onSubmit={async (draft) => {
+            await onCreate(draft);
+            setComposingWeek(null);
+          }}
+        />
+      ) : null}
+      {rows.length > 0 ? (
+        <ol className="ca-trail-weeks">
+          {rows.map(({ week, entry }) =>
+            entry === undefined ? (
+              <li data-state="empty" key={`week-${week}`}>
+                <div className="ca-trail-row ca-trail-row--empty">
+                  <span className="ca-trail-kicker">Week {week}</span>
+                  <span className="ca-trail-row-body">
+                    <span>Nothing saved</span>
+                    {readOnly ? null : (
+                      <Button
+                        aria-label={`Add a build for Week ${week}`}
+                        className="ca-trail-action"
+                        onClick={() => setComposingWeek(week)}
+                      >
+                        Add
+                      </Button>
+                    )}
+                  </span>
+                </div>
+              </li>
+            ) : (
+              <li data-state={entry.still_relevant ? "used" : "unused"} key={entry.id}>
+                <button
+                  aria-expanded={openEntryId === entry.id}
+                  className="ca-trail-row"
+                  onClick={() => setOpenEntryId(openEntryId === entry.id ? undefined : entry.id)}
+                  type="button"
+                >
+                  <span className="ca-trail-kicker">Week {entry.week}</span>
+                  <span className="ca-trail-row-body">
+                    <span className="ca-trail-row-title">{entry.build_title}</span>
+                    {openEntryId === entry.id ? null : (
+                      <span className="ca-trail-excerpt">{entry.reflection}</span>
+                    )}
+                    <span className="ca-trail-status">{entryStatus(entry)}</span>
+                  </span>
+                </button>
+                {openEntryId === entry.id ? (
+                  <EntryDetails
+                    entry={entry}
+                    onAsk={onAsk}
+                    readOnly={readOnly}
+                    {...entryActions}
+                  />
+                ) : null}
+              </li>
+            ),
+          )}
+        </ol>
+      ) : composingWeek !== null ? null : (
+        <p className="ca-trail-note">Nothing saved yet. Start with the build you did last.</p>
       )}
     </section>
   );
@@ -601,7 +674,23 @@ function StaffEntry({
 
   return (
     <article className="ca-trail-entry" data-set-aside={!entry.still_relevant}>
-      <EntryBody
+      <header className="ca-trail-entry-header">
+        <p className="ca-trail-kicker">
+          Week {entry.week}
+          {entry.still_relevant ? null : " · The student's agent does not use this"}
+        </p>
+        <h3>
+          {entry.build_url ? (
+            <a href={entry.build_url} rel="noreferrer" target="_blank">
+              {entry.build_title}
+            </a>
+          ) : (
+            entry.build_title
+          )}
+        </h3>
+      </header>
+      <p className="ca-trail-text">{entry.reflection}</p>
+      <EntryFeedback
         entry={entry}
         pastedLabel="Pasted by student"
         {...(readOnly
@@ -664,10 +753,11 @@ export function LearningTrailStaff({
   return (
     <section aria-label="Learning trails" className="ca-learning-trail">
       <header className="ca-trail-header">
-        <h2>{selectedStudent ? selectedStudent.student_name : "Learning trails"}</h2>
+        <p className="ca-trail-kicker">Learning trail</p>
+        <h2>{selectedStudent ? selectedStudent.student_name : "Student builds"}</h2>
         <p className="ca-trail-note">
-          Only entries students chose to share appear here. Students see your feedback beside their
-          reflection, and the Course Agent can draw on it when helping them later.
+          Only builds students chose to share appear here. Students see your feedback beside their
+          notes, and the Course Agent can draw on it when helping them later.
         </p>
         {selectedStudent ? (
           <div className="ca-trail-actions">
@@ -689,10 +779,10 @@ export function LearningTrailStaff({
             />
           ))
         ) : (
-          <p className="ca-trail-note">This student has no shared entries right now.</p>
+          <p className="ca-trail-note">This student has no shared builds right now.</p>
         )
       ) : students.length > 0 ? (
-        <ol className="ca-trail-timeline">
+        <ol className="ca-trail-students">
           {students.map((student) => (
             <li key={student.student_id}>
               <button
@@ -709,7 +799,7 @@ export function LearningTrailStaff({
           ))}
         </ol>
       ) : (
-        <p className="ca-trail-note">No student has shared an entry yet.</p>
+        <p className="ca-trail-note">No student has shared a build yet.</p>
       )}
     </section>
   );

@@ -63,6 +63,7 @@ import {
   timelineFade,
 } from "./ConversationTimeline.js";
 import { ConversationTranscript, formatConversationTime } from "./ConversationTranscript.js";
+import { LearningTrailDialog } from "./LearningTrailPanel.js";
 import { historicalInteraction, historicalPanelAction } from "./historicalWorkspace.js";
 import {
   applyTAQuestionEvent,
@@ -148,10 +149,6 @@ const STUDENT_CONTACT_PROMPT = {
 const INSTRUCTOR_CONTACT_PROMPT = {
   label: "Contact",
   message: "I'd like to contact students. Help me prepare a message using the instructor messaging tool, asking for the audience and message details you need.",
-};
-const LEARNING_TRAIL_PROMPT = {
-  label: "Trail",
-  message: "Open the learning trail.",
 };
 const EMPTY_NOTIFICATION_CENTER: NotificationCenterData = {
   generated_at: "1970-01-01T00:00:00Z",
@@ -312,6 +309,8 @@ export default function App() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [transcriptOpen, setTranscriptOpen] = useState(false);
   const closeTranscript = useCallback(() => setTranscriptOpen(false), []);
+  const [trailOpen, setTrailOpen] = useState(false);
+  const closeTrail = useCallback(() => setTrailOpen(false), []);
   const [aboutOpen, setAboutOpen] = useAboutRoute();
   const [syllabusPdfUrl, setSyllabusPdfUrl] = useState<string | undefined>();
   const [syllabusContent, setSyllabusContent] = useState<string | null>(null);
@@ -1990,15 +1989,12 @@ export default function App() {
         ? STUDENT_CONTACT_PROMPT
         : null
     : null;
-  const headerPrompts = [
-    ...HEADER_PROMPTS.map((prompt) =>
-      prompt.label === "Apply" && contactPrompt ? contactPrompt : prompt,
-    ),
-    ...(principal?.authenticated &&
-    principal.roles.some((role) => role === "student" || role === "ta" || role === "instructor")
-      ? [LEARNING_TRAIL_PROMPT]
-      : []),
-  ];
+  const headerPrompts = HEADER_PROMPTS.map((prompt) =>
+    prompt.label === "Apply" && contactPrompt ? contactPrompt : prompt,
+  );
+  const canUseTrail =
+    principal?.authenticated === true &&
+    principal.roles.some((role) => role === "student" || role === "ta" || role === "instructor");
   return (
     <div
       className="course-agent"
@@ -2054,6 +2050,11 @@ export default function App() {
           </div>
         </div>
         <div className="header-utility">
+          {canUseTrail ? (
+            <Button className="header-new-chat" onClick={() => setTrailOpen(true)}>
+              {principal?.roles.includes("student") ? "My builds" : "Student builds"}
+            </Button>
+          ) : null}
           <Button className="header-new-chat" onClick={startNewConversation}>
             New chat
           </Button>
@@ -2293,6 +2294,9 @@ export default function App() {
                   onInteraction={handleWorkspaceInteraction}
                   onCloseWorkspace={handleCloseWorkspace}
                   onPanelAction={handleWorkspacePanelAction}
+                  onAskAboutTrail={
+                    isTimeTraveling || isRunning ? undefined : (question) => void sendMessage(question)
+                  }
                   onCheckAssignment={
                     !isTimeTraveling && principal?.roles.includes("student")
                       ? (resourceUri) =>
@@ -2482,6 +2486,17 @@ export default function App() {
         </>
       )}
 
+      {trailOpen ? (
+        <LearningTrailDialog
+          onAsk={(question) => {
+            setTrailOpen(false);
+            setAboutOpen(false);
+            setTranscriptOpen(false);
+            void sendMessage(question);
+          }}
+          onClose={closeTrail}
+        />
+      ) : null}
       {transcriptOpen ? (
         <ConversationTranscript
           events={conversationEvents}

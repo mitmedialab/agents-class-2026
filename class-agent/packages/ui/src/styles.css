@@ -2370,7 +2370,7 @@
 }
 
 .ca-trail-header h2 {
-  font-size: 1.75rem;
+  font-size: 2rem;
   font-weight: 400;
   margin: 0;
 }
@@ -2391,9 +2391,37 @@
   text-transform: uppercase;
 }
 
+.ca-trail-steps {
+  border-bottom: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-border);
+  display: grid;
+  gap: var(--space-4) var(--space-6);
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: var(--space-4) 0;
+}
+
+.ca-trail-steps li {
+  display: grid;
+  font-size: 0.8125rem;
+  gap: var(--space-1);
+  line-height: 1.45;
+}
+
+.ca-trail-steps li > span:last-child {
+  color: var(--color-text-muted);
+}
+
+.ca-trail-steps strong {
+  font-size: 0.9375rem;
+  font-weight: 400;
+}
+
 .ca-trail-entry {
   display: grid;
   gap: var(--space-4);
+  padding: 0 0 var(--space-6);
 }
 
 .ca-trail-entry-header {
@@ -2411,9 +2439,10 @@
   color: inherit;
 }
 
-.ca-trail-entry[data-set-aside="true"] .ca-trail-entry-header h3,
-.ca-trail-entry[data-set-aside="true"] > .ca-trail-text {
-  color: var(--color-text-muted);
+.ca-trail-link {
+  color: inherit;
+  font-size: 0.8125rem;
+  justify-self: start;
 }
 
 .ca-trail-text {
@@ -2462,8 +2491,36 @@
   gap: var(--space-2);
 }
 
-.ca-trail-relevant input {
+.ca-trail-relevant input,
+.ca-trail-toggle input {
   accent-color: var(--color-text);
+}
+
+.ca-trail-toggles {
+  border-top: 1px solid var(--color-border);
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+}
+
+.ca-trail-toggle {
+  align-items: start;
+  cursor: pointer;
+  display: grid;
+  font-size: 0.875rem;
+  gap: var(--space-2);
+  grid-template-columns: auto 1fr;
+}
+
+.ca-trail-toggle input {
+  margin: 0.2rem 0 0;
+}
+
+.ca-trail-toggle small {
+  color: var(--color-text-muted);
+  display: block;
+  font-size: 0.75rem;
+  line-height: 1.4;
 }
 
 .ca-trail-form {
@@ -2495,19 +2552,39 @@
   margin: 0;
 }
 
-.ca-trail-timeline {
-  border-top: 1px solid var(--color-border);
+/* The trail itself: one line through the weeks, a filled dot where the agent uses the note. */
+.ca-trail-weeks {
+  border-left: 1px solid var(--color-border);
+  display: grid;
   list-style: none;
-  margin: 0;
+  margin: 0 0 0 0.25rem;
   padding: 0;
 }
 
-.ca-trail-timeline > li {
-  border-bottom: 1px solid var(--color-border);
+.ca-trail-weeks > li {
+  padding-left: 1.25rem;
+  position: relative;
 }
 
-.ca-trail-timeline .ca-trail-entry {
-  padding: 0 0 var(--space-6);
+.ca-trail-weeks > li::before {
+  background: var(--color-text);
+  border: 1px solid var(--color-text);
+  border-radius: 50%;
+  content: "";
+  height: 0.5625rem;
+  left: -0.3125rem;
+  position: absolute;
+  top: 1.1rem;
+  width: 0.5625rem;
+}
+
+.ca-trail-weeks > li[data-state="unused"]::before {
+  background: var(--color-surface);
+}
+
+.ca-trail-weeks > li[data-state="empty"]::before {
+  background: var(--color-surface);
+  border-color: var(--color-border);
 }
 
 .ca-trail-row {
@@ -2519,22 +2596,80 @@
   display: grid;
   font: inherit;
   gap: var(--space-4);
-  grid-template-columns: 5rem 1fr auto;
-  padding: var(--space-3) 0;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  padding: var(--space-4) 0;
   text-align: left;
   width: 100%;
 }
 
-.ca-trail-timeline > li[data-set-aside="true"] .ca-trail-row {
+.ca-trail-row--empty {
+  color: var(--color-text-muted);
+  cursor: default;
+  font-size: 0.8125rem;
+  padding: var(--space-3) 0;
+}
+
+.ca-trail-row-body {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.ca-trail-row--empty .ca-trail-row-body {
+  align-items: baseline;
+  display: flex;
+  gap: var(--space-4);
+}
+
+.ca-trail-row-title {
+  font-size: 1.0625rem;
+}
+
+.ca-trail-excerpt {
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--color-text-muted);
+  display: -webkit-box;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  overflow: hidden;
+}
+
+.ca-trail-status {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  margin-top: var(--space-1);
+}
+
+.ca-trail-weeks > li[data-state="unused"] .ca-trail-row-title {
   color: var(--color-text-muted);
 }
 
 .ca-trail-row:focus-visible,
-.ca-trail-relevant input:focus-visible {
+.ca-trail-relevant input:focus-visible,
+.ca-trail-toggle input:focus-visible {
   outline: 1px solid var(--color-text);
   outline-offset: 2px;
 }
 
+.ca-trail-students {
+  border-top: 1px solid var(--color-border);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ca-trail-students > li {
+  border-bottom: 1px solid var(--color-border);
+}
+
 .ca-trail-student-row {
   grid-template-columns: 1fr auto;
+}
+
+@media (max-width: 640px) {
+  .ca-trail-row {
+    gap: var(--space-1);
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
