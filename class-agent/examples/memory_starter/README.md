@@ -1,5 +1,27 @@
 # Week 8 student fork setup
 
+## Start from the student branch
+
+The [course repository](https://github.com/mitmedialab/agents-class-2026) opens on
+`main`. Use its
+[Week 8 starter branch](https://github.com/mitmedialab/agents-class-2026/tree/student/week-8-personalization-starter)
+for this build. When creating a GitHub fork, clear **Copy the DEFAULT branch only** so
+the starter branch appears in your fork. Switch to that branch and create your own
+working branch from it.
+
+If you already forked the repository or copied only its default branch, clone your
+fork and run these commands from the repository root:
+
+```bash
+git fetch https://github.com/mitmedialab/agents-class-2026.git student/week-8-personalization-starter
+git switch -c week8-personalization FETCH_HEAD
+git push -u origin week8-personalization
+```
+
+When opening your pull request, choose `mitmedialab/agents-class-2026` and
+`student/week-8-personalization-starter` as the base repository and branch. Your
+pull request will then show your group's feature changes separately from the starter.
+
 The fork includes the published Week 1–8 assignments, including the open-ended
 [Week 8 memory and user-modeling build](assignments/week-8/week-8.md). It also
 includes a fictional copy of the historical final-project team-formation assignment. The Week 8
