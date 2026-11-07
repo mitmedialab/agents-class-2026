@@ -1,5 +1,5 @@
 1 | Cover: Tools, MCPs and Skills over a still of an ape among bones.
-2 | Course logistics screenshot with reminders about communication, assignments, slides, and peer work.
+2 | Course logistics text listing communication, assignments, slides, peer work, and students' ideas.
 3 | Course website screenshot beside Uncle Sam and reminder that students can change the agent.
 4 | Four final-project formats: new agent, outcome study, evaluation environment, or benchmark.
 5 | Show-and-tell transition slide.

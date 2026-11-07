@@ -1,0 +1,56 @@
+1 | The control-room image introduces computer use as a form of agency through a device interface, setting up the week's move from browser clicks to physical hardware.
+2 | The first Week 4 project collage recalls how students designed environments and evaluations before this lecture asks agents to operate real devices.
+3 | The second gallery broadens the environments students built, showing the variety of states and actions a device-use agent may have to handle.
+4 | The final gallery completes the project recap and links environment design to today's focus on perception and action through devices.
+6 | The show-and-tell art separates student demonstrations from the technical lecture while keeping their prototypes as the immediate examples.
+8 | The control-room image returns after the student demonstrations to begin the lecture's closer look at how agents perceive and act through devices.
+9 | The computer-interface illustration introduces device use as an agent acting through an existing interface built for people.
+11 | The perception-action diagram places a human, agent, and device in one loop; device-use assistance depends on what the agent can sense and control.
+12 | The browser diagram distinguishes visual and DOM observations from clicks, typing, and navigation, clarifying the agent's available channels.
+14 | The DOM and screenshot examples compare structural and visual views of the same page; each reveals information the other may miss.
+15 | The two floral mugs are a grounding test: an agent must use visual distinctions to select the object the person actually means.
+16 | The browser-use architecture shows how an agent may control either a local or cloud browser while keeping the connection to the page explicit.
+17 | The Playwright code and accessibility snapshot show a structured way to inspect and act on web elements without relying solely on pixels.
+18 | The protocol diagram traces a browser command through Playwright and Chrome DevTools to Chromium, exposing the layers beneath an agent click.
+19 | The desktop diagram expands browser use to windows, screenshots, UI trees, and operating-system actions.
+20 | The shell and screenshot comparison shows two routes to the same computer task: command-level control and interaction with visible applications.
+21 | The S1, S2, and S3 chart situates computer-use agents within published scaling results, while reminding students that benchmark performance varies by setup.
+22 | The UI-Tars screenshot is an example of a model operating desktop software through visual observations and actions.
+23 | The Claude Computer Use code shows the tool boundary through which a model's requested mouse or keyboard action reaches a computer.
+24 | PyAutoGUI provides a lower-level action example, turning agent decisions into explicit mouse and keyboard calls.
+25 | The accessibility-tree screenshots show that operating systems expose element roles and labels that can make interface control more precise.
+26 | The subprocess and PTY flow shows a different device-use interface: commands and their output can serve as actions and observations.
+27 | The mobile diagram applies the same perception-action idea to phones, whose screens, app state, and gestures differ from desktop systems.
+28 | The MobileRun and DroidRun examples show how mobile automation is assembled from device setup, observations, and platform-specific commands.
+29 | Android and iOS accessibility APIs expose interface structure that can help an agent navigate mobile apps with less guesswork.
+30 | The Android Debug Bridge commands illustrate a direct route to inspecting and controlling a phone, complementing the accessibility APIs on the previous slide.
+31 | The smartglasses diagram extends device use to wearables with cameras, audio, and other sensors close to the person's activity.
+32 | VisionClaw illustrates an assistant using smartglasses to perceive a scene and respond in context, linking device use to situated help.
+33 | AISee combines glasses and headphones as a platform for wearable support, where input and output need to fit the user's immediate surroundings.
+34 | The watch interface shows another small-screen agent surface with brief interactions and limited room for explanation.
+35 | The robot and printer examples show that device-use agents can act through very different physical endpoints, each with its own control boundary.
+36 | The Home Assistant MCP page illustrates a registered route from an agent to smart-home devices rather than direct unrestricted control.
+37 | The ROS 2 diagram connects model decisions to robot tools, showing how a robotics middleware layer mediates physical actions.
+38 | The CUPS page and commands make printing a concrete example of a device action with a narrow operating-system interface.
+41 | WebArena and VisualWebArena provide browser tasks against which perception and action strategies can be compared.
+42 | The Agent Company cover introduces workplace tasks that span multiple tools, extending device-use evaluation beyond a single interface.
+43 | OSWorld's screenshot and paper ground desktop computer-use evaluation in observable application states and task outcomes.
+44 | WindowsAgentArena shows a second desktop benchmark, emphasizing that platform differences matter when testing agents.
+45 | The Terminal-Bench leaderboard represents command-line tasks as a measurable device-use setting, although rankings depend on the benchmark design.
+46 | AndroidWorld's task screens bring the evaluation problem to mobile apps, where agents must manage small interfaces and changing state.
+48 | The access diagram makes privacy risk concrete: a computer-use agent could see screenshots, files, messages, and logged-in sessions unrelated to its task.
+49 | The visual prompt-injection diagram shows untrusted webpage content trying to redirect an agent that is reading the page as task data.
+51 | The imitation-learning loop shows a model learning the next interface action from an instruction and current device state.
+52 | The grounding pipeline makes a click target a prediction from both screenshot and instruction, a core challenge in visual device use.
+53 | The world-model diagram asks a model to predict how the screen will change after an action, supporting planning and error recovery.
+55 | The small Chrome robot serves as a visual bridge from benchmark methods to device-use demonstrations in the physical world.
+56 | Hands operating a device underline the human motor actions that a device-use agent may need to reproduce or assist.
+57 | The remote house-viewing still illustrates a device mediating perception at a distance, where the agent's observation is not the whole environment.
+58 | DOOM running on an ESP32-P4 shows an agent controlling an unconventional device through a program and display rather than a standard desktop.
+59 | The phone test rig makes mobile automation inspectable by showing both the device screen and the control terminal.
+60 | The electronics board and phone show agent control crossing hardware and software boundaries during a navigation task.
+61 | Reverse Engineer Anything combines screenshots and hardware to suggest a broader device-use workflow: understanding an unfamiliar system before operating it.
+63 | AISee's person-and-interface images return device use to the course goal of augmenting a person with low vision in daily activity.
+64 | The accessible browser screens show how assistant controls can make web tasks easier without taking the interface away from the user.
+65 | Phi-Ground's presentation-editor diagram shows guided clicks and visual grounding as a way to support a person in an existing application.
+69 | The closing logos identify the course setting after the device-use assignment and its cognitive-augmentation challenge.

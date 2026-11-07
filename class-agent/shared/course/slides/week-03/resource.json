@@ -7,6 +7,7 @@
     "media_type": "application/pdf",
     "file": "week-3-slides.pdf",
     "accessibility_file": "accessibility.txt",
+    "caption_file": "captions.txt",
     "visibility": "public",
     "status": "published",
     "order": 62

@@ -1,0 +1,59 @@
+1 | The rover photograph introduces the week's central question: an agent can only be evaluated in relation to the environment where it acts.
+3 | The project art marks show-and-tell as a chance to compare the environments students have built, not only the agents placed inside them.
+5 | The rover returns at the start of the environments section, linking a physical mission to the abstract idea of an agent's surroundings.
+7 | Highlighting the environment in the agent loop makes clear that actions and feedback depend on an external state the agent does not fully control.
+8 | The POMDP diagram gives a vocabulary for that loop: states change after actions, observations reveal only part of them, and rewards express the objective.
+9 | The expanded architecture locates tools and sandboxes at the boundary where agent actions meet an environment.
+10 | The planet, forest, and city images show that an environment may be remote, natural, or social; its properties shape what an agent can observe and do.
+11 | The examples from games, commerce, agriculture, and classrooms widen the term “environment” beyond a browser or robot simulator.
+13 | Returning to the POMDP diagram emphasizes the gap between an environment's actual state and the observation available to the agent.
+14 | The POMDP taxonomy turns that distinction into formal components that can be specified in a benchmark or simulator.
+15 | The browser diagram treats a webpage as state that changes when an agent clicks or types, illustrating a familiar digital environment.
+16 | The greenhouse diagram shows sensor readings and physical conditions as observations of a slower, partly hidden environment.
+17 | The tutor diagram makes a student's learning state part of the environment, where an agent's response can change cognition rather than a screen.
+18 | The multi-agent game diagram adds other actors whose choices affect the same environment, complicating prediction and scoring.
+21 | The Go board shows a highly structured environment whose rules and terminal outcomes made AlphaGo evaluation possible.
+22 | The robotics illustration shifts from game states to physical action, where perception and control face real-world uncertainty.
+23 | The outdoor humanoid robot underscores that a physical environment includes terrain, people, and changing conditions beyond a tidy simulator.
+24 | Grocery items make the environment concrete at object level: an agent must recognize and manipulate the right things to complete a task.
+25 | The cooking example shows how agent instructions meet an ordinary household setting, where success depends on situated human and device actions.
+26 | The game examples show interactive worlds that expose state through graphics and allow agents to act through defined controls.
+27 | The Pokémon screenshot pairs a game world with an agent's reasoning log, making both the environment state and decision trace visible.
+28 | Minecraft illustrates an open-ended world where several agents can coordinate or compete while changing a shared state.
+29 | The robotic arm emphasizes the physical interface between an agent's planned action and an actual object in the environment.
+30 | The student collage connects the lecture's many example environments back to settings the class can build and test itself.
+32 | The person operating a device illustrates an interface to the physical world, which an agent must emulate or cooperate with to act there.
+33 | The protocol diagram separates agent commands from environment state changes, making the interface an explicit design object.
+34 | Reset and step calls show how a simulator can expose observations and rewards consistently to an agent and evaluator.
+36 | The grayscale title image marks the shift from specifying environments to asking what evidence counts as agent success.
+37 | Two paths reach the same refund result, showing why a final outcome alone can conceal unsafe or inefficient intermediate behavior.
+42 | The changing benchmark curves show that model choice and run settings affect scores, so comparisons require controlled conditions.
+44 | The split between response grading and environment-state grading asks whether evaluation should inspect what an agent said or what it actually changed.
+45 | Adding a grader to the agent-environment loop makes the evaluator's access and criteria explicit.
+46 | The section image introduces simulated environments as repeatable places to test actions that may be costly or risky in the real world.
+47 | The loop highlights that each action changes state and may be expensive to evaluate, motivating controlled simulations.
+48 | WebArena's sites turn common browser tasks into repeatable tests with observable goals and outcomes.
+49 | AppWorld's simulated apps and supervisor show how a benchmark can control several services while checking the agent's final state.
+50 | The customer-service benchmark illustrates evaluation where an agent must navigate a conversation and satisfy a service objective.
+51 | The workplace diagram tests longer tasks across professional tools, extending evaluation beyond one webpage or command.
+52 | ScienceWorld's pixel-art world provides a contained setting for testing scientific reasoning through interaction.
+53 | DiscoveryWorld's map similarly makes discovery a sequence of observable choices and consequences rather than a text-only answer.
+54 | The kitchen and room scenes in AI2-THOR illustrate embodied tasks whose success depends on spatial perception and action.
+55 | The vending-business curves show that a long-running agent can be scored by cumulative outcomes, not just single-step correctness.
+56 | The greenhouse-control diagram connects observations, actions, and crop conditions in a simulated physical system.
+57 | Paired household photos and simulations ask how well a benchmark's artificial world represents real activities.
+58 | The reminder and boxing imagery marks a return from benchmark examples to the importance of keeping agents within safe boundaries.
+59 | The sandbox diagram isolates agent execution from external tools, so environment interaction can be tested without granting unrestricted access.
+60 | The warm-toned image introduces cognitive environments, where the state being changed may be a person's beliefs, skills, or feelings.
+63 | TutorBench brings tutoring behavior into evaluation, where a good answer must also support a learner's understanding.
+64 | The belief-update paper illustrates a simulator that tries to model how a person might change their mind after agent input.
+65 | The simulated-classroom paper scales that idea to multiple learners and interactions, while still requiring validation against real classrooms.
+66 | The tutoring papers and charts connect simulated measures to actual learning outcomes, the crucial test for cognitive augmentation.
+67 | Sotopia's illustrated social world offers a contained setting for studying agent behavior in conversations and relationships.
+68 | The community flowchart extends evaluation to collective well-being, where one agent's actions can affect many people.
+71 | The simulation warning cautions that convenient synthetic outcomes may not predict real human behavior.
+74 | The benchmark collage returns to diverse settings to ask which agent effects can be measured only in an actual environment.
+76 | The dark dome image closes the lecture's evaluation journey and frames real-world benchmarking as an open challenge.
+77 | The course website screenshot turns that open challenge into a discussion prompt for students to critique environments and validation together.
+79 | The weekly-build art marks the move from evaluating published benchmarks to designing and scoring a realistic environment of one's own.
+83 | The closing logos identify the course context after the environment-building assignment.

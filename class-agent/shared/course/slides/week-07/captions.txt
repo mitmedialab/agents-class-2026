@@ -1,0 +1,85 @@
+3 | The uneasy film still introduces memory as more than storage: what an agent recalls can change how it responds to a person later.
+5 | Highlighting the memory store in the agent harness locates persistence beside orchestration, where information from prior episodes can inform future actions.
+7 | The four-row table introduces working, semantic, episodic, and procedural memory as distinct kinds of information an agent might need.
+8 | Filling the working-memory row ties the current task to the context window, whose contents are available now but do not automatically persist.
+9 | The semantic-memory row adds general facts and knowledge, distinguishing them from the temporary context of one interaction.
+10 | The episodic-memory row adds specific past sessions, the material an agent could use to remember what happened with a person before.
+11 | The completed table adds procedural memory as skills and how-tos, making clear that remembering how to act differs from remembering facts or events.
+12 | The tree separates memory encoded in model weights from memory stored outside them, a design choice that determines how information can be updated.
+16 | Encoding, storage, and retrieval form a lifecycle: an agent must decide what to represent, keep, and bring back when it is useful.
+17 | Highlighting encoding begins that lifecycle with the problem of turning experience into a form the agent can later use.
+18 | The sensor categories show how varied an agent's possible experiences are, from text and images to audio and signals from its own operation.
+20 | The supermarket-and-coordinate example explains embeddings as numeric positions that let an agent compare items by meaning or similarity.
+21 | CLIP, MiniLM, and CLAP illustrate that different data types require different encoders before they can be stored or retrieved in a shared workflow.
+22 | EmbeddingGemma's announcement is a current example of a model built for compact semantic representations, connecting the abstract embedding idea to available tools.
+23 | The blank metadata table introduces information about a memory's origin, time, and access scope as part of what should be stored with content.
+24 | The source row makes provenance explicit, so an agent can distinguish a user's statement from a document or tool result.
+25 | The time row shows why stored facts need dates and validity periods rather than being treated as timeless truth.
+26 | The scope row connects memory storage to permissions: the same fact may be available to one person or tool but not another.
+27 | Completing the table leaves room for task-specific metadata, emphasizing that a useful memory record carries context as well as content.
+28 | The pixel-art town and memory stream illustrate Generative Agents recording everyday events so later behavior can draw on accumulated experience.
+30 | The caution beside the Hugging Face mark shows that retained notes can become an attack surface when untrusted content is recalled as instruction.
+31 | ProMemAssist uses sensed activity to model working memory and predict when a prompt might help, linking encoding to cognitive augmentation.
+32 | Returning to the lifecycle diagram closes the encoding examples and prepares the move to where memories are kept.
+33 | Highlighting storage changes the question from what to capture to how and where the agent should preserve it.
+34 | The database table introduces relational records, vector stores, and knowledge graphs as storage structures suited to different retrieval questions.
+35 | The relational row shows why precise facts such as dates or allergies fit structured queries rather than approximate similarity search.
+36 | The vector-store row shows how semantic matching can retrieve “my dog, Rex” from a query about a pet even without exact word overlap.
+37 | The graph row makes relationships first-class, useful when an agent must follow links between people, places, and changing roles.
+38 | The reflection tree in Generative Agents shows raw observations being condensed into higher-level conclusions that can guide later behavior.
+39 | Mind Mapper's pipeline turns everyday speech into conditional patterns, an example of storing behavior-relevant rules rather than isolated quotes.
+40 | The MemGPT replacement call shows a memory update in action: “boyfriend” becomes “ex-boyfriend,” so stale relationship facts do not persist unchanged.
+41 | The forgetting table frames deletion as a necessary storage decision, with time, use frequency, and importance offering different criteria.
+42 | The time-based row shows the simplicity and risk of dropping oldest memories: age alone cannot identify what remains important.
+43 | The frequency-based row shows that a rarely retrieved memory may still be essential when an unusual situation arises.
+44 | The importance-based row preserves valuable information in principle but requires a judge whose scoring can itself be wrong.
+45 | The sleeping-agent art and compute diagram introduce offline consolidation as a way to reorganize memories between active interactions.
+46 | Pulse's research cards illustrate proactive use of stored context, where an agent prepares information before the user asks.
+47 | The storage-highlighted lifecycle re-centers the discussion before the lecture moves from keeping memories to finding them.
+48 | Highlighting retrieval marks the final lifecycle stage: a stored memory helps only if the right part returns at the right time.
+49 | The wall of photos and lines visualizes the retrieval problem as connecting many fragments into a useful account.
+50 | The haystack image and accuracy chart show why loading every memory into context is not a reliable substitute for selecting relevant evidence.
+51 | The four-step flow breaks retrieval into timing, query formulation, search strategy, and post-processing, each a possible source of error.
+52 | The timing table compares always-on, model-triggered, and proactive retrieval before weighing their interruption and omission costs.
+53 | The always-on row shows that retrieving on every turn can guarantee exposure but also add irrelevant context.
+54 | The automated row gives the model discretion to request memory, which saves context but risks never looking when it should.
+55 | The just-in-time row offers proactive help at the cost of possibly interrupting the person with poorly timed information.
+56 | The layered-retrieval diagram limits upfront detail and opens full instructions or files only when needed, reducing context load.
+57 | The dinner and Jarvis examples show that a useful memory search may require decomposing or rewriting the person's original question.
+58 | Memoro's wearable example makes retrieval a human-centered timing problem: a hint is valuable when it arrives at the moment of recall.
+59 | The strategy table introduces lexical, semantic, and graph retrieval as different ways to locate stored material.
+60 | The lexical row shows the strength of exact-word matches and their weakness when a person uses different words for the same idea.
+61 | The semantic row finds related meanings but warns that a forced top result may look relevant even when no good memory exists.
+62 | The graph row retrieves through relationships, useful when a question spans people, places, events, or a chain of facts.
+63 | The da Vinci frame illustrates a historical persona assembled from writings, where retrieval quality determines whether the interaction remains grounded.
+64 | Generative Agents' scoring combines recency, importance, and relevance, showing why hybrid retrieval can outperform one signal alone.
+65 | The rerank-and-compress flow shows retrieval continuing after search: fragments must be selected and summarized before entering the working context.
+66 | The retrieval-highlighted lifecycle closes the storage-and-search sequence before the lecture turns to implementation libraries.
+68 | Mem0's banner introduces a drop-in memory layer, connecting the lecture's concepts to a tool students could adopt.
+69 | Letta's page shows an agent managing memory operations itself, an implementation choice that changes when stored facts are updated or read.
+70 | The glowing screen introduces personalization as a consequence of memory: the same system may behave differently with different users.
+71 | The two-user diagram asks which parts of a generic agent should change for a specific person and at what point in the interaction.
+74 | The progression from likes to facts to behavioral patterns shows increasingly rich ways to represent a user for adaptation.
+75 | Learn, Represent, and Adapt provide the personalization lifecycle that organizes the examples that follow.
+76 | Highlighting Learn starts with the evidence an agent collects about a person's goals and preferences.
+77 | The familiar-order example makes a user model concrete: remembering a preference can reduce repeated explanation.
+78 | The profile-settings screen shows explicit modeling, where a person states and can inspect the preferences an agent uses.
+79 | GUM's inferred wedding context shows implicit modeling, which may help proactively but can also guess wrongly about the person's intent.
+80 | Repeating Learn closes the collection examples before the lecture examines how a model stores a picture of the user.
+81 | Highlighting Represent shifts attention from gathering evidence to the categories and structure of the user profile.
+82 | The Persona-MME wheel illustrates that a profile spans several dimensions, making a single preference list too narrow for some tasks.
+83 | The dashboard paper contrasts the system's model with the user's understanding of it, motivating ways to reveal and correct mismatches.
+84 | The caricature post and cartoon show a user asking how an AI sees them, a playful but revealing question about hidden user models.
+85 | Repeating Represent prepares the next step: using a profile to change actual agent behavior.
+86 | Highlighting Adapt marks the point where learned information affects an agent's response or action.
+87 | The dinner chat maps a recommendation to explicit, implicit, behavioral, and topical evidence, showing why an adaptation should be explainable.
+89 | The layered dinner request shows adaptation bounded by safety, stated preferences, history, and current context rather than one remembered fact.
+90 | Future You turns a life story into a conversational older-self avatar, an example of personalization aimed at reflection on long-term goals.
+91 | Adding Refine to the lifecycle makes personalization iterative: feedback should change what the agent learns, represents, and does next.
+92 | The feedback diagram shows historical and current interaction data informing both an adaptation and later corrections to it.
+93 | Duolingo's practice screens illustrate a memory model adapting timing to a learner's likely forgetting, connecting personalization to measurable learning.
+94 | The robot-and-passenger film still introduces the trust question: persistent knowledge can make an agent helpful while also creating vulnerability.
+95 | The incognito-chat image makes control over what is remembered concrete, asking which conversations should remain outside a persistent profile.
+97 | The Recall timeline shows how a memory feature's privacy design and public response can change whether people accept it.
+98 | The SpAIware attack flow shows untrusted webpage text planting a memory that later leaks data, joining storage and prompt-injection risks.
+99 | The closing cheat sheet gathers the week's choices across encoding, storage, retrieval, learning, representation, adaptation, and trust.

@@ -1,0 +1,111 @@
+2 | The first student-repository gallery shows the class's early attempts to turn cognitive-augmentation ideas into documented projects, setting up a lecture about the user experience those agents create.
+3 | The cognitive-load concept and interface sketches make the design challenge visible: an agent must help in a particular human situation, not merely demonstrate technical capability.
+4 | These websites and concept diagrams show different ways students are already representing agent goals and interactions before the lecture introduces design principles.
+5 | The final repository previews widen the set of contexts to rooms and mobile devices, where agent behavior has to fit a person's task and surroundings.
+7 | The Class Runtime cover presents the newsletter as a shared record of class work and a way to notice emerging project directions.
+8 | Featured student projects make the newsletter's role concrete by bringing individual builds back into the course community.
+9 | The newsletter excerpt shows how short project summaries help classmates see and learn from one another's experiments.
+10 | The course website and Uncle Sam illustration reinforce that this experimental class treats the course agent itself as a design material.
+11 | The show-and-tell title card moves from staff review to student explanations of what their agents do and how people use them.
+15 | The outdoor photograph broadens the lecture's goal beyond task completion: human flourishing includes life circumstances and relationships that an agent may affect.
+16 | The flourishing framework gives a wider set of outcomes against which a cognitive-augmentation agent could be judged.
+17 | Maslow's pyramid illustrates that goals exist at several levels; an interface that helps with an immediate task may still affect deeper needs.
+20 | MemPal pairs a wearable concept with a phone interface to show assistance designed around an older person's memory needs in daily life.
+21 | RoomPal's scene-to-description interface illustrates how an agent can turn sensed surroundings into information a person can act on.
+22 | The accuracy bars show that an AI explanation can help or mislead; the value of an agent's advice depends on whether it improves the person's judgment.
+23 | The Socratic-question result suggests an agent can support critical thinking by asking useful questions instead of supplying answers immediately.
+24 | Future You combines a life story, chatbot, voice, and avatar to illustrate augmentation aimed at long-term reflection rather than a single task.
+25 | The EEG device and quiz chart connect an attention intervention to a learning outcome, showing why agent design should measure effects on people.
+26 | This question graphic pivots from attractive examples to whether widespread AI use actually advances human abilities.
+28 | The biased-writing-assistant paper illustrates that helpful suggestions can also shift opinions, so an agent's influence must be considered alongside efficiency.
+29 | The writing plots give evidence for homogenization: repeated AI suggestions can make different people's outputs more alike.
+30 | The sycophancy examples show a failure mode in social agents that confirm a user's view when challenge or correction would be more useful.
+31 | The election-advice headlines make the stakes of agent influence concrete when people use AI for consequential choices.
+32 | Algorithmic inheritance connects individual AI recommendations to unequal outcomes that may compound across generations.
+33 | The delegation study asks whether handing a decision to an agent can distance a person from the harm caused by that decision.
+34 | The motivation report links AI assistance to a possible loss of incentive to learn, a core concern for a course about cognitive augmentation.
+35 | The medical-screening story illustrates deskilling: repeated reliance on AI can weaken a person's independent ability to perform a task.
+36 | The companion paper shows that emotional attachment is a design outcome of conversational agents, not merely a side effect of their technical function.
+37 | This study asks whether highly responsive AI companionship changes how satisfying human relationships feel afterward.
+38 | The interaction findings extend the companion discussion from subjective experience to time and attention spent with other people.
+42 | Muse's mascot and feature diagram introduce a concrete personal agent whose interface and behavior will be used to examine user trust.
+43 | The Muse chat screens show the agent as the user encounters it, allowing its apparent helpfulness to be compared with its actual assumptions.
+44 | The interviewer photograph represents the kind of attentive human partner a user might imagine when an agent converses fluently.
+45 | The successive chat responses expose how a seemingly coherent agent can steer a conversation without checking what the user meant.
+46 | The sleeping-person image challenges the idea that a friendly-looking agent is reliably attentive to a user's needs.
+47 | The chat example shows Skip filling gaps with its own assumptions; this is why clarifying questions matter in human-agent interaction.
+48 | The animal-mask image sharpens the mismatch between a user's mental model of Skip and the system's actual behavior.
+49 | The reported incidents test Muse against the trust criteria introduced earlier: privacy, autonomy, and security can fail even in a polished interface.
+51 | The three framings hold the AI constant while changing what users are told about its motive, isolating the effect of presentation on trust.
+52 | The trust and empathy bars show that descriptions of an agent's motives can change how people judge the same behavior.
+53 | These additional bars extend the framing result to perceived helpfulness, underscoring that interface language shapes the user's mental model.
+54 | Conversation-sentiment trajectories show that framing can alter the course of interaction over time, not just a first impression.
+55 | The portraits, animals, mascots, and robots compare visual identities for agents; each suggests a different level of competence, warmth, or social role.
+56 | The instructor and virtual-idol lesson screens test whether an agent's portrayed identity influences attention and learning.
+57 | The motivation chart connects admiration for an instructor to educational outcomes, adding a social dimension to agent presentation.
+58 | The culturally adaptive video study shows that personalization can affect beliefs, including beliefs about health information, so adaptation needs care.
+63 | The teacher-to-autopilot taxonomy makes delegation a graded design choice rather than a single on/off switch.
+64 | The bar chart shows users value participating in agent work, supporting the lecture's emphasis on visible and adjustable delegation.
+65 | The autonomy line changes across task stages, showing that a user's preferred degree of agent control may vary within one workflow.
+66 | The trust flow links perceived reliability to delegation choices: trust is part of the interaction design, not just a final rating.
+67 | The heatmap shows autonomy preferences vary by person and task, arguing against one universal default for all users.
+69 | The direct-manipulation debate frames a recurring interface choice: should the person act directly, or should an agent act on their behalf?
+70 | The projected rocket interface demonstrates that useful agent interaction can be situated in a physical task rather than confined to a chat box.
+71 | These research figures broaden the possible channels for interaction to multimodal signals and communication grounded in the user's activity.
+78 | The generated vibeOS screenshot asks whether the appearance of a complete interface is enough to tell if its underlying interactions were thoughtfully designed.
+81 | Inline code suggestions represent a low-friction agent pattern: assistance appears inside the user's task, where acceptance can be quick and habitual.
+82 | The small chat panel shows a second coding-agent pattern, with the conversation beside the work rather than directly inside it.
+83 | The command-approval dialog makes control visible but also raises the lecture's question of whether a routine click reflects informed consent.
+84 | Don't Make Me Think introduces the classic usability aim of reducing effort, which this lecture will test against the need for reflection and control.
+85 | The no-interface book cover pushes that aim further, setting up a critique of invisible or effortless agent decisions.
+88 | The overreliance study suggests less friction can encourage people to accept AI output without checking it, complicating a simple efficiency goal.
+89 | The question-based learning result offers an alternative: interaction can deliberately slow an answer to help the user think.
+90 | The explanation study shows that a persuasive rationale may increase agreement even when an AI answer is wrong.
+91 | The misinformation result reinforces that explanations themselves can spread error, so visibility alone is not enough for trustworthy design.
+94 | Cursor's selection interface gives the user a concrete way to specify what an agent may edit, keeping scope tied to visible material.
+95 | DynaVis combines language with direct chart manipulation, showing how an agent can make an editable result rather than a detached answer.
+96 | The tldraw example turns a rough sketch into an illustration while preserving the canvas as the place where the user steers the work.
+97 | Spellburst's branching canvas lets a creator compare generations and choose directions, making iteration visible.
+98 | The code-and-node canvas shows the same idea extended to controllable visual output, where an agent's transformations remain inspectable.
+99 | Sensecape arranges sources and ideas spatially, illustrating how an interface can support thinking across materials instead of one linear chat.
+100 | MusicFX DJ provides continuous controls for blending sound, an example of real-time steering rather than a single prompt-and-response cycle.
+102 | The user-world feedback loop depicts technology as part of how people perceive and act, preparing the shift from interface features to cognitive effects.
+103 | Revisiting the full agent architecture shows that the human-facing interface is only one layer in a larger decision and action system.
+104 | Highlighting the human and app interface isolates the design surface where users form expectations and exercise control.
+105 | The progressive-disclosure diagram maps how an interaction can reveal capabilities and delegation gradually as the person's task develops.
+106 | The Thinker sculpture marks a move from product examples to theories about how technology shapes human experience.
+107 | Ihde's book introduces post-phenomenology as a lens for describing the relationship between a person, a technology, and the world.
+108 | The embodiment relation shows technology becoming part of a person's action, as when an interface extends what they can do.
+109 | The hermeneutic relation shows technology representing the world for interpretation, a role many agent summaries and dashboards play.
+110 | The alterity relation depicts technology as a counterpart, matching the conversational social role users may assign to an agent.
+111 | The background relation shows technology shaping experience without being the direct focus of attention, a possible role for persistent agents.
+112 | The four-part framework gathers those relations so designers can ask how an agent is experienced, not only what tasks it completes.
+113 | Inline code editing supplies an embodiment example: assistance is woven into the user's own action in the editor.
+114 | VR glasses add a hermeneutic example, where the device mediates how a person sees and interprets the world.
+115 | A chat interface illustrates alterity because the agent appears as someone or something to address.
+116 | The continuously learning background agent completes the framework by showing influence that may occur without a visible conversation.
+119 | The extended-mind paper supports the idea that external tools can participate in remembering and thinking, not simply store finished answers.
+120 | Distributed cognition extends that idea from one person and tool to groups whose thinking spans people, artifacts, and processes.
+121 | The paired diagrams contrast using a tool for a task with thinking distributed across a whole system, clarifying the scale of the design problem.
+123 | The historical overload paper ties today's agent interfaces back to the older goal of reducing work and information burden.
+124 | The cognitive-task diagrams separate remembering, understanding, judging, learning, and coordinating so the same UI pattern is not assumed to serve all of them.
+125 | Pairing cognitive tasks with interface examples suggests choosing controls and representations for the human ability an agent is meant to support.
+126 | The ten principle icons provide a familiar usability checklist, which the next slides examine for conflicts with autonomy and other goals.
+127 | The Thinker returns to emphasize selecting interaction patterns according to a user's cognitive task rather than applying one universal template.
+129 | Human-Machine Reconfigurations argues that user intentions evolve during use; agent interfaces must allow the relationship to change.
+130 | The Bradshaw reading supports delegation that people can adjust and interrupt, connecting historical agent design to current autonomy concerns.
+131 | The database-deletion report illustrates how an agent action can outrun a user's warning, making reversibility and authorization concrete.
+132 | The expensive-order story is another case where an assistant's convenience can produce a harmful action outside the user's intent.
+133 | Highlighting efficiency reveals why minimal interaction is attractive even when other design principles remain at stake.
+134 | The icons then foreground user control and minimalist design, showing that good principles can pull in different directions.
+135 | The focus on user control asks designers to choose how much friction is necessary for a person to intervene meaningfully.
+136 | The Thinker closes the tradeoff sequence by tying interface choices back to user autonomy rather than a fixed principle ranking.
+138 | The course-agent screenshot supplies a shared system for a persona exercise: students can reason about a real user's context and delegation choices.
+139 | The blank persona template asks teams to state a user's goal, what the agent may do, and both the possible gains and harms.
+141 | Repeating the persona worksheet makes it the working artifact for group discussion rather than a one-time illustration.
+142 | The journey map turns a persona into a sequence of moments, separating work delegated to the agent from work retained by the user.
+145 | The interface sketches invite teams to translate those delegation decisions into concrete interaction patterns.
+146 | The Figma MCP workflow shows a design moving from an editable visual artifact into code and components, connecting concept to implementation.
+147 | The json-render example illustrates an agent composing a constrained UI from defined building blocks rather than arbitrary presentation code.
+148 | OpenUI offers another example of generated interfaces, prompting students to consider which parts the agent chooses and which the platform controls.
+152 | The handwriting-tablet experiment asks how an agent might support playful, tangible interaction outside a conventional chat surface.

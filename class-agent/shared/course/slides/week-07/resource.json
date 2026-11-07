@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "resource": {
+    "uri": "course://slides/week-07",
+    "title": "Memory & Personalization",
+    "description": "Slides for the seventh course meeting.",
+    "media_type": "application/pdf",
+    "file": "week-7-slides.pdf",
+    "accessibility_file": "accessibility.txt",
+    "caption_file": "captions.txt",
+    "visibility": "public",
+    "status": "published",
+    "order": 66
+  }
+}

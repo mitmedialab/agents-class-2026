@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "resource": {
+    "uri": "course://slides/week-08",
+    "title": "Final Project Proposals",
+    "description": "Slides for the eighth course meeting.",
+    "media_type": "application/pdf",
+    "file": "week-8-slides.pdf",
+    "accessibility_file": "accessibility.txt",
+    "caption_file": "captions.txt",
+    "visibility": "public",
+    "status": "published",
+    "order": 67
+  }
+}

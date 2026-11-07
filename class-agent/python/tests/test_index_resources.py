@@ -129,6 +129,9 @@ def test_slide_accessibility_sidecar_is_registered_inside_its_deck_directory(
     writer.add_blank_page(width=612, height=345)
     writer.write(directory / "slides.pdf")
     (directory / "accessibility.txt").write_text("1 | A visible diagram.\n", encoding="utf-8")
+    (directory / "captions.txt").write_text(
+        "1 | This diagram explains the lesson.\n", encoding="utf-8"
+    )
     manifest_path = directory / "resource.json"
     resource_manifest = {
         "uri": "course://slides/week-01",
@@ -136,6 +139,7 @@ def test_slide_accessibility_sidecar_is_registered_inside_its_deck_directory(
         "media_type": "application/pdf",
         "file": "slides.pdf",
         "accessibility_file": "accessibility.txt",
+        "caption_file": "captions.txt",
     }
     manifest = {"schema_version": 1, "resource": resource_manifest}
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
@@ -144,9 +148,16 @@ def test_slide_accessibility_sidecar_is_registered_inside_its_deck_directory(
     refresh_resource_registry(registry_path)
     entry = json.loads(registry_path.read_text())["resources"][0]
     assert entry["accessibility_path"] == "course/slides/week-01/accessibility.txt"
+    assert entry["caption_path"] == "course/slides/week-01/captions.txt"
 
     resource_manifest["accessibility_file"] = "../outside.txt"
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     (directory.parent / "outside.txt").write_text("1 | Outside.\n", encoding="utf-8")
     with pytest.raises(ValueError, match="invalid accessibility file"):
+        refresh_resource_registry(registry_path)
+
+    resource_manifest["accessibility_file"] = "accessibility.txt"
+    resource_manifest["caption_file"] = "../outside.txt"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(ValueError, match="invalid caption file"):
         refresh_resource_registry(registry_path)

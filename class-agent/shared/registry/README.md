@@ -11,6 +11,10 @@ root are rejected.
 Published slide entries also carry a deck-local `accessibility_path` when the source
 manifest declares `accessibility_file`. These page descriptions join extracted PDF text
 for reads and search; the sidecar is not a downloadable asset.
+Slide entries can also carry a deck-local `caption_path` from `caption_file`.
+Numbered contextual captions join the same page text for reads and search; text-only
+pages can have no caption. This optional field extends registry schema version 1 without
+changing existing entries.
 
 This registry maps directly to future MCP resources without defining a competing
 external protocol.

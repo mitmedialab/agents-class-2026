@@ -71,8 +71,9 @@ repository reads still happen on the course server using its protected credentia
 The MCP cannot read draft assignments, another student's private communications
 or repository source, instructor tools, the student's course-chat history, or
 unregistered local files. It has no website/documentation or GitHub write tool.
-It does not monitor, grade, or save learning check-ins. PDF text extraction does
-not convey diagrams or other visual material on slides; use
+It does not monitor, grade, or save learning check-ins. Maintained slide descriptions
+and captions summarize visual material, but the extracted text does not convey every
+diagram detail; use
 `read_course_slide_page` to inspect a numbered rendered page or the first-party
 viewer to open the full original PDF. The OAuth allowlist accepts ChatGPT callbacks and Claude's
 exact `https://claude.ai/api/mcp/auth_callback` callback. Gemini callbacks
@@ -80,8 +81,8 @@ are accepted only when their exact app-specific URIs are configured in
 `MCP_GEMINI_OAUTH_REDIRECT_URIS`. Claude and Gemini still require live
 end-to-end sign-in tests before students are invited to connect them.
 The learning instruction is client-neutral.
-The maintained public registry currently contains five lecture-slide PDFs
-(weeks 1, 2, 3, 4, and 6) and one reading PDF; the MCP does not discover or
+The maintained public registry currently contains seven lecture-slide PDFs
+(weeks 1, 2, 3, 4, 6, 7, and 8) and one reading PDF; the MCP does not discover or
 ingest every reading linked elsewhere on the web.
 
 Authorization is enforced by the server, not by a prompt: OAuth tokens resolve

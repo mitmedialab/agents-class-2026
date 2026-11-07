@@ -76,6 +76,7 @@
       "visibility": "public",
       "status": "published",
       "accessibility_path": "course/slides/week-01/accessibility.txt",
+      "caption_path": "course/slides/week-01/captions.txt",
       "assets": {
         "first_slide": "registry/slide-thumbnails/dd4d5c4926e7810e111aba74a12280533fb18f4c4f9205b2a1c640ae385277ef.png"
       }
@@ -89,6 +90,7 @@
       "visibility": "public",
       "status": "published",
       "accessibility_path": "course/slides/week-02/accessibility.txt",
+      "caption_path": "course/slides/week-02/captions.txt",
       "assets": {
         "first_slide": "registry/slide-thumbnails/e4d2625270828cb070c070181a2e6d395f79e71cc6b47ca6b06ccdf0543a30c7.png"
       }
@@ -102,6 +104,7 @@
       "visibility": "public",
       "status": "published",
       "accessibility_path": "course/slides/week-03/accessibility.txt",
+      "caption_path": "course/slides/week-03/captions.txt",
       "assets": {
         "first_slide": "registry/slide-thumbnails/74ea9df3e264de91502bd0989849cdbd41618140300d473432f5e5e19b785dec.png"
       }
@@ -115,6 +118,7 @@
       "visibility": "public",
       "status": "published",
       "accessibility_path": "course/slides/week-04/accessibility.txt",
+      "caption_path": "course/slides/week-04/captions.txt",
       "assets": {
         "first_slide": "registry/slide-thumbnails/adb96cf3441e5588302b4d5145eb4e171950a8f42dd6b6442b5dd83e49f4c033.png"
       }
@@ -128,8 +132,37 @@
       "visibility": "public",
       "status": "published",
       "accessibility_path": "course/slides/week-06/accessibility.txt",
+      "caption_path": "course/slides/week-06/captions.txt",
       "assets": {
         "first_slide": "registry/slide-thumbnails/d8933a9b3bfffea9a466312f265b060f08b379626e3910f823de2240961cb46d.png"
+      }
+    },
+    {
+      "uri": "course://slides/week-07",
+      "title": "Memory & Personalization",
+      "description": "Slides for the seventh course meeting.",
+      "media_type": "application/pdf",
+      "path": "course/slides/week-07/week-7-slides.pdf",
+      "visibility": "public",
+      "status": "published",
+      "accessibility_path": "course/slides/week-07/accessibility.txt",
+      "caption_path": "course/slides/week-07/captions.txt",
+      "assets": {
+        "first_slide": "registry/slide-thumbnails/598721cf9aa665e404346bfc0b1cab9a2ef6013f4643eaa72cb3d2beb12a48a3.png"
+      }
+    },
+    {
+      "uri": "course://slides/week-08",
+      "title": "Final Project Proposals",
+      "description": "Slides for the eighth course meeting.",
+      "media_type": "application/pdf",
+      "path": "course/slides/week-08/week-8-slides.pdf",
+      "visibility": "public",
+      "status": "published",
+      "accessibility_path": "course/slides/week-08/accessibility.txt",
+      "caption_path": "course/slides/week-08/captions.txt",
+      "assets": {
+        "first_slide": "registry/slide-thumbnails/801dbacb455767fed45fb5cfd043ebd63c4ecb4cf6400306939de0c12457f412.png"
       }
     },
     {

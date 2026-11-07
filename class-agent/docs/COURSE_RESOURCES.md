@@ -16,6 +16,8 @@ course://slides/week-02
 course://slides/week-03
 course://slides/week-04
 course://slides/week-06
+course://slides/week-07
+course://slides/week-08
 course://readings/software-agents-bradshaw
 ```
 
@@ -50,6 +52,7 @@ For a public course slide deck, use one directory per deck:
 shared/course/slides/week-01/
 ├── resource.json
 ├── accessibility.txt
+├── captions.txt
 └── week-01-slides.pdf
 ```
 
@@ -63,6 +66,7 @@ shared/course/slides/week-01/
     "media_type": "application/pdf",
     "file": "week-01-slides.pdf",
     "accessibility_file": "accessibility.txt",
+    "caption_file": "captions.txt",
     "visibility": "public",
     "status": "published",
     "order": 100
@@ -92,6 +96,16 @@ when replacing a PDF; indexing rejects a count mismatch. The PDF bytes remain un
 questions, the agent can still inspect an authorized page through `document.inspect_page` or
 `course.inspect_slide_page`; rendered PNG bytes are ephemeral and are not stored in conversation
 history.
+
+Each deck also has a `captions.txt` sidecar for slides with meaningful visual content.
+Use `page | caption` lines in increasing page order; text-only slides may be omitted.
+Keep each caption to one to three sentences explaining what the visual contributes to
+the week's topic or the surrounding slides. Captions complement visual descriptions:
+the description identifies what is on the page, while the caption explains its role
+in the lecture. Set `"caption_file": "captions.txt"` in the manifest. The caption
+appears as `Slide caption:` under the same page heading in reads and search. The
+indexer rejects page numbers outside the PDF; caption files remain inside the deck
+directory and are not downloadable assets.
 
 For a specific page of a registered slide deck that is not focused in the workspace,
 the first-party Course Agent can use `course.inspect_slide_page`; the Course MCP's

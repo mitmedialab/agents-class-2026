@@ -1,0 +1,37 @@
+1 | The ape-and-bones film still frames tools as a change in what an agent can accomplish, introducing the week's progression from tools to MCP and skills.
+3 | The website and Uncle Sam image reinforce that students are invited to change the class agent, making the upcoming tool-building tutorial part of the course itself.
+5 | This show-and-tell transition separates students' current builds from the lecture's explanation of how agents gain new capabilities.
+6 | Returning to the ape scene focuses attention on the tool: an external capability that changes the agent's action space.
+7 | The agent loop places tools in context: a model chooses actions, receives observations from the environment, and decides whether to continue.
+8 | Toolformer's paper and flow introduce tool calls as a learned way to supplement language-model generation with external results.
+9 | The annotated loop turns the abstract cycle into individual reasoning, action, and observation steps that a tool-using agent must coordinate.
+10 | The simplified loop restates the core mechanism before the lecture expands the architecture around it.
+11 | The two walking infants are a metaphor for agent scaffolding: a runtime can support useful action while overly rigid support can constrain it.
+12 | Revisiting the loop after the metaphor keeps the model, tools, and environment distinct as the architecture grows.
+13 | The expanded architecture shows that tool use depends on an orchestrator, memory, interfaces, and a sandbox, not a model call alone.
+14 | A coding task makes the architecture concrete by placing a human request and code environment on opposite sides of the orchestrator.
+15 | This step shows the model proposing a response while the orchestrator decides what operation should happen next.
+16 | The sandbox tool call illustrates the boundary between a model's proposed action and an executed operation whose result can be recorded.
+17 | Feeding the saved result back into context lets the model continue from observed state rather than assume its earlier action succeeded.
+18 | The complete coding-agent diagram recombines the preceding steps into a single inspectable tool-use cycle.
+19 | The robot-at-desk image introduces practical tool design after the architecture of tool calling has been established.
+20 | The comparison argues for narrow, clearly named tools: vague overlapping APIs make selection and oversight harder for an agent.
+21 | The research figure distinguishes agents that invoke tools from coding agents that can construct code-based operations, prompting a choice of capability boundary.
+22 | The mechanical image introduces MCP as the connector that lets an agent reach external capabilities through a shared protocol.
+23 | The MCP diagram shows one agent discovering and calling several independent servers; the protocol makes the boundary explicit across products.
+27 | The integration logos demonstrate why a common protocol matters: the same agent can connect to communication, design, document, and creative systems.
+28 | The drawing robot introduces skills as instructions for using capabilities well, complementing the executable tools and MCP servers just discussed.
+29 | The SKILL.md example shows procedural knowledge packaged as readable instructions, so a task can be taught without hardcoding every step into the runtime.
+30 | The tool-inspiration transition shifts from architecture to possible capabilities students could build for cognitive augmentation.
+31 | The phone facing a forest asks students to consider the real situations in which an agent might need a tool, beyond a desktop chat window.
+32 | The social posts imagine agents communicating with other agents or acting as personal assistants, expanding the set of possible interfaces and collaborators.
+33 | The Agent Village plan treats multiple agents as a social experiment, where coordination itself becomes a capability to study.
+34 | The hand-operated instrument shows a human can be the executor of an agent-requested action; tools need not be software APIs.
+35 | The workforce headlines extend that example to paid human work, raising questions about how agents delegate physical-world tasks.
+36 | Historical calendar-agent diagrams show that observing schedules and communicating with people were useful tool boundaries long before current LLMs.
+37 | The cooking example connects a coding agent to a physical task, illustrating how a digital assistant can still need human or device action.
+39 | The peer-support research motivates a cognitive goal for tools: help students learn with one another rather than merely finish work faster.
+41 | The paper and summary connect the warning about lost peer support to students choosing an AI assistant over classmates for help.
+42 | The course website screenshot makes the proposed response concrete: the agent can route attention back to classmates and course discussion.
+44 | The weekly-build title card marks the move from examples to students' own tool experiments.
+47 | The institutional logos close the tool-building week and identify the course setting for the assignment.

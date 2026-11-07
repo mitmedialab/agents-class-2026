@@ -21,7 +21,11 @@ from course_server.agent.capabilities import (
     ResourceAnnouncement,
     ResourceDeadline,
 )
-from course_server.resource_text import extract_resource_text, load_slide_accessibility
+from course_server.resource_text import (
+    extract_resource_text,
+    load_slide_accessibility,
+    load_slide_captions,
+)
 from course_server.slide_thumbnails import FIRST_SLIDE_ASSET_ID, generate_slide_thumbnail
 
 DEFAULT_FAQ_PATH = DEFAULT_RESOURCE_REGISTRY_PATH.parent.parent / "course/faq/faq.json"
@@ -51,6 +55,7 @@ class ManifestResource(BaseModel):
     media_type: str
     file: str
     accessibility_file: str | None = None
+    caption_file: str | None = None
     assets: dict[str, str] = Field(default_factory=dict)
     visibility: Literal["public"] = "public"
     status: Literal["published", "provisional"] = "published"
@@ -73,6 +78,7 @@ class GeneratedResourceEntry(TypedDict):
     media_type: str
     path: str
     accessibility_path: NotRequired[str]
+    caption_path: NotRequired[str]
     assets: NotRequired[dict[str, str]]
     visibility: str
     status: str
@@ -153,6 +159,19 @@ def refresh_resource_registry(
             ):
                 raise ValueError(f"invalid accessibility file for {resource.uri}")
             entry["accessibility_path"] = accessibility_path.relative_to(shared_root).as_posix()
+        if resource.caption_file is not None:
+            if not (
+                resource.uri.startswith("course://slides/")
+                and resource.media_type == "application/pdf"
+            ):
+                raise ValueError(f"caption file requires a slide PDF: {resource.uri}")
+            caption_path = (manifest_path.parent / resource.caption_file).resolve()
+            if (
+                not caption_path.is_relative_to(manifest_path.parent.resolve())
+                or not caption_path.is_file()
+            ):
+                raise ValueError(f"invalid caption file for {resource.uri}")
+            entry["caption_path"] = caption_path.relative_to(shared_root).as_posix()
         if assets:
             entry["assets"] = assets
         if resource.announcement is not None:
@@ -201,7 +220,17 @@ def index_resources(
                 if resource.accessibility_path is not None
                 else None
             )
-            text = extract_resource_text(data, resource.media_type, slide_descriptions=descriptions)
+            captions = (
+                load_slide_captions(resource.caption_path)
+                if resource.caption_path is not None
+                else None
+            )
+            text = extract_resource_text(
+                data,
+                resource.media_type,
+                slide_descriptions=descriptions,
+                slide_captions=captions,
+            )
             normalized_text = normalize_resource_text(text)
             content_sha256 = hashlib.sha256(data).hexdigest()
             source_path = resource.path.relative_to(registry_path.parent.parent).as_posix()

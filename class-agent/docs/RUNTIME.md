@@ -275,6 +275,9 @@ Registered slide PDFs include page-numbered accessibility descriptions from each
 maintained `accessibility.txt` sidecar in both read and search text. The sidecar is confined to
 the deck directory and its page count is checked against the PDF, so visual examples can be
 located before an agent opens the original page image.
+Sparse `captions.txt` sidecars add one- to three-sentence explanations of how visual
+slides contribute to their lecture. They are also confined to the deck and indexed
+under the corresponding page for read and search.
 
 `course.submit_application` is public so prospective students do not need an account.
 Its schema requires every structured application field and a principal-owned temporary

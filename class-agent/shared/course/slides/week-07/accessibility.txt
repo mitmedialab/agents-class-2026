@@ -1,0 +1,99 @@
+1 | Cover: Memory and Personalization, MAS.S60, Agents for Cognitive Augmentation, MIT Fall 2026.
+2 | Nicholas Negroponte quote describing a personalized interface as a digital butler.
+3 | Memory section title over a blurred film still of a startled man in a dark bedroom.
+4 | Stateless to Stateful: across episodes, what information to persist and how to use it.
+5 | Agent harness diagram with the State/Memory store highlighted beside the orchestrator.
+6 | One-minute discussion question 1: what would you tell a friend joining class for the first time?
+7 | Types of memory table: working, semantic, episodic, and procedural memory, rows still empty.
+8 | Types of memory table: working memory is the current context, held in the context window.
+9 | Types of memory table adds semantic memory: facts and knowledge, held as LLM knowledge.
+10 | Types of memory table adds episodic memory: specific experiences, held as past sessions.
+11 | Completed types of memory table adds procedural memory: procedures and how-tos, held as skills.
+12 | Agent memory tree splitting into parametric and non-parametric, with where and how rows.
+13 | Parametric memory lives in the weights and needs finetuning, covered in a future lecture.
+14 | Non-parametric memory lives outside the weights, highlighted as the focus of this class.
+15 | Why use non-parametric memory: avoid recomputation for personalisation, latency, long tasks, learning.
+16 | Memory lifecycle: Encoding, Storage, and Retrieval connected by arrows.
+17 | Memory lifecycle with Encoding highlighted and Storage and Retrieval dimmed.
+18 | Data types an agent senses: text, video, images, auditory, other sensors, and the agent itself.
+19 | Data types slide noting that agents can only understand numbers.
+20 | What is an embedding: supermarket aisle photo, with top-view coordinates as each item's vector.
+21 | Embedding methods by data type: CLIP, all-MiniLM-L6-v2, CLAP, and a sentence-transformers link.
+22 | EmbeddingGemma 2 announcement graphic with a Google blog link.
+23 | Content and context metadata table: source, time, scope, and others, examples still empty.
+24 | Metadata table adds source: who said it, which tool, URL, document and page.
+25 | Metadata table adds time: when it happened, when it was stored, valid from and until.
+26 | Metadata table adds scope: who can access it and with what privileges.
+27 | Completed metadata table adds others: dependent on the task.
+28 | Generative Agents pixel-art town beside a memory stream log, with GitHub and arXiv links.
+29 | Memory of itself for long-horizon tasks: structured note-taking and /compact compaction.
+30 | Hugging Face logo with a caution that notes enabled the attacks.
+31 | ProMemAssist: working memory model and timing predictor built from what you see and hear.
+32 | Memory lifecycle repeated with Encoding highlighted.
+33 | Memory lifecycle with Storage highlighted.
+34 | Types of databases table: relational databases, vector stores, and knowledge graphs, rows empty.
+35 | Relational databases: structured records queried precisely, like birthdays and allergies; SQLite.
+36 | Vector stores: search for meaning rather than keywords, "pet" finds "my dog, Rex"; Chroma.
+37 | Knowledge graphs: relationships and changes over time, Alice works at MIT; Neo4j.
+38 | Generative Agents reflection tree abstracting observations into higher-level insights.
+39 | Mind Mapper: illustrated pipeline learning if-then behavioral patterns from everyday speech.
+40 | MemGPT chat where a replace call updates "boyfriend named James" to "ex-boyfriend named James".
+41 | Forgetting table: time-based, frequency-based, and importance-based, rows still empty.
+42 | Time-based forgetting drops the oldest memories, losing old but vital facts; used by MemGPT.
+43 | Frequency-based forgetting drops rarely retrieved memories, losing rare essentials; used by MemOS.
+44 | Importance-based forgetting scores and keeps valuable memories but needs a fallible judge.
+45 | Dreaming: article art of a sleeping Claude agent and a sleep-time compute diagram.
+46 | ChatGPT Pulse: overnight research cards, with a video placeholder reading "ChatGPT starts your day".
+47 | Memory lifecycle repeated with Storage highlighted.
+48 | Memory lifecycle with Retrieval highlighted.
+49 | Film still of a man in profile before a wall of pinned photos and drawn lines.
+50 | Why not load everything: needle-in-a-haystack photo and context rot accuracy chart for 18 models.
+51 | Four steps of memory retrieval: timing and intent, query construction, strategies, post-processing.
+52 | Retrieval timing table: always-on, automated timing, and just-in-time, rows still empty.
+53 | Always-on retrieval runs on every query, like classic RAG or CLAUDE.md, adding noise each turn.
+54 | Automated timing lets the model call a memory tool, as in MemGPT, but it may never look.
+55 | Just-in-time retrieval surfaces memory unasked, like ChatGPT Pulse, but can interrupt badly.
+56 | Retrieving in layers: always name and description, full instructions when relevant, files if needed.
+57 | Query construction: decompose a dinner-planning request or rewrite a vague question about Jarvis.
+58 | Memoro: wearable infers what you are trying to recall and whispers a hint, in two modes.
+59 | Retrieval strategies table: lexical, semantic, and graph, rows still empty.
+60 | Lexical retrieval matches exact words with BM25 or grep but misses synonyms.
+61 | Semantic retrieval matches meaning in embedding space but forced top-K always returns something.
+62 | Graph retrieval follows links between people, places, and events, as in HippoRAG, Zep, and Mem0g.
+63 | Living Memories: a visitor talks to a framed da Vinci figure built from his journals.
+64 | Hybrid retrieval: Generative Agents memory stream scored by recency, importance, and relevance.
+65 | Post-retrieval processing: 20 fragments re-ranked to the best 5, then compressed into one context.
+66 | Memory lifecycle repeated with Retrieval highlighted.
+67 | Drop-in libraries for memory section title.
+68 | Mem0 banner, memory for AI agents, with a GitHub link.
+69 | Letta, previously MemGPT: agents manage their own memory; npm install command and GitHub link.
+70 | Personalisation section title over a film still of a glowing red screen with a looping logo.
+71 | Generic to Personal: one agent serving users A and B, what should change and when.
+72 | One-minute discussion question 2: how does your behaviour change with different people?
+73 | Why personalise: less effort explaining context, trust in the agent, and a feeling of familiarity.
+74 | From facts to patterns: recommendation likes, LLM memory facts, then behavioral pattern cards.
+75 | Personalisation lifecycle: Learn, Represent, and Adapt connected by arrows.
+76 | Personalisation lifecycle with Learn highlighted.
+77 | User model: Starbucks logo and book cover, the relationship of ordering the usual.
+78 | Learning user models explicitly: settings screen with profile fields and stated preferences.
+79 | Learning user models implicitly: GUM infers a friend's wedding and suggests a suit rental.
+80 | Personalisation lifecycle repeated with Learn highlighted.
+81 | Personalisation lifecycle with Represent highlighted.
+82 | The profile: Persona-MME task categories wheel for representing a user.
+83 | Mental model alignment: AI dashboard paper screenshot showing system and user models.
+84 | How does it see you: viral post asking ChatGPT for a caricature, beside a generated cartoon.
+85 | Personalisation lifecycle repeated with Represent highlighted.
+86 | Personalisation lifecycle with Adapt highlighted.
+87 | How it adapts: dinner chat mapped onto explicit, implicit, behavioral, and topical preferences.
+88 | Persona adaptations caption under a black video frame; the demo video is not in the PDF.
+89 | How much to adapt: "Book dinner on Friday" layered by safety, preferences, past, and context.
+90 | Future You: life story turned into a 60-year-old self through chatbot, voice, and avatar.
+91 | Personalisation lifecycle loop: Learn, Represent, Adapt, with Refine feeding back.
+92 | Using feedback to adjust adaptations: historical and interaction data guide and refine an agent.
+93 | Duolingo's memory model: practice screens that bring words back just before you forget them.
+94 | Trust and Risk section title over an animated film still of a robot beside a hover-chair passenger.
+95 | One-minute discussion question 3: what an agent should know or never remember; incognito chat.
+96 | Trust and Risk: privacy and surveillance, false memories, transparency and control, staleness.
+97 | Microsoft Recall timeline: May 2024 launch, plain-text criticism, opt-in pullback, Signal blocking.
+98 | SpAIware: a web page plants a memory, then every later message leaks to an attacker's server.
+99 | Cheat sheet made by Claude: what to use when, across memory and personalisation stages.

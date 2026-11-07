@@ -1,0 +1,12 @@
+1 | The film still introduces final project proposals as a shift from practicing individual techniques to committing to an agent idea that can be built and evaluated.
+2 | The first Week 6 gallery recalls agents operating phones, lights, a table robot, and a music player. Those prototypes show the range of devices students can draw on for their final proposals.
+3 | The second Week 6 gallery extends that range to television, cameras, audio, robotics, and an Android app. Together with the previous slide, it grounds proposal discussion in work students have already made.
+4 | The blimp in a shared atrium shows that device-use projects can leave conventional screens and require attention to a physical setting.
+6 | The OpenAI and Anthropic marks accompany the class MCP announcement, situating the course agent among the AI systems students may connect to their work.
+7 | Crossing out “Show and tell” marks the change in format: this meeting centers on final project proposals rather than weekly prototype demonstrations.
+11 | The sequence from two crosses to a circle illustrates why a course agent might retain learning history: it could recognize improvement on a concept instead of treating each week in isolation.
+12 | The InquiryBits chart shows that comfort with sharing AI conversation traces falls as the audience grows. A course agent that uses student memory or collaboration data therefore needs boundaries that reflect who can see what.
+13 | The pixel-art classroom places many different agent projects in one shared learning space. Mateo's sound-design example makes the diversity of student goals concrete before teams choose a personalization direction.
+14 | The issue list translates broad final-project ideas into specific course-agent changes, including reflections, learning trails, messaging, and user control of memory.
+15 | The course-agent screenshot demonstrates one possible support task: arranging students into project teams under stated constraints. The visible count and final team do not fully match those constraints, illustrating why an agent's grouping should be checked.
+16 | The closing marks identify the MIT Media Lab and Fluid Interfaces as the setting for the proposal discussion and invite further questions about the projects.

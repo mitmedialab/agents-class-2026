@@ -12,7 +12,7 @@ from uuid import uuid4
 import httpx
 import pytest
 from pydantic import ValidationError
-from pypdf import PdfWriter
+from pypdf import PdfReader, PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
 from agent_core import PrincipalContext
@@ -60,6 +60,7 @@ from course_server.resource_text import (
     ResourceTextExtractionError,
     extract_resource_text,
     load_slide_accessibility,
+    load_slide_captions,
 )
 from course_server.uploads import FileTemporaryUploadStore
 
@@ -272,6 +273,51 @@ def test_slide_accessibility_text_is_page_numbered_and_searchable(
         )
 
 
+def test_slide_captions_are_sparse_page_numbered_and_searchable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def inline_to_thread(function: object, *args: object, **kwargs: object) -> object:
+        assert callable(function)
+        return function(*args, **kwargs)
+
+    monkeypatch.setattr(asyncio, "to_thread", inline_to_thread)
+    pdf = _pdf_with_text("A visible slide.")
+    pdf_path = tmp_path / "slides.pdf"
+    pdf_path.write_bytes(pdf)
+    sidecar = tmp_path / "captions.txt"
+    sidecar.write_text("1 | The diagram explains the agent loop.\n", encoding="utf-8")
+    captions = load_slide_captions(sidecar)
+    assert captions == {1: "The diagram explains the agent loop."}
+    assert "Slide caption: The diagram explains the agent loop." in extract_resource_text(
+        pdf, "application/pdf", slide_captions=captions
+    )
+    resource = FileResourceProvider(
+        [
+            ResourceDefinition(
+                uri="course://slides/example",
+                title="Example Slides",
+                media_type="application/pdf",
+                path=pdf_path,
+                caption_path=sidecar,
+            )
+        ]
+    )
+    assert (
+        "Slide caption: The diagram explains the agent loop."
+        in asyncio.run(resource.read("course://slides/example")).text
+    )
+    assert "agent loop" in asyncio.run(resource.search("agent loop"))[0].excerpt
+
+    sidecar.write_text("2 | The missing slide.\n", encoding="utf-8")
+    with pytest.raises(ResourceTextExtractionError, match="outside PDF"):
+        extract_resource_text(pdf, "application/pdf", slide_captions=load_slide_captions(sidecar))
+    sidecar.write_text("2 | Later.\n1 | Earlier.\n", encoding="utf-8")
+    with pytest.raises(ResourceTextExtractionError, match="must increase"):
+        load_slide_captions(sidecar)
+    with pytest.raises(ResourceTextExtractionError, match="require a PDF"):
+        extract_resource_text(b"text", "text/plain", slide_captions={1: "A caption."})
+
+
 def test_all_published_slide_pages_have_accessibility_descriptions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -287,8 +333,39 @@ def test_all_published_slide_pages_have_accessibility_descriptions(
         assert resource.accessibility_path is not None
         descriptions = load_slide_accessibility(resource.accessibility_path)
         assert all(len(description) > 12 for description in descriptions)
+        assert resource.caption_path is not None
+        captions = load_slide_captions(resource.caption_path)
+        assert all(1 <= page <= len(descriptions) for page in captions)
         contents = asyncio.run(resources.read(resource.uri))
         assert contents.text.count("Accessibility description:") == len(descriptions)
+        assert contents.text.count("Slide caption:") == len(captions)
+
+
+def test_week_eight_image_only_pages_have_registered_descriptions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def inline_to_thread(function: object, *args: object, **kwargs: object) -> object:
+        assert callable(function)
+        return function(*args, **kwargs)
+
+    monkeypatch.setattr(asyncio, "to_thread", inline_to_thread)
+    uri = "course://slides/week-08"
+    resource = next(
+        definition for definition in load_resource_definitions() if definition.uri == uri
+    )
+    assert resource.accessibility_path is not None
+    descriptions = load_slide_accessibility(resource.accessibility_path)
+    assert len(descriptions) == len(PdfReader(resource.path).pages) == 16
+
+    contents = asyncio.run(FileResourceProvider.from_registry().read(uri))
+    assert "--- Page 12 ---\nAccessibility description: InquiryBits research-paper" in (
+        contents.text
+    )
+    assert "--- Page 15 ---\nAccessibility description: Course-agent chat screenshot" in (
+        contents.text
+    )
+    assert "Mateo Larrea Ferro" in contents.text
+    assert "Slide caption: The InquiryBits chart shows" in contents.text
 
 
 def test_public_resource_registry_includes_provisional_schedule() -> None:
@@ -308,6 +385,8 @@ def test_public_resource_registry_includes_provisional_schedule() -> None:
         "course://slides/week-03",
         "course://slides/week-04",
         "course://slides/week-06",
+        "course://slides/week-07",
+        "course://slides/week-08",
         "course://readings/software-agents-bradshaw",
     ]
     instructors = next(summary for summary in summaries if summary.uri == COURSE_INSTRUCTORS_URI)
@@ -566,6 +645,13 @@ def test_slide_accessibility_path_cannot_leave_its_deck_directory(tmp_path: Path
     )
 
     with pytest.raises(ValueError, match="leaves deck directory"):
+        FileResourceProvider.from_registry(registry_path)
+
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    registry["resources"][0].pop("accessibility_path")
+    registry["resources"][0]["caption_path"] = "outside.txt"
+    registry_path.write_text(json.dumps(registry), encoding="utf-8")
+    with pytest.raises(ValueError, match="slide caption path leaves deck directory"):
         FileResourceProvider.from_registry(registry_path)
 
 

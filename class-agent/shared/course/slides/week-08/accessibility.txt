@@ -1,0 +1,16 @@
+1 | Cover: Final Project Proposals for MAS.S60 over a film still of three men in dark suits grappling outdoors.
+2 | Six Week 6 device-use project images: an iOS Howler notification, Hue lighting, earthquake lighting with a red-lit laptop, a room for Mantra glasses, a Lang Table robot, and an iPod Nano screen.
+3 | Six more Week 6 project images: TV controls, a small Zora display, an iOS camera assistant, a sound-loop phone screen, a robot arm, and a Fading Memories Android app.
+4 | Week 6 blimp project photo showing a small blimp in a glass-walled atrium above red lounge chairs.
+5 | Course logistics: the new class MCP and survey results about lectures, builds, and office hours.
+6 | OpenAI and Anthropic logos beneath the announcement that OpenAI has joined the chat.
+7 | Show-and-tell is crossed out above Final Project Proposals, with colorful abstract art and a retro telephone illustration below a Zoom Meeting ID label.
+8 | Prompt to find everyone's presentations on their websites, with a small image of a person looking through binoculars at the bottom.
+9 | Week 8 build: memory and user modeling through a personalization feature on the course agent, in teams of three or four.
+10 | Discussion prompt asks how a course agent could remember and adapt to students to support learning, motivation, social interaction, or engagement, or augment instructors.
+11 | Example learning-history diagram for distinguishing MCP from tools: crosses for Weeks 1 and 2 lead by arrows to a circle in Week 3.
+12 | InquiryBits research-paper page titled "Sharing AI Conversation Traces to Support Collaboration Within Trust Boundaries" by Caitlin Morris and Pattie Maes, beside a bar chart of comfort sharing: close collaborators 6.0, immediate team 5.5, department 3.8, and whole company 2.6 on a seven-point scale.
+13 | Pixel-art classroom with students displaying varied agent projects; the highlighted student's speech bubble says "working on an AI agent for sound design," and the dialogue box identifies them as Mateo.
+14 | GitHub issue-list screenshot showing five course-agent proposals: interview me for the weekly reflection; a persistent learning trail connecting each week's work; re-examine the course agent's role; improved student-staff messaging; and student control of what agent memory is old, new, and visible to others.
+15 | Course-agent chat screenshot says it has grouped 25 active weekly-build participants with at least three for-credit students per team, but the displayed six groups contain 24 names and the last group has two for-credit students. Groups shown: 1, Jad Bendarkawi, Yuxiang Cheng, and Stacey Cho (credit), with Meiri Anto (listener); 2, Juan Ruben Gomez, Matti Gruener, and Yanning Hou (credit), with Sandra Regina Boccia (listener); 3, Leticia Izquierdo, Hyung Woon Lee, and Roma Luo (credit), with Maya Detwiller (listener); 4, David Selles, Egemen Sert, and Raine (Chunyu) Sha (credit), with Sean Hardesty Lewis (listener); 5, Brooke Smilen, Manasi Vaidya, and Ruipeng Wang (credit), with Olivia Seow (listener); 6, Lilith Yu and Ray Zhang (credit), with Yue Yang and Mateo Larrea Ferro (listeners).
+16 | MIT Media Lab and Fluid Interfaces logos above a closing thank-you and invitation to contact the instructors with questions or ideas.

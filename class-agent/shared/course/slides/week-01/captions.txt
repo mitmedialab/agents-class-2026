@@ -1,0 +1,81 @@
+1 | The connected-point image frames cognitive augmentation as a network of people, information, and tools that an agent can help coordinate.
+2 | The instructor portraits introduce the people behind the course and establish that its agent research spans both technical systems and human experience.
+3 | The teaching-assistant directory identifies the human support network students can use alongside the course agent.
+6 | The archival computing photo begins the history of agents with early research, before language models made the term newly popular.
+9 | Elmer and Elsie and the other automata show that sensing and acting toward goals have physical precedents older than current AI.
+13 | The diagram places digital twins between multi-agent systems and personal interface agents, showing overlapping traditions rather than a single origin.
+14 | Knowledge Navigator's assistant Phil is an early vision of an agent that helps a person manage information and communication through an interface.
+15 | The dark video still continues that concept example, making a proposed interface agent feel like an interaction rather than only a paper design.
+16 | The books and robots connect Pattie Maes's early research to autonomous behavior and interfaces that learn from users.
+17 | The calendar-scheduling paper gives a specific early task for a learning interface agent: noticing a person's patterns and helping coordinate time.
+18 | The scanned calendar diagrams show how that agent observed interface behavior and proposed actions, foreshadowing modern personalization.
+19 | The emotional-state and prediction figures show researchers evaluating what an early agent inferred, not just whether it took action.
+20 | The 1994 overload paper ties agent research to reducing work and information burden, a goal that remains central to cognitive augmentation.
+21 | The 1995 magazine article shows intelligent software entering a wider public conversation long before today's generative agents.
+23 | The portraits frame a lasting design debate: how much should a person manipulate an interface directly, and how much should an agent do for them?
+25 | HOMR demonstrates an early recommendation agent using preferences to surface music a person might like.
+26 | The Emacs Remembrance Agent shows contextual retrieval beside ongoing writing, offering memory support without requiring a separate search.
+27 | The wearable Remembrance Agent moves contextual memory from the desktop into a person's current activity.
+28 | The browser version shows the same retrieval idea inside web navigation, where relevant past information can appear near the present task.
+29 | Virtual Mentors presents advice as coming from simulated people, raising questions about whose knowledge and voice an agent represents.
+30 | The mentor's suggested introduction shows an agent connecting a person to another human rather than serving only as a source of answers.
+31 | Yenta's profile and introduction illustrate a social agent using personal information to match people with shared interests.
+32 | The ChatGPT launch announcement marks a turning point that made language-model interaction broadly familiar.
+33 | The 2025 agent-product collage shows language models gaining tools and computer access, reviving older interface-agent ambitions.
+34 | The 2026 product pages extend that trend toward personal agents that persist across tasks and browsing sessions.
+39 | The Nudge cover pairs behavioral-design ideas with the warning that language-model agents can be redirected by subtle suggestions.
+40 | The hypersensitivity paper gives research evidence for that concern, connecting social influence to agent reliability.
+41 | The inequality paper asks whether algorithmic decisions can pass advantages and disadvantages forward across generations.
+42 | The vending-machine experiment and balance chart put agent autonomy in a measurable setting where small business decisions compound over time.
+44 | VendingBench's curves compare long-run outcomes, showing why a plausible individual action can still produce poor cumulative performance.
+45 | The unwanted-action examples make trust failures concrete, from destructive database operations to instructions smuggled through untrusted content.
+52 | The news collage asks whether AI systems strengthen or weaken learning, creativity, and mental health, setting the human outcome standard for the course.
+53 | The schooling, thought, and companionship reports broaden that question beyond productivity to cognitive and social life.
+54 | The economic and policy headlines show that expectations for agents are high while evidence of reliable benefit remains mixed.
+55 | The adoption and risk reports reinforce why agent design must consider power, errors, and accountability alongside capability.
+58 | The classic agent-environment diagram defines the basic loop of sensing and acting before specifying what implements the agent.
+59 | Placing an LLM inside the same diagram shows what changes in a modern agent while leaving the environment and feedback loop intact.
+60 | The token-prediction figure and Transformer paper introduce the language-model component without treating it as the whole agent.
+61 | Adding a prompt to the model image makes the input explicit: an LLM's next output depends on the context it receives.
+62 | The simple input-output diagram isolates text generation so later slides can contrast it with action-taking agents.
+63 | The cat-breed example shows a conventional answer produced from a prompt, with no persistent action in an environment.
+64 | The spaghetti example makes token prediction tangible by showing how a model continues a phrase one piece at a time.
+65 | The tokenization figure explains how text becomes model-readable units before the Transformer processes it.
+66 | The full pipeline connects text, tokens, model output, and detokenization, clarifying the machinery beneath a chat response.
+68 | The chatbot diagram shows independent requests and answers, a useful baseline for understanding what an agent loop adds.
+69 | Prompt chaining connects multiple model calls, but its fixed sequence differs from an agent that selects actions based on observations.
+70 | ReAct and Toolformer are research examples of models using reasoning and tools to move beyond single-turn text generation.
+71 | The agent-loop diagram adds environment actions and feedback, making the model's next step depend on what actually happened.
+72 | The decision-process view introduces memory, policy, actions, and observations as parts of the agent rather than properties of the LLM alone.
+73 | The sequence diagram traces requests, tool calls, and results across human, model, and environment, showing where execution boundaries lie.
+75 | The team-channel example shows an agent participating in an existing social workflow rather than waiting in a standalone chat.
+76 | The work-plugin screenshot shows an agent operating inside a document or project context, where it can act on more than a typed question.
+77 | The coding-terminal screenshot makes tool use visible through commands and results during a software task.
+78 | OpenClaw's terminal conversation illustrates a personal-agent interface that can carry state across requests.
+79 | Hermes's interface shows another implementation of an agent using code and tools as part of conversation.
+80 | The circuit-board example extends computer use from software into electronics, where actions can affect physical systems.
+81 | The browser example shows an agent navigating a visual web interface as a person might.
+82 | The document example shows computer use inside an editor, where the agent must respect the user's existing work.
+83 | The CAD post illustrates an agent manipulating specialized software whose state is difficult to capture in plain text.
+84 | The 3D-modeling post extends that idea to a visual creation workflow where the person still needs to inspect and guide the result.
+86 | The pixel-art map suggests an open world of paths, places, and possible actions, preparing the move from software screens to richer environments.
+87 | The kitchen example shows a coding agent's instructions crossing into cooking, where physical execution and human safety matter.
+88 | The device post adds a second physical-world example, broadening the scope of tools an agent might use.
+89 | The office-item video still illustrates perception in an ordinary workplace, where finding an object requires grounding language in a scene.
+90 | The telepresence apparatus shows an agent-mediated presence in a physical space, blending remote communication with action.
+91 | The hardware hackathon card points to experimentation with agents beyond laptops, including custom devices and embodied interfaces.
+93 | The ten-domain grid maps the many human abilities an agent might augment, from memory and attention to emotion and perception.
+94 | MEMORO introduces a wearable memory assistant as a concrete project at the intersection of sensing, retrieval, and daily cognition.
+95 | The group discussion photo places the wearable in a social setting, reminding designers that memory support affects interactions with other people.
+96 | The gaze-aware demo shows an agent responding to what a person attends to, making interface timing part of cognitive assistance.
+97 | The thought-inference diagram illustrates how gaze and behavior signals might help an LLM infer needs, while also implying privacy questions.
+98 | The staged diagram adds consent and reflection before adaptation, presenting a more careful path from sensed behavior to a personalized agent.
+99 | The publication timeline reconnects contemporary cognitive agents to decades of interface-agent research.
+100 | The presenter still serves as another example of agent research communicated through a human demonstration rather than an abstract architecture.
+103 | The course website screenshot grounds the remaining logistics in the shared agent and resources students will use.
+104 | The website and Uncle Sam image make the invitation explicit: students can modify the class agent as part of their learning.
+105 | The weekly-build art introduces recurring experiments as the way students will test lecture ideas in working agents.
+108 | The project-link examples model how students can document a build so others can inspect the idea, implementation, and outcome.
+112 | The Anthropic mark serves as a transition into the tutorial environment used for the first hands-on agent work.
+114 | The website screenshot reconnects the tutorial to the course community and invites students to share what they build.
+116 | The closing logos identify the institutional setting for the first week's agent-building assignment.
