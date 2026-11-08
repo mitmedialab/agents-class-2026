@@ -739,6 +739,13 @@ def test_course_agent_selects_only_the_principals_own_memories() -> None:
         assert runtime.contexts[1].selected_memories == []
         assert memories.reads == [owner.user_id]
 
+        conversation = await service.create_conversation(owner, title="Chat")
+        await service.run(
+            principal=owner, conversation_id=conversation.id, text="Hello", use_memory=False
+        )
+        assert runtime.contexts[2].selected_memories == []
+        assert memories.reads == [owner.user_id]
+
     asyncio.run(scenario())
 
 

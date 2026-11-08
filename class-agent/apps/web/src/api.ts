@@ -847,6 +847,7 @@ export async function streamAgentRun(
   text: string,
   onEvent: (event: AgentStreamEvent) => void,
   signal?: AbortSignal,
+  useMemory = true,
 ): Promise<void> {
   const request: RequestInit = {
     method: "POST",
@@ -855,7 +856,7 @@ export async function streamAgentRun(
       Accept: "text/event-stream",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text, use_memory: useMemory }),
   };
   if (signal) {
     request.signal = signal;

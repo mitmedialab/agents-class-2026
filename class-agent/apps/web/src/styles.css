@@ -2579,6 +2579,7 @@ textarea {
 
 .attachment-button,
 .composer-draft-action,
+.composer-memory-toggle,
 .upload-list button {
   appearance: none;
   background: transparent;
@@ -2591,10 +2592,16 @@ textarea {
   text-transform: uppercase;
 }
 
-.attachment-button {
+.attachment-button,
+.composer-memory-toggle {
   align-items: center;
   display: inline-flex;
   gap: 0.35rem;
+}
+
+.composer-memory-toggle input {
+  accent-color: var(--color-text);
+  margin: 0;
 }
 
 .attachment-button svg {

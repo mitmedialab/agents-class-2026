@@ -195,6 +195,10 @@ class RunRequest(ApiModel):
     text: PromptText
 
 
+class StreamRunRequest(RunRequest):
+    use_memory: bool = True
+
+
 class AgentRunRequest(RunRequest):
     conversation_id: UUID
 
@@ -664,6 +668,7 @@ async def _run_agent(
     text: str,
     event_observer: Callable[[Event], None] | None = None,
     text_delta_observer: Callable[[str], None] | None = None,
+    use_memory: bool = True,
 ) -> AgentResult:
     assert state.services is not None
     try:
@@ -682,6 +687,7 @@ async def _run_agent(
             text=text,
             event_observer=event_observer,
             text_delta_observer=text_delta_observer,
+            use_memory=use_memory,
         )
         if application_event is None:
             return result
@@ -752,6 +758,7 @@ async def _stream_agent_run(
     principal: PrincipalContext,
     conversation_id: UUID,
     text: str,
+    use_memory: bool = True,
 ) -> AsyncIterator[str]:
     yield _sse(
         event="status",
@@ -783,6 +790,7 @@ async def _stream_agent_run(
             text=text,
             event_observer=observe_event,
             text_delta_observer=observe_text_delta,
+            use_memory=use_memory,
         )
     )
     run_task.add_done_callback(lambda _task: event_queue.put_nowait(None))
@@ -2570,7 +2578,7 @@ def create_app(
     @router.post("/conversations/{conversation_id}/run/stream")
     async def stream_conversation_run(
         conversation_id: UUID,
-        payload: RunRequest,
+        payload: StreamRunRequest,
         request: Request,
         principal: Annotated[PrincipalContext, Depends(_require_principal)],
     ) -> StreamingResponse:
@@ -2594,6 +2602,7 @@ def create_app(
                 principal=principal,
                 conversation_id=conversation_id,
                 text=payload.text,
+                use_memory=payload.use_memory,
             )
         )
 

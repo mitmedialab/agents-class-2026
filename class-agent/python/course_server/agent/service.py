@@ -249,6 +249,7 @@ class CourseAgentService:
         text: str,
         event_observer: EventObserver | None = None,
         text_delta_observer: TextDeltaObserver | None = None,
+        use_memory: bool = True,
     ) -> AgentResult:
         previous_events = await self._owned_conversation_events(principal, conversation_id)
         agent_input = AgentInput(conversation_id=conversation_id, text=text)
@@ -268,6 +269,7 @@ class CourseAgentService:
             previous_events=previous_events,
             event_observer=event_observer,
             text_delta_observer=text_delta_observer,
+            use_memory=use_memory,
         )
 
     async def greet_on_page_load(
@@ -413,6 +415,7 @@ class CourseAgentService:
         blocked_tool_ids: frozenset[str] = frozenset(),
         event_observer: EventObserver | None = None,
         text_delta_observer: TextDeltaObserver | None = None,
+        use_memory: bool = True,
     ) -> AgentResult:
 
         authorized = self._capability_policy.authorize(principal)
@@ -441,7 +444,7 @@ class CourseAgentService:
         )
         selected_memories = (
             await self._memories.list_recent(principal.user_id)
-            if self._memories is not None and principal.user_id is not None
+            if use_memory and self._memories is not None and principal.user_id is not None
             else []
         )
         context = AgentContext(

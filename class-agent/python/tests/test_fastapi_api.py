@@ -960,6 +960,27 @@ def test_pending_action_route_returns_only_unresolved_owned_confirmation() -> No
     assert resolved.json() is None
 
 
+def test_stream_route_forwards_memory_opt_out(monkeypatch: pytest.MonkeyPatch) -> None:
+    client, _, _ = _build_client()
+    conversation_id = _create_conversation(client, title="Memory")
+    original_run = CourseAgentService.run
+    seen: list[bool] = []
+
+    async def recording_run(self: CourseAgentService, **kwargs: Any) -> AgentResult:
+        seen.append(kwargs["use_memory"])
+        return await original_run(self, **kwargs)
+
+    monkeypatch.setattr(CourseAgentService, "run", recording_run)
+    for body in ({"text": "Hello"}, {"text": "Hello", "use_memory": False}):
+        with client.stream(
+            "POST", f"/conversations/{conversation_id}/run/stream", json=body
+        ) as response:
+            assert response.status_code == 200
+            "".join(response.iter_text())
+
+    assert seen == [True, False]
+
+
 def test_free_text_application_intent_is_left_to_the_agent() -> None:
     client, _, runtime = _build_client()
     conversation_id = _create_conversation(client, title="Apply")

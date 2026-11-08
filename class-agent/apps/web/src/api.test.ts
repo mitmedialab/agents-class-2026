@@ -720,3 +720,26 @@ it("derives a PDF download from the registered asset header", async () => {
     vi.unstubAllGlobals();
   }
 });
+
+it("can opt a streamed run out of memory", async () => {
+  const fetchMock = vi.fn().mockResolvedValue({
+    body: new ReadableStream({ start: (controller) => controller.close() }),
+    ok: true,
+    status: 200,
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  try {
+    await streamAgentRun(
+      "20000000-0000-4000-8000-000000000001",
+      "hello",
+      () => undefined,
+      undefined,
+      false,
+    );
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(JSON.parse(init.body as string)).toEqual({ text: "hello", use_memory: false });
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

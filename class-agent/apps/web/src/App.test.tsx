@@ -668,6 +668,7 @@ describe("Course Agent interface", () => {
         "How does grading work?",
         expect.any(Function),
         expect.any(AbortSignal),
+        true,
       ),
     );
     expect(api.createConversation).toHaveBeenCalledWith("How does grading work?");
@@ -754,6 +755,35 @@ describe("Course Agent interface", () => {
     ).toBe(screen.getByTestId("workspace-shell"));
   });
 
+  it("lets a signed-in user turn memory off for a message", async () => {
+    vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
+    render(<App />);
+    await openExistingConversation();
+
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Use memory" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Message" }), {
+      target: { value: "What is due this week?" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    await waitFor(() =>
+      expect(api.streamAgentRun).toHaveBeenCalledWith(
+        conversation.id,
+        "What is due this week?",
+        expect.any(Function),
+        expect.any(AbortSignal),
+        false,
+      ),
+    );
+  });
+
+  it("hides the memory option from anonymous visitors", async () => {
+    render(<App />);
+    await openExistingConversation();
+
+    expect(screen.queryByRole("checkbox", { name: "Use memory" })).toBeNull();
+  });
+
   it("sends a typed message through the visible composer action", async () => {
     render(<App />);
     await openExistingConversation();
@@ -773,6 +803,7 @@ describe("Course Agent interface", () => {
         "What is due this week?",
         expect.any(Function),
         expect.any(AbortSignal),
+        true,
       ),
     );
     expect(composer).toHaveValue("");
@@ -1062,6 +1093,7 @@ describe("Course Agent interface", () => {
         "Make the message warmer and keep the same recipients.",
         expect.any(Function),
         expect.any(AbortSignal),
+        true,
       ),
     );
     await waitFor(() =>
@@ -1274,6 +1306,7 @@ describe("Course Agent interface", () => {
         submissionPrompt,
         expect.any(Function),
         expect.any(AbortSignal),
+        true,
       ),
     );
   });
@@ -1388,6 +1421,7 @@ describe("Course Agent interface", () => {
         expect.stringContaining(actionPrompt),
         expect.any(Function),
         expect.any(AbortSignal),
+        true,
       ),
     );
     expect(vi.mocked(api.streamAgentRun).mock.calls.at(-1)?.[1]).toContain(
@@ -1501,6 +1535,7 @@ describe("Course Agent interface", () => {
         "I'd like to apply for the course.",
         expect.any(Function),
         expect.any(AbortSignal),
+        true,
       ),
     );
     expect(api.ensureApplicationDraft).toHaveBeenCalledWith(conversation.id);
@@ -1654,7 +1689,7 @@ describe("Course Agent interface", () => {
 
     await waitFor(() =>
       expect(api.streamAgentRun).toHaveBeenCalledWith(
-        conversation.id, prompt, expect.any(Function), expect.any(AbortSignal),
+        conversation.id, prompt, expect.any(Function), expect.any(AbortSignal), true,
       ),
     );
     expect(api.ensureApplicationDraft).not.toHaveBeenCalled();
@@ -1676,6 +1711,7 @@ describe("Course Agent interface", () => {
         "I'd like to apply for the course.",
         expect.any(Function),
         expect.any(AbortSignal),
+        true,
       ),
     );
     expect(api.ensureApplicationDraft).not.toHaveBeenCalled();
@@ -1696,6 +1732,7 @@ describe("Course Agent interface", () => {
       "I'd like to apply for the course.",
       expect.any(Function),
       expect.any(AbortSignal),
+      true,
     );
   });
 
@@ -1918,6 +1955,7 @@ describe("Course Agent interface", () => {
       "What is due?",
       expect.any(Function),
       expect.any(AbortSignal),
+      true,
     );
   });
 
@@ -2126,6 +2164,7 @@ describe("Course Agent interface", () => {
       ),
       expect.any(Function),
       expect.any(AbortSignal),
+      true,
     );
   });
 

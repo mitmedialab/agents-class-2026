@@ -42,6 +42,9 @@ POST /api/v1/conversations/{conversation_id}/run/stream
 POST /api/v1/agent/run
 ```
 
+`run/stream` accepts an optional `use_memory` (default `true`). When `false`, that run does not
+load the user's memories.
+
 The TA-question confirmation route accepts only `send` or `cancel`, plus a bounded
 `reporter_visibility` of `named` or `anonymous`. On `send`, the browser may submit the complete
 reviewed `question` shown in the confirmation; edits on `cancel` are rejected. The stored subject

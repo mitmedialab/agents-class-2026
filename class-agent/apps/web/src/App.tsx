@@ -297,6 +297,7 @@ export default function App() {
     emptyWorkspaceState,
   );
   const [message, setMessage] = useState("");
+  const [memoryEnabled, setMemoryEnabled] = useState(true);
   const [isInitializing, setIsInitializing] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
   const [isOpeningStatic, setIsOpeningStatic] = useState(false);
@@ -1155,7 +1156,13 @@ export default function App() {
         }
       };
 
-      await streamAgentRun(conversationId, text, handleStreamEvent, controller.signal);
+      await streamAgentRun(
+        conversationId,
+        text,
+        handleStreamEvent,
+        controller.signal,
+        memoryEnabled,
+      );
       if (streamedTextFrame !== 0) flushStreamedText();
       completed = !receivedError;
       if (!receivedError) {
@@ -2547,6 +2554,17 @@ export default function App() {
                 </svg>
                 {isUploading ? "Uploading" : "Attach"}
               </button>
+              {principal?.authenticated ? (
+                <label className="composer-memory-toggle">
+                  <input
+                    checked={memoryEnabled}
+                    disabled={isRunning}
+                    onChange={(event) => setMemoryEnabled(event.target.checked)}
+                    type="checkbox"
+                  />
+                  Use memory
+                </label>
+              ) : null}
               {message.length > 0 || uploads.length > 0 ? (
                 <button
                   className="composer-draft-action"
