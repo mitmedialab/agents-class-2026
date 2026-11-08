@@ -29,6 +29,7 @@ from course_server.workspace import (
 from .capabilities import (
     ASK_TA_TOOL_ID,
     INSTRUCTOR_MESSAGE_STUDENTS_TOOL_ID,
+    SAVE_MY_MEMORY_TOOL_ID,
     CourseCapabilityPolicy,
 )
 from .skills import (
@@ -417,6 +418,8 @@ class CourseAgentService:
         text_delta_observer: TextDeltaObserver | None = None,
         use_memory: bool = True,
     ) -> AgentResult:
+        if not use_memory:
+            blocked_tool_ids |= {SAVE_MY_MEMORY_TOOL_ID}
 
         authorized = self._capability_policy.authorize(principal)
         authorized_skills = self._skills.authorized_metadata(principal) if self._skills else ()

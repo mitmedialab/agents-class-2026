@@ -332,6 +332,7 @@ def _build_client(
     assignment_store: AssignmentStore | None = None,
     grade_store: FileGradeBook | None = None,
     favicon_fetcher: Callable[[str], tuple[bytes, str] | None] | None = None,
+    memories: MemoryManager | None = None,
 ) -> tuple[TestClient, str, RecordingRuntime]:
     auth_store = InMemoryAuthStore()
     conversations = InMemoryConversationStore()
@@ -377,6 +378,7 @@ def _build_client(
             else None
         ),
         notification_center=notification_center,
+        memories=memories,
         anonymous_quota_policy=anonymous_quota_policy or AnonymousQuotaPolicy(),
         favicon_fetcher=favicon_fetcher or fetch_public_favicon,
     )
@@ -979,6 +981,59 @@ def test_stream_route_forwards_memory_opt_out(monkeypatch: pytest.MonkeyPatch) -
             "".join(response.iter_text())
 
     assert seen == [True, False]
+
+
+class InMemoryMemories:
+    def __init__(self) -> None:
+        self.rows: list[Memory] = []
+
+    async def list_recent(self, user_id: UUID, limit: int) -> list[Memory]:
+        return [memory for memory in self.rows if memory.user_id == user_id][:limit]
+
+    async def update_content(
+        self, *, user_id: UUID, memory_id: UUID, content: str, updated_at: datetime
+    ) -> Memory | None:
+        for index, memory in enumerate(self.rows):
+            if memory.id == memory_id and memory.user_id == user_id:
+                self.rows[index] = memory.model_copy(
+                    update={"content": content, "updated_at": updated_at}
+                )
+                return self.rows[index]
+        return None
+
+    async def delete(self, *, user_id: UUID, memory_id: UUID) -> bool:
+        kept = [m for m in self.rows if not (m.id == memory_id and m.user_id == user_id)]
+        deleted = len(kept) < len(self.rows)
+        self.rows = kept
+        return deleted
+
+
+def test_memory_routes_act_only_on_the_logged_in_users_memories() -> None:
+    store = InMemoryMemories()
+    client, access_code, _ = _build_client(memories=store)
+    assert client.get("/memories").status_code == 403
+
+    _login(client, access_code)
+    owner = UUID(client.get("/auth/me").json()["user_id"])
+    mine = Memory(user_id=owner, kind="goal", content="Mine", privacy="personal")
+    theirs = Memory(user_id=uuid4(), kind="goal", content="Theirs", privacy="personal")
+    store.rows = [mine, theirs]
+
+    assert [m["content"] for m in client.get("/memories").json()] == ["Mine"]
+
+    edited = client.patch(f"/memories/{mine.id}", json={"content": "  Edited  "})
+    assert edited.status_code == 200
+    assert edited.json()["content"] == "Edited"
+    assert client.patch(f"/memories/{mine.id}", json={"content": "  "}).status_code == 422
+    assert client.patch(f"/memories/{mine.id}", json={"content": "x" * 2001}).status_code == 422
+    assert client.patch(f"/memories/{mine.id}", json={"kind": "other"}).status_code == 422
+
+    assert client.patch(f"/memories/{theirs.id}", json={"content": "Hacked"}).status_code == 404
+    assert client.delete(f"/memories/{theirs.id}").status_code == 404
+    assert store.rows[1].content == "Theirs"
+
+    assert client.delete(f"/memories/{mine.id}").status_code == 204
+    assert client.get("/memories").json() == []
 
 
 def test_free_text_application_intent_is_left_to_the_agent() -> None:

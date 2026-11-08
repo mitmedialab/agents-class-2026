@@ -13,8 +13,3 @@ CREATE TABLE user_memories (
 );
 
 CREATE INDEX user_memories_user_time_index ON user_memories (user_id, updated_at DESC);
-
--- Resubmitting a questionnaire answer replaces it instead of adding a contradiction.
-CREATE UNIQUE INDEX user_memories_user_question_index
-    ON user_memories (user_id, (metadata ->> 'question_id'))
-    WHERE metadata ? 'question_id';

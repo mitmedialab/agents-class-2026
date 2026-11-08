@@ -1,38 +1,40 @@
 import { useCallback, useEffect, useState } from "react";
 
-const ABOUT_PATH = "/about";
+export type PageRoute = "about" | "onboarding" | null;
 
-function isAboutPath(pathname: string): boolean {
-  return pathname === ABOUT_PATH || pathname === `${ABOUT_PATH}/`;
+function routeFromPath(pathname: string): PageRoute {
+  if (pathname === "/about" || pathname === "/about/") return "about";
+  if (pathname === "/onboarding" || pathname === "/onboarding/") return "onboarding";
+  return null;
 }
 
-export function urlForAboutState(href: string, open: boolean): string {
+export function urlForPageRoute(href: string, route: PageRoute): string {
   const url = new URL(href);
-  if (open) {
-    url.pathname = ABOUT_PATH;
-  } else if (isAboutPath(url.pathname)) {
+  if (route) {
+    url.pathname = `/${route}`;
+  } else if (routeFromPath(url.pathname)) {
     url.pathname = "/";
   }
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
-export function useAboutRoute(): [boolean, (open: boolean) => void] {
-  const [open, setOpen] = useState(() => isAboutPath(window.location.pathname));
+export function usePageRoute(): [PageRoute, (route: PageRoute) => void] {
+  const [route, setRoute] = useState(() => routeFromPath(window.location.pathname));
 
   useEffect(() => {
-    const handlePopState = () => setOpen(isAboutPath(window.location.pathname));
+    const handlePopState = () => setRoute(routeFromPath(window.location.pathname));
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  const navigate = useCallback((nextOpen: boolean) => {
+  const navigate = useCallback((nextRoute: PageRoute) => {
     const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-    const nextUrl = urlForAboutState(window.location.href, nextOpen);
+    const nextUrl = urlForPageRoute(window.location.href, nextRoute);
     if (nextUrl !== currentUrl) {
       window.history.pushState(window.history.state, "", nextUrl);
     }
-    setOpen(nextOpen);
+    setRoute(nextRoute);
   }, []);
 
-  return [open, navigate];
+  return [route, navigate];
 }

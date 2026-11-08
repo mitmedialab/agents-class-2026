@@ -220,6 +220,29 @@ textarea {
   max-width: 76rem;
 }
 
+.onboarding-question {
+  font-size: clamp(1rem, 1.35vw, 1.2rem);
+  line-height: 1.5;
+  margin-bottom: var(--space-8);
+}
+
+.onboarding-question textarea {
+  resize: vertical;
+}
+
+.onboarding-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  margin-top: 5rem;
+}
+
+.onboarding-actions .ca-button:disabled {
+  color: var(--color-text-muted);
+  cursor: default;
+}
+
 .syllabus-download {
   display: flex;
   justify-content: flex-end;
@@ -2940,6 +2963,11 @@ textarea {
 }
 
 .drawer-heading .ca-button,
+.account-section > .onboarding-link {
+  display: block;
+  margin-bottom: var(--space-4);
+}
+
 .account-section > .ca-button {
   color: var(--color-text-muted);
   font-size: 0.6875rem;

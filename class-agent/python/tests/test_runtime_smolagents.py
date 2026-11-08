@@ -48,7 +48,8 @@ from course_server.agent import (
     ToolExecutionContext,
     ToolExecutionResult,
 )
-from course_server.agent.capabilities import ToolEmittedEvent
+from course_server.agent.capabilities import SAVE_MY_MEMORY_TOOL_ID, ToolEmittedEvent
+from course_server.agent.memory_tool import SaveMyMemoryTool
 from course_server.workspace import load_component_registry
 from course_server.workspace.constants import OPEN_COMPONENT_TOOL_ID, REVIEW_PRESENTATION_TOOL_ID
 from course_server.workspace.tools import (
@@ -766,6 +767,35 @@ class ScriptedSkillModel(ScriptedToolCallingModel):
         )
 
 
+class ScriptedSaveMemoryModel(ScriptedToolCallingModel):
+    def generate(
+        self,
+        messages: list[ChatMessage],
+        stop_sequences: list[str] | None = None,
+        response_format: dict[str, str] | None = None,
+        tools_to_call_from: list[Any] | None = None,
+        **kwargs: Any,
+    ) -> ChatMessage:
+        del messages, stop_sequences, response_format, tools_to_call_from, kwargs
+        self.calls += 1
+        if self.calls == 1:
+            function = ChatMessageToolCallFunction(
+                name="memory_save_mine",
+                arguments={"kind": "preference", "content": "Private preference text"},
+            )
+        else:
+            function = ChatMessageToolCallFunction(
+                name="final_answer", arguments={"answer": "Done."}
+            )
+        return ChatMessage(
+            role=MessageRole.ASSISTANT,
+            content="",
+            tool_calls=[
+                ChatMessageToolCall(function=function, id=f"call-{self.calls}", type="function")
+            ],
+        )
+
+
 class ScriptedVisualWorkspaceModel(ScriptedToolCallingModel):
     def generate(
         self,
@@ -1020,6 +1050,46 @@ def test_runtime_loads_authorized_skill_body_only_after_explicit_tool_call() -> 
         completed = next(event for event in result.events if event.type == "agent.tool.completed")
         assert completed.payload["storage_policy"] == "server_summary"
         assert "instructions" not in completed.payload
+
+    asyncio.run(scenario())
+
+
+def test_saved_memory_text_is_not_copied_into_durable_events() -> None:
+    saved: list[Memory] = []
+
+    class Memories:
+        async def save(self, memory: Memory) -> None:
+            saved.append(memory)
+
+    async def scenario() -> None:
+        runtime = SmolagentsRuntime(
+            model_provider=ScriptedProvider(ScriptedSaveMemoryModel()),
+            tools=ToolCatalog([SaveMyMemoryTool(Memories())]),
+        )
+        user_id = uuid4()
+        conversation_id = uuid4()
+        result = await runtime.run(
+            context=AgentContext(
+                principal=PrincipalContext(
+                    authenticated=True,
+                    user_id=user_id,
+                    username="alice",
+                    roles=["public", "student"],
+                    session_id=uuid4(),
+                ),
+                conversation_id=conversation_id,
+                permitted_tool_ids=[SAVE_MY_MEMORY_TOOL_ID],
+            ),
+            input=AgentInput(conversation_id=conversation_id, text="Questionnaire responses"),
+        )
+
+        assert [(m.user_id, m.content) for m in saved] == [(user_id, "Private preference text")]
+        assert not any("Private preference" in e.model_dump_json() for e in result.events)
+        requested = next(e for e in result.events if e.type == "agent.tool.requested")
+        completed = next(e for e in result.events if e.type == "agent.tool.completed")
+        assert requested.payload == {"tool_id": SAVE_MY_MEMORY_TOOL_ID, "arguments_redacted": True}
+        assert completed.payload["storage_policy"] == "server_summary"
+        assert "result" not in completed.payload
 
     asyncio.run(scenario())
 

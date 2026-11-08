@@ -11,8 +11,11 @@ import psycopg
 import pytest
 from psycopg import sql
 from psycopg_pool import AsyncConnectionPool
+from pydantic import JsonValue
 
-from agent_core import Memory
+from agent_core import Memory, PrincipalContext
+from course_server.agent.capabilities import ToolExecutionContext
+from course_server.agent.memory_tool import SaveMyMemoryTool
 from course_server.memory import MAX_SELECTED_MEMORIES, PostgresMemoryStore
 from course_server.migrations import apply_migrations
 from course_server.postgres.auth_store import create_auth_pool
@@ -46,7 +49,7 @@ async def _create_user(pool: AsyncConnectionPool[Any]) -> UUID:
     return user_id
 
 
-def _memory(user_id: UUID, content: str, age: int = 0, question_id: str | None = None) -> Memory:
+def _memory(user_id: UUID, content: str, age: int = 0) -> Memory:
     at = NOW - timedelta(minutes=age)
     return Memory(
         user_id=user_id,
@@ -55,13 +58,12 @@ def _memory(user_id: UUID, content: str, age: int = 0, question_id: str | None =
         kind="preference",
         content=content,
         privacy="personal",
-        metadata={"question_id": question_id} if question_id else {},
     )
 
 
 @pytest.mark.postgres
 @pytest.mark.skipif(TEST_DATABASE_URL is None, reason="TEST_DATABASE_URL is not configured")
-def test_memories_are_user_scoped_newest_first_bounded_and_replaced_per_question() -> None:
+def test_memories_are_user_scoped_newest_first_bounded_and_never_replaced() -> None:
     assert TEST_DATABASE_URL is not None
     schema_name = f"test_memory_{uuid4().hex}"
     with psycopg.connect(TEST_DATABASE_URL) as connection:
@@ -77,17 +79,33 @@ def test_memories_are_user_scoped_newest_first_bounded_and_replaced_per_question
             store = PostgresMemoryStore(pool)
             owner, other = await _create_user(pool), await _create_user(pool)
 
-            await store.save(_memory(other, "Theirs", question_id="style"))
-            await store.save(_memory(owner, "Older", age=5))
-            await store.save(_memory(owner, "Hints", age=1, question_id="style"))
-            await store.save(_memory(owner, "Full answers", question_id="style"))
+            await store.save(_memory(other, "Theirs"))
+            await store.save(_memory(owner, "Hints", age=5))
+            await store.save(_memory(owner, "Hints"))
 
-            assert [m.content for m in await store.list_recent(owner)] == ["Full answers", "Older"]
+            assert [m.content for m in await store.list_recent(owner)] == ["Hints", "Hints"]
             assert [m.content for m in await store.list_recent(other)] == ["Theirs"]
 
             for index in range(MAX_SELECTED_MEMORIES + 1):
                 await store.save(_memory(owner, f"Extra {index}"))
             assert len(await store.list_recent(owner)) == MAX_SELECTED_MEMORIES
+
+            # Tools run on a worker thread with their own event loop; use the pool the same way.
+            tool = SaveMyMemoryTool(store)
+            context = ToolExecutionContext(
+                principal=PrincipalContext(
+                    authenticated=True,
+                    user_id=other,
+                    username="other",
+                    roles=["public", "student"],
+                    session_id=uuid4(),
+                ),
+                conversation_id=uuid4(),
+                permitted_resource_uris=frozenset(),
+            )
+            arguments: dict[str, JsonValue] = {"kind": "goal", "content": "Saved by tool"}
+            await asyncio.to_thread(lambda: asyncio.run(tool.execute(arguments, context)))
+            assert (await store.list_recent(other))[0].content == "Saved by tool"
         finally:
             await pool.close()
 

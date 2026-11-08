@@ -12,7 +12,7 @@ PostgreSQL stores durable server-side identity and canonical conversation histor
 - `conversations`: one explicitly user- or anonymous-session-owned conversation;
 - `events`: canonical JSON event envelopes with JSONB payload and metadata;
 - `user_memories`: per-user agent memories, deleted with the user; the newest are sent to the
-  model on that user's runs;
+  model on that user's runs. Every save inserts a new row; no memory is ever replaced;
 - `course_resources`: normalized public resource text and PostgreSQL full-text index;
 - `faq_entries`: individually addressable active and inactive FAQ records;
 - `ta_questions`: private student escalation, explicit confirmation, delivery, and resolution state;

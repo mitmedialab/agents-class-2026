@@ -10,6 +10,7 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App.js";
 import * as api from "./api.js";
+import { ONBOARDING_SECTIONS } from "./onboardingQuestions.js";
 
 vi.mock("./api.js", () => ({
   applyWorkspacePanelAction: vi.fn(),
@@ -2651,5 +2652,67 @@ describe("Course Agent interface", () => {
     );
     expect(screen.getByRole("button", { name: "Contact" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Apply" })).not.toBeInTheDocument();
+  });
+
+  it("offers the onboarding questionnaire only to signed-in users", async () => {
+    window.history.replaceState({}, "", "/onboarding");
+    render(<App />);
+    await screen.findByRole("textbox", { name: "Message" });
+    expect(screen.queryByRole("heading", { name: "Onboarding questionnaire" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
+    expect(screen.queryByRole("button", { name: "Onboarding questionnaire" })).toBeNull();
+  });
+
+  async function openOnboarding(): Promise<string> {
+    fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Onboarding questionnaire" }));
+    await screen.findByRole("heading", { level: 1, name: "Onboarding questionnaire" });
+    expect(window.location.pathname).toBe("/onboarding");
+    return ONBOARDING_SECTIONS[0]!.questions[0]!;
+  }
+
+  it("sends onboarding answers with memory on and leaves the checkbox alone", async () => {
+    vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
+    render(<App />);
+    await openExistingConversation();
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Use memory" }));
+
+    const question = await openOnboarding();
+    fireEvent.change(screen.getByRole("textbox", { name: question }), {
+      target: { value: "Physics" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send to the agent" }));
+
+    await waitFor(() =>
+      expect(api.streamAgentRun).toHaveBeenCalledWith(
+        conversation.id,
+        `Onboarding questionnaire responses:\n\n${question}\nPhysics`,
+        expect.any(Function),
+        expect.any(AbortSignal),
+        true,
+      ),
+    );
+    expect(window.location.pathname).toBe("/");
+    expect(await screen.findByRole("checkbox", { name: "Use memory" })).not.toBeChecked();
+  });
+
+  it("leaves onboarding by the way back without sending and keeps the draft", async () => {
+    vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
+    render(<App />);
+    await openExistingConversation();
+
+    const question = await openOnboarding();
+    fireEvent.change(screen.getByRole("textbox", { name: question }), {
+      target: { value: "Physics" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Back to conversation" }));
+
+    await screen.findByRole("textbox", { name: "Message" });
+    expect(window.location.pathname).toBe("/");
+    expect(api.streamAgentRun).not.toHaveBeenCalled();
+
+    await openOnboarding();
+    expect(screen.getByRole("textbox", { name: question })).toHaveValue("Physics");
   });
 });
