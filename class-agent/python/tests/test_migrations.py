@@ -32,6 +32,7 @@ def test_migrations_are_discoverable_and_checksummed() -> None:
         "0016_course_mcp",
         "0017_course_direct_messages",
         "0018_mcp_usage",
+        "0020_user_memories",
     ]
     assert all(len(migration.checksum) == 64 for migration in migrations)
 

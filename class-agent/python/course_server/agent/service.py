@@ -18,6 +18,7 @@ from agent_core import (
     Event,
     PrincipalContext,
 )
+from course_server.memory import MemoryReader
 from course_server.uploads import TemporaryUploadStore, UploadError
 from course_server.workspace import (
     ComponentRegistry,
@@ -183,6 +184,7 @@ class CourseAgentService:
         workspace_registry: ComponentRegistry | None = None,
         uploads: TemporaryUploadStore | None = None,
         attention: AgentAttentionProvider | None = None,
+        memories: MemoryReader | None = None,
     ) -> None:
         self._runtime = runtime
         self._conversations = conversations
@@ -191,6 +193,7 @@ class CourseAgentService:
         self._workspace_registry = workspace_registry or load_component_registry()
         self._uploads = uploads
         self._attention = attention
+        self._memories = memories
 
     async def _authorized_upload_uris(
         self,
@@ -436,10 +439,16 @@ class CourseAgentService:
             if self._attention is not None and principal.authenticated
             else []
         )
+        selected_memories = (
+            await self._memories.list_recent(principal.user_id)
+            if self._memories is not None and principal.user_id is not None
+            else []
+        )
         context = AgentContext(
             principal=principal,
             conversation_id=conversation_id,
             recent_events=_recent_context_events(previous_events),
+            selected_memories=selected_memories,
             capabilities=[
                 Capability(id=tool_id, status="available") for tool_id in permitted_tool_ids
             ],

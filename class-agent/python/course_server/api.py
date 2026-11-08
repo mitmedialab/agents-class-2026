@@ -112,6 +112,7 @@ from course_server.mail import (
     TAQuestionService,
     TAQuestionStateError,
 )
+from course_server.memory import PostgresMemoryStore
 from course_server.migrations import apply_migrations
 from course_server.notification_portraits import StudentNotificationPortraitRegistry
 from course_server.notifications import (
@@ -1015,6 +1016,7 @@ def create_app(
                 workspace_registry=component_registry,
                 uploads=upload_store,
                 attention=notification_center,
+                memories=PostgresMemoryStore(pool),
             ),
             conversations=conversation_store,
             applicants=applicant_store,
