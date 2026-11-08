@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "code": "S07",
+  "name": "Roma Luo",
+  "team": "MIT Media Lab",
+  "site": "https://mitmedialab.github.io/agents2026-roma/",
+  "bio": "Static agent interface (mit.s60 agent).",
+  "project": "Liminal: sound that guides a sleeper into light sleep and wakes them with an idea",
+  "interests": [
+    "sleep",
+    "sound",
+    "creativity"
+  ],
+  "skills": [
+    "signal processing",
+    "sound design"
+  ],
+  "weekly_builds": [
+    {
+      "week": "W04",
+      "title": "Liminal: sleep signals and sound to reach light sleep and record an idea",
+      "summary": ""
+    }
+  ],
+  "source": {
+    "method": "migrated from tools/students.csv (scraped from the public course site by tools/sites2csv.py)",
+    "date": "2026-11-07"
+  }
+}

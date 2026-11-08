@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "code": "S17",
+  "name": "mdetwiller",
+  "team": "MIT Media Lab",
+  "site": "",
+  "bio": "",
+  "project": "a cognitive agents project",
+  "interests": [
+    "agents"
+  ],
+  "skills": [
+    "prototyping"
+  ],
+  "weekly_builds": [],
+  "source": {
+    "method": "placeholder until she provides her own data",
+    "date": "2026-11-07"
+  }
+}

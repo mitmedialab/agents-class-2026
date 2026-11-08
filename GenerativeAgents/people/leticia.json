@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "code": "S08",
+  "name": "Leticia",
+  "team": "City Science",
+  "site": "https://mitmedialab.github.io/agents2026-leticia/",
+  "bio": "Media designer and architect: digital media experiences, collaborative co-construction and the machine's role in city making; tools for healthier cities.",
+  "project": "City Agents: simulate whether a city space will attract social interaction",
+  "interests": [
+    "cities",
+    "social interaction",
+    "ambient agents"
+  ],
+  "skills": [
+    "3D",
+    "simulation",
+    "urban design"
+  ],
+  "weekly_builds": [
+    {
+      "week": "W01",
+      "title": "Build an Agent",
+      "summary": ""
+    },
+    {
+      "week": "W02",
+      "title": "Connect to MCP servers",
+      "summary": ""
+    },
+    {
+      "week": "W03",
+      "title": "New interfaces for agents",
+      "summary": ""
+    },
+    {
+      "week": "W04",
+      "title": "KoKoRo: desktop tasks measured by accuracy, interruptions, time and mental effort",
+      "summary": ""
+    },
+    {
+      "week": "W05",
+      "title": "City Agents: an interactive environment in Blender",
+      "summary": ""
+    }
+  ],
+  "source": {
+    "method": "migrated from tools/students.csv (scraped from the public course site by tools/sites2csv.py)",
+    "date": "2026-11-07"
+  }
+}
