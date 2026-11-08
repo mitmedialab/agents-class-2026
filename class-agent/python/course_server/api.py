@@ -27,7 +27,7 @@ from pydantic import (
     model_validator,
 )
 
-from agent_core import AgentResult, Conversation, Event, PrincipalContext
+from agent_core import AgentResult, Conversation, Event, Memory, PrincipalContext
 from course_server.agent import (
     ApplicantStore,
     ConversationAccessDenied,
@@ -535,9 +535,7 @@ async def _resolve_or_create_principal(
     return principal
 
 
-def _memory_owner(
-    request: Request, principal: PrincipalContext
-) -> tuple[MemoryManager, UUID]:
+def _memory_owner(request: Request, principal: PrincipalContext) -> tuple[MemoryManager, UUID]:
     state = _get_app_state(request)
     assert state.services is not None
     if state.services.memories is None:

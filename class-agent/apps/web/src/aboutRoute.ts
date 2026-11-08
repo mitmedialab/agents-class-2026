@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 
-export type PageRoute = "about" | "onboarding" | null;
+export type PageRoute = "about" | "onboarding" | "memories" | null;
 
 function routeFromPath(pathname: string): PageRoute {
   if (pathname === "/about" || pathname === "/about/") return "about";
   if (pathname === "/onboarding" || pathname === "/onboarding/") return "onboarding";
+  if (pathname === "/memories" || pathname === "/memories/") return "memories";
   return null;
 }
 

@@ -28,6 +28,7 @@ vi.mock("./api.js", () => ({
   getPendingActionConversation: vi.fn(),
   getPrincipal: vi.fn(),
   listConversations: vi.fn(),
+  listMemories: vi.fn(),
   login: vi.fn(),
   logout: vi.fn(),
   markNotificationCenterItemRead: vi.fn(),
@@ -2662,6 +2663,30 @@ describe("Course Agent interface", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
     expect(screen.queryByRole("button", { name: "Onboarding questionnaire" })).toBeNull();
+  });
+
+  it("opens the memory list from the drawer for signed-in users", async () => {
+    vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
+    vi.mocked(api.listMemories).mockResolvedValue([]);
+    render(<App />);
+    await screen.findByRole("textbox", { name: "Message" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Your memories" }));
+
+    await screen.findByRole("heading", { level: 1, name: "Your memories" });
+    expect(window.location.pathname).toBe("/memories");
+  });
+
+  it("does not show the memory list to anonymous visitors", async () => {
+    window.history.replaceState({}, "", "/memories");
+    render(<App />);
+    await screen.findByRole("textbox", { name: "Message" });
+    expect(screen.queryByRole("heading", { name: "Your memories" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
+    expect(screen.queryByRole("button", { name: "Your memories" })).toBeNull();
+    expect(api.listMemories).not.toHaveBeenCalled();
   });
 
   async function openOnboarding(): Promise<string> {

@@ -13,7 +13,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from agent_core import AgentContext, AgentInput, AgentResult, Event, PrincipalContext
+from agent_core import AgentContext, AgentInput, AgentResult, Event, Memory, PrincipalContext
 from course_server.agent import (
     ASK_TA_TOOL_ID,
     INSTRUCTOR_LIST_APPLICATIONS_TOOL_ID,
@@ -45,6 +45,7 @@ from course_server.instructor_messages import (
     InstructorMessageService,
 )
 from course_server.mail import InMemoryTAQuestionStore, TAQuestionService, TAQuestionStore
+from course_server.memory import MemoryManager
 from course_server.notifications import (
     InMemoryNotificationItemReadStore,
     NotificationCenterService,

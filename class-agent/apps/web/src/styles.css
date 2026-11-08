@@ -238,9 +238,40 @@ textarea {
   margin-top: 5rem;
 }
 
-.onboarding-actions .ca-button:disabled {
+.onboarding-actions .ca-button:disabled,
+.memory-actions .ca-button:disabled {
   color: var(--color-text-muted);
   cursor: default;
+}
+
+.syllabus-sections .memory-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.memory-list li {
+  border-top: 1px solid var(--color-border);
+  padding: var(--space-6) 0;
+}
+
+.memory-list textarea {
+  resize: vertical;
+}
+
+.syllabus-sections .memory-kind {
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  letter-spacing: 0.1em;
+  margin: 0 0 var(--space-2);
+  text-transform: uppercase;
+}
+
+.memory-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
 }
 
 .syllabus-download {

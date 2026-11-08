@@ -97,9 +97,9 @@ import {
 import { mergeNotificationCenterUpdates } from "./notifications.js";
 import { readStartupQuery, urlWithoutStartupQuery } from "./startupQuery.js";
 import { usePageRoute } from "./aboutRoute.js";
+import { MemoriesPage } from "./MemoriesPage.js";
 import { OnboardingQuestionnaire } from "./OnboardingQuestionnaire.js";
 import type { OnboardingAnswers } from "./onboardingQuestions.js";
-
 const CONNECTION_ERROR = "I couldn’t reach the Course Agent. Please try again.";
 const WELCOME_MESSAGE =
   "Welcome. I’m the Course Agent. This agent is the class website—ask me for class information, or talk with me if you’d like to apply.";
@@ -320,7 +320,8 @@ export default function App() {
   const [pageRoute, setPageRoute] = usePageRoute();
   const aboutOpen = pageRoute === "about";
   const onboardingOpen = pageRoute === "onboarding" && principal?.authenticated === true;
-  const pageOpen = aboutOpen || onboardingOpen;
+  const memoriesOpen = pageRoute === "memories" && principal?.authenticated === true;
+  const pageOpen = aboutOpen || onboardingOpen || memoriesOpen;
   // Every setAboutOpen(false) means "back to the conversation", so it leaves onboarding too.
   const setAboutOpen = (open: boolean) => setPageRoute(open ? "about" : null);
   const [onboardingAnswers, setOnboardingAnswers] = useState<OnboardingAnswers>({});
@@ -2245,6 +2246,13 @@ export default function App() {
           error={syllabusError}
           loading={syllabusLoading}
         />
+      ) : memoriesOpen ? (
+        <MemoriesPage
+          onBack={() => {
+            setPageRoute(null);
+            requestAnimationFrame(() => composerRef.current?.focus());
+          }}
+        />
       ) : onboardingOpen ? (
         <OnboardingQuestionnaire
           answers={onboardingAnswers}
@@ -2699,6 +2707,15 @@ export default function App() {
                     }}
                   >
                     Onboarding questionnaire
+                  </Button>
+                  <Button
+                    className="onboarding-link"
+                    onClick={() => {
+                      setHistoryOpen(false);
+                      setPageRoute("memories");
+                    }}
+                  >
+                    Your memories
                   </Button>
                   <Button disabled={authSubmitting} onClick={() => void handleLogout()}>
                     Log out

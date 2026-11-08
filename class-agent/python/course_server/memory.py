@@ -63,9 +63,7 @@ class PostgresMemoryStore:
                 ),
             )
 
-    async def list_recent(
-        self, user_id: UUID, limit: int = MAX_SELECTED_MEMORIES
-    ) -> list[Memory]:
+    async def list_recent(self, user_id: UUID, limit: int = MAX_SELECTED_MEMORIES) -> list[Memory]:
         async with self._pool.connection() as connection:
             rows = await (
                 await connection.execute(
@@ -105,4 +103,4 @@ class PostgresMemoryStore:
                 "DELETE FROM user_memories WHERE id = %s AND user_id = %s",
                 (memory_id, user_id),
             )
-        return cursor.rowcount == 1
+        return bool(cursor.rowcount == 1)

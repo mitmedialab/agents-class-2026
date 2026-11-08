@@ -86,6 +86,21 @@ def test_memories_are_user_scoped_newest_first_bounded_and_never_replaced() -> N
             assert [m.content for m in await store.list_recent(owner)] == ["Hints", "Hints"]
             assert [m.content for m in await store.list_recent(other)] == ["Theirs"]
 
+            theirs = (await store.list_recent(other))[0]
+            later = NOW + timedelta(hours=1)
+            assert not await store.delete(user_id=owner, memory_id=theirs.id)
+            refused = await store.update_content(
+                user_id=owner, memory_id=theirs.id, content="No", updated_at=later
+            )
+            assert refused is None
+            edited = await store.update_content(
+                user_id=other, memory_id=theirs.id, content="Edited", updated_at=later
+            )
+            assert edited is not None and edited.content == "Edited"
+            assert edited.updated_at == later and edited.created_at == theirs.created_at
+            assert await store.delete(user_id=other, memory_id=theirs.id)
+            assert await store.list_recent(other) == []
+
             for index in range(MAX_SELECTED_MEMORIES + 1):
                 await store.save(_memory(owner, f"Extra {index}"))
             assert len(await store.list_recent(owner)) == MAX_SELECTED_MEMORIES
