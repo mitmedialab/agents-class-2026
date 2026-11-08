@@ -19,6 +19,7 @@ export interface LearningTrailEntry {
   build_title: string;
   build_url?: string | null;
   reflection: string;
+  topics: string[];
   still_relevant: boolean;
   shared_with_staff: boolean;
   shared_with_class: boolean;
@@ -32,8 +33,26 @@ export interface LearningTrailEntryDraft {
   build_title: string;
   build_url: string | null;
   reflection: string;
+  topics: string[];
   shared_with_staff: boolean;
   shared_with_class: boolean;
+}
+
+export interface LearningTrailTopic {
+  id: string;
+  title: string;
+  week?: number | null;
+}
+
+export interface LearningTrailCoverage {
+  practiced: LearningTrailTopic[];
+  not_yet: LearningTrailTopic[];
+}
+
+/** An entry the agent drafted from a debrief. It is saved only when the student saves it. */
+export interface LearningTrailPendingDraft {
+  draft: LearningTrailEntryDraft;
+  proposed_at: string;
 }
 
 export interface LearningTrailConnection {
@@ -67,6 +86,12 @@ export interface LearningTrailProps {
   entries: LearningTrailEntry[];
   /** Keyed by entry ID, strongest first. */
   connections?: Record<string, LearningTrailConnection[]> | undefined;
+  /** The course's topics, in week order, that a build can be tagged with. */
+  topics?: LearningTrailTopic[] | undefined;
+  /** An agent-drafted entry awaiting the student's decision. */
+  pendingDraft?: LearningTrailPendingDraft | undefined;
+  onAcceptDraft?: ((draft: LearningTrailEntryDraft) => Promise<void>) | undefined;
+  onDiscardDraft?: (() => Promise<void>) | undefined;
   focusEntryId?: string | undefined;
   /** History views show what is saved now and do not allow changes. */
   readOnly?: boolean;
@@ -90,6 +115,21 @@ const NEXT_BUILD_QUESTION =
   "I'm starting my next build. Using my saved builds, what should I watch out for? " +
   "Tell me which weeks you drew on.";
 
+function debriefQuestion(week: number): string {
+  return (
+    `I just finished my Week ${week} build. Debrief me: ask me three short questions one at a ` +
+    "time, then draft my entry with the topics it practiced and open My builds so I can review it."
+  );
+}
+
+function quizQuestion(entry: LearningTrailEntry): string {
+  return (
+    `Quiz me on my Week ${entry.week} build (${entry.build_title}): ask me one question about ` +
+    "the most important lesson from my note or the feedback on it, wait for my answer, and only " +
+    "then compare it with what I wrote and what staff said."
+  );
+}
+
 function weekQuestion(entry: LearningTrailEntry): string {
   return (
     `What did I learn in Week ${entry.week} (${entry.build_title}), ` +
@@ -107,22 +147,29 @@ function formatDate(value: string): string {
 }
 
 function EntryForm({
+  draft,
   entry,
   initialWeek,
   onCancel,
   onSubmit,
+  topics = [],
 }: {
+  /** Prefills the form from an agent-drafted entry; the student still saves it. */
+  draft?: LearningTrailEntryDraft | undefined;
   entry?: LearningTrailEntry | undefined;
   initialWeek?: number | undefined;
   onCancel: () => void;
   onSubmit: (draft: LearningTrailEntryDraft) => Promise<void>;
+  topics?: LearningTrailTopic[] | undefined;
 }) {
-  const [week, setWeek] = useState(String(entry?.week ?? initialWeek ?? ""));
-  const [title, setTitle] = useState(entry?.build_title ?? "");
-  const [url, setUrl] = useState(entry?.build_url ?? "");
-  const [reflection, setReflection] = useState(entry?.reflection ?? "");
-  const [shared, setShared] = useState(entry?.shared_with_staff ?? true);
-  const [sharedWithClass, setSharedWithClass] = useState(entry?.shared_with_class ?? false);
+  const source = entry ?? draft;
+  const [week, setWeek] = useState(String(source?.week ?? initialWeek ?? ""));
+  const [title, setTitle] = useState(source?.build_title ?? "");
+  const [url, setUrl] = useState(source?.build_url ?? "");
+  const [reflection, setReflection] = useState(source?.reflection ?? "");
+  const [selectedTopics, setSelectedTopics] = useState<string[]>(source?.topics ?? []);
+  const [shared, setShared] = useState(source?.shared_with_staff ?? true);
+  const [sharedWithClass, setSharedWithClass] = useState(source?.shared_with_class ?? false);
   const fieldId = useId();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -137,6 +184,7 @@ function EntryForm({
         build_title: title,
         build_url: url.trim() || null,
         reflection,
+        topics: selectedTopics,
         shared_with_staff: shared,
         shared_with_class: sharedWithClass,
       });
@@ -148,7 +196,7 @@ function EntryForm({
 
   return (
     <form
-      aria-label={entry ? "Edit build" : "Add a build"}
+      aria-label={entry ? "Edit build" : draft ? "Review the drafted build" : "Add a build"}
       className="ca-trail-form"
       onSubmit={(event) => void submit(event)}
     >
@@ -194,6 +242,28 @@ function EntryForm({
           value={reflection}
         />
       </label>
+      {topics.length > 0 ? (
+        <fieldset className="ca-trail-topics">
+          <legend className="ca-field__label">Course topics this build practiced</legend>
+          {topics.map((topic) => (
+            <label className="ca-trail-relevant" key={topic.id}>
+              <input
+                checked={selectedTopics.includes(topic.id)}
+                onChange={(event) =>
+                  setSelectedTopics(
+                    event.currentTarget.checked
+                      ? [...selectedTopics, topic.id]
+                      : selectedTopics.filter((id) => id !== topic.id),
+                  )
+                }
+                type="checkbox"
+              />
+              {topic.week ? `Week ${topic.week} · ` : ""}
+              {topic.title}
+            </label>
+          ))}
+        </fieldset>
+      ) : null}
       <label className="ca-trail-relevant">
         <input
           checked={shared}
@@ -374,10 +444,12 @@ function EntryDetails({
   onSetShared,
   onSetSharedWithClass,
   readOnly,
+  topics,
 }: {
   entry: LearningTrailEntry;
   onCollapse: () => void;
   readOnly: boolean;
+  topics: LearningTrailTopic[];
 } & Pick<
   LearningTrailProps,
   | "onAddFeedback"
@@ -411,6 +483,7 @@ function EntryDetails({
           await onEdit(entry.id, draft);
           setMode("read");
         }}
+        topics={topics}
       />
     );
   }
@@ -418,6 +491,13 @@ function EntryDetails({
   return (
     <div className="ca-trail-entry">
       <p className="ca-trail-text">{entry.reflection}</p>
+      {entry.topics.length > 0 ? (
+        <p className="ca-trail-topic-tags">
+          {entry.topics.map((id) => (
+            <span key={id}>{topics.find((topic) => topic.id === id)?.title ?? id}</span>
+          ))}
+        </p>
+      ) : null}
       {entry.build_url ? (
         <a className="ca-trail-link" href={entry.build_url} rel="noreferrer" target="_blank">
           Open the build
@@ -496,9 +576,14 @@ function EntryDetails({
           </div>
           <div className="ca-trail-actions">
             {onAsk ? (
-              <Button className="ca-trail-action" onClick={() => onAsk(weekQuestion(entry))}>
-                Ask about this week
-              </Button>
+              <>
+                <Button className="ca-trail-action" onClick={() => onAsk(quizQuestion(entry))}>
+                  Check what stuck
+                </Button>
+                <Button className="ca-trail-action" onClick={() => onAsk(weekQuestion(entry))}>
+                  Ask about this week
+                </Button>
+              </>
             ) : null}
             <Button className="ca-trail-action" onClick={() => setMode("feedback")}>
               Add feedback
@@ -638,6 +723,92 @@ function ConnectionMap({
         {highlighted ? [place, highlighted.title].filter(Boolean).join(" · ") : " "}
       </p>
     </div>
+  );
+}
+
+/** The open learner model: which course topics each saved build practiced, and the gaps. */
+function SkillsMap({
+  entries,
+  onSelectBuild,
+  selectedEntryId,
+  topics,
+}: {
+  entries: LearningTrailEntry[];
+  onSelectBuild: (entryId: string) => void;
+  selectedEntryId: string | undefined;
+  topics: LearningTrailTopic[];
+}) {
+  const builds = [...entries].sort((a, b) => a.week - b.week);
+  const practiced = new Set(
+    builds.filter((entry) => entry.still_relevant).flatMap((entry) => entry.topics),
+  );
+  const untouched = topics.filter((topic) => !practiced.has(topic.id));
+  const tagged = builds.some((entry) => entry.topics.length > 0);
+
+  return (
+    <section aria-label="Skills map" className="ca-trail-skills">
+      <h3>What your builds have practiced</h3>
+      {tagged ? (
+        <table className="ca-trail-skills-grid">
+          <thead>
+            <tr>
+              <th scope="col">
+                <span className="ca-visually-hidden">Topic</span>
+              </th>
+              {builds.map((entry) => (
+                <th key={entry.id} scope="col">
+                  <button
+                    aria-label={`Week ${entry.week}: ${entry.build_title}`}
+                    aria-pressed={entry.id === selectedEntryId}
+                    onClick={() => onSelectBuild(entry.id)}
+                    title={entry.build_title}
+                    type="button"
+                  >
+                    W{entry.week}
+                  </button>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {topics.map((topic) => (
+              <tr data-practiced={practiced.has(topic.id)} key={topic.id}>
+                <th scope="row">{topic.title}</th>
+                {builds.map((entry) => {
+                  const hit = entry.topics.includes(topic.id);
+                  const feedback = hit && entry.feedback.length > 0;
+                  return (
+                    <td
+                      aria-label={
+                        hit
+                          ? `Practiced in Week ${entry.week}${feedback ? ", with feedback" : ""}`
+                          : undefined
+                      }
+                      data-feedback={feedback}
+                      data-hit={hit}
+                      data-unused={hit && !entry.still_relevant}
+                      key={entry.id}
+                    >
+                      <span aria-hidden="true" />
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p className="ca-trail-note">
+          Tag each build with the course topics it practiced, and this map fills in. A debrief
+          suggests the tags for you.
+        </p>
+      )}
+      {tagged && untouched.length > 0 ? (
+        <p className="ca-trail-skills-gaps">
+          Not yet in any build: {untouched.map((topic) => topic.title).join(", ")}.
+        </p>
+      ) : null}
+    </section>
   );
 }
 
@@ -836,9 +1007,13 @@ export function LearningTrail({
   connections,
   entries,
   focusEntryId,
+  onAcceptDraft,
   onAsk,
   onCreate,
+  onDiscardDraft,
+  pendingDraft,
   readOnly = false,
+  topics = [],
   ...entryActions
 }: LearningTrailProps) {
   const [composingWeek, setComposingWeek] = useState<number | null>(null);
@@ -891,17 +1066,37 @@ export function LearningTrail({
             >
               Add a build
             </Button>
-            {onAsk && entries.length > 0 ? (
+            {onAsk ? (
               <Button
                 className="ca-trail-action"
-                onClick={() => onAsk(NEXT_BUILD_QUESTION)}
+                onClick={() => onAsk(debriefQuestion(latestWeek + 1))}
                 variant="outline"
               >
-                Ask the agent about my next build
+                Debrief this week with the agent
+              </Button>
+            ) : null}
+            {onAsk && entries.length > 0 ? (
+              <Button className="ca-trail-action" onClick={() => onAsk(NEXT_BUILD_QUESTION)}>
+                Ask about my next build
               </Button>
             ) : null}
           </div>
         )}
+      {pendingDraft && onAcceptDraft && !readOnly ? (
+        <section aria-label="Drafted from your debrief" className="ca-trail-draft">
+          <p className="ca-trail-note">
+            The agent drafted this from your debrief. Nothing is saved yet: change anything, then
+            save it, or discard it.
+          </p>
+          <EntryForm
+            draft={pendingDraft.draft}
+            key={pendingDraft.proposed_at}
+            onCancel={() => void onDiscardDraft?.()}
+            onSubmit={onAcceptDraft}
+            topics={topics}
+          />
+        </section>
+      ) : null}
       </header>
       {composingWeek !== null ? (
         <EntryForm
@@ -912,6 +1107,7 @@ export function LearningTrail({
             await onCreate(draft);
             setComposingWeek(null);
           }}
+          topics={topics}
         />
       ) : null}
       {rows.length > 0 ? (
@@ -971,6 +1167,7 @@ export function LearningTrail({
                         onAsk={onAsk}
                         onCollapse={() => setOpenEntryId(undefined)}
                         readOnly={readOnly}
+                        topics={topics}
                         {...entryActions}
                       />
                     ) : null}
@@ -981,6 +1178,17 @@ export function LearningTrail({
           </div>
           {selectedEntry ? (
             <div className="ca-trail-column">
+              {topics.length > 0 ? (
+                <SkillsMap
+                  entries={entries}
+                  onSelectBuild={(entryId) => {
+                    setSelectedEntryId(entryId);
+                    setOpenEntryId(entryId);
+                  }}
+                  selectedEntryId={selectedEntry.id}
+                  topics={topics}
+                />
+              ) : null}
               <ConnectionsPanel
                 connections={connections?.[selectedEntry.id]}
                 entry={selectedEntry}

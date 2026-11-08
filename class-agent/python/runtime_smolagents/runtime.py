@@ -217,6 +217,16 @@ def _agent_instructions(
             "build title. Never invent or embellish a memory or a citation. Read the "
             "learning-trail skill before relying on them."
         )
+    overview = context.metadata.get("memory_overview")
+    if isinstance(overview, dict):
+        sections.append(
+            "Course topics in this student's saved builds, derived by the platform from the "
+            "topics they tagged:\n"
+            + json.dumps(overview, ensure_ascii=False, sort_keys=True)
+            + "\nWhen it fits the current help, point out an untouched topic that the present "
+            "assignment could practice, or a practiced one it builds on. Do not present this as "
+            "a grade or a judgement of the student."
+        )
     if context.metadata.get("memory_unavailable") is True:
         sections.append(
             "This student's saved memories could not be loaded for this run. If they matter, say "

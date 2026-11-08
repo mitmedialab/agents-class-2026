@@ -7,6 +7,7 @@ bears on the current question stays with the Course Agent.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from uuid import UUID
 
 from pydantic import JsonValue
@@ -39,7 +40,9 @@ def _feedback_metadata(feedback: TrailFeedback) -> dict[str, JsonValue]:
     }
 
 
-def _as_memory(entry: TrailEntry, user_id: UUID) -> Memory:
+def _as_memory(
+    entry: TrailEntry, user_id: UUID, topic_titles: Mapping[str, str] | None = None
+) -> Memory:
     content, truncated = _bounded(entry.reflection, MAX_REFLECTION_CHARACTERS)
     recent_feedback = entry.feedback[-MAX_FEEDBACK_PER_MEMORY:]
     return Memory(
@@ -54,6 +57,7 @@ def _as_memory(entry: TrailEntry, user_id: UUID) -> Memory:
             "week": entry.week,
             "build_title": entry.build_title,
             "build_url": entry.build_url,
+            "topics": [(topic_titles or {}).get(topic, topic) for topic in entry.topics],
             "feedback": [_feedback_metadata(feedback) for feedback in recent_feedback],
             "truncated": truncated
             or len(recent_feedback) < len(entry.feedback)
@@ -62,7 +66,12 @@ def _as_memory(entry: TrailEntry, user_id: UUID) -> Memory:
     )
 
 
-def select_trail_memories(entries: list[TrailEntry], user_id: UUID) -> list[Memory]:
+def select_trail_memories(
+    entries: list[TrailEntry],
+    user_id: UUID,
+    *,
+    topic_titles: Mapping[str, str] | None = None,
+) -> list[Memory]:
     """Return still-relevant entries, newest week first, within the context budget."""
 
     relevant = sorted(
@@ -73,7 +82,7 @@ def select_trail_memories(entries: list[TrailEntry], user_id: UUID) -> list[Memo
     selected: list[Memory] = []
     characters = 0
     for entry in relevant[:MAX_SELECTED_ENTRIES]:
-        memory = _as_memory(entry, user_id)
+        memory = _as_memory(entry, user_id, topic_titles)
         characters += len(memory.content) + sum(
             len(item.body) for item in entry.feedback[-MAX_FEEDBACK_PER_MEMORY:]
         )

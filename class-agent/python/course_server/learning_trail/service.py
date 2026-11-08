@@ -8,9 +8,12 @@ require a TA or instructor session and only ever reach entries that student chos
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
+
+from pydantic import JsonValue
 
 from agent_core import Memory, PrincipalContext
 
@@ -18,17 +21,20 @@ from .connections import ConnectionDocument, find_connections
 from .models import (
     MAX_ENTRIES_PER_STUDENT,
     MAX_FEEDBACK_PER_ENTRY,
+    PendingDraft,
     SharedTrailSummary,
     StaffFeedbackDraft,
+    TopicCoverage,
     TrailConnection,
     TrailEntry,
     TrailEntryDraft,
     TrailEntryPatch,
     TrailFeedback,
     TrailFeedbackDraft,
+    TrailTopic,
 )
 from .retrieval import select_trail_memories
-from .store import TrailStore, TrailStoreError
+from .store import FileDraftStore, TrailStore, TrailStoreError
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +82,13 @@ def _find_shared(entries: list[TrailEntry], entry_id: UUID) -> TrailEntry:
     return entry
 
 
+def _topic_week(document: ConnectionDocument) -> int | None:
+    if document.week is not None:
+        return document.week
+    match = re.fullmatch(r"course://slides/week-0*([0-9]+)", document.target_id)
+    return int(match.group(1)) if match else None
+
+
 def _newest_first(entries: list[TrailEntry]) -> list[TrailEntry]:
     return sorted(entries, key=lambda entry: (entry.week, entry.updated_at), reverse=True)
 
@@ -98,12 +111,14 @@ class LearningTrailService:
         *,
         student_name: StudentNameLookup | None = None,
         course_materials: CourseMaterialLoader | None = None,
+        drafts: FileDraftStore | None = None,
         clock: Callable[[], datetime] = _clock,
         id_factory: Callable[[], UUID] = uuid4,
     ) -> None:
         self._store = store
         self._student_name = student_name
         self._course_materials = course_materials
+        self._drafts = drafts
         self._clock = clock
         self._id_factory = id_factory
 
@@ -124,6 +139,7 @@ class LearningTrailService:
                 build_title=draft.build_title,
                 build_url=draft.build_url,
                 reflection=draft.reflection,
+                topics=draft.topics,
                 shared_with_staff=draft.shared_with_staff,
                 shared_with_class=draft.shared_with_class,
                 created_at=now,
@@ -348,4 +364,73 @@ class LearningTrailService:
             owner = _owner(principal)
         except TrailAccessDenied:
             return []
-        return select_trail_memories(await self._store.read(owner), owner)
+        titles = {topic.id: topic.title for topic in await self.topics()}
+        return select_trail_memories(await self._store.read(owner), owner, topic_titles=titles)
+
+    async def memory_overview(self, principal: PrincipalContext) -> dict[str, JsonValue] | None:
+        """Platform-derived facts about the trail for the run: which course topics the
+        student's builds have practiced and which none has touched yet."""
+
+        try:
+            coverage = await self.coverage(principal)
+        except TrailAccessDenied:
+            return None
+        if not coverage.practiced and not coverage.not_yet:
+            return None
+        return {
+            "topics_practiced": [topic.title for topic in coverage.practiced],
+            "topics_not_yet_practiced": [topic.title for topic in coverage.not_yet],
+        }
+
+    # Topics and coverage: the open learner model.
+
+    async def topics(self) -> list[TrailTopic]:
+        """The course's slide decks and readings, in week order, that a build can be tagged with."""
+
+        if self._course_materials is None:
+            return []
+        topics = [
+            TrailTopic(id=document.target_id, title=document.title, week=_topic_week(document))
+            for document in await self._course_materials()
+        ]
+        return sorted(topics, key=lambda topic: (topic.week is None, topic.week or 0, topic.title))
+
+    async def coverage(self, principal: PrincipalContext) -> TopicCoverage:
+        owner = _owner(principal)
+        tagged = {
+            topic
+            for entry in await self._store.read(owner)
+            if entry.still_relevant
+            for topic in entry.topics
+        }
+        topics = await self.topics()
+        return TopicCoverage(
+            practiced=[topic for topic in topics if topic.id in tagged],
+            not_yet=[topic for topic in topics if topic.id not in tagged],
+        )
+
+    # Drafts: the agent proposes, the student decides.
+
+    async def propose(self, principal: PrincipalContext, draft: TrailEntryDraft) -> PendingDraft:
+        owner = _owner(principal)
+        if self._drafts is None:
+            raise TrailStoreError("drafts are not enabled")
+        pending = PendingDraft(draft=draft, proposed_at=self._clock())
+        await self._drafts.write(owner, pending)
+        return pending
+
+    async def pending_draft(self, principal: PrincipalContext) -> PendingDraft | None:
+        owner = _owner(principal)
+        return None if self._drafts is None else await self._drafts.read(owner)
+
+    async def discard_draft(self, principal: PrincipalContext) -> None:
+        owner = _owner(principal)
+        if self._drafts is not None:
+            await self._drafts.clear(owner)
+
+    async def accept_draft(self, principal: PrincipalContext, draft: TrailEntryDraft) -> TrailEntry:
+        """Save the draft as the student edited it, then forget the proposal."""
+
+        entry = await self.create(principal, draft)
+        await self.discard_draft(principal)
+        return entry

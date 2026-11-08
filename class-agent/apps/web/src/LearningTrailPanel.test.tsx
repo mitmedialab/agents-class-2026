@@ -15,6 +15,10 @@ vi.mock("./api.js", async (importOriginal) => ({
   deleteLearningTrailFeedback: vi.fn(),
   listLearningTrail: vi.fn(),
   listLearningTrailConnections: vi.fn(),
+  listLearningTrailTopics: vi.fn(),
+  getLearningTrailDraft: vi.fn(),
+  acceptLearningTrailDraft: vi.fn(),
+  discardLearningTrailDraft: vi.fn(),
   listLearningTrailStudents: vi.fn(),
   listSharedLearningTrail: vi.fn(),
   updateLearningTrailEntry: vi.fn(),
@@ -27,6 +31,7 @@ function entry(overrides: Partial<LearningTrailEntry> = {}): LearningTrailEntry 
     build_title: "Voice agent",
     build_url: "https://example.com/voice",
     reflection: "Latency mattered more than I expected.",
+    topics: [],
     still_relevant: true,
     shared_with_staff: false,
     shared_with_class: false,
@@ -49,6 +54,11 @@ describe("LearningTrailPanel", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.mocked(api.listLearningTrailConnections).mockResolvedValue({});
+    vi.mocked(api.listLearningTrailTopics).mockResolvedValue({
+      topics: [],
+      coverage: { practiced: [], not_yet: [] },
+    });
+    vi.mocked(api.getLearningTrailDraft).mockResolvedValue(null);
     vi.mocked(api.createLearningTrailEntry).mockResolvedValue(entry());
     vi.mocked(api.updateLearningTrailEntry).mockResolvedValue(entry());
     vi.mocked(api.addLearningTrailFeedback).mockResolvedValue(entry());
@@ -78,7 +88,7 @@ describe("LearningTrailPanel", () => {
     vi.mocked(api.listLearningTrail).mockResolvedValue([entry()]);
     render(<LearningTrailPanel onAsk={onAsk} readOnly={false} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Ask the agent about my next build" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Ask about my next build" }));
     expect(onAsk).toHaveBeenLastCalledWith(expect.stringContaining("my next build"));
 
     fireEvent.click(screen.getByRole("button", { name: /^Week 3\s*Voice agent/ }));
@@ -174,11 +184,71 @@ describe("LearningTrailPanel", () => {
         build_title: "Voice agent",
         build_url: null,
         reflection: "Latency mattered.",
+        topics: [],
         shared_with_staff: true,
         shared_with_class: false,
       }),
     );
     expect(await screen.findByRole("button", { name: /^Week 3\s*Voice agent/ })).toBeInTheDocument();
+  });
+
+  it("shows the skills map from tagged builds and lets the student accept a drafted entry", async () => {
+    const onAsk = vi.fn();
+    vi.mocked(api.listLearningTrail).mockResolvedValue([
+      entry({ topics: ["course://slides/week-02"] }),
+    ]);
+    vi.mocked(api.listLearningTrailTopics).mockResolvedValue({
+      topics: [
+        { id: "course://slides/week-02", title: "Tools, MCPs and Skills", week: 2 },
+        { id: "course://slides/week-04", title: "Agent Evaluation & Environments", week: 4 },
+      ],
+      coverage: { practiced: [], not_yet: [] },
+    });
+    vi.mocked(api.getLearningTrailDraft).mockResolvedValue({
+      draft: {
+        week: 4,
+        build_title: "Night environment",
+        build_url: null,
+        reflection: "Replaying one night was enough to find the rule.",
+        topics: ["course://slides/week-04"],
+        shared_with_staff: false,
+        shared_with_class: false,
+      },
+      proposed_at: "2026-10-02T00:00:00Z",
+    });
+    vi.mocked(api.acceptLearningTrailDraft).mockResolvedValue(entry());
+    render(<LearningTrailPanel onAsk={onAsk} readOnly={false} />);
+
+    const map = within(await screen.findByRole("region", { name: "Skills map" }));
+    expect(map.getByLabelText("Practiced in Week 3")).toBeInTheDocument();
+    expect(map.getByText(/Not yet in any build: Agent Evaluation & Environments/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Debrief this week with the agent" }));
+    expect(onAsk).toHaveBeenLastCalledWith(expect.stringContaining("Week 4 build. Debrief me"));
+
+    const review = within(screen.getByRole("form", { name: "Review the drafted build" }));
+    expect(review.getByLabelText("What did you learn, or what would you change?")).toHaveValue(
+      "Replaying one night was enough to find the rule.",
+    );
+    expect(review.getByRole("checkbox", { name: /Agent Evaluation/ })).toBeChecked();
+    fireEvent.change(review.getByLabelText("What did you learn, or what would you change?"), {
+      target: { value: "In my words." },
+    });
+    fireEvent.click(review.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(api.acceptLearningTrailDraft).toHaveBeenCalledWith(
+        expect.objectContaining({ week: 4, reflection: "In my words.", topics: ["course://slides/week-04"] }),
+      ),
+    );
+    expect(api.createLearningTrailEntry).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(screen.queryByRole("form", { name: "Review the drafted build" })).toBeNull(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^Week 3\s*Voice agent/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Check what stuck" }));
+    expect(onAsk).toHaveBeenLastCalledWith(expect.stringContaining("Quiz me on my Week 3 build"));
   });
 
   it("marks an entry as no longer relevant", async () => {

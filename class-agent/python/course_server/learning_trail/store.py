@@ -16,7 +16,7 @@ from pydantic import ValidationError
 
 from course_server.agent.store import MemoryUnavailable
 
-from .models import TrailDocument, TrailEntry
+from .models import PendingDraft, TrailDocument, TrailEntry
 
 MAX_TRAIL_FILE_BYTES = 2 * 1024 * 1024
 
@@ -122,3 +122,55 @@ class FileTrailStore:
         finally:
             if temporary is not None:
                 Path(temporary).unlink(missing_ok=True)
+
+
+class FileDraftStore:
+    """At most one pending agent-drafted entry per student, in its own small file."""
+
+    def __init__(self, directory: Path) -> None:
+        self._directory = directory
+
+    async def read(self, user_id: UUID) -> PendingDraft | None:
+        return await asyncio.to_thread(self._read, user_id)
+
+    async def write(self, user_id: UUID, draft: PendingDraft) -> None:
+        await asyncio.to_thread(self._write, user_id, draft)
+
+    async def clear(self, user_id: UUID) -> None:
+        await asyncio.to_thread(self._clear, user_id)
+
+    def _path(self, user_id: UUID) -> Path:
+        return self._directory / f"{user_id}.draft.json"
+
+    def _read(self, user_id: UUID) -> PendingDraft | None:
+        path = self._path(user_id)
+        if not path.is_file():
+            return None
+        try:
+            return PendingDraft.model_validate_json(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, ValidationError) as error:
+            raise TrailStoreError("stored draft is malformed or unavailable") from error
+
+    def _write(self, user_id: UUID, draft: PendingDraft) -> None:
+        temporary: str | None = None
+        try:
+            if self._directory.is_symlink():
+                raise TrailStoreError("learning trail directory is invalid")
+            self._directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+            descriptor, temporary = tempfile.mkstemp(dir=self._directory, suffix=".tmp")
+            with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+                output.write(draft.model_dump_json(indent=2))
+                output.write("\n")
+            os.replace(temporary, self._path(user_id))
+            temporary = None
+        except OSError as error:
+            raise TrailStoreError("draft could not be saved") from error
+        finally:
+            if temporary is not None:
+                Path(temporary).unlink(missing_ok=True)
+
+    def _clear(self, user_id: UUID) -> None:
+        try:
+            self._path(user_id).unlink(missing_ok=True)
+        except OSError as error:
+            raise TrailStoreError("draft could not be removed") from error

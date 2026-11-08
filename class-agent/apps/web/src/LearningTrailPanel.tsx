@@ -4,20 +4,26 @@ import {
   LearningTrailStaff,
   type LearningTrailConnection,
   type LearningTrailEntry,
+  type LearningTrailPendingDraft,
+  type LearningTrailTopic,
   type LearningTrailStudent,
 } from "@class-agent/ui";
 import { useCallback, useEffect, useState } from "react";
 
 import {
   ApiError,
+  acceptLearningTrailDraft,
   addLearningTrailFeedback,
   addStaffLearningTrailFeedback,
   createLearningTrailEntry,
   deleteLearningTrailEntry,
   deleteLearningTrailFeedback,
   deleteStaffLearningTrailFeedback,
+  discardLearningTrailDraft,
+  getLearningTrailDraft,
   listLearningTrail,
   listLearningTrailConnections,
+  listLearningTrailTopics,
   listLearningTrailStudents,
   listSharedLearningTrail,
   updateLearningTrailEntry,
@@ -43,6 +49,8 @@ function StudentView({
 }: LearningTrailPanelProps & { entries: LearningTrailEntry[] }) {
   const [entries, setEntries] = useState(initialEntries);
   const [connections, setConnections] = useState<Record<string, LearningTrailConnection[]>>();
+  const [topics, setTopics] = useState<LearningTrailTopic[]>([]);
+  const [pendingDraft, setPendingDraft] = useState<LearningTrailPendingDraft | undefined>();
   const loadConnections = useCallback(async () => {
     // The trail stays usable if connections fail, so a failure leaves them out.
     try {
@@ -51,9 +59,21 @@ function StudentView({
       setConnections({});
     }
   }, []);
+  const loadDraft = useCallback(async () => {
+    try {
+      setPendingDraft((await getLearningTrailDraft()) ?? undefined);
+    } catch {
+      setPendingDraft(undefined);
+    }
+  }, []);
   useEffect(() => {
     void loadConnections();
-  }, [loadConnections]);
+    void loadDraft();
+    listLearningTrailTopics().then(
+      (result) => setTopics(result.topics),
+      () => setTopics([]),
+    );
+  }, [loadConnections, loadDraft]);
   const reload = async () => {
     setEntries(await listLearningTrail());
     void loadConnections();
@@ -64,7 +84,18 @@ function StudentView({
       connections={connections}
       entries={entries}
       focusEntryId={focusEntryId}
+      onAcceptDraft={async (draft) => {
+        await acceptLearningTrailDraft(draft);
+        setPendingDraft(undefined);
+        await reload();
+      }}
       onAsk={onAsk}
+      onDiscardDraft={async () => {
+        await discardLearningTrailDraft();
+        setPendingDraft(undefined);
+      }}
+      pendingDraft={pendingDraft}
+      topics={topics}
       onAddFeedback={async (entryId, draft) => {
         await addLearningTrailFeedback(entryId, draft);
         await reload();

@@ -68,6 +68,11 @@ order, each with its date and time, scrolled to the latest. It starts with the f
 and also applies to a conversation opened from the drawer. A new message is added at the bottom and
 the reply streams in under it. It is a browser projection of canonical events. A conversation with
 no student message yet, such as the opening greeting, keeps the single-moment view.
+**My builds** opens from the header for logged-in students. It lists each week's build with a
+skills map of course topics the builds practiced, connections to other builds, class materials,
+and classmates who share, a **Debrief this week with the agent** button that starts a short
+interview in chat, and, when the agent has drafted an entry from a debrief, a review form at the
+top that the student saves or discards.
 The drawer lists only conversations with a student message, titled from that message and showing the time of the latest activity.
 Open the About page from the right side of the header or link directly to `/about`.
 The browser URL and Back/Forward navigation remain synchronized with that page. Notifications and their desktop/mobile layout state are hidden while About is open and restored when returning to chat. It

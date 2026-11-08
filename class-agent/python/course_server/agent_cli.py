@@ -83,8 +83,8 @@ from course_server.instructor_messages import (
     InstructorMessageService,
     InstructorMessageStudentsTool,
 )
-from course_server.learning_trail import FileTrailStore, LearningTrailService
-from course_server.learning_trail.tools import MemoryGetMineTool
+from course_server.learning_trail import FileDraftStore, FileTrailStore, LearningTrailService
+from course_server.learning_trail.tools import MemoryGetMineTool, MemoryProposeMineTool
 from course_server.mail import CourseAskTATool, TAQuestionService
 from course_server.migrations import apply_migrations
 from course_server.postgres.auth_store import PostgresAuthStore, create_auth_pool
@@ -230,6 +230,10 @@ def build_runtime(
     application_access = ApplicationAccessPolicy(
         settings.applicant_data_path / "student-access.json"
     )
+    resolved_learning_trail = learning_trail or LearningTrailService(
+        FileTrailStore(settings.learning_trail_data_path),
+        drafts=FileDraftStore(settings.learning_trail_data_path),
+    )
     executable_tools: list[ExecutableTool] = [
         CourseReadSyllabusTool(course_resources),
         CourseReadPublicFileTool(course_resources),
@@ -242,10 +246,8 @@ def build_runtime(
         CourseSearchTool(course_resources),
         CourseListAssignmentsTool(assignment_store),
         CourseGetAssignmentTool(assignment_store),
-        MemoryGetMineTool(
-            learning_trail
-            or LearningTrailService(FileTrailStore(settings.learning_trail_data_path))
-        ),
+        MemoryGetMineTool(resolved_learning_trail),
+        MemoryProposeMineTool(resolved_learning_trail),
         ReadTemporaryUploadTool(upload_store),
         DocumentInspectPageTool(
             course_resources,

@@ -1,11 +1,25 @@
 # Learning trail
 
-A student saves one reflection per weekly build, and marks it as still relevant or not. Staff feedback
-reaches an entry in two ways: a TA or instructor writes it on an entry the student shared, or the
-student pastes it from an email. The Course Agent reads those entries, so that help with a later
-assignment can build on earlier weeks and say where it got that from. **My builds** also shows how
-each build connects to the student's other builds, to class slides and readings, and to classmates
-who chose to share.
+The Course Agent as a study coach with a memory the student owns. A student keeps one reflection per
+weekly build, tagged with the course topics it practiced. Staff feedback reaches an entry in two
+ways: a TA or instructor writes it on an entry the student shared, or the student pastes it from an
+email. The Course Agent reads those entries on every run, so that help with a later assignment can
+build on earlier weeks and say where it got that from.
+
+What the original agent could not do, and this adds:
+
+- **Debrief.** The agent interviews the student about a build in three short questions, then
+  proposes an entry in the student's words with `memory.propose_mine`. The draft waits in
+  **My builds** until the student edits and saves it, or discards it. The agent never writes an entry.
+- **Skills map.** An open learner model: course topics (slide decks and readings) down the side,
+  builds across the top. The platform tells the agent which topics the student's builds have
+  practiced and which none has touched, so it can suggest where a new assignment could stretch.
+- **Pre-brief.** The page greeting connects a pending assignment to something the student wrote
+  down earlier, such as a plan or feedback they have not acted on.
+- **Check what stuck.** Retrieval practice on an earlier build: the agent asks one question, waits,
+  then compares the answer with the student's note and staff feedback.
+- **Connections.** How each build relates to the student's other builds, class materials, and
+  classmates who chose to share.
 
 Status: initial version. `make check` passes. Scope and open questions are at the end.
 
@@ -37,6 +51,7 @@ For anything more, such as a truncated entry or one the student set aside, the a
 | To change | Edit | Depends on |
 | --- | --- | --- |
 | Data and memory logic | `models.py`, `store.py`, `service.py`, `retrieval.py` | `TrailStore` protocol; `select_trail_memories` |
+| Topics, coverage, drafts | `service.py` (`topics`, `coverage`, `propose`, `accept_draft`), `FileDraftStore` in `store.py`, `MemoryProposeMineTool` in `tools.py` | Course slides and readings in the resource catalog |
 | The panels | `packages/ui/src/LearningTrail.tsx`, `apps/web/src/LearningTrailPanel.tsx`, `apps/web/src/api.ts`, `routes.py` | The JSON shape of `TrailEntry` |
 | Connections | `connections.py`, the map and list in `LearningTrail.tsx` | `TrailConnection` |
 | What the agent says | `skills/learning-trail/SKILL.md`, `tools.py`, the memory section of `_agent_instructions` in `python/runtime_smolagents/runtime.py` | `Memory.metadata` fields; the `memory.get_mine` result |
@@ -74,6 +89,11 @@ Feedback a TA or instructor wrote stays theirs in the sense that its author and 
   and link, and a short excerpt, and only as a connection from one of their own builds. They never
   see feedback, and the agent never receives a classmate's text.
 - Anyone with file access to the server can read the files. They are not encrypted at rest.
+
+**Agent-drafted entries.** A debrief ends with `memory.propose_mine`, which stores one pending
+draft per student in a separate file. It is not an entry, is not read by `select_memories`, and
+is replaced by the next proposal. Only the student turns it into an entry, after editing it in the
+panel, or discards it. The agent cannot save, edit, or delete entries.
 
 **Who can change it.**
 
@@ -180,14 +200,17 @@ which takes entries still marked relevant, newest week first, up to 16 entries a
 The runtime prompt presents them as student-written data rather than instructions. The agent calls
 `memory.get_mine` when it needs a truncated entry or one the student set aside.
 
-**Observation space added by this feature.** The selected trail memories in `AgentContext`, the
-`memory.get_mine` result, and the `learning-trail` component in the workspace.
+**Observation space added by this feature.** The selected trail memories in `AgentContext`
+(each with its topics), the `memory_overview` metadata naming topics practiced and not yet
+practiced, the `memory.get_mine` result, the `memory.propose_mine` result, and the
+`learning-trail` component in the workspace.
 
 **Tools and actions added by this feature.**
 
 | Tool | Who | Effect |
 | --- | --- | --- |
 | `memory.get_mine` | Logged-in student's run | Reads their own trail. Read-only. |
+| `memory.propose_mine` | Logged-in student's run | Parks one draft for the student to review in the panel. Saves nothing. |
 | `workspace.open_component` with `learning-trail` | Agent, existing tool | Opens the panel. Carries at most an entry ID. |
 
 Saving, sharing, and writing feedback happen only through the panel and its API, not through the
@@ -204,6 +227,10 @@ One interaction in which saved information changes a later reply:
 4. Back as the student, start a new conversation and ask the same question. The reply should name the
    earlier build and the TA's feedback, and say where each came from.
 5. Untick **Agent can use this** on that build and ask again. The reply should stop relying on it.
+
+To try the debrief, press **Debrief this week with the agent**, answer its three questions, and
+open **My builds**: the draft is at the top, with the topics it suggested ticked. Change it and
+save, or discard it. Press **Check what stuck** on an earlier build for a one-question quiz.
 
 To see connections, save two or more builds and open **My builds**. Select a build, then expand a row
 in the list. A second student who ticks **Classmates can see this** on a build appears on the map as

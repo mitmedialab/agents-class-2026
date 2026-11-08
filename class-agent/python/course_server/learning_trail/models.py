@@ -17,6 +17,7 @@ from pydantic import (
 
 MAX_ENTRIES_PER_STUDENT = 64
 MAX_FEEDBACK_PER_ENTRY = 16
+MAX_TOPICS_PER_ENTRY = 8
 MAX_WEEK = 20
 
 FeedbackRole = Literal["instructor", "ta"]
@@ -45,6 +46,21 @@ FeedbackBody = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=10_000)
 ]
 PersonName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+# A course topic is a slide deck or reading in the course catalog, so the list stays tied to what
+# the class actually covered and the agent cannot invent a topic.
+TopicId = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True, pattern=r"^course://(slides|readings)/[A-Za-z0-9._-]{1,120}$"
+    ),
+]
+Topics = Annotated[list[TopicId], Field(max_length=MAX_TOPICS_PER_ENTRY)]
+
+
+def _unique_topics(value: list[str]) -> list[str]:
+    if len(set(value)) != len(value):
+        raise ValueError("topics must not repeat")
+    return value
 
 
 class TrailModel(BaseModel):
@@ -76,6 +92,7 @@ class TrailEntry(TrailModel):
     build_title: BuildTitle
     build_url: BuildUrl | None = None
     reflection: Reflection
+    topics: Annotated[Topics, AfterValidator(_unique_topics)] = Field(default_factory=list)
     still_relevant: bool = True
     shared_with_staff: bool = False
     shared_with_class: bool = False
@@ -89,8 +106,32 @@ class TrailEntryDraft(TrailModel):
     build_title: BuildTitle
     build_url: BuildUrl | None = None
     reflection: Reflection
+    topics: Annotated[Topics, AfterValidator(_unique_topics)] = Field(default_factory=list)
     shared_with_staff: bool = False
     shared_with_class: bool = False
+
+
+class PendingDraft(TrailModel):
+    """An entry the Course Agent drafted from a debrief. Nothing is saved until the student
+    accepts it in the panel, where they can change every word first."""
+
+    draft: TrailEntryDraft
+    proposed_at: AwareDatetime
+
+
+class TrailTopic(TrailModel):
+    """A course topic a build can be tagged with: one slide deck or reading."""
+
+    id: TopicId
+    title: str
+    week: int | None = None
+
+
+class TopicCoverage(TrailModel):
+    """Which course topics this student's saved builds have practiced, for the panel and agent."""
+
+    practiced: list[TrailTopic]
+    not_yet: list[TrailTopic]
 
 
 class TrailEntryPatch(TrailModel):
@@ -100,6 +141,7 @@ class TrailEntryPatch(TrailModel):
     build_title: BuildTitle | None = None
     build_url: BuildUrl | None = None
     reflection: Reflection | None = None
+    topics: Annotated[Topics, AfterValidator(_unique_topics)] | None = None
     still_relevant: bool | None = None
     shared_with_staff: bool | None = None
     shared_with_class: bool | None = None

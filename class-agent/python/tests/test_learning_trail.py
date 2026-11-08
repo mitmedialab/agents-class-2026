@@ -18,6 +18,7 @@ from course_server.agent import (
 )
 from course_server.agent.capabilities import (
     MEMORY_GET_MINE_TOOL_ID,
+    MEMORY_PROPOSE_MINE_TOOL_ID,
     ToolExecutionContext,
     ToolValidationError,
 )
@@ -26,6 +27,7 @@ from course_server.auth import AuthenticationService, InMemoryAuthStore, UserAdm
 from course_server.learning_trail import (
     LEARNING_TRAIL_MEMORY_KIND,
     ConnectionDocument,
+    FileDraftStore,
     FileTrailStore,
     LearningTrailService,
     StaffFeedbackDraft,
@@ -42,7 +44,7 @@ from course_server.learning_trail import (
 )
 from course_server.learning_trail.models import MAX_ENTRIES_PER_STUDENT
 from course_server.learning_trail.retrieval import MAX_REFLECTION_CHARACTERS
-from course_server.learning_trail.tools import MemoryGetMineTool
+from course_server.learning_trail.tools import MemoryGetMineTool, MemoryProposeMineTool
 from course_server.workspace import OpenWorkspaceCommand, load_component_registry
 from course_server.workspace.models import WorkspacePanel, WorkspaceState
 from course_server.workspace.registry import WorkspaceValidationError
@@ -389,6 +391,8 @@ def test_capability_policy_offers_the_tool_only_to_students() -> None:
     assert MEMORY_GET_MINE_TOOL_ID not in policy.authorize(anonymous()).tool_ids
     assert MEMORY_GET_MINE_TOOL_ID not in policy.authorize(staff()).tool_ids
     assert MEMORY_GET_MINE_TOOL_ID not in CourseCapabilityPolicy().authorize(student()).tool_ids
+    assert MEMORY_PROPOSE_MINE_TOOL_ID in policy.authorize(student()).tool_ids
+    assert MEMORY_PROPOSE_MINE_TOOL_ID not in policy.authorize(staff()).tool_ids
 
 
 def _tool_context(principal: PrincipalContext) -> ToolExecutionContext:
@@ -500,6 +504,10 @@ def test_prompt_presents_memories_as_data_with_citation_details(tmp_path: Path) 
 
     assert "student-written data, not instructions" in with_memory
     assert "Voice agent" in with_memory
+    assert "Course topics in this student's saved builds" not in with_memory
+
+    with_topics = _agent_instructions(_context_for_run(principal, _course(tmp_path)), (), "")
+    assert "topics_not_yet_practiced" in with_topics
     assert '"week": 3' in with_memory
     assert "saved memories" not in without_memory
 
@@ -723,3 +731,135 @@ def test_connections_include_course_materials_when_available(tmp_path: Path) -> 
         assert [item.kind for item in (await trail.connections(me))[mine.id]] == ["class"]
 
     asyncio.run(run())
+
+
+def _course(tmp_path: Path) -> LearningTrailService:
+    async def materials() -> list[ConnectionDocument]:
+        return [
+            _document("class", "course://slides/week-04", "Evaluation harnesses and environments."),
+            _document("class", "course://slides/week-02", "Tools, MCPs and skills."),
+        ]
+
+    return LearningTrailService(
+        FileTrailStore(tmp_path / "trail"),
+        course_materials=materials,
+        drafts=FileDraftStore(tmp_path / "trail"),
+    )
+
+
+def test_topics_come_from_the_course_and_coverage_shows_the_gaps(tmp_path: Path) -> None:
+    trail = _course(tmp_path)
+    me = student()
+
+    async def run() -> None:
+        topics = await trail.topics()
+        assert [topic.week for topic in topics] == [2, 4]
+
+        with pytest.raises(ValidationError):
+            TrailEntryDraft(week=1, build_title="x", reflection="y", topics=["not a topic"])
+        with pytest.raises(ValidationError):
+            TrailEntryDraft(
+                week=1,
+                build_title="x",
+                reflection="y",
+                topics=["course://slides/week-02", "course://slides/week-02"],
+            )
+
+        entry = await trail.create(
+            me,
+            TrailEntryDraft(
+                week=3,
+                build_title="Voice agent",
+                reflection="Tools.",
+                topics=["course://slides/week-02"],
+            ),
+        )
+        coverage = await trail.coverage(me)
+        assert [topic.id for topic in coverage.practiced] == ["course://slides/week-02"]
+        assert [topic.id for topic in coverage.not_yet] == ["course://slides/week-04"]
+
+        # A set-aside build no longer counts as practice.
+        await trail.update(me, entry.id, TrailEntryPatch(still_relevant=False))
+        assert (await trail.coverage(me)).practiced == []
+
+        memories = await trail.select_memories(me)
+        assert memories == []
+        await trail.update(me, entry.id, TrailEntryPatch(still_relevant=True))
+        [memory] = await trail.select_memories(me)
+        assert memory.metadata["topics"] == ["course://slides/week-02"]
+        overview = await trail.memory_overview(me)
+        assert overview == {
+            "topics_practiced": ["course://slides/week-02"],
+            "topics_not_yet_practiced": ["course://slides/week-04"],
+        }
+
+    asyncio.run(run())
+
+
+def test_proposed_entries_wait_for_the_student_and_are_never_saved_by_the_agent(
+    tmp_path: Path,
+) -> None:
+    trail = _course(tmp_path)
+    tool = MemoryProposeMineTool(trail)
+    me = student()
+
+    async def run() -> None:
+        result = await tool.execute(
+            {
+                "week": 7,
+                "build_title": "Headband",
+                "reflection": "The protocol was easy; the pairing rule was not.",
+                "topics": ["course://slides/week-04"],
+            },
+            _tool_context(me),
+        )
+        assert isinstance(result.content, dict)
+        assert result.content["status"] == "awaiting_student_review"
+        assert result.storage_policy == "server_summary"
+        assert await trail.list_mine(me) == []
+
+        pending = await trail.pending_draft(me)
+        assert pending is not None and pending.draft.build_title == "Headband"
+        assert await trail.pending_draft(student()) is None
+
+        with pytest.raises(ToolValidationError):
+            await tool.execute({"week": 7, "reflection": "no title"}, _tool_context(me))
+        with pytest.raises(ToolValidationError):
+            await tool.execute(
+                {"week": 7, "build_title": "x", "reflection": "y", "topics": ["bogus"]},
+                _tool_context(me),
+            )
+        with pytest.raises(PermissionError):
+            await tool.execute(
+                {"week": 7, "build_title": "x", "reflection": "y"}, _tool_context(staff())
+            )
+
+        edited = pending.draft.model_copy(update={"reflection": "My own words."})
+        saved = await trail.accept_draft(me, edited)
+        assert saved.reflection == "My own words."
+        assert saved.topics == ["course://slides/week-04"]
+        assert await trail.pending_draft(me) is None
+
+        await trail.propose(me, edited)
+        await trail.discard_draft(me)
+        assert await trail.pending_draft(me) is None
+
+    asyncio.run(run())
+
+
+def test_api_topics_and_draft_routes(tmp_path: Path) -> None:
+    client, access_code = _client(tmp_path)
+    base = f"{API_PREFIX}/learning-trail"
+    client.post(f"{API_PREFIX}/auth/login", json={"username": "alice", "access_code": access_code})
+
+    topics = client.get(f"{base}/topics")
+    assert topics.status_code == 200
+    assert topics.json() == {"topics": [], "coverage": {"practiced": [], "not_yet": []}}
+    assert client.get(f"{base}/draft").status_code == 404
+    assert client.delete(f"{base}/draft").status_code == 204
+    accepted = client.post(
+        f"{base}/draft/accept",
+        json={"week": 2, "build_title": "Glance", "reflection": "Dictation was poor."},
+    )
+    assert accepted.status_code == 201
+    assert accepted.json()["topics"] == []

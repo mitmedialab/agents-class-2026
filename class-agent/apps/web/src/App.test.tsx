@@ -29,6 +29,10 @@ vi.mock("./api.js", () => ({
   listConversations: vi.fn(),
   listLearningTrail: vi.fn(),
   listLearningTrailConnections: vi.fn(),
+  listLearningTrailTopics: vi.fn(),
+  getLearningTrailDraft: vi.fn(),
+  acceptLearningTrailDraft: vi.fn(),
+  discardLearningTrailDraft: vi.fn(),
   login: vi.fn(),
   logout: vi.fn(),
   markNotificationCenterItemRead: vi.fn(),
@@ -1447,6 +1451,7 @@ describe("Course Agent interface", () => {
         build_title: "Bedside agent",
         build_url: null,
         reflection: "The baseline was stale.",
+        topics: [],
         still_relevant: true,
         shared_with_staff: false,
         shared_with_class: false,
@@ -1456,6 +1461,11 @@ describe("Course Agent interface", () => {
       },
     ]);
     vi.mocked(api.listLearningTrailConnections).mockResolvedValue({});
+    vi.mocked(api.listLearningTrailTopics).mockResolvedValue({
+      topics: [],
+      coverage: { practiced: [], not_yet: [] },
+    });
+    vi.mocked(api.getLearningTrailDraft).mockResolvedValue(null);
     vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
     render(<App />);
     await openExistingConversation();
@@ -1465,7 +1475,7 @@ describe("Course Agent interface", () => {
     expect(await screen.findByRole("button", { name: /Bedside agent/ })).toBeInTheDocument();
     expect(api.streamAgentRun).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Ask the agent about my next build" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ask about my next build" }));
 
     await waitFor(() =>
       expect(api.streamAgentRun).toHaveBeenCalledWith(

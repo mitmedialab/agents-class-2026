@@ -3,6 +3,9 @@ import type {
   LearningTrailEntry,
   LearningTrailEntryDraft,
   LearningTrailConnection,
+  LearningTrailCoverage,
+  LearningTrailPendingDraft,
+  LearningTrailTopic,
   LearningTrailFeedbackDraft,
   LearningTrailStudent,
 } from "@class-agent/ui";
@@ -374,6 +377,44 @@ export async function listLearningTrailConnections(): Promise<
     connections: Record<string, LearningTrailConnection[]>;
   }>("/learning-trail/connections");
   return connections;
+}
+
+export async function listLearningTrailTopics(): Promise<{
+  topics: LearningTrailTopic[];
+  coverage: LearningTrailCoverage;
+}> {
+  return requestJson<{ topics: LearningTrailTopic[]; coverage: LearningTrailCoverage }>(
+    "/learning-trail/topics",
+  );
+}
+
+/** The entry the agent drafted from a debrief, or null when there is none. */
+export async function getLearningTrailDraft(): Promise<LearningTrailPendingDraft | null> {
+  try {
+    return await requestJson<LearningTrailPendingDraft>("/learning-trail/draft");
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+export function acceptLearningTrailDraft(
+  draft: LearningTrailEntryDraft,
+): Promise<LearningTrailEntry> {
+  return requestJson<LearningTrailEntry>("/learning-trail/draft/accept", {
+    method: "POST",
+    body: JSON.stringify(draft),
+  });
+}
+
+export async function discardLearningTrailDraft(): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/learning-trail/draft`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!response.ok) {
+    throw await responseError(response);
+  }
 }
 
 export function createLearningTrailEntry(

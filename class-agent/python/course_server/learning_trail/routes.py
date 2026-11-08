@@ -10,13 +10,16 @@ from pydantic import BaseModel
 from agent_core import PrincipalContext
 
 from .models import (
+    PendingDraft,
     SharedTrailSummary,
     StaffFeedbackDraft,
+    TopicCoverage,
     TrailConnection,
     TrailEntry,
     TrailEntryDraft,
     TrailEntryPatch,
     TrailFeedbackDraft,
+    TrailTopic,
 )
 from .service import (
     LearningTrailService,
@@ -33,6 +36,11 @@ class TrailResponse(BaseModel):
 
 class TrailConnectionsResponse(BaseModel):
     connections: dict[UUID, list[TrailConnection]]
+
+
+class TrailTopicsResponse(BaseModel):
+    topics: list[TrailTopic]
+    coverage: TopicCoverage
 
 
 class SharedStudentsResponse(BaseModel):
@@ -86,6 +94,54 @@ def build_learning_trail_router(
             )
         except _HANDLED as error:
             raise _http_error(error) from error
+
+    @router.get("/topics", response_model=TrailTopicsResponse)
+    async def list_topics(
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(require_principal)],
+    ) -> TrailTopicsResponse:
+        service = service_for(request)
+        try:
+            return TrailTopicsResponse(
+                topics=await service.topics(), coverage=await service.coverage(principal)
+            )
+        except _HANDLED as error:
+            raise _http_error(error) from error
+
+    @router.get("/draft", response_model=PendingDraft)
+    async def read_draft(
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(require_principal)],
+    ) -> PendingDraft:
+        try:
+            pending = await service_for(request).pending_draft(principal)
+        except _HANDLED as error:
+            raise _http_error(error) from error
+        if pending is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "no pending draft")
+        return pending
+
+    @router.post("/draft/accept", response_model=TrailEntry, status_code=status.HTTP_201_CREATED)
+    async def accept_draft(
+        draft: TrailEntryDraft,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(require_principal)],
+    ) -> TrailEntry:
+        try:
+            return await service_for(request).accept_draft(principal, draft)
+        except _HANDLED as error:
+            raise _http_error(error) from error
+
+    @router.delete("/draft", status_code=status.HTTP_204_NO_CONTENT)
+    async def discard_draft(
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(require_principal)],
+    ) -> Response:
+        try:
+            await service_for(request).discard_draft(principal)
+        except _HANDLED as error:
+            raise _http_error(error) from error
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     @router.post("/entries", response_model=TrailEntry, status_code=status.HTTP_201_CREATED)
     async def create_entry(

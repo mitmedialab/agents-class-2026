@@ -77,6 +77,7 @@ SEARCH_COURSE_TOOL_ID = "course.search"
 LIST_MY_COMMUNICATIONS_TOOL_ID = "course.list_my_communications"
 READ_MY_COMMUNICATION_TOOL_ID = "course.read_my_communication"
 MEMORY_GET_MINE_TOOL_ID = "memory.get_mine"
+MEMORY_PROPOSE_MINE_TOOL_ID = "memory.propose_mine"
 SUBMIT_APPLICATION_TOOL_ID = "course.submit_application"
 ASK_TA_TOOL_ID = "course.ask_ta"
 READ_UPLOAD_TOOL_ID = "upload.read"
@@ -2821,7 +2822,7 @@ class CourseCapabilityPolicy:
                     else ()
                 ),
                 *(
-                    (MEMORY_GET_MINE_TOOL_ID,)
+                    (MEMORY_GET_MINE_TOOL_ID, MEMORY_PROPOSE_MINE_TOOL_ID)
                     if self._learning_trail_enabled
                     and principal.authenticated
                     and "student" in principal.roles

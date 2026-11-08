@@ -6,8 +6,10 @@ import logging
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Protocol, cast
+from typing import Protocol, cast, runtime_checkable
 from uuid import UUID, uuid4
+
+from pydantic import JsonValue
 
 from agent_core import (
     AgentContext,
@@ -88,7 +90,11 @@ _PAGE_LOAD_GREETING_INPUT = (
     f"Keep the whole response short, generally no more than {_PAGE_LOAD_GREETING_MAX_WORDS} words. "
     "If no items are supplied, briefly welcome the person and choose a useful course-related "
     "suggestion. Decide the wording and priorities yourself. Do not invent updates, deadlines, or "
-    "completed checks."
+    "completed checks. "
+    "If this student's saved learning-trail memories are supplied and one of them bears on a "
+    "pending assignment or on this week's topic, add one sentence that connects them, cited by "
+    "week and build title, such as a plan they wrote down that this assignment is a chance to try, "
+    "or staff feedback they have not acted on yet. Otherwise do not mention the trail."
 )
 EventObserver = Callable[[Event], None]
 TextDeltaObserver = Callable[[str], None]
@@ -124,6 +130,13 @@ class MemorySelector(Protocol):
     """Supplies the current principal's own memories for one run's context."""
 
     async def select_memories(self, principal: PrincipalContext) -> list[Memory]: ...
+
+
+@runtime_checkable
+class MemoryOverviewProvider(Protocol):
+    """Optional platform-derived facts about the memories, such as course topics covered."""
+
+    async def memory_overview(self, principal: PrincipalContext) -> dict[str, JsonValue] | None: ...
 
 
 def _principal_references(principal: PrincipalContext) -> dict[str, UUID | None]:
@@ -455,9 +468,12 @@ class CourseAgentService:
         )
         selected_memories: list[Memory] = []
         memory_unavailable = False
+        memory_overview: dict[str, JsonValue] | None = None
         if self._memories is not None and principal.authenticated:
             try:
                 selected_memories = await self._memories.select_memories(principal)
+                if isinstance(self._memories, MemoryOverviewProvider):
+                    memory_overview = await self._memories.memory_overview(principal)
             except MemoryUnavailable:
                 logger.warning("Selected memories are unavailable for this run", exc_info=True)
                 memory_unavailable = True
@@ -484,6 +500,7 @@ class CourseAgentService:
                 ],
                 "attention_items": attention_items,
                 **({"memory_unavailable": True} if memory_unavailable else {}),
+                **({"memory_overview": memory_overview} if memory_overview is not None else {}),
             },
         )
         observed_method = getattr(self._runtime, "run_observed", None)

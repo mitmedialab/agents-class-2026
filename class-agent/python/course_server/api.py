@@ -109,6 +109,7 @@ from course_server.instructor_messages import (
 )
 from course_server.learning_trail import (
     ConnectionDocument,
+    FileDraftStore,
     FileTrailStore,
     LearningTrailService,
 )
@@ -933,6 +934,7 @@ def create_app(
             FileTrailStore(resolved_settings.learning_trail_data_path),
             student_name=lambda user_id: _display_name(auth_store, user_id),
             course_materials=_course_material_loader(lambda: course_resources),
+            drafts=FileDraftStore(resolved_settings.learning_trail_data_path),
         )
         instructor_message_store = PostgresInstructorMessageStore(pool)
         instructor_message_service = InstructorMessageService(

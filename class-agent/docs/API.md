@@ -18,6 +18,10 @@ POST /api/v1/notifications/{notification_id}/read
 
 GET    /api/v1/learning-trail
 GET    /api/v1/learning-trail/connections
+GET    /api/v1/learning-trail/topics
+GET    /api/v1/learning-trail/draft
+POST   /api/v1/learning-trail/draft/accept
+DELETE /api/v1/learning-trail/draft
 POST   /api/v1/learning-trail/entries
 PATCH  /api/v1/learning-trail/entries/{entry_id}
 DELETE /api/v1/learning-trail/entries/{entry_id}
