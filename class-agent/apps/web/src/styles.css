@@ -2749,6 +2749,12 @@ textarea {
   text-transform: uppercase;
 }
 
+.account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+}
+
 .trail-dialog {
   background: var(--color-surface);
   border-left: 1px solid var(--color-border);
@@ -2780,6 +2786,14 @@ textarea {
   overflow-y: auto;
   text-align: left;
   transform: none;
+}
+
+/* With a workspace open the stage starts under the fixed header, so the chat must not scroll
+   up behind it: the header's height becomes a margin instead of scrolling padding. */
+.course-agent[data-log-chat="true"][data-workspace-open="true"] .response-stage {
+  height: calc(100% - 5.5rem);
+  margin-top: 5.5rem;
+  padding-top: 0;
 }
 
 .course-agent[data-log-chat="true"] .response-stage-header {
@@ -3052,7 +3066,10 @@ textarea {
     z-index: 29;
   }
 
-  .course-agent:has(.mobile-view-switcher) .header-actions {
+  /* Beside the Chat and Notifications switcher only Your logs fits; the marks on the left
+     start a new chat. */
+  .course-agent:has(.mobile-view-switcher) .header-actions > :not(.logs-link),
+  .course-agent:has(.mobile-view-switcher) .header-new-chat {
     display: none;
   }
 
@@ -3388,6 +3405,11 @@ textarea {
   }
 
   .header-prompt {
+    display: none;
+  }
+
+  /* On a phone the header has no room for it; the logs drawer offers My builds instead. */
+  .header-my-builds {
     display: none;
   }
 

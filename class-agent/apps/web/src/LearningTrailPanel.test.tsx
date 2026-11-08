@@ -207,7 +207,7 @@ describe("LearningTrailPanel", () => {
     vi.mocked(api.getLearningTrailDraft).mockResolvedValue({
       draft: {
         week: 4,
-        build_title: "Night environment",
+        build_title: "Evaluation harness",
         build_url: null,
         reflection: "Replaying one night was enough to find the rule.",
         topics: ["course://slides/week-04"],
@@ -226,6 +226,8 @@ describe("LearningTrailPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Debrief this week with the agent" }));
     expect(onAsk).toHaveBeenLastCalledWith(expect.stringContaining("Week 4 build. Debrief me"));
 
+    expect(screen.getByText("Evaluation harness", { exact: false })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Review and save" }));
     const review = within(screen.getByRole("form", { name: "Review the drafted build" }));
     expect(review.getByLabelText("What did you learn, or what would you change?")).toHaveValue(
       "Replaying one night was enough to find the rule.",

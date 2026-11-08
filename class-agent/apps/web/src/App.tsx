@@ -2073,7 +2073,10 @@ export default function App() {
         </div>
         <div className="header-utility">
           {canUseTrail ? (
-            <Button className="header-new-chat" onClick={() => setTrailOpen(true)}>
+            <Button
+              className="header-new-chat header-my-builds"
+              onClick={() => setTrailOpen(true)}
+            >
               {principal?.roles.includes("student") ? "My builds" : "Student builds"}
             </Button>
           ) : null}
@@ -2588,9 +2591,21 @@ export default function App() {
                   <p className="account-name">
                     {principal.display_name || principal.username || "Course member"}
                   </p>
-                  <Button disabled={authSubmitting} onClick={() => void handleLogout()}>
-                    Log out
-                  </Button>
+                  <div className="account-actions">
+                    {canUseTrail ? (
+                      <Button
+                        onClick={() => {
+                          setHistoryOpen(false);
+                          setTrailOpen(true);
+                        }}
+                      >
+                        {principal.roles.includes("student") ? "My builds" : "Student builds"}
+                      </Button>
+                    ) : null}
+                    <Button disabled={authSubmitting} onClick={() => void handleLogout()}>
+                      Log out
+                    </Button>
+                  </div>
                 </>
               ) : (
                 <form className="login-form" onSubmit={(event) => void handleLogin(event)}>

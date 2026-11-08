@@ -1019,6 +1019,7 @@ export function LearningTrail({
   const [composingWeek, setComposingWeek] = useState<number | null>(null);
   const [openEntryId, setOpenEntryId] = useState<string | undefined>(focusEntryId);
   const [selectedEntryId, setSelectedEntryId] = useState<string | undefined>(focusEntryId);
+  const [reviewingDraft, setReviewingDraft] = useState(false);
   const weeksRef = useRef<HTMLOListElement>(null);
 
   useEffect(() => {
@@ -1030,11 +1031,15 @@ export function LearningTrail({
   }, [focusEntryId]);
 
   useEffect(() => {
-    // Opening a build closes the one before it, so bring the new one into view.
+    // Opening a build closes the one before it, so bring the new one into view. One the agent
+    // pointed at goes to the top, so the reader sees it before anything else.
     if (openEntryId === undefined) return;
     const row = weeksRef.current?.querySelector(`[data-entry-id="${CSS.escape(openEntryId)}"]`);
-    row?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
-  }, [openEntryId]);
+    row?.scrollIntoView?.({
+      behavior: "smooth",
+      block: openEntryId === focusEntryId ? "start" : "nearest",
+    });
+  }, [focusEntryId, openEntryId]);
 
   const latestWeek = entries.reduce((latest, entry) => Math.max(latest, entry.week), 0);
   const savedWeeks = new Set(entries.map((entry) => entry.week));
@@ -1084,17 +1089,42 @@ export function LearningTrail({
         )}
       {pendingDraft && onAcceptDraft && !readOnly ? (
         <section aria-label="Drafted from your debrief" className="ca-trail-draft">
-          <p className="ca-trail-note">
-            The agent drafted this from your debrief. Nothing is saved yet: change anything, then
-            save it, or discard it.
-          </p>
-          <EntryForm
-            draft={pendingDraft.draft}
-            key={pendingDraft.proposed_at}
-            onCancel={() => void onDiscardDraft?.()}
-            onSubmit={onAcceptDraft}
-            topics={topics}
-          />
+          {reviewingDraft ? (
+            <>
+              <p className="ca-trail-note">
+                The agent drafted this from your debrief. Nothing is saved yet: change anything,
+                then save it, or discard it.
+              </p>
+              <EntryForm
+                draft={pendingDraft.draft}
+                key={pendingDraft.proposed_at}
+                onCancel={() => setReviewingDraft(false)}
+                onSubmit={async (draft) => {
+                  await onAcceptDraft(draft);
+                  setReviewingDraft(false);
+                }}
+                topics={topics}
+              />
+            </>
+          ) : (
+            <div className="ca-trail-draft-summary">
+              <span className="ca-trail-row-week">Draft · Week {pendingDraft.draft.week}</span>
+              <span className="ca-trail-draft-title">{pendingDraft.draft.build_title}</span>
+              <span className="ca-trail-status">From your debrief. Not saved until you save it.</span>
+              <div className="ca-trail-actions">
+                <Button
+                  className="ca-trail-action"
+                  onClick={() => setReviewingDraft(true)}
+                  variant="outline"
+                >
+                  Review and save
+                </Button>
+                <Button className="ca-trail-action" onClick={() => void onDiscardDraft?.()}>
+                  Discard
+                </Button>
+              </div>
+            </div>
+          )}
         </section>
       ) : null}
       </header>

@@ -3014,7 +3014,22 @@
 
 .ca-trail-draft .ca-trail-form {
   border: 0;
+  max-width: 44rem;
   padding-top: 0;
+}
+
+.ca-trail-draft-summary {
+  display: grid;
+  gap: var(--space-1);
+  justify-items: start;
+}
+
+.ca-trail-draft-title {
+  font-size: 1.0625rem;
+}
+
+.ca-trail-draft-summary .ca-trail-actions {
+  margin-top: var(--space-2);
 }
 
 /* The skills map: course topics down the side, builds across the top. */
