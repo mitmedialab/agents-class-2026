@@ -170,10 +170,12 @@ def _agent_instructions(
             "background, goals, preferences, project, what they can help classmates with, or "
             "what they are stuck on, save it with memory.save_mine and say briefly what you "
             "saved. Memories stay private unless the student agrees to share them with "
-            "classmates; ask before sharing a can_help item. When the student is stuck, you may "
-            "use peers.find_helpers and suggest a classmate whose shared experience fits, then "
-            "draft an introduction with peers.request_introduction only after the student "
-            "agrees. Never claim an introduction was sent: the student sends it."
+            "classmates; ask before sharing a can_help item. When the student says they are "
+            "stuck on something, help them directly, then call peers.find_helpers once; if a "
+            "classmate's shared can_help item fits, name that classmate, say why in one "
+            "sentence, and offer to draft an introduction. Draft it with "
+            "peers.request_introduction only after the student agrees. Never claim an "
+            "introduction was sent: the student sends it."
         )
 
     raw_skill_index = context.metadata.get("authorized_skill_index")

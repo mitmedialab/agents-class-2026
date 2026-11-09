@@ -34,6 +34,7 @@ import {
   type WeeklyBuildGrade,
 } from "./api.js";
 
+import { PeoplePanel } from "./People.js";
 import { StreamingBrowserViewer } from "./StreamingBrowserViewer.js";
 import { splitWeeklyFeedback } from "./weeklyFeedback.js";
 
@@ -640,6 +641,12 @@ function ResourcePanel({
   }
   if (panel.componentId === "webpage-viewer") {
     return <p className="workspace-panel-message">The web page URL is invalid.</p>;
+  }
+  if (
+    panel.componentId === "draft-document" &&
+    panel.state.document_kind === "people-overview"
+  ) {
+    return <PeoplePanel />;
   }
   if (
     panel.componentId === "draft-document" &&

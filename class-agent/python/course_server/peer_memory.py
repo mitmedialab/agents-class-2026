@@ -852,10 +852,11 @@ class SaveMyMemoryTool:
         "Remember one durable fact the logged-in student just told you about themself: "
         "background, goal, preference, current project, something they can help classmates "
         "with (can_help), or something they need help with (needs_help). Write it as a short "
-        "third-person sentence in your own words. Save only what the student said, never "
-        "guesses, grades or third parties' information. Set share_with_classmates true only "
-        "when the student agreed that classmates may see it for introductions; otherwise it "
-        "stays private to the student. Tell the student what you saved."
+        "sentence in your own words that uses the student's name and no pronouns. Save only "
+        "what the student said, never guesses, grades or third parties' information. Set "
+        "share_with_classmates true only when the student agreed that classmates may see it "
+        "for introductions; otherwise it stays private to the student. Tell the student what "
+        "you saved."
     )
     input_schema: ClassVar[dict[str, JsonValue]] = {
         "type": "object",

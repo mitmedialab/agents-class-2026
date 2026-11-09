@@ -1,6 +1,5 @@
 """Owner-scoped HTTP routes for the People panel (memories and peer introductions)."""
 
-
 from collections.abc import Awaitable, Callable
 from typing import Annotated, Literal
 from uuid import UUID

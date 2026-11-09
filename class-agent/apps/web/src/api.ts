@@ -188,6 +188,74 @@ export function getMyAssignmentFeedback(
   );
 }
 
+export type MemoryKind =
+  | "background"
+  | "goal"
+  | "preference"
+  | "project"
+  | "can_help"
+  | "needs_help";
+export type MemoryPrivacy = "personal" | "course_private";
+
+export interface StudentMemory {
+  id: string;
+  kind: MemoryKind;
+  content: string;
+  privacy: MemoryPrivacy;
+  source_excerpt: string | null;
+  edited_by_student: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PeerIntroduction {
+  id: string;
+  direction: "outgoing" | "incoming";
+  other: { username: string; display_name: string };
+  topic: string;
+  message: string;
+  status: "draft" | "sent" | "accepted" | "declined" | "unavailable" | "cancelled";
+  created_at: string;
+  responded_at: string | null;
+}
+
+export interface PeopleOverview {
+  memories: StudentMemory[];
+  introductions: PeerIntroduction[];
+}
+
+export function getMyPeople(): Promise<PeopleOverview> {
+  return requestJson<PeopleOverview>("/people/mine");
+}
+
+export function updateMyMemory(
+  memoryId: string,
+  update: { content?: string; privacy?: MemoryPrivacy },
+): Promise<{ memory: StudentMemory }> {
+  return requestJson<{ memory: StudentMemory }>(
+    `/people/mine/memories/${encodeURIComponent(memoryId)}`,
+    { method: "PATCH", body: JSON.stringify(update) },
+  );
+}
+
+export async function deleteMyMemory(memoryId: string): Promise<void> {
+  const response = await fetch(
+    `${API_BASE_URL}/people/mine/memories/${encodeURIComponent(memoryId)}`,
+    { method: "DELETE", credentials: "include" },
+  );
+  if (!response.ok) throw await responseError(response);
+}
+
+export function actOnIntroduction(
+  introductionId: string,
+  action: "send" | "cancel" | "accept" | "decline",
+): Promise<{ introductions: PeerIntroduction[] }> {
+  return requestJson<{ introductions: PeerIntroduction[] }>(
+    `/people/mine/introductions/${encodeURIComponent(introductionId)}`,
+    { method: "POST", body: JSON.stringify({ action }) },
+  );
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -455,7 +523,7 @@ export function applyWorkspacePanelAction(
 
 export function openStaticWorkspace(
   conversationId: Uuid,
-  target: "schedule" | "grading" | "notification" | "assignment",
+  target: "schedule" | "grading" | "notification" | "assignment" | "people",
   notificationId?: Uuid,
   assignmentId?: string,
 ): Promise<Event> {

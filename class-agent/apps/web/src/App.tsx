@@ -141,6 +141,7 @@ const HEADER_PROMPTS = [
   { label: "Schedule", staticTarget: "schedule" },
   { label: "Grading", staticTarget: "grading" },
 ] as const;
+const PEOPLE_PROMPT = { label: "People", staticTarget: "people" } as const;
 const STUDENT_CONTACT_PROMPT = {
   label: "Contact",
   message: "I'd like to email the course instructors. Help me prepare a question for course staff using the available email tool.",
@@ -1226,7 +1227,7 @@ export default function App() {
   }
 
   async function openStatic(
-    target: "schedule" | "grading" | "notification" | "assignment",
+    target: "schedule" | "grading" | "notification" | "assignment" | "people",
     notification?: NotificationCenterItem,
     assignmentId?: string,
   ): Promise<boolean> {
@@ -1247,7 +1248,7 @@ export default function App() {
     let createdConversation = false;
     try {
       if (!conversationId) {
-        const title = notification?.title ?? (target === "grading" ? "Grading" : target === "assignment" ? "Weekly build" : "Schedule");
+        const title = notification?.title ?? (target === "grading" ? "Grading" : target === "assignment" ? "Weekly build" : target === "people" ? "People" : "Schedule");
         const created = await createConversation(titleFromMessage(title));
         if (generation !== staticOpenGeneration.current) return false;
         conversationId = created.id;
@@ -2063,9 +2064,12 @@ export default function App() {
         ? STUDENT_CONTACT_PROMPT
         : null
     : null;
-  const headerPrompts = HEADER_PROMPTS.map((prompt) =>
-    prompt.label === "Apply" && contactPrompt ? contactPrompt : prompt,
-  );
+  const headerPrompts = [
+    ...HEADER_PROMPTS.map((prompt) =>
+      prompt.label === "Apply" && contactPrompt ? contactPrompt : prompt,
+    ),
+    ...(principal?.authenticated && principal.roles.includes("student") ? [PEOPLE_PROMPT] : []),
+  ];
   return (
     <div
       className="course-agent"
