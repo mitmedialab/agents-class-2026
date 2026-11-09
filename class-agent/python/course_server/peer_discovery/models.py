@@ -61,6 +61,7 @@ class Recommendation(StrictModel):
 
 
 class SavedRecommendation(Recommendation):
+    source_hash: str | None = None
     profile: LearningProfile
     created_at: str = Field(default_factory=now)
 

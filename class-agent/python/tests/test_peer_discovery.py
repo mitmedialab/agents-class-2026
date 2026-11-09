@@ -8,7 +8,14 @@ import pytest
 
 from agent_core import PrincipalContext
 from course_server.agent.capabilities import ToolExecutionContext, ToolValidationError
-from course_server.peer_discovery.models import Build, Feedback, ProfileUpdate, Recommendation
+from course_server.peer_discovery.models import (
+    Build,
+    Catalog,
+    Feedback,
+    ProfileUpdate,
+    Recommendation,
+    StudentMemory,
+)
 from course_server.peer_discovery.service import PeerDiscovery, within_site
 from course_server.peer_discovery.store import PeerStore
 from course_server.peer_discovery.tools import PeerTool
@@ -286,7 +293,7 @@ def test_cross_topic_pair_suggests_a_transfer_from_the_peer_method(service: Peer
     catalog = service.store.catalog().model_copy(update={"builds": [own, peer]})
     assert user.user_id is not None
     reason = service.atlas(user, service.store.student(user.user_id), catalog)["pairs"][0]["reason"]
-    assert "several agents" in reason and "two readings of the same artwork" in reason
+    assert "several agents" in reason and "two interpretations" in reason
 
 
 def test_weekly_pair_uses_saved_recommendation_reason(service: PeerDiscovery) -> None:
@@ -301,3 +308,97 @@ def test_weekly_pair_uses_saved_recommendation_reason(service: PeerDiscovery) ->
     ][0]
     assert pair["reason"] == rec.reason
     assert pair["borrow"] == rec.borrow
+
+
+def test_weekly_matching_finds_a_shared_method_outside_preset_topics(
+    service: PeerDiscovery,
+) -> None:
+    user = student("grace")
+    peer, mine = sorted(seed(service, user), key=lambda b: b.project_id)
+    peer = peer.model_copy(
+        update={
+            "title": "Loam",
+            "content": "We compare soil porosity by weighing the same sample after each rainfall.",
+        }
+    )
+    mine = mine.model_copy(
+        update={
+            "title": "Planter trials",
+            "content": "Our planter tracks soil porosity for every tray during the growing season.",
+        }
+    )
+    unrelated = peer.model_copy(
+        update={
+            "id": "unrelated",
+            "title": "Weaving",
+            "content": "A foot pedal changes the tension on a weaving loom.\n# References\n"
+            + mine.content,
+        }
+    )
+    catalog = service.store.catalog().model_copy(update={"builds": [mine, peer, unrelated]})
+    for name, expected in [("grace", peer), ("ada", mine)]:
+        principal = student(name)
+        assert principal.user_id is not None
+        pairs = service.atlas(principal, service.store.student(principal.user_id), catalog)["pairs"]
+        assert any(p["peer"] == expected.id and "soil porosity" in p["reason"] for p in pairs)
+        assert all(p["peer"] != unrelated.id for p in pairs)
+
+
+def test_week_seven_matches_teams_and_respects_individual_dismissals(
+    service: PeerDiscovery,
+) -> None:
+    pages = {
+        "raine": "week07/",
+        "david": "week07/index.html",
+        "brooke": "week07/",
+        "jad": "weeks/week-07.html",
+    }
+    sites = {
+        f"agents2026-{name}": f"https://mitmedialab.github.io/agents2026-{name}/"
+        for name in (*pages, "stacey", "hyung", "manasi")
+    }
+    builds = [
+        Build(
+            id=name,
+            project_id="agents2026-" + name,
+            week=7,
+            title="Proposal",
+            source_url=sites["agents2026-" + name] + path,
+            content="Proposal slides",
+            source_hash="source",
+            observed_at="2026-11-03",
+        )
+        for name, path in pages.items()
+    ]
+    cat = Catalog(sites=sites, builds=builds)
+    for name in ("raine", "stacey"):
+        results = service.atlas(student(name), StudentMemory(), cat)["pairs"]
+        assert len(results) == 2 and {r["mine"] for r in results} == {"raine"}
+        assert any("two readings" in r["reason"] for r in results)
+        assert any("visitor noticed" in r["reason"] for r in results)
+    for name in ("david", "brooke", "jad", "hyung", "manasi"):
+        assert len(service.atlas(student(name), StudentMemory(), cat)["pairs"]) == 2
+    memory = StudentMemory(feedback=[Feedback(build_id="brooke", rating="not_relevant")])
+    assert [p["peer"] for p in service.atlas(student("raine"), memory, cat)["pairs"]] == ["jad"]
+
+
+def test_scheduled_scan_reuses_fresh_public_sources_and_warm_open_skips_network(
+    service: PeerDiscovery,
+) -> None:
+    # Exercise separate service instances as after a restart: the daily check
+    # must honor persisted source timestamps, independently of an in-memory timer.
+    asyncio.run(service.refresh_due())
+    assert len(service.store.catalog().builds) == 2
+    assert all("full_checked_at" in entry for entry in service.store.catalog().coverage.values())
+    visits = []
+
+    def visit_again(url: str) -> dict[str, object]:
+        visits.append(url)
+        return visit(url)
+
+    restarted = PeerDiscovery(service.store, service.projects, visit_again)
+    asyncio.run(restarted.refresh_due())
+    assert visits == []
+    restarted.projects = None  # type: ignore[assignment]
+    assert asyncio.run(restarted.prepare_weekly(student("ada")))["indexed_builds"] == 2
+    assert not visits

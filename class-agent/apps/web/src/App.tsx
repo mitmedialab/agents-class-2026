@@ -2159,6 +2159,18 @@ export default function App() {
               >
                 About
               </Button>
+              {principal?.roles.includes("student") && (
+                <Button
+                  className="about-link peer-learning-link"
+                  disabled={
+                    isInitializing || isOpeningStatic || isRunning || isUploading ||
+                    Boolean(awaitingConfirmationAction) || timelinePull !== null
+                  }
+                  onClick={() => void openStatic("peer-learning")}
+                >
+                  Peer learning
+                </Button>
+              )}
               <a className="about-link" href="/ai-connect">
                 Connect AI
               </a>
@@ -2598,15 +2610,6 @@ export default function App() {
             <Button className="new-conversation" onClick={startNewConversation} variant="outline">
               New conversation
             </Button>
-
-            {principal?.roles.includes("student") && (
-              <Button className="new-conversation drawer-peer-learning" variant="outline"
-                disabled={isInitializing || isOpeningStatic || isRunning || isUploading || Boolean(awaitingConfirmationAction) || timelinePull !== null}
-                onClick={() => void openStatic("peer-learning")}
-              >
-                Peer learning
-              </Button>
-            )}
 
             <nav aria-label="Conversations" className="conversation-navigation">
               <p className="drawer-label">Conversations</p>

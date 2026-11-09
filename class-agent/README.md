@@ -181,12 +181,13 @@ repository derived from their trusted account username. The credential remains s
 configured organization, prefix, and exclusions are enforced in platform code. See
 [docs/STUDENT_PROJECTS.md](docs/STUDENT_PROJECTS.md).
 
-Students can open **Your logs → Peer learning → My Weekly Paired Stars** to see their
-indexed build alongside another student's work from the same week. Opening the panel
-checks the course project directory and reuses a shared index of public portfolio pages.
+Week 7 includes reviewed project methods and team bylines from three public proposals. The matcher connects a method one group offers to an experiment another group could try. Students on the same team share their proposal and retain individual feedback. The proposal link opens the source deck. Other builds use the weekly text matcher.
+
+Students can open **top menu → Peer learning → My Weekly Paired Stars** to see their
+indexed build alongside another student's work from the same week. The running API checks the authorized course directory hourly and refreshes portfolios last scanned at least 24 hours ago. It reads public pages without a model call. Opening the panel reuses the shared index.
 The first visit on an empty installation may take longer. Same-week matches require an
 indexed build for the signed-in student's roster project and an eligible peer build.
-The pair card explains a shared topic or saved focus supported by the write-ups and suggests what to compare. Automatic pairs require a supported shared topic, a saved focus, or a method the student could try in their own project. A common assignment alone does not qualify. Saved agent recommendations show their recorded rationale.
+The pair card explains a shared topic or saved focus supported by the write-ups and suggests what to compare. Automatic pairs require a supported shared topic, a saved focus, or a method the student could try in their own project. A common assignment alone does not qualify. In chat, the Course Agent receives up to four candidates per search, reads the student’s build and relevant peers, and can save a source-backed rationale. The weekly page reuses it while its peer evidence and student profile remain current.
 **Not for me** dismisses that build for the current account. Students can edit their
 goals and long-term focus in matching preferences. Their preferences, saved works and
 feedback are stored per account in the server's private `PEER_DISCOVERY_PATH` directory.

@@ -14,7 +14,7 @@ from uuid import UUID
 
 from agent_core import PrincipalContext
 from course_server.agent.capabilities import ToolValidationError, WebVisitRunner
-from course_server.student_projects import StudentProjectCatalog
+from course_server.student_projects import StudentProject, StudentProjectCatalog
 
 from .models import (
     Build,
@@ -27,8 +27,9 @@ from .models import (
     StudentMemory,
     now,
 )
-from .pair_reason import pair_reason
-from .preview import clean_title, evidence_passages, project_description
+from .pair_reason import build_profile, match_builds, terms
+from .preview import clean_title, project_description
+from .proposals import belongs_to, proposal_for, transfer
 from .retrieval import query_terms
 from .store import PeerStore
 
@@ -104,28 +105,40 @@ class PeerDiscovery:
     async def prepare_weekly(self, principal: PrincipalContext) -> dict[str, object]:
         """Reuse the public catalog across students; rank separately for each request."""
         student_id(principal)
-        async with self._prepare_lock:
-            if time.monotonic() >= self._next_directory_check:
-                try:
-                    roster = await asyncio.to_thread(self.projects.list_projects)
-                    coverage = self.store.catalog().coverage
-                    cutoff = (datetime.now(UTC) - timedelta(hours=6)).isoformat()
-                    stale = [
-                        p.id
-                        for p in roster
-                        if p.site_url and coverage.get(p.id, {}).get("checked_at", "") < cutoff
-                    ]
-                    for start in range(0, len(stale), 8):
-                        await self.refresh(principal, stale[start : start + 8], [])
-                    self._next_directory_check = time.monotonic() + 300
-                except Exception as error:
-                    logging.getLogger(__name__).warning("Weekly peer source refresh unavailable")
-                    self._next_directory_check = time.monotonic() + 30
-                    if not self.store.catalog().builds:
-                        raise ToolValidationError(
-                            "Course websites could not be read. Try again shortly."
-                        ) from error
+        if not self.store.catalog().builds:
+            try:
+                await self.refresh_due()
+            except Exception as error:
+                raise ToolValidationError(
+                    "Course websites could not be read. Try again shortly."
+                ) from error
         return self.context(principal)
+
+    async def refresh_due(self) -> None:
+        async with self._prepare_lock:
+            with self.store.refresh_slot() as acquired:
+                if not acquired or time.monotonic() < self._next_directory_check:
+                    return
+                self._next_directory_check = time.monotonic() + 60
+                roster = {p.id: p for p in await asyncio.to_thread(self.projects.list_projects)}
+                coverage = self.store.catalog().coverage
+                cutoff = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+                stale = [
+                    p.id
+                    for p in roster.values()
+                    if p.site_url and coverage.get(p.id, {}).get("full_checked_at", "") < cutoff
+                ]
+                for start in range(0, len(stale), 8):
+                    await self._refresh_public(stale[start : start + 8], [], roster)
+
+    async def maintain_catalog(self) -> None:
+        """Public pages only. Personal memory and model providers are outside this job."""
+        while True:
+            try:
+                await self.refresh_due()
+            except Exception:
+                logging.getLogger(__name__).warning("Scheduled peer catalog refresh unavailable")
+            await asyncio.sleep(3600)
 
     def context(self, principal: PrincipalContext) -> dict[str, object]:
         memory = self.store.student(student_id(principal))
@@ -145,7 +158,7 @@ class PeerDiscovery:
             "coverage": catalog.coverage,
             "indexed_builds": len(catalog.builds),
             "privacy": "Your learning profile and feedback are private to your student account.",
-            "freshness": "Opening weekly pairs checks for new course builds.",
+            "freshness": "The Course Agent refreshes public sources daily while running.",
         }
 
     def atlas(
@@ -172,15 +185,25 @@ class PeerDiscovery:
             "Social connection",
         )
         works = [b for b in catalog.builds if b.project_id in catalog.sites and b.week]
+        student_project = self.own_project(principal)
         builds: list[dict[str, object]] = [
             {
                 "id": b.id,
                 "author": b.project_id,
-                "title": b.title,
+                "title": group.title if (group := proposal_for(b)) else b.title,
+                **(
+                    {
+                        "team": list(group.members.values()),
+                        "ownTeam": student_project in group.members,
+                        "proposalSource": group.source,
+                    }
+                    if group
+                    else {}
+                ),
                 "week": b.week,
                 "url": b.source_url,
                 "image": b.image_url,
-                "excerpt": project_description(b.content, b.title),
+                "excerpt": group.summary if group else project_description(b.content, b.title),
                 "domain": next(
                     (
                         d
@@ -192,44 +215,44 @@ class PeerDiscovery:
             }
             for b in works
         ]
-        own = {b.week: b for b in works if b.project_id == self.own_project(principal)}
+
+        # Two authors may publish the same proposal. Use one representative for
+        # ranking, keeping existing build IDs for stars, source links and feedback.
+        def work_key(b: Build) -> str:
+            group = proposal_for(b)
+            return group.source if group else b.id
+
+        dismissed_ids = self.dismissed(memory)
+        dismissed_works = {work_key(b) for b in works if b.id in dismissed_ids}
+        originals = {}
+        for work in works:
+            key = work_key(work)
+            if key not in originals or work.project_id == student_project:
+                originals[key] = work
+        ranked_works = list(originals.values())
+        own = {b.week: b for b in ranked_works if belongs_to(b, student_project)}
         by_id = {b.id: b for b in works}
-        pairs = [
-            {"mine": own[b.week].id, "peer": b.id, "borrow": r.borrow, "reason": r.reason}
-            for r in memory.recommendations
-            if (b := by_id.get(r.build_id)) and b.week in own and b.id not in self.dismissed(memory)
-        ]
-        excluded = self.dismissed(memory)
-        ignored = {
-            "that",
-            "this",
-            "with",
-            "from",
-            "week",
-            "build",
-            "agent",
-            "agents",
-            "course",
-            "https",
-            "github",
-            "project",
-            "about",
-            "what",
-            "have",
-            "they",
-            "will",
-            "their",
-            "into",
-            "when",
-            "which",
-            "some",
-            "more",
-            "using",
-        }
-
-        def terms(text: str) -> set[str]:
-            return set(re.findall(r"[a-z]{4,}", text.casefold())) - ignored
-
+        pairs = []
+        seen_saved: set[tuple[str, str]] = set()
+        for rec in reversed(memory.recommendations):
+            saved = by_id.get(rec.build_id)
+            if (
+                not saved
+                or saved.week not in own
+                or belongs_to(saved, student_project)
+                or rec.profile != memory.profile
+                or (rec.source_hash and rec.source_hash != saved.source_hash)
+                or (not rec.source_hash and rec.evidence_quote not in saved.content)
+            ):
+                continue
+            pair_key = (own[saved.week].id, work_key(saved))
+            if pair_key in seen_saved or pair_key[1] in dismissed_works:
+                continue
+            seen_saved.add(pair_key)
+            pairs.append(
+                {"mine": pair_key[0], "peer": saved.id, "borrow": rec.borrow, "reason": rec.reason}
+            )
+        pairs.reverse()
         focus = terms(
             " ".join(
                 [
@@ -240,43 +263,29 @@ class PeerDiscovery:
                 ]
             )
         )
-        for week, mine in own.items():
+        profiles = {b.id: build_profile(b.title, b.content) for b in works}
+        for mine in ranked_works:
+            if not belongs_to(mine, student_project):
+                continue
             existing = {p["peer"] for p in pairs if p["mine"] == mine.id}
-            candidates = [
-                b
-                for b in works
-                if b.week == week
-                and b.project_id != mine.project_id
-                and b.id not in excluded | existing
-            ]
-            vocabulary = {b.id: terms(b.title + " " + b.content) for b in candidates}
-            frequency = Counter(word for words in vocabulary.values() for word in words)
-            anchor = terms(mine.title + " " + mine.content)
-
-            scores = {
-                key: 5 * len(words & focus) + sum(1 / frequency[t] for t in words & anchor)
-                for key, words in vocabulary.items()
-            }
-            for peer in sorted(candidates, key=lambda b: (-scores[b.id], b.id)):
-                if len(existing) >= 2:
-                    break
-                passages = evidence_passages(peer.content)
-                if not passages:
+            used = {work_key(by_id[k]) for k in existing}
+            cohort = [b for b in ranked_works if b.week == mine.week]
+            frequency = Counter(term for b in cohort for term in profiles[b.id].vocabulary)
+            ranked = []
+            for peer in cohort:
+                if belongs_to(peer, student_project) or work_key(peer) in dismissed_works | used:
                     continue
-                reason = pair_reason(
-                    mine, peer, anchor & vocabulary[peer.id], focus & vocabulary[peer.id], frequency
+                mine_group, peer_group = proposal_for(mine), proposal_for(peer)
+                match = (
+                    transfer(mine_group, peer_group, focus) if mine_group and peer_group else None
                 )
-                if not reason:
-                    continue
-                existing.add(peer.id)
-                pairs.append(
-                    {
-                        "mine": mine.id,
-                        "peer": peer.id,
-                        "reason": reason,
-                        "borrow": reason,
-                    }
-                )
+                if not match:
+                    match = match_builds(profiles[mine.id], profiles[peer.id], focus, frequency)
+                if match:
+                    score, reason = match
+                    ranked.append((-score, peer.id, reason))
+            for _, peer_id, reason in sorted(ranked)[: max(0, 2 - len(existing))]:
+                pairs.append({"mine": mine.id, "peer": peer_id, "reason": reason, "borrow": reason})
         return {
             "ownAuthor": self.own_project(principal),
             "authors": authors,
@@ -348,6 +357,11 @@ class PeerDiscovery:
         if any(p not in roster for p in project_ids):
             raise ToolValidationError("Choose project IDs from the authorized course directory.")
 
+        return await self._refresh_public(project_ids, weeks, roster)
+
+    async def _refresh_public(
+        self, project_ids: list[str], weeks: list[int], roster: dict[str, StudentProject]
+    ) -> dict[str, object]:
         def remember_sites(catalog: Catalog) -> None:
             catalog.sites.update(
                 {
@@ -454,7 +468,9 @@ class PeerDiscovery:
                             record.title = previous.reviewed_title
                         by_id[record.id] = record
                     catalog.builds = list(by_id.values())
+                    last_full = catalog.coverage.get(project_id, {}).get("full_checked_at", "")
                     catalog.coverage[project_id] = {
+                        "full_checked_at": last_full if weeks else stamp,
                         "checked_at": stamp,
                         **statuses,
                         "limit": f"Read up to {MAX_PAGES_PER_PROJECT} discovered weekly pages.",
@@ -507,7 +523,7 @@ class PeerDiscovery:
         candidates = [
             b
             for b in catalog.builds
-            if b.project_id != self.own_project(principal)
+            if not belongs_to(b, self.own_project(principal))
             and b.id not in dismissed
             and (week is None or b.week == week)
         ]
@@ -553,7 +569,9 @@ class PeerDiscovery:
         if not 1 <= len(picks) <= 4 or len({p.build_id for p in picks}) != len(picks):
             raise ToolValidationError("Choose one to four distinct source-supported builds.")
         catalog = {b.id: b for b in self.store.catalog().builds}
-        eligible = {b.id for b in catalog.values() if b.project_id != self.own_project(principal)}
+        eligible = {
+            b.id for b in catalog.values() if not belongs_to(b, self.own_project(principal))
+        }
         if len(eligible & seen.keys()) < min(2, len(eligible)):
             raise ToolValidationError(
                 "Read at least two eligible candidate sources for comparison."
@@ -578,7 +596,11 @@ class PeerDiscovery:
                 r for r in memory.recommendations if r.build_id not in {p.build_id for p in picks}
             ]
             memory.recommendations.extend(
-                SavedRecommendation(**p.model_dump(), profile=memory.profile.model_copy(deep=True))
+                SavedRecommendation(
+                    **p.model_dump(),
+                    profile=memory.profile.model_copy(deep=True),
+                    source_hash=catalog[p.build_id].source_hash,
+                )
                 for p in picks
             )
             memory.recommendations = memory.recommendations[-100:]

@@ -155,3 +155,15 @@ it("shows the agent's result set and sends only the student's edited message", a
   expect(sendMessage).toHaveBeenCalledWith("b","How did you test the board?",expect.any(String));
   expect(await screen.findByText("Message sent.")).toBeVisible();
 });
+
+it("keeps a failed message draft and shows the delivery error on its pair card", async () => {
+  const sendMessage = vi.fn().mockRejectedValue(new Error("Course messaging is unavailable."));
+  setup({data:{...peerFixture,atlas},sendMessage});
+  fireEvent.click(screen.getByRole("button",{name:"Connect"}));
+  const draft = screen.getByRole("textbox", {name:"Message to Ada"});
+  fireEvent.change(draft, {target:{value:"Could you share the sensor setup?"}});
+  fireEvent.click(screen.getByRole("button",{name:"Send"}));
+  const error = await screen.findByRole("alert");
+  expect(error.closest(".atlas-pair")).toBe(draft.closest(".atlas-pair"));
+  expect(draft).toHaveValue("Could you share the sensor setup?");
+});

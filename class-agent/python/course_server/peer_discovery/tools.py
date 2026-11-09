@@ -15,6 +15,7 @@ from course_server.workspace.registry import ComponentRegistry
 from course_server.workspace.tools import WorkspaceOpenComponentTool
 
 from .models import ProfileUpdate, Recommendation, StrictModel
+from .proposals import belongs_to, proposal_for
 from .service import PeerDiscovery, student_id
 
 
@@ -81,14 +82,16 @@ _DESCRIPTIONS = {
         "Refresh public weekly pages discovered from 1-8 listed course project "
         "websites. Get project IDs from course.list_student_projects. Optional weeks "
         "restrict scope. Reports coverage and failures, not proof of missing "
-        "submissions. Repeat bounded batches when necessary; no guessed URLs or "
-        "scheduled crawler. "
+        "submissions. The API refreshes the shared catalog daily. Refresh manually only "
+        "for missing or outdated evidence; use discovered URLs. "
     ),
     "query_builds": (
         "Retrieve a lexical shortlist from the indexed public peer-build catalog. Use "
         "current needs and saved profile; semantic comparison remains the Course "
         "Agent's job. Excludes own and dismissed builds. Read multiple candidate "
-        "sources next. "
+        "sources next. For a weekly pair, read the student's own build and two to four "
+        "eligible peers. Compare actual methods and evidence. The shortlist and reviewed "
+        "proposal notes are starting points. Skip weak pairs, including week-only matches. "
     ),
     "read_build": (
         "Read the stored public source snapshot of an indexed weekly build, including "
@@ -128,7 +131,18 @@ class PeerTool:
         service, principal = self.service, context.principal
         seen_key = "peer_read_builds"
         if self.operation == "get_context":
-            result = service.context(principal)
+            catalog = service.store.catalog()
+            memory = service.store.student(user)
+            own = [b for b in catalog.builds if belongs_to(b, service.own_project(principal))]
+            result = {
+                "profile": memory.profile.model_dump(),
+                "recent_feedback": [f.model_dump() for f in memory.feedback[-8:]],
+                "own_builds": [
+                    {"id": b.id, "title": b.title, "week": b.week}
+                    for b in sorted(own, key=lambda b: b.week or 0, reverse=True)[:14]
+                ],
+                "indexed_builds": len(catalog.builds),
+            }
         elif isinstance(request, ProfileUpdate):
             result = service.update_profile(
                 principal,
@@ -141,7 +155,16 @@ class PeerTool:
         elif isinstance(request, Refresh):
             result = await service.refresh(principal, request.project_ids, request.weeks)
         elif isinstance(request, Query):
-            result = service.query(principal, request.query, request.week)
+            shortlist = service.query(principal, request.query, request.week)
+            rows = shortlist["candidates"]
+            assert isinstance(rows, list)
+            result = {
+                "candidates": [
+                    {key: row[key] for key in ("id", "title", "week", "project_id", "source_url")}
+                    for row in rows[:4]
+                ],
+                "indexed_builds": shortlist["indexed_builds"],
+            }
         elif isinstance(request, Read):
             build = service.read_build(principal, request.build_id)
             seen = context.transient_state.setdefault(seen_key, {})
@@ -149,6 +172,13 @@ class PeerTool:
                 raise ToolValidationError("Invalid source-read state.")
             seen[build.id] = build.source_hash
             result = build.model_dump(mode="json")
+            if group := proposal_for(build):
+                result["reviewed_proposal"] = {
+                    "title": group.title,
+                    "summary": group.summary,
+                    "methods": group.offers,
+                    "source": group.source,
+                }
         elif isinstance(request, Save):
             seen = context.transient_state.get(seen_key, {})
             if not isinstance(seen, dict):

@@ -2,6 +2,9 @@
 
 Run only in an isolated local test deployment:
 PYTHONPATH=python:examples uv run uvicorn peer_recording:create_recording_app --factory
+For local course-inbox QA, set MCP_MESSAGING_ENABLED=true and MAIL_ENABLED=true
+with the isolated QA roster and database. Inbox delivery runs in the API process.
+External email delivery is performed separately by the mail worker.
 Use the ordinary Course Agent factory for model-backed operation.
 """
 
@@ -41,7 +44,7 @@ class RecordingModel(Model):
                 return "workspace_review_presentation", {"decision": "no_visual"}
             return "final_answer", {
                 "answer": (
-                    "Local scripted demo. Explore your weekly pairs in Your logs, "
+                    "Local scripted demo. Open Peer learning in the top menu for your weekly pairs, "
                     "or ask the hardware prototype example question to see peer builds in "
                     "the workspace."
                 )

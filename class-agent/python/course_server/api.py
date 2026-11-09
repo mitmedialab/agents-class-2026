@@ -1070,9 +1070,16 @@ def create_app(
                 max_upload_bytes=resolved_settings.anonymous_max_upload_bytes,
             ),
         )
+        peer_refresh = (
+            asyncio.create_task(peer_service.maintain_catalog()) if peer_service else None
+        )
         try:
             yield
         finally:
+            if peer_refresh is not None:
+                peer_refresh.cancel()
+                with suppress(asyncio.CancelledError):
+                    await peer_refresh
             app.state.course_state.services = None
             if browser_service is not None:
                 await browser_service.close()

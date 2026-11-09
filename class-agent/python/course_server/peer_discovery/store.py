@@ -31,6 +31,18 @@ class PeerStore:
             fcntl.flock(lock, fcntl.LOCK_EX)
             yield
 
+    @contextmanager
+    def refresh_slot(self) -> Iterator[bool]:
+        """One scheduled scan across API workers; ordinary catalog reads stay available."""
+        self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        with (self.directory / ".refresh.lock").open("a") as lock:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                yield False
+            else:
+                yield True
+
     def _read(self, name: str, model: type[T]) -> T:
         path = self.directory / name
         if not path.exists():
