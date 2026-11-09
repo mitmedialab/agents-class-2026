@@ -86,3 +86,14 @@ group. Jad's and Stacey's statements were **written for the demo**; neither team
 Follow `class-agent/examples/memory_starter/README.md` (setup, `.env`, API and web app).
 Setup applies the new migration automatically. Log in as a student and open **People** in
 the header.
+
+To get the group's demo accounts (`yuxiang`, `stacey`, `jad`) in your own local copy, run this
+after setup, from `class-agent/`, and restart the API:
+
+```bash
+uv run python ../week8-docs/add_group_accounts.py
+```
+
+It adds the three members to your ignored local roster and creates their accounts in your
+local database. It prints each new access code once. The codes work only on your machine, so
+keep them out of Git; everyone running the script gets their own.
