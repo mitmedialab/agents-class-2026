@@ -4,26 +4,73 @@
   "name": "Roma Luo",
   "team": "MIT Media Lab",
   "site": "https://mitmedialab.github.io/agents2026-roma/",
-  "bio": "Static agent interface (mit.s60 agent).",
-  "project": "Liminal: sound that guides a sleeper into light sleep and wakes them with an idea",
+  "bio": "Roma Luo studies at Harvard's Graduate School of Design and is cross-registered at the MIT Media Lab for Cognitive Agents (MAS.S60). He builds agents that act on real things, from his own sleep data to a camera on his desk, and cares about memory and about how well people judge what AI can do.",
+  "project": "re:dream, an agent that interviews you about last night's dream and lets you step back into it as a spatial soundscape",
   "interests": [
-    "sleep",
-    "sound",
-    "creativity"
+    {
+      "term": "memory systems",
+      "description": "How an agent, or a person with an agent, keeps and retrieves what matters. His course site is his own memory of the course, answering questions from a vault of markdown files. His week 6 camera remembers where each object was last seen, and its failures came from memory: the vision model named the same AirPods case differently on different days. His final project keeps a dream memory across nights that surfaces recurring places, people and motifs."
+    },
+    {
+      "term": "sleep",
+      "description": "The edge of sleep as a place where ideas appear. His week 4 and 5 work replays one real morning of his consumer EEG headband and asks an agent to shape sound so a sleeper reaches light sleep (N1), then wakes them before deeper sleep to catch an idea. His final project moves to the morning after: recalling and re-entering a dream."
+    },
+    {
+      "term": "metacognition",
+      "description": "Judging what AI can and cannot do. Once execution is delegated, he argues, the skill that matters is calibrated reliance. His week 3 Frontier Map asks for a one-click prediction before every delegation to Claude, resolves the outcome by watching the conversation, and maps where expectations of AI are too high or too low."
+    },
+    {
+      "term": "sub-agent models of the mind",
+      "description": "Treating one person's goals or voices as several agents. His week 2 Calendar++ gives each life goal to its own agent; the agents debate in a weekly meeting, code tallies the result and nothing reaches the calendar until the user signs. The aim is to make invisible disagreements visible and leave the decision to the person."
+    },
+    {
+      "term": "creativity",
+      "description": "Supporting the moment an idea forms rather than generating ideas for people. Liminal tries to catch ideas at sleep onset; re:dream treats a dream as material the dreamer can revisit, with an agent that asks questions instead of interpreting."
+    }
   ],
   "skills": [
-    "signal processing",
-    "sound design"
+    "agent evaluation",
+    "physiological signals",
+    "sound design",
+    "simulation",
+    "3D"
   ],
   "weekly_builds": [
     {
+      "week": "W01",
+      "title": "Downloads-folder naming agent on a local model",
+      "summary": "He wrote an agent loop by hand, with no framework, around a local GGUF model (llama-cpp-python) that renames files in a real Windows Downloads folder according to a naming convention it reads first. Renames are dry-run by default, verified by looking again, and can be undone. He treated it as an experiment in moving the tutorial's observe, act, observe loop onto a real filesystem to see how it fails."
+    },
+    {
+      "week": "W02",
+      "title": "Calendar++: goal agents that debate your week",
+      "summary": "He designed and built a native macOS calendar in Swift where each of the user's life goals is held by its own agent. In a weekly meeting the agents propose and rebut, a clerk tallies, and the user signs before anything is scheduled: the model proposes, code decides. It reads the calendar through EventKit and includes its own MCP client; he notes openly that it does not use the smolagents interface the rubric asked for."
+    },
+    {
+      "week": "W03",
+      "title": "Frontier Map: calibrating judgment of AI capability",
+      "summary": "A calm desktop agent that trains one skill: predicting how well Claude will do a task. Before each delegation a small dial asks for a one-click prediction; an observer agent watches the conversation, counts corrections and resolves the outcome; a radial map shows where expectations are accurate, too high or too low. Predictions cannot be skipped, because 'this is obviously fine' is the belief being tested."
+    },
+    {
       "week": "W04",
-      "title": "Liminal: sleep signals and sound to reach light sleep and record an idea",
-      "summary": ""
+      "title": "Liminal: an environment for guiding a sleeper to the edge of sleep",
+      "summary": "He replayed one real morning of his consumer EEG headband data on a 3D turntable built in Blender: the record is the night, its rings the sleep stages and brain waves. The tone arm drops and music plays only when the agent steps in, shaping tempo, volume and brightness to guide the sleeper into light sleep and wake them to catch an idea. The data pipeline, model and site were built; the agent was still a rule policy."
+    },
+    {
+      "week": "W05",
+      "title": "Evaluating Liminal",
+      "summary": "He compared silence, a rule agent and an LLM agent (Claude Haiku 4.5) on 8 tasks, 5 trials each, 120 episodes traced in Langfuse. The rule agent won overall (pass@1 0.68); the LLM was the best at keeping a sleeper asleep (15 of 15 guard tasks) but succeeded in only 8 of 25 dives, where it must guide the sleeper into light sleep and wake them with an idea. pass@5 looked perfect while pass^5 was 0 on every dive task. The most telling failure: the agent asked a still-sleeping person for their idea in 7 of 25 LLM dives, and an 'act, then check' layer removed it."
+    },
+    {
+      "week": "W06",
+      "title": "A Pocket 4 that remembers where things were left",
+      "summary": "He turned a DJI Osmo Pocket 4 into an embodied agent exposed as an MCP server: it can look around, point, zoom and take photos within guard rails, and every few seconds a vision model lists what is in view and stores it in SQLite. Asked where an AirPods case was, it found it 3 of 3 times in view, 2 of 3 beside the desk out of view, and 0 of 3 when it had been taken away by hand; misses came from the vision model naming the case differently on different days. The camera also ignored the Bluetooth commands the community had documented."
     }
   ],
   "source": {
-    "method": "migrated from tools/students.csv (scraped from the public course site by tools/sites2csv.py)",
-    "date": "2026-11-07"
+    "method": "drafted by Claude from the owner's documentation repository (weeks 1-5), his published course site (week 6) and the final project proposal",
+    "repo": "roma-luo/mit.s60-website",
+    "commit": "929033d",
+    "date": "2026-11-09"
   }
 }

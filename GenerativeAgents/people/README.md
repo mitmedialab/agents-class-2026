@@ -7,7 +7,7 @@ simulation is an idle background character from `tools/students.csv` and never t
 | File | Person | Data |
 | --- | --- | --- |
 | `hyungwoon.json` | S02 · Hyungwoon Lee | summarized from his documentation repository (weeks 1–6) |
-| `roma.json` | S07 · Roma Luo | migrated from the public course site |
+| `roma.json` | S07 · Roma Luo | summarized from his documentation repository (weeks 1–5), course site (week 6) and final project proposal |
 | `leticia.json` | S08 · Leticia | migrated from the public course site |
 | `mdetwiller.json` | S17 · mdetwiller | placeholder until she sends her own data |
 
