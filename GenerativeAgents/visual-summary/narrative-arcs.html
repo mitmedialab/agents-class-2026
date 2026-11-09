@@ -171,7 +171,7 @@ select{font-size:12px;font-weight:500;color:var(--ink);background:var(--raise);b
 .notes ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
 code{font-family:ui-monospace,Menlo,monospace;font-size:11px;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:0 4px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
-.embed .band,.embed header,.embed .notes{display:none}
+.embed .band,.embed header,.embed .notes,.embed [data-theme-btn]{display:none}
 .embed body{padding:0;background:transparent}
 </style>
 </head>
@@ -640,6 +640,11 @@ function setTheme(t) { document.documentElement.dataset.theme = t; if (G) { appl
   try { localStorage.setItem("sg-theme", t); } catch (e) {} }
 document.querySelectorAll("[data-theme-btn]").forEach(b => b.addEventListener("click", () => setTheme(b.dataset.themeBtn)));
 let saved = "light"; try { saved = EMBED ? "light" : localStorage.getItem("sg-theme") || "light"; } catch (e) {}
+if (EMBED) { // inside placelab the page's own light/dark switch rules; the embed follows it and hides its own
+  const fromParent = () => { try { const r = window.parent.document.documentElement; return r.dataset.theme === "dark" || (r.dataset.theme !== "light" && window.parent.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light"; } catch (e) { return matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"; } };
+  saved = fromParent();
+  window.addEventListener("message", e => { if (e.data && (e.data.placelabTheme === "dark" || e.data.placelabTheme === "light")) setTheme(e.data.placelabTheme); });
+}
 setTheme(saved);
 let rz = null; new ResizeObserver(() => { clearTimeout(rz); rz = setTimeout(() => { if (!anyPin()) hideTip(); fr = null; render(); afterLayout(); }, 80); }).observe($("wrap"));
 legend(); render();

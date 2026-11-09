@@ -42,7 +42,7 @@ def load_person(path):
     interests,skills=interest_terms(),strings("skills",1,MAX_LIST)
     avatar=p.get("avatar")
     if avatar is not None and not valid_avatar(avatar):
-        err.append('avatar: expected {"t": 0, "h": 0, "s": 0, "p": 0} with optional "hs", "g" (small non-negative integers) and "face" (35 of s d e h)')
+        err.append('avatar: expected {"t": 0, "h": 0, "s": 0, "p": 0} with optional "hs", "g" (small non-negative integers) and "face" (35 of s d e h), "ini" (1-2 letters)')
     if err:return None,err
     weeks=sorted(weeks,key=lambda w:w["week"])
     notes=[{"term":x["term"].strip(),"description":x.get("description","").strip()} for x in p["interests"] if isinstance(x,dict) and x.get("description","").strip()]
@@ -55,10 +55,11 @@ def load_person(path):
     if avatar is not None:prof["avatar"]=avatar
     return prof,[]
 
-AVATAR_KEYS={"t","h","s","p","hs","g"}  # palette indexes; the page wraps them to its own palette sizes (src/scene.js)
+AVATAR_KEYS={"t","h","s","p","hs","g","ini"}  # palette indexes; the page wraps them to its own palette sizes (src/scene.js)
 def valid_avatar(a):
     if not isinstance(a,dict) or not {"t","h","s","p"}<=a.keys() or not a.keys()<=AVATAR_KEYS|{"face"}:return False
-    if not all(isinstance(a[k],int) and not isinstance(a[k],bool) and 0<=a[k]<100 for k in a if k!="face"):return False
+    if not all(isinstance(a[k],int) and not isinstance(a[k],bool) and 0<=a[k]<100 for k in a if k not in("face","ini")):return False
+    if "ini" in a and not (isinstance(a["ini"],str) and re.fullmatch(r"[A-Za-z0-9]{1,2}",a["ini"])):return False  # the two letters shown next to the character
     return "face" not in a or (isinstance(a["face"],str) and re.fullmatch(r"[sdeh]{35}",a["face"]) is not None)
 
 def load_background(src):

@@ -4,7 +4,7 @@
    "who talked to whom" chart from visual-summary/ fed with this run. serve.py keeps each record in
    data/runs/, so earlier runs can be reopened from the report.
    ===================================================================== */
-const REPORT={current:null,viewing:null,tab:"news",writing:false,list:null};
+const REPORT={current:null,viewing:null,tab:"arcs",writing:false,list:null};
 const hhOf=clk=>clk.replace(/^d\d+ /,"");
 // chart time: day start + minutes since 09:00 (3 s of simulation per minute, as in memory.js hhmm)
 const tOf=(day,clk)=>{const [h,m]=hhOf(clk).split(":").map(Number);return (day-1)*DAY_LEN+Math.max(0,(h*60+m-540)*3)};
@@ -62,7 +62,7 @@ function templateNews(rec){
     column_title:L2("tplColumnT"),column:L2("tplColumn")(mine.length,partners.join(", "),mine.map(c=>c.insight).filter(Boolean).pop()||"")};
 }
 async function finishRun(){
-  const rec=buildRecord();REPORT.current=REPORT.viewing=rec;REPORT.tab="news";REPORT.writing=true;renderReport();
+  const rec=buildRecord();REPORT.current=REPORT.viewing=rec;REPORT.tab="arcs";REPORT.writing=true;renderReport();
   try{rec.newsletter=LLM.on?await postJSON("/api/newsletter",newsContext(rec)):templateNews(rec)}
   catch(e){console.warn("newsletter from templates:",e.message);rec.newsletter=templateNews(rec)}
   REPORT.writing=false;
@@ -105,30 +105,29 @@ function loadChart(rec){
   const f=$("rep-frame");if(!f||!rec)return;const key=rec.id||rec.created;if(f.dataset.key===key)return;f.dataset.key=key;
   if(typeof ARCS_HTML!=="undefined")f.srcdoc=ARCS_HTML;else if(f.getAttribute("src"))f.contentWindow.location.reload();else f.src=f.dataset.src;
 }
-$("rep-frame").addEventListener("load",()=>{const f=$("rep-frame");try{const d=f.contentDocument;
+$("rep-frame").addEventListener("load",()=>{const f=$("rep-frame");try{f.contentWindow.postMessage({placelabTheme:TH.dark?"dark":"light"},"*")}catch(e){}try{const d=f.contentDocument;
   if(!d.getElementById("chart")){f.dataset.missing="1";$("rep-arcs-wait").textContent=L2("chartMissing");$("rep-arcs-wait").hidden=false;f.style.height="0px";return}
   delete f.dataset.missing;$("rep-arcs-wait").hidden=true;const fit=()=>{f.style.height=Math.ceil(d.body.getBoundingClientRect().height)+8+"px"};fit();new ResizeObserver(fit).observe(d.body)}catch(e){}});
 async function loadRunList(){if(REPORT.list||!LLM.server)return;try{REPORT.list=(await api("/api/runs")).runs||[]}catch(e){REPORT.list=[]}renderReport()}
 function renderReport(){
   if(!$("rep-news"))return;
   const live=!REPORT.current,rec=REPORT.viewing||REPORT.current;
-  $("t-replab").textContent=L2("repLab");
-  $("rep-title").textContent=rec?L2("repTitle")(rec.run,rec.days):`${L2("repTitle")(runNo,CFG.days)} · ${L2("repLive")}`;
+  $("rep-again").title=rec?L2("repTitle")(rec.run,rec.days):`${L2("repTitle")(runNo,CFG.days)} · ${L2("repLive")}`;  // the run number lives in the tooltip; the band says the rest
   const runs=(REPORT.list||[]).filter(r=>!REPORT.current||r.id!==REPORT.current.id);
   $("rep-runs").innerHTML=`<option value="">${REPORT.current?L2("thisRun"):L2("repLive")}</option>`+runs.slice().reverse().map(r=>`<option value="${esc(r.id)}"${REPORT.viewing&&REPORT.viewing.id===r.id&&REPORT.viewing!==REPORT.current?" selected":""}>${L2("pastRun")(r.n)} · ${esc((r.created||"").slice(0,16).replace("T"," "))}</option>`).join("");
-  $("rep-runs").hidden=!runs.length;$("t-reppick").hidden=!runs.length;
-  ["news","arcs","detail"].forEach(k=>{$("rt-"+k).setAttribute("aria-selected",REPORT.tab===k);$("rp-"+k).hidden=REPORT.tab!==k});
-  [["rt-news","tabNews"],["rt-arcs","tabArcs"],["rt-detail","tabDetail"],["t-again","again"],["t-forget","forget"],["t-reppick","pickRun"],["t-arcsnote","arcsNote"]].forEach(([id,k])=>$(id).textContent=L2(k));
-  const pastView=rec&&rec!==REPORT.current;$("rt-detail").hidden=!!pastView;if(pastView&&REPORT.tab==="detail")REPORT.tab="news";
+  $("rep-runs").hidden=!runs.length;$("t-reppick").hidden=!runs.length;$("rep-forget").hidden=!LLM.server;  // forgetting only means something with a server that keeps episodes
+  ["news","arcs","detail","eval"].forEach(k=>{$("rt-"+k).setAttribute("aria-selected",REPORT.tab===k);$("rp-"+k).hidden=REPORT.tab!==k});
+  [["rt-news","tabNews"],["rt-arcs","tabArcs"],["rt-detail","tabDetail"],["rt-eval","tabEval"],["t-again","again"],["t-forget","forget"],["t-reppick","pickRun"],["t-arcsnote","arcsNote"]].forEach(([id,k])=>$(id).textContent=L2(k));
+  const pastView=rec&&rec!==REPORT.current;$("rt-detail").hidden=!!pastView;$("rt-eval").hidden=!!pastView;if(pastView&&(REPORT.tab==="detail"||REPORT.tab==="eval"))REPORT.tab="news";
   if(!rec){$("rep-news").innerHTML=`<p class="hint">${L2("repRunning")}</p>`;$("rep-arcs-body").hidden=true;$("rep-arcs-wait").textContent=L2("repRunning");$("rep-arcs-wait").hidden=false}
   else{$("rep-news").innerHTML=REPORT.writing&&rec===REPORT.current?`<p class="hint">${L2("writing")}</p>`:newsletterHTML(rec);$("rep-arcs-body").hidden=false;const miss=$("rep-frame").dataset.missing;$("rep-arcs-wait").hidden=!miss;if(miss)$("rep-arcs-wait").textContent=L2("chartMissing");if(REPORT.tab==="arcs")loadChart(rec)}
   loadRunList();
 }
-["news","arcs","detail"].forEach(k=>$("rt-"+k).addEventListener("click",()=>{REPORT.tab=k;renderReport();if(k==="detail")renderResults()}));
+["news","arcs","detail","eval"].forEach(k=>$("rt-"+k).addEventListener("click",()=>{REPORT.tab=k;renderReport();if(k==="detail"||k==="eval")renderResults()}));
 $("rep-runs").addEventListener("change",async e=>{const id=e.target.value;
   if(!id){REPORT.viewing=REPORT.current;renderReport();return}
   try{REPORT.viewing=await api("/api/runs/"+id);renderReport()}catch(err){console.warn(err)}});
 $("rep-again").addEventListener("click",()=>{
   const last=REPORT.current;if(last&&last.id)runNo=+last.id.slice(4)+1;else runNo++;
   REPORT.current=REPORT.viewing=null;REPORT.list=null;CFG.days=+$("days").value;running=true;init();renderAll();renderYouCard();showNav("sim");if(userAgent)setFollow(true)});
-$("rep-forget").addEventListener("click",async()=>{if(!confirm(L2("forgetQ")))return;await forgetEpisodes();$("rep-msg").textContent=L2("forgotten");if(REPORT.viewing)renderReport()});
+$("rep-forget").addEventListener("click",async()=>{if(!confirm(L2("forgetQ")))return;await forgetEpisodes();$("rep-msg").textContent=L2("forgotten");$("rep-msg").hidden=false;if(REPORT.viewing)renderReport()});

@@ -96,6 +96,8 @@ import {
 import { mergeNotificationCenterUpdates } from "./notifications.js";
 import { readStartupQuery, urlWithoutStartupQuery } from "./startupQuery.js";
 import { useAboutRoute } from "./aboutRoute.js";
+import { PlaceLabPage } from "./PlaceLabPage.js";
+import { usePlaceLabRoute } from "./placeLabRoute.js";
 
 const CONNECTION_ERROR = "I couldn’t reach the Course Agent. Please try again.";
 const WELCOME_MESSAGE =
@@ -313,6 +315,7 @@ export default function App() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useAboutRoute();
+  const [placeLabOpen, setPlaceLabOpen] = usePlaceLabRoute();
   const [syllabusPdfUrl, setSyllabusPdfUrl] = useState<string | undefined>();
   const [syllabusContent, setSyllabusContent] = useState<string | null>(null);
   const [syllabusError, setSyllabusError] = useState<string | null>(null);
@@ -1296,6 +1299,7 @@ export default function App() {
     }
     setHistoryOpen(false);
     setMobileView("chat");
+    setPlaceLabOpen(false);
     setAboutOpen(true);
   }
 
@@ -1996,6 +2000,7 @@ export default function App() {
     <div
       className="course-agent"
       data-about-open={aboutOpen}
+      data-placelab-open={placeLabOpen}
       data-conversation-reading={selectedConversationId !== null}
       data-file-drag-active={isFileDragActive}
       data-mobile-notifications-open={
@@ -2047,10 +2052,23 @@ export default function App() {
           </div>
         </div>
         <div className="header-utility">
+          <Button
+            aria-current={placeLabOpen ? "page" : undefined}
+            className="header-new-chat placelab-link"
+            onClick={() => {
+              setHistoryOpen(false);
+              setAboutOpen(false);
+              setMobileView("chat");
+              setPlaceLabOpen(!placeLabOpen);
+            }}
+          >
+            <span aria-hidden="true" className="placelab-dot" />
+            Place Lab
+          </Button>
           <Button className="header-new-chat" onClick={startNewConversation}>
             New chat
           </Button>
-          {displayedWorkspaceState.panels.length === 0 || aboutOpen ? (
+          {displayedWorkspaceState.panels.length === 0 || aboutOpen || placeLabOpen ? (
             <nav aria-label="Course shortcuts" className="header-actions">
               {headerPrompts.map((prompt) => (
                 <Button
@@ -2134,7 +2152,9 @@ export default function App() {
         />
       ) : null}
 
-      {aboutOpen ? (
+      {placeLabOpen ? (
+        <PlaceLabPage />
+      ) : aboutOpen ? (
         <SyllabusPage
           content={syllabusContent}
           pdfDownloadUrl={syllabusPdfUrl}

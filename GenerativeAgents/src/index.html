@@ -4,7 +4,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Silkscreen:wght@400;700&display=swap">
 <link rel="stylesheet" href="styles.css">
-<div class="band"><div class="bandin"><span id="band-glyph"></span><span class="bandt"><b id="t-sim">GA Cognitive Agents</b> <span id="t-band">· e14 / e15 · tercer piso</span></span><span class="langsw" role="group" aria-label="idioma / language"><button id="lang-es" aria-pressed="true">es</button><button id="lang-en" aria-pressed="false">en</button></span></div></div>
+<div class="band"><div class="bandin"><span id="band-glyph"></span><span class="bandt"><b id="t-sim">GA Cognitive Agents</b> <span id="t-band">· e14 / e15 · tercer piso</span></span><span class="langsw" role="group" aria-label="idioma / language"><button id="lang-es" aria-pressed="true">es</button><button id="lang-en" aria-pressed="false">en</button></span><span class="langsw themesw" role="group" aria-label="theme"><button id="th-light" aria-pressed="false">light</button><button id="th-dark" aria-pressed="false">dark</button></span></div></div>
 <div class="wrap">
   <header>
     <div><div class="lab" id="t-tagline" style="margin-bottom:4px">¿qué ideas nacen cuando la clase se cruza?</div><h1 id="t-title">placelab</h1><div class="steps" role="tablist"><button id="nav-survey" aria-pressed="true"><b>1</b><span id="t-nav1">perfil</span></button><button id="nav-sim" aria-pressed="false"><b>2</b><span id="t-nav2">simulación</span></button><button id="nav-results" aria-pressed="false"><b>3</b><span id="t-nav3">resultados</span></button></div></div>
@@ -108,35 +108,25 @@
 
   <!-- 3 · resultados -->
   <section id="sec-results" hidden>
-    <div class="rep-head"><div><div class="lab" id="t-replab">final report</div><h2 class="evt" id="rep-title"></h2></div>
-      <div class="ctl" style="gap:8px;flex-wrap:wrap"><label class="hint" for="rep-runs" id="t-reppick">report</label><select id="rep-runs"></select>
-        <button class="go" type="button" id="rep-again"><span id="t-again">run again</span></button><button class="btn" type="button" id="rep-forget"><span id="t-forget">forget earlier runs</span></button></div></div>
-    <p class="hint" id="rep-msg"></p>
-    <div class="tabs rep-tabs" role="tablist"><button class="tab" role="tab" id="rt-news" aria-selected="true">newsletter</button><button class="tab" role="tab" id="rt-arcs" aria-selected="false">who talked to whom</button><button class="tab" role="tab" id="rt-detail" aria-selected="false">details</button></div>
-    <div id="rp-news"><div id="rep-news"></div></div>
-    <div id="rp-arcs" hidden><p class="hint" id="rep-arcs-wait" hidden></p><div id="rep-arcs-body"><p class="hint" id="t-arcsnote"></p><iframe id="rep-frame" class="arcs" name="placelab-embed" title="who talked to whom" data-src="../visual-summary/narrative-arcs.html"></iframe></div></div>
+    <div class="rep-bar"><div class="tabs rep-tabs" role="tablist"><button class="tab" role="tab" id="rt-arcs" aria-selected="true">who talked to whom</button><button class="tab" role="tab" id="rt-news" aria-selected="false">newsletter</button><button class="tab" role="tab" id="rt-detail" aria-selected="false">where</button><button class="tab" role="tab" id="rt-eval" aria-selected="false">evaluation</button></div>
+      <div class="ctl rep-ctl" style="gap:8px;flex-wrap:wrap"><label class="hint" for="rep-runs" id="t-reppick" hidden>report</label><select id="rep-runs" hidden></select>
+        <button class="btn" type="button" id="rep-forget" hidden><span id="t-forget">forget earlier runs</span></button><button class="go" type="button" id="rep-again"><span id="t-again">run again</span></button></div></div>
+    <p class="hint" id="rep-msg" hidden></p>
+    <div id="rp-arcs"><p class="hint" id="rep-arcs-wait" hidden></p><div id="rep-arcs-body"><p class="hint" id="t-arcsnote"></p><iframe id="rep-frame" class="arcs" name="placelab-embed" title="who talked to whom" data-src="../visual-summary/narrative-arcs.html"></iframe></div></div>
+    <div id="rp-news" hidden><div id="rep-news"></div></div>
     <div id="rp-detail" hidden>
-    <div id="res-verdict"></div>
-
-    <section class="evid" style="margin-top:12px">
-      <div class="evh"><div><div class="lab" id="t-maplab">1 · mapa de calor de ideas</div><h2 class="evt" id="t-maptitle">dónde nacen y se discuten las ideas, y cómo cambia</h2></div><p class="hint" id="t-maphint"></p></div>
-      <div class="ctl" style="gap:10px;flex-wrap:wrap"><input type="range" id="res-t" min="0" max="1000" value="1000" aria-label="momento de la simulación" style="flex:1;min-width:160px"><span class="mono" id="res-tlab"></span><button class="btn" id="res-play"><span id="t-resplay">reproducir</span></button></div>
-      <canvas id="res-map" class="dmap" aria-label="mapa de calor de ideas por espacio"></canvas>
-    </section>
-
-    <section class="evid" style="margin-top:12px">
-      <div class="evh"><div><div class="lab" id="t-convlab">2 · cómo van las conversaciones</div><h2 class="evt" id="t-convtitle">qué pasa en los espacios comunes, día a día</h2></div><p class="hint" id="t-convhint2"></p></div>
-      <div id="res-conv"></div>
-    </section>
-
-    <section class="evid" style="margin-top:12px">
-      <div class="evh"><div><div class="lab" id="t-idlab">3 · ideas nuevas</div><h2 class="evt" id="t-idtitle">lo que ha salido de cruzarse</h2></div><p class="hint" id="t-idhint"></p></div>
-      <div id="res-ideas"></div>
-    </section>
-
-    <details class="more" style="margin-top:12px"><summary id="t-more">más lecturas: arquitectura</summary>
-    <div class="arch" id="arch" style="margin-top:12px"></div>
-    </details>
+      <section class="evid">
+        <div class="evh"><div><div class="lab" id="t-maplab">idea heat map</div><h2 class="evt" id="t-maptitle">where the ideas were brewing</h2></div><p class="hint" id="t-maphint"></p></div>
+        <div class="ctl" style="gap:10px;flex-wrap:wrap"><input type="range" id="res-t" min="0" max="1000" value="1000" aria-label="moment of the simulation" style="flex:1;min-width:160px"><span class="mono" id="res-tlab"></span><button class="btn" id="res-play"><span id="t-resplay">play</span></button></div>
+        <canvas id="res-map" class="dmap" aria-label="heat map of conversations and ideas on the floor plan"></canvas>
+        <div class="space-notes" id="res-space"></div>
+      </section>
+    </div>
+    <div id="rp-eval" hidden>
+      <!-- evaluation: left empty on purpose; a teammate fills it in (render into #res-eval from a renderEvaluation() in sim.js) -->
+      <section class="evid"><div class="evh"><div><div class="lab" id="t-evlab">evaluation</div><h2 class="evt" id="t-evtitle"></h2></div><p class="hint" id="t-evhint"></p></div><div id="res-eval"></div></section>
+    </div>
+  </section>
     </div>
   </section>
 </div>

@@ -108,7 +108,7 @@ function templateTalk(a,b,place){
     DIFF.push({t:simT,clk:clock(),key:I.id,idea:I,from:S,to:Lst,text:l.t,second:!!src,src:src?src.from:null,adopted:lines.some(x=>x.adopt&&x.adopt.idea===I&&x.w===Lst)});
     I.mentions++;Lst.heardCount[I.id]=(Lst.heardCount[I.id]||0)+1;if(!Lst.heard[I.id])Lst.heard[I.id]={from:S,t:simT,clk:clock(),text:l.t}}
   const c={clk:clock(),place,a,b,lines,start:simT,shown:0,born:ctx.born,adopt:ctx.adopt,agree:ctx.agree,evo:ctx.evo};convs.unshift(c);if(convs.length>80)convs.pop();dirtyConv=true;
-  CLOG.push({t:simT,day,clk:clock(),place,out:ctx.born.length?"born":ctx.evo.length?"evo":ctx.adopt.length?"join":ctx.agree?"agr":"none",mine:a.user||b.user,a,b,idea:ctx.born[0]||(ctx.evo[0]&&ctx.evo[0].idea)||(ctx.adopt[0]&&ctx.adopt[0].idea)||null,lines});
+  CLOG.push({t:simT,day,clk:clock(),place,x:(a.x+b.x)/2,z:(a.z+b.z)/2,out:ctx.born.length?"born":ctx.evo.length?"evo":ctx.adopt.length?"join":ctx.agree?"agr":"none",mine:a.user||b.user,a,b,idea:ctx.born[0]||(ctx.evo[0]&&ctx.evo[0].idea)||(ctx.adopt[0]&&ctx.adopt[0].idea)||null,lines});
   a.conv=b.conv=c;a.scratch.chat=chat;b.scratch.chat=chat;
   [[a,b],[b,a]].forEach(([p,o])=>{
     const op=ctx.props[o.id],born=ctx.born[0],join=ctx.adopt.find(x=>x.who===p),theirs=ctx.adopt.find(x=>x.who===o);
@@ -216,9 +216,12 @@ renderer.domElement.addEventListener("pointerup",e=>{
 });
 
 /* ---------- monogramas 7×7 y equipos ---------- */
-const PIX={A:["010","101","111","101","101"],B:["110","101","110","101","110"],C:["011","100","100","100","011"],D:["110","101","101","101","110"],E:["111","100","110","100","111"],F:["111","100","110","100","100"],G:["011","100","101","101","011"],H:["101","101","111","101","101"],I:["111","010","010","010","111"],L:["100","100","100","100","111"],M:["101","111","111","101","101"],O:["010","101","101","101","010"],P:["110","101","110","100","100"],S:["011","100","010","001","110"],T:["111","010","010","010","010"],V:["101","101","101","101","010"]};
+const PIX={A:["010","101","111","101","101"],B:["110","101","110","101","110"],C:["011","100","100","100","011"],D:["110","101","101","101","110"],E:["111","100","110","100","111"],F:["111","100","110","100","100"],G:["011","100","101","101","011"],H:["101","101","111","101","101"],I:["111","010","010","010","111"],J:["001","001","001","101","010"],K:["101","101","110","101","101"],L:["100","100","100","100","111"],M:["101","111","111","101","101"],N:["110","101","101","101","101"],O:["010","101","101","101","010"],P:["110","101","110","100","100"],Q:["010","101","101","111","011"],R:["110","101","110","101","101"],S:["011","100","010","001","110"],T:["111","010","010","010","010"],U:["101","101","101","101","111"],V:["101","101","101","101","010"],W:["101","101","111","111","101"],X:["101","101","010","101","101"],Y:["101","101","010","010","010"],Z:["111","001","010","100","111"],"1":["010","110","010","010","111"],"2":["110","001","010","100","111"],"3":["110","001","010","001","110"],"4":["101","101","111","001","001"],"5":["111","100","110","001","110"],"6":["011","100","110","101","010"],"7":["111","001","010","010","010"],"8":["010","101","010","101","010"],"9":["010","101","011","001","110"],"0":["010","101","101","101","010"]};
 function mono7(two,cls=""){const g=[];for(let r=0;r<7;r++)for(let c=0;c<7;c++){let on=false;if(r>=1&&r<=5){const i=c<3?0:c>3?1:-1;if(i>=0){const ch=PIX[two[i]];if(ch)on=ch[r-1][c-(i?4:0)]==="1"}}g.push(`<i class="${on?"on":""}"></i>`)}return `<span class="mono7 ${cls}" aria-hidden="true">${g.join("")}</span>`}
 const GI=Object.fromEntries(TEAMS.map((t,i)=>[t.n,"E"+(i+1)]));
+/* initials shown next to each character: the ones you typed, else first+last name, else the code */
+const normIni=s=>(s||"").normalize("NFD").replace(/[^A-Za-z0-9]/g,"").toUpperCase().slice(0,2);
+function initialsOf(pf,av){if(av&&av.ini)return normIni(av.ini);const w=(pf.name||"").trim().split(/\s+/).filter(Boolean);const g=w.length>1?w[0][0]+w[w.length-1][0]:w.length?w[0].slice(0,2):(pf.code||"??").slice(0,2);return normIni(g)||"??"}
 $("band-glyph").innerHTML=mono7("GA");
 function renderGroups(){$("groups").innerHTML=TEAMS.map(g=>{const m=agents.filter(a=>a.group===g.n);return `<span>${mono7(GI[g.n]||"EQ","dark")}${g.n}<b>${m.filter(a=>a.onFloor).length}/${g.size}</b></span>`}).join("")}
 
@@ -256,7 +259,7 @@ function renderMem(target){
   const m=a.a_mem,s=a.scratch,nodes=[...m.seq_event,...m.seq_thought,...m.seq_chat].sort((x,y)=>y.node_count-x.node_count).slice(0,80);
   const pct=Math.max(0,Math.min(100,100*(1-s.importance_trigger_curr/s.importance_trigger_max)));
   const refl=a.reflections[0],STATE=L("STATE");
-  const html=`<div class="who"><img alt="" src="${a.tex[0].url}"><div><div class="state">${esc(tr(who(a)))}${youTag(a)} · ${esc(tr(STATE[a.state]?STATE[a.state](a):""))}</div><div class="hint">${mono7(GI[a.group]||"EQ","dark")} ${esc(a.group)} · ${esc(a.pf.code)}${a.pf.name?" · "+esc(a.pf.name):""}</div><div class="hint">${pfLine(a)}</div>${a.ideas.length?`<div class="hint">${L("ideasNow")}: ${a.ideas.map(i=>`«${esc(ideaTitle(i))}»`).join(" · ")}</div>`:""}</div></div>
+  const html=`<div class="who"><img alt="" src="${a.tex[0].url}"><div><div class="state">${esc(tr(who(a)))}${youTag(a)} · ${esc(tr(STATE[a.state]?STATE[a.state](a):""))}</div><div class="hint">${mono7(initialsOf(a.pf,a.user&&CFG.user?CFG.user.avatar:a.pf.avatar),"dark")} ${esc(a.group)} · ${esc(a.pf.code)}${a.pf.name?" · "+esc(a.pf.name):""}</div><div class="hint">${pfLine(a)}</div>${a.ideas.length?`<div class="hint">${L("ideasNow")}: ${a.ideas.map(i=>`«${esc(ideaTitle(i))}»`).join(" · ")}</div>`:""}</div></div>
   <div class="scratch">
     <div><span>vision_r</span><b>${s.vision_r}</b></div><div><span>att_bandwidth</span><b>${s.att_bandwidth}</b></div><div><span>retention</span><b>${s.retention}</b></div>
     <div><span>event</span><b>${m.seq_event.length}</b></div><div><span>thought</span><b>${m.seq_thought.length}</b></div><div><span>chat</span><b>${m.seq_chat.length}</b></div>
@@ -279,7 +282,7 @@ function drawSpark(){
   const dpr=window.devicePixelRatio||1,w=sp.clientWidth,h=sp.clientHeight;if(sp.width!==w*dpr){sp.width=w*dpr;sp.height=h*dpr}
   sctx.setTransform(dpr,0,0,dpr,0,0);sctx.clearRect(0,0,w,h);
   const m=Math.max(3,...bins),n=bins.length,step=w/59;
-  sctx.fillStyle="rgba(255,79,18,.15)";sctx.strokeStyle="#FF4F12";sctx.lineWidth=1.5;sctx.beginPath();
+  sctx.fillStyle="rgba(255,79,18,.15)";sctx.strokeStyle=TH.orange;sctx.lineWidth=1.5;sctx.beginPath();
   bins.forEach((v,i)=>{const x=i*step,y=h-2-(v/m)*(h-6);i?sctx.lineTo(x,y):sctx.moveTo(x,y)});sctx.stroke();
   sctx.lineTo((n-1)*step,h);sctx.lineTo(0,h);sctx.closePath();sctx.fill();
 }
@@ -367,42 +370,45 @@ function results(){
   const talked=talkedWith();
   return {mine,bornMine,joined,others:[...others],byDay,nIdeas:IDEAS.length,myConvs:userAgent?CLOG.filter(c=>c.mine).length:0,talked,goalOK:talked.length>=CFG.goal};
 }
-function renderResults(){
-  const T=L("res"),R=results();
-  const n=R.nIdeas;
-  const tk=R.talked.length;
-  $("res-verdict").innerHTML=(userAgent?`<div class="verdict small ${R.goalOK?"ok":""}"><div class="vbig">${tk} / ${CFG.goal}</div><div><div class="vt">${R.goalOK?T.goalWin:finished?T.goalLose:T.goalPending}</div><div class="hint">${T.goalSub(R.myConvs,tk,CFG.goal)}</div>
-    ${tk?`<div class="faces" style="margin-top:6px">${R.talked.map(x=>`<span class="fc" title="${esc(tr(who(x.a)))}${x.a.pf.name?" · "+esc(x.a.pf.name):""}">${face(x.a)}<small>${esc(x.a.pf.name||x.a.pf.code)} · ${x.n}</small></span>`).join("")}</div>`:""}</div></div>`:"")+
-  `<div class="verdict small ${n?"ok":""}" style="margin-top:8px"><div class="vbig">${n}</div><div><div class="vt">${T.ideasBorn(n)}</div><div class="hint">${userAgent?T.sub(R.bornMine.length,R.joined.length,R.others.length,finished?CFG.days:day,CFG.days):T.noUser}</div>
-    ${userAgent&&R.others.length?`<div class="faces" style="margin-top:6px">${R.others.map(x=>`<span class="fc" title="${esc(tr(who(x)))} · ${esc(x.group)}">${face(x)}<small>${esc(x.pf.name||x.group)}</small></span>`).join("")}</div>`:""}</div></div>`;
-  drawDemandAll();renderConvEvo();renderIdeas();
-}
+function renderResults(){drawDemandAll()}
+/* the evaluation tab (#rp-eval / #res-eval) is intentionally empty: someone else is writing it */
 /* ---------- 1) mapa de calor: dónde nacen y se discuten las ideas, en el tiempo ---------- */
-function demandAt(t){
-  const born={},talk={};
-  for(const i of IDEAS)if(i.born.t<=t)born[i.born.place]=(born[i.born.place]||0)+1;
-  for(const c of CLOG)if(c.t<=t)talk[c.place]=(talk[c.place]||0)+1;
-  return {born,talk};
-}
-function drawDemand(cv,t,small){
+function demandAt(t){return {born:IDEAS.filter(i=>i.born.t<=t),talk:CLOG.filter(c=>c.t<=t)}}
+function drawDemand(cv,t){
   const w=cv.clientWidth,h=w*265/425,dpr=window.devicePixelRatio||1;if(!w)return;
   cv.width=w*dpr;cv.height=h*dpr;cv.style.height=h+"px";const g=cv.getContext("2d");g.setTransform(dpr,0,0,dpr,0,0);
-  g.fillStyle="#fff";g.fillRect(0,0,w,h);if(svImg.complete){g.globalAlpha=.55;g.drawImage(svImg,0,0,w,h);g.globalAlpha=1}
-  const sx=w/425,sy=h/265,D=demandAt(t),max=Math.max(1,...Object.values(D.born)),maxT=Math.max(1,...Object.values(D.talk));
-  // espacios: tinte por conversaciones (suave) y por ideas nacidas (fuerte)
-  for(const id of SPIDS){const v=D.born[id]||0,tk=D.talk[id]||0;if(!v&&!tk)continue;
-    g.fillStyle=`rgba(255,79,18,${Math.min(.85,.1*tk/maxT+.7*v/max)})`;g.beginPath();for(const [px,py] of SPPTS[id])g.rect((px-185)*sx-sx,(py-40)*sy-sy,2*sx+1,2*sy+1);g.fill()}
-  g.drawImage(MASK,0,0,w,h);
-  for(const id of SPIDS){const v=D.born[id]||0,tk=D.talk[id]||0,[cx,cy]=SPC[id],X=(cx-185)*sx,Y=(cy-40)*sy;
-    if(!small){g.font="bold 9px 'Silkscreen', monospace";g.fillStyle="rgba(0,0,0,.75)";g.fillText(SP[id].short,X-10,Y-6);if(v||tk){g.font="bold 12px 'Silkscreen', monospace";g.fillStyle="#161616";g.fillText(v,X-10,Y+8);g.font="8px Archivo, sans-serif";g.fillStyle="rgba(0,0,0,.6)";g.fillText(`${tk} conv`,X+(v>9?14:8),Y+8)}}
-    else if(v){g.font="bold 9px 'Silkscreen', monospace";g.fillStyle="#161616";g.fillText(v,X-4,Y+4)}}
-  if(userAgent&&!small)for(const i of IDEAS){if(i.born.t>t||!i.members.has(userAgent))continue;const [px,py]=PX(i.born.x,i.born.z);g.strokeStyle="#161616";g.lineWidth=1.5;g.beginPath();g.arc((px-185)*sx,(py-40)*sy,6,0,6.28);g.stroke()}
+  g.fillStyle=TH.paper;g.fillRect(0,0,w,h);if(svImg.complete){g.globalAlpha=TH.dark?.3:.5;g.drawImage(svImg,0,0,w,h);g.globalAlpha=1}
+  const sx=w/425,sy=h/265,D=demandAt(t),P=(x,z)=>{const [px,py]=PX(x,z);return [(px-185)*sx,(py-40)*sy]};
+  // heat: gaussians added up on a separate canvas; a conversation is a soft spot, an idea born a strong one
+  const hc=document.createElement("canvas");hc.width=Math.round(w);hc.height=Math.round(h);const hg=hc.getContext("2d");hg.globalCompositeOperation="lighter";
+  const [hr,hg_,hb]=TH.dark?[255,90,34]:[255,79,18];
+  const blob=(x,y,r,a)=>{const gr=hg.createRadialGradient(x,y,0,x,y,r);gr.addColorStop(0,`rgba(${hr},${hg_},${hb},${a})`);gr.addColorStop(1,`rgba(${hr},${hg_},${hb},0)`);hg.fillStyle=gr;hg.beginPath();hg.arc(x,y,r,0,6.283);hg.fill()};
+  const at=c=>c.x!=null?P(c.x,c.z):P(spc3(c.place).x,spc3(c.place).z);
+  const ta=.16*Math.min(1,10/Math.max(1,D.talk.length));  // many talks in one spot should glow, not flatten
+  for(const c of D.talk){const [x,y]=at(c);blob(x,y,22*sx/1.6,ta)}
+  for(const i of D.born){const [x,y]=at(i.born);blob(x,y,34*sx/1.6,.5)}
+  g.drawImage(hc,0,0);g.drawImage(MASK,0,0,w,h);
+  // idea dots (yours in ink) and the names of the spaces
+  for(const i of D.born){const [x,y]=at(i.born);g.fillStyle=userAgent&&i.members.has(userAgent)?TH.ink:TH.orange;g.beginPath();g.arc(x,y,3.5,0,6.283);g.fill();g.strokeStyle=TH.paper;g.lineWidth=1;g.stroke()}
+  g.font="bold 9px 'Silkscreen', monospace";g.fillStyle=TH.inkA;
+  for(const id of SPIDS){const [cx,cy]=SPC[id],X=(cx-185)*sx,Y=(cy-40)*sy,nb=D.born.filter(i=>i.born.place===id).length,nt=D.talk.filter(c=>c.place===id).length;g.fillText(SP[id].short,X-10,Y-6);if(nb||nt){g.font="8px Archivo, sans-serif";g.fillText(`${nb} ${L("res").ideasShort} · ${nt} conv`,X-10,Y+8);g.font="bold 9px 'Silkscreen', monospace"}}
+  renderSpaceNotes(D,t);
+}
+/* a few lines about the space itself: which rooms carried the day, and what was born where */
+function renderSpaceNotes(D,t){
+  const el=$("res-space");if(!el)return;const T=L("res");
+  const rows=SPIDS.map(id=>({id,nb:D.born.filter(i=>i.born.place===id).length,nt:D.talk.filter(c=>c.place===id).length,mine:D.talk.filter(c=>c.place===id&&c.mine).length})).filter(r=>r.nt||r.nb).sort((a,b)=>(b.nb*3+b.nt)-(a.nb*3+a.nt));
+  if(!rows.length){el.innerHTML=`<div class="lead soft">${T.spaceNone}</div>`;return}
+  const top=rows[0],busiest=rows.slice().sort((a,b)=>b.nt-a.nt)[0],quiet=SPIDS.filter(id=>!rows.find(r=>r.id===id)).map(id=>placeName(id));
+  el.innerHTML=`<div class="lead">${T.spaceLead(placeName(top.id),top.nt,top.nb,busiest.id!==top.id?placeName(busiest.id):null,busiest.nt,D.talk.length,D.born.length)}${quiet.length?` ${T.spaceQuiet(quiet.join(", "))}`:""}</div>`+
+    rows.map(r=>{const ideas=D.born.filter(i=>i.born.place===r.id);const fact=(FACTS[r.id]||[])[0]||"";
+      return `<div><b>${esc(placeName(r.id))}</b>${T.spaceRow(r.nt,r.nb,r.mine)}${ideas.length?`<small>${ideas.map(i=>`«${esc(ideaTitle(i))}» · ${esc(i.born.clk)}`).join(" · ")}</small>`:""}${fact?`<small class="soft">${esc(tr(fact))}</small>`:""}</div>`}).join("");
 }
 const simEnd=()=>Math.min(simT,CFG.days*DAY_LEN);
 function tLabel(t){const d=Math.min(CFG.days,Math.floor(t/DAY_LEN)+1),m=540+Math.floor((t-(d-1)*DAY_LEN)/3);return L("res").at(d,`${String(Math.floor(m/60)%24).padStart(2,"0")}:${String(m%60).padStart(2,"0")}`)}
 let resPlay=null;
-function drawDemandAll(){const t=simEnd()*(+$("res-t").value/1000);$("res-tlab").textContent=tLabel(t);drawDemand($("res-map"),t,false)}
-$("res-ideas").addEventListener("click",e=>{const f=e.target.closest(".ev,.face");if(!f)return;selAgent=agents[+f.dataset.a];hiIds=f.dataset.ids?f.dataset.ids.split(","):[];dirtyMem=true;showNav("sim");showTab("mem")});
+function drawDemandAll(){const t=simEnd()*(+$("res-t").value/1000);$("res-tlab").textContent=tLabel(t);drawDemand($("res-map"),t)}
+$("res-eval").addEventListener("click",e=>{const f=e.target.closest(".ev,.face");if(!f)return;selAgent=agents[+f.dataset.a];hiIds=f.dataset.ids?f.dataset.ids.split(","):[];dirtyMem=true;showNav("sim");showTab("mem")});
 $("res-t").addEventListener("input",()=>{if(resPlay){clearInterval(resPlay);resPlay=null;$("t-resplay").textContent=L("res").play}drawDemandAll()});
 $("res-play").addEventListener("click",()=>{
   if(resPlay){clearInterval(resPlay);resPlay=null;$("t-resplay").textContent=L("res").play;return}
@@ -410,28 +416,11 @@ $("res-play").addEventListener("click",()=>{
   resPlay=setInterval(()=>{sl.value=Math.min(1000,+sl.value+8);drawDemandAll();if(+sl.value>=1000){clearInterval(resPlay);resPlay=null;$("t-resplay").textContent=L("res").play}},60);
 });
 /* ---------- 2) cómo van las conversaciones ---------- */
-function renderConvEvo(){
-  const T=L("res"),rows=[];
-  for(let d=1;d<=CFG.days;d++){if((d-1)*DAY_LEN>=simT&&d>1)break;const cs=CLOG.filter(c=>c.day===d);
-    rows.push(`<div class="cday"><span>${L("dayShort")} ${d}</span><div class="cstrip">${cs.map(c=>`<i class="csq ${c.out==="none"?"":c.out}${c.mine?" mine":""}" title="${c.clk} · ${esc(trp(SP[c.place].n))} · ${esc(tr(who(c.a)))} · ${esc(tr(who(c.b)))}${c.idea?" · «"+esc(c.idea.title)+"»":""}"></i>`).join("")}</div><b>${T.dayRow(cs.length,cs.filter(c=>c.out==="born").length,cs.filter(c=>c.out==="evo").length,cs.filter(c=>c.out==="join").length)}</b></div>`)}
-  const pct=CLOG.length?Math.round(100*CLOG.filter(c=>c.out==="born"||c.out==="join"||c.out==="evo").length/CLOG.length):0;
-  const byPlace={};for(const c of CLOG)byPlace[c.place]=(byPlace[c.place]||0)+1;
-  $("res-conv").innerHTML=`${rows.join("")}<p class="hint" style="margin-top:8px">${T.trend(CLOG.length,pct)} ${Object.entries(byPlace).sort((a,b)=>b[1]-a[1]).map(([p,n])=>`${esc(trp(SP[p].n))} ${n}`).join(" · ")}</p>`;
-}
 /* ---------- ideas nuevas: la lista ---------- */
 const pname=a=>a.pf.name||tr(who(a));
 function ideaText(i){const T=L("res"),[A,B]=i.by,part=i.parts[1].text;
   const wantsKind=B.pf.skills.includes(part)?"skill":"interest";
   return T.ideaText(A.pf.project,part,pname(A),A.pf.skills.join(T.and),pname(B),B.pf.skills.join(T.and),wantsKind,trp(SP[i.born.place].n))}
-function renderIdeas(){
-  const T=L("res"),box=$("res-ideas");
-  if(!IDEAS.length){box.innerHTML=`<p class="hint">${T.noIdeas}</p>`;return}
-  const list=[...IDEAS].sort((a,b)=>b.members.size-a.members.size||a.born.t-b.born.t);
-  box.innerHTML=`<div class="ideas">${list.map(i=>`<div class="idea${userAgent&&i.members.has(userAgent)?" mine":""}">
-    <div class="it"><b>${esc(ideaTitle(i))}</b><p>${esc(ideaText(i))}</p></div>
-    <div class="vers">${i.versions.map(v=>`<div class="ver${v.n===i.versions.length?" cur":""}"><span class="mono">v${v.n} · ${esc(v.clk)} · ${esc(trp(SP[v.place].n))}</span><span>${v.kind==="born"?T.vBorn:esc(tr(v.text))} <i class="pair">${v.by.map(face).join("")}</i>${v.evidence.length?` <button class="ev" data-a="${v.by[0].id}" data-ids="${v.evidence.join(",")}" title="${L("evTitle")}">${v.evidence.join(" ")}</button>`:""}</span></div>`).join("")}</div>
-    <div class="im"><span class="mono">${esc(i.born.clk)} · ${esc(trp(SP[i.born.place].n))}</span><span class="pair">${[...i.members].slice(0,8).map(face).join("")}${i.members.size>8?`<i>+${i.members.size-8}</i>`:""}</span><span class="hint">${T.ideaFrom(esc(shortP(i.parts[0].text)),esc(i.parts[1].text))}</span></div></div>`).join("")}</div>`;
-}
 function onFinish(){renderAll();showNav("results");$("ff-bar").hidden=true;finishRun()}  // report.js: newsletter, chart, saved run
 
 /* ---------- navegación: perfil · simulación · resultados ---------- */
@@ -468,21 +457,23 @@ function pfPreview(){
   if(!svAv||svAv.code!==code)svAv={code,...(CFG.user&&CFG.user.code===code&&CFG.user.avatar?CFG.user.avatar:p.avatar||avatarIdx(i))};
   const tex=spriteFrom(svAv);
   box.hidden=false;$("pf-actions").hidden=false;
-  box.innerHTML=`<img alt="" src="${tex[0].url}" style="width:56px;height:84px;image-rendering:pixelated">${mono7(GI[p.team]||"EQ","dark")}<div class="hint"><b>${esc(p.code)}${pf.name?" · "+esc(pf.name):""} · ${esc(p.team)}</b><br>${L("pfProj")}: ${esc(pf.project)}<br>${L("pfSkills")}: ${esc(pf.skills.join(", "))}<br>${L("pfInt")}: ${esc(pf.interests.join(", "))}${pf.bio?`<br><span class="soft">${esc(pf.bio)}</span>`:""}</div>`;
+  box.innerHTML=`<img alt="" src="${tex[0].url}" style="width:56px;height:84px;image-rendering:pixelated">${mono7(initialsOf(pf,svAv),"dark")}<div class="hint"><b>${esc(p.code)}${pf.name?" · "+esc(pf.name):""} · ${esc(p.team)}</b><br>${L("pfProj")}: ${esc(pf.project)}<br>${L("pfSkills")}: ${esc(pf.skills.join(", "))}<br>${L("pfInt")}: ${esc(pf.interests.join(", "))}${pf.bio?`<br><span class="soft">${esc(pf.bio)}</span>`:""}</div>`;
   renderAvatarEditor();
   $("pf-edit").hidden=true;
 }
 /* avatar: eliges ropa, pelo y piel; el personaje y su descripción («la de camiseta roja y pelo negro») salen de aquí */
 let svAv=null;
 const AVROWS=[["t",SHIRT,"avShirt"],["h",HAIR,"avHair"],["s",SKIN,"avSkin"],["p",PANTS,"avPants"]];
-const avOnly=av=>{const o={t:av.t,h:av.h,s:av.s,p:av.p,hs:av.hs||0,g:av.g||0};if(av.face)o.face=av.face;return o};
+const avOnly=av=>{const o={t:av.t,h:av.h,s:av.s,p:av.p,hs:av.hs||0,g:av.g||0};if(av.face)o.face=av.face;if(av.ini)o.ini=av.ini;return o};
 function renderAvatarEditor(){const el=$("pf-avatar");if(!el||!svAv)return;el.hidden=false;
   const txtRow=(k,names,lab)=>`<div class="avrow"><span>${lab}</span>${names.map((n,j)=>`<button type="button" class="sw txt${(svAv[k]||0)===j?" on":""}" data-k="${k}" data-j="${j}">${esc(n)}</button>`).join("")}</div>`;
   el.innerHTML=`<div class="lab">${L("pfavatar")}</div>`+AVROWS.map(([k,arr,lab])=>`<div class="avrow"><span>${L(lab)}</span>${arr.map((c,j)=>`<button type="button" class="sw${svAv[k]===j?" on":""}" data-k="${k}" data-j="${j}" style="background:${c}" aria-label="${L(lab)} ${j+1}"></button>`).join("")}</div>`).join("")
     +txtRow("hs",L2("styles"),L2("avStyle"))+txtRow("g",L2("glasses"),L2("avGlasses"))
     +(svAv.face?`<div class="avrow"><span>${L2("avFace")}</span><button type="button" class="btn" data-av="noface">${L2("avFaceClear")}</button></div>`:"")
     +`<div class="ctl" style="gap:8px;flex-wrap:wrap"><button type="button" class="btn orange" data-av="cam">${L2("camBtn")}</button><button type="button" class="btn" data-av="copy">${L2("avCopy")}</button></div>`
+    +`<div class="avrow"><span>${L("avIni")}</span><input id="pf-ini" maxlength="2" value="${esc(svAv.ini||"")}" placeholder="${esc(initialsOf(PROFILES.find(p=>p.code===svAv.code)||{code:svAv.code},null))}" style="width:3.2em;text-transform:uppercase"> ${mono7(initialsOf(PROFILES.find(p=>p.code===svAv.code)||{code:svAv.code},svAv),"dark")}</div>`
     +`<div class="hint">${L("avLabel")}: ${esc(tr(`la de camiseta ${SHIRTN[svAv.t%SHIRTN.length]} y ${HAIRN[svAv.h%HAIRN.length]}`))}</div><div class="hint" id="av-msg"></div>`}
+$("pf-avatar").addEventListener("input",e=>{if(e.target.id!=="pf-ini"||!svAv)return;svAv.ini=normIni(e.target.value);if($("pf-code").value!=="__new")pfPreview();const el=$("pf-ini");if(el){el.value=svAv.ini;el.focus();el.setSelectionRange(2,2)}});
 $("pf-avatar").addEventListener("click",e=>{
   const act=e.target.closest("[data-av]");
   if(act&&svAv){const k=act.dataset.av;
@@ -566,6 +557,17 @@ function loop(now){
   requestAnimationFrame(loop);
 }
 {const u=loadYou();if(u){CFG.user={code:u.code,over:u.over||null,history:u.history||[],avatar:u.avatar||null};CFG.days=u.days||3;$("days").value=String(CFG.days);if(!$("days").value)$("days").value="3";CFG.days=+$("days").value}}
+
+/* ---------- theme: light / dark. Default follows the system; the band switch pins one (saved in this browser) ---------- */
+function setTheme(t,save=true){const r=document.documentElement;if(t==="light"||t==="dark")r.dataset.theme=t;else delete r.dataset.theme;
+  if(save)try{if(t==="light"||t==="dark")localStorage.setItem("placelab-theme",t);else localStorage.removeItem("placelab-theme")}catch(e){}
+  $("th-light").setAttribute("aria-pressed",r.dataset.theme==="light");$("th-dark").setAttribute("aria-pressed",r.dataset.theme==="dark");
+  applySceneTheme();if(agents&&agents.length){if(nav==="results")drawDemandAll();drawSchema()}
+  const f=$("rep-frame");if(f&&f.contentWindow)try{f.contentWindow.postMessage({placelabTheme:TH.dark?"dark":"light"},"*")}catch(e){}}
+$("th-light").addEventListener("click",()=>setTheme(document.documentElement.dataset.theme==="light"?null:"light"));
+$("th-dark").addEventListener("click",()=>setTheme(document.documentElement.dataset.theme==="dark"?null:"dark"));
+{let t=null;try{t=localStorage.getItem("placelab-theme")}catch(e){}if(!t){const q=new URLSearchParams(location.search).get("theme");if(q==="dark"||q==="light")t=q}setTheme(t,false)}  // ?theme=dark: the host page (the course site) asks for its own look
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>{if(!document.documentElement.dataset.theme)setTheme(null,false)});
 // ask serve.py first whether the model, earlier runs and memories are available (talk.js); without it, templates
 llmInit().finally(()=>{
   init();setView("v3d");resize();applyLang();fillCodeOptions();if(CFG.user)$("pf-code").value=CFG.user.code;pfPreview();renderAll();renderYouCard();renderLLMMode();

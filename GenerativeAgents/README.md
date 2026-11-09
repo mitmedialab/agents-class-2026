@@ -6,10 +6,14 @@ they perceive, store memories with a *poignancy*, retrieve by recency × relevan
 reflect (3 questions → insights with evidence) and converse. When they talk they cross what they
 bring (project, interests, skills), and new ideas are born from that.
 
-Interface: **profile** (accept or modify your profile, and dress your avatar, optionally from your
-camera) → **simulation** (3D, each character's memory) → **report** (a newsletter of the run, the
-"who talked to whom" chart from `visual-summary/`, and the details: idea heat map, conversations day
-by day, new ideas). Run it again and the agents remember earlier runs. The interface is in English by
+Interface: **profile** (accept or modify your profile, dress your avatar, optionally from your
+camera, and pick the two initials shown next to it) → **simulation** (3D, each character's memory) →
+**report**, four tabs: **who talked to whom** (the chart from `visual-summary/`), **newsletter** (the
+run written up), **where** (the idea heat map: the plan warms up where conversations happened and
+where ideas were born, with a time slider from day 1 to day 3, and a few lines on each space) and
+**evaluation** (reserved, still to be written). The page follows the system's light or dark mode; the
+switch in the band pins one. It also opens inside the course site (`class-agent/apps/web`) under the
+**Place Lab** entry of its header, at `/placelab`. Run it again and the agents remember earlier runs. The interface is in English by
 default, with a Spanish switch at the top right.
 
 ## The pipeline
@@ -105,7 +109,8 @@ tools/sites2csv.py         students' public agentic websites -> tools/students.c
 tools/sites.txt            list of student sites (repo slug agents2026-xxx or full URL), one per line
 tools/roster2profiles.py   people/*.json (active) + students.csv or course-members.json (idle background) -> src/profiles.js
 tools/students.csv         background characters; columns: code,team,site,bio,final_project,W00..Wnn,interests,skills,project
-build.py                   -> dist/placelab.html (single file)
+build.py                   -> dist/placelab.html (single file), and a copy for the course site at
+                           class-agent/apps/web/public/placelab/index.html (served at /placelab)
 ```
 
 ## Where to change things
@@ -126,7 +131,8 @@ build.py                   -> dist/placelab.html (single file)
 | memory (retrieval, reflection, poignancy) | `src/memory.js` |
 | day rhythm, breaks, conversation length | `src/sim.js` (`nextOuting`, `cafeMult`, `arrive`) |
 | interface texts (EN/ES) | `src/i18n.js` (`UI`), `src/strings.js` (`UI2`) |
-| styles | `src/styles.css` |
+| styles, light and dark tokens | `src/styles.css` (`:root`, `:root[data-theme="dark"]`) |
+| the evaluation tab of the report | `src/index.html` (`#rp-eval`), a `renderEvaluation()` in `src/sim.js` |
 
 ## The team: `people/`
 

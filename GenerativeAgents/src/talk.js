@@ -55,7 +55,7 @@ function startModelTalk(a,b,place){
     if(e.idea&&e.run<runNo&&!earlier.some(x=>x.id===e.idea.id))earlier.push({id:e.idea.id,title:e.idea.title,pitch:`from an earlier run (run ${e.run}): ${e.insight}`});
   const side=(p,o,t)=>({project:p.pf.project,skills:p.pf.skills,interests:p.pf.interests,topic:{kind:t.kind,title:t.label,text:t.text},memories:episodeMemories(p,o,t)});
   const ctx={lang,place:placeEN(place),time:clock(),A:side(a,b,ta),B:side(b,a,tb),shared_history:shared.map(epText),ideas:[...inPlay,...earlier.slice(0,4)]};
-  const c={clk:clock(),day,place,a,b,lines:[],start:simT,shown:0,born:[],adopt:[],evo:[],agree:false,pending:true,topics:{a:ta.label,b:tb.label},followup:shared.length>0};  // the same two talked before, in this run or an earlier one
+  const c={clk:clock(),day,place,x:(a.x+b.x)/2,z:(a.z+b.z)/2,a,b,lines:[],start:simT,shown:0,born:[],adopt:[],evo:[],agree:false,pending:true,topics:{a:ta.label,b:tb.label},followup:shared.length>0};  // the same two talked before, in this run or an earlier one
   convs.unshift(c);if(convs.length>80)convs.pop();dirtyConv=true;
   const offline=()=>{c.offline=true;return finishModelTalk(c,localConverse(ctx,shared[shared.length-1]),ctx)};   // offline.js
   if(!LLM.on)return offline();   // no model: the fixed rules answer at once
@@ -84,7 +84,7 @@ function finishModelTalk(c,res,ctx){
   }else if(res.outcome==="new_idea"){idea=newIdeaLLM(a,b,res.idea_title,res.idea_pitch,place,null);out="born";c.born.push(idea)}
   if(out==="born"){bornMemory(a,b,idea);bornMemory(b,a,idea);lines[lines.length-1].born=idea}
   Object.assign(c,{lines,insight:res.insight,pending:false,start:simT,shown:0});dirtyConv=true;
-  CLOG.push({t:simT,day:c.day,clk:c.clk,place,out,mine:a.user||b.user,a,b,idea,insight:res.insight,topics:c.topics,followup:c.followup,llm:true,lines});
+  CLOG.push({t:simT,day:c.day,clk:c.clk,place,x:c.x,z:c.z,out,mine:a.user||b.user,a,b,idea,insight:res.insight,topics:c.topics,followup:c.followup,llm:true,lines});
   // memory: the conversation (chat), its insight as an episode thought, and the usual plan + memo
   const ep={id:`r${runNo}-c${CLOG.length}`,run:runNo,day:c.day,clk:c.clk.replace(/^d\d+ /,""),place:placeEN(place),a:a.pf.code,b:b.pf.code,topics:c.topics,insight:res.insight,
     idea:idea?{id:`r${runNo}-${idea.id}`,title:ideaTitle(idea)}:null,outcome:res.outcome,lang};

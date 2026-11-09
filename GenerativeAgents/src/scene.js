@@ -46,6 +46,12 @@ const vp=$("vp");
 const renderer=new THREE.WebGLRenderer({antialias:true});
 renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));vp.prepend(renderer.domElement);
 const scene=new THREE.Scene();scene.background=new THREE.Color(0xD9D9D4);scene.fog=new THREE.Fog(0xD9D9D4,45,120);
+/* theme: the page's data-theme (light/dark) also recolours the stage and the 2D plans. TH reads the live CSS tokens. */
+const THEMED=[];  // {mat,light,dark}
+const TH={get dark(){return document.documentElement.dataset.theme==="dark"||(document.documentElement.dataset.theme!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches)},
+  css(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim()},
+  get paper(){return TH.css("--paper")||"#fff"},get ink(){return TH.css("--ink")||"#000"},get inkA(){return TH.dark?"rgba(242,239,230,.8)":"rgba(0,0,0,.75)"},get orange(){return TH.css("--orange")||"#FF4F12"}};
+function applySceneTheme(){const d=TH.dark,bg=d?0x1C1C1A:0xD9D9D4;scene.background.setHex(bg);scene.fog.color.setHex(bg);for(const t of THEMED)t.mat.color.setHex(d?t.dark:t.light)}
 scene.add(new THREE.HemisphereLight(0xFFFFFF,0x8A8A88,1.05));
 const sun=new THREE.DirectionalLight(0xFFFFFF,.55);sun.position.set(12,24,8);scene.add(sun);
 const camera=new THREE.PerspectiveCamera(42,1,.1,400);
@@ -69,7 +75,7 @@ const CORRPTS=[],CORRRAW=[];
   const tex=new THREE.TextureLoader().load(PLANTEX);tex.anisotropy=renderer.capabilities.getMaxAnisotropy();
   const fl=new THREE.Mesh(new THREE.PlaneGeometry(42.5,26.5),new THREE.MeshBasicMaterial({map:tex}));
   fl.rotation.x=-Math.PI/2;fl.position.set(-.25,-.01,.25);scene.add(fl);
-  const wl=dec(WALLS),box=new THREE.BoxGeometry(.11,.85,.11),mat=new THREE.MeshLambertMaterial({color:0xE2E2DF});
+  const wl=dec(WALLS),box=new THREE.BoxGeometry(.11,.85,.11),mat=new THREE.MeshLambertMaterial({color:0xE2E2DF});THEMED.push({mat,light:0xE2E2DF,dark:0x4A4A47});
   // dentro de la cafetería no se levantan los iconos del plano
   const keep=[];for(let i=0;i<wl.length;i+=2){const px=185+wl[i]/2,py=40+wl[i+1]/2;if(px>430&&px<466&&py>150&&py<176)continue;if((px>=338&&px<=398&&py>=209&&py<=223)||(px>=387&&px<=397&&py>=150&&py<=223))continue;keep.push(i)}
   const inst=new THREE.InstancedMesh(box,mat,keep.length),m4=new THREE.Matrix4();
@@ -77,7 +83,7 @@ const CORRPTS=[],CORRRAW=[];
   inst.instanceMatrix.needsUpdate=true;scene.add(inst);
   const cr=dec(CORR);for(let i=0;i<cr.length;i+=24)CORRRAW.push([185+cr[i]/2,40+cr[i+1]/2]);
   // zócalo del edificio
-  const base=new THREE.Mesh(new THREE.BoxGeometry(43,.5,27),new THREE.MeshLambertMaterial({color:0xB9B9B6}));base.position.set(-.25,-.27,.25);scene.add(base);
+  const base=new THREE.Mesh(new THREE.BoxGeometry(43,.5,27),new THREE.MeshLambertMaterial({color:0xB9B9B6}));THEMED.push({mat:base.material,light:0xB9B9B6,dark:0x2C2C2A});base.position.set(-.25,-.27,.25);scene.add(base);
 })();
 const inBuilding=(px,py)=>(px>=190&&px<=408&&py>=85&&py<=304)||(px>=408&&px<=605&&py>=46&&py<=304);
 

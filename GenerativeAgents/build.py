@@ -13,3 +13,6 @@ for f in order: html=html.replace(f'<script src="{f}"></script>\n','')
 html=html.rstrip()+'\n<script>\n'+js+'\n</script>\n'
 out=G/'dist'/'placelab.html'
 out.parent.mkdir(exist_ok=True);out.write_text(html,encoding='utf-8');print('->',out,len(html),'bytes')
+# the course site (class-agent/apps/web) shows Place Lab at /placelab: the same single file, served from its public/ folder
+site=G.parent/'class-agent'/'apps'/'web'/'public'/'placelab'/'index.html'
+if site.parent.parent.exists():site.parent.mkdir(exist_ok=True);site.write_text(html,encoding='utf-8');print('->',site)
