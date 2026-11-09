@@ -34,3 +34,5 @@ data/instructors/*
 accepted-applicants.json
 
 var/student-showcase/
+var/weekly-dreams/
+var/dream-preview/

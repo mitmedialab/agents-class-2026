@@ -1024,6 +1024,7 @@ def create_app(
                     student_communications_enabled=True,
                     faq_updates_enabled=True,
                     student_projects_enabled=(resolved_settings.github_student_projects_enabled),
+                    weekly_dream_enabled=resolved_settings.weekly_dream_enabled,
                 ),
                 skills=skills,
                 workspace_registry=component_registry,

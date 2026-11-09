@@ -45,6 +45,11 @@
       "id": "weekly-build-showcase",
       "directory": "weekly-build-showcase",
       "audience": "instructors"
+    },
+    {
+      "id": "weekly-dream",
+      "directory": "weekly-dream",
+      "audience": "students"
     }
   ]
 }

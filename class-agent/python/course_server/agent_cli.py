@@ -364,6 +364,28 @@ def build_runtime(
                 ),
             ]
         )
+    if settings.weekly_dream_enabled:
+        from course_server.weekly_dreams import (
+            TOOL_IDS,
+            FileDreamStore,
+            WeeklyDreamService,
+            WeeklyDreamTool,
+        )
+
+        own_reader = (
+            InspectMyStudentRepositoryTool(
+                project_catalog, settings.github_repository_prefix, student_project_aliases
+            )
+            if project_catalog is not None
+            else None
+        )
+        dream_service = WeeklyDreamService(
+            FileDreamStore(settings.weekly_dream_data_path),
+            course_resources,
+            resolved_roster,
+            own_reader,
+        )
+        executable_tools.extend(WeeklyDreamTool(tool_id, dream_service) for tool_id in TOOL_IDS)
     tools = ToolCatalog(executable_tools)
     provider = OpenAIModelProvider(
         model_id=settings.model_id,
@@ -420,6 +442,7 @@ async def _run_postgres_turn(
                 course_resources,
                 faq_updates_enabled=True,
                 student_projects_enabled=settings.github_student_projects_enabled,
+                weekly_dream_enabled=settings.weekly_dream_enabled,
             ),
             skills=skills,
         )
