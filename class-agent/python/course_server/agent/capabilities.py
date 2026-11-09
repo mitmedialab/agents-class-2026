@@ -83,6 +83,18 @@ DOCUMENT_INSPECT_PAGE_TOOL_ID = "document.inspect_page"
 COURSE_INSPECT_SLIDE_PAGE_TOOL_ID = "course.inspect_slide_page"
 LIST_PRIVATE_RESOURCES_TOOL_ID = "course.list_private_resources"
 GET_MY_GRADES_TOOL_ID = "grades.get_mine"
+GET_MY_MEMORIES_TOOL_ID = "memory.get_mine"
+SAVE_MY_MEMORY_TOOL_ID = "memory.save_mine"
+FORGET_MY_MEMORY_TOOL_ID = "memory.forget_mine"
+FIND_PEER_HELPERS_TOOL_ID = "peers.find_helpers"
+REQUEST_PEER_INTRODUCTION_TOOL_ID = "peers.request_introduction"
+PEER_MEMORY_TOOL_IDS = (
+    GET_MY_MEMORIES_TOOL_ID,
+    SAVE_MY_MEMORY_TOOL_ID,
+    FORGET_MY_MEMORY_TOOL_ID,
+    FIND_PEER_HELPERS_TOOL_ID,
+    REQUEST_PEER_INTRODUCTION_TOOL_ID,
+)
 READ_PRIVATE_RESOURCE_TOOL_ID = "course.read_private_resource"
 INSTRUCTOR_LIST_APPLICATIONS_TOOL_ID = "instructor.list_applications"
 INSTRUCTOR_READ_APPLICATION_TOOL_ID = "instructor.read_application"
@@ -2701,8 +2713,10 @@ class CourseCapabilityPolicy:
         student_communications_enabled: bool = False,
         faq_updates_enabled: bool = False,
         student_projects_enabled: bool = False,
+        peer_memory_access: Callable[[PrincipalContext], bool] | None = None,
     ) -> None:
         self._resources = resources
+        self._peer_memory_access = peer_memory_access
         self._browser_enabled = browser_enabled
         self._mail_enabled = mail_enabled
         self._assignments_enabled = assignments_enabled
@@ -2813,6 +2827,11 @@ class CourseCapabilityPolicy:
                     if self._grades_enabled
                     and self._grade_access is not None
                     and self._grade_access(principal)
+                    else ()
+                ),
+                *(
+                    PEER_MEMORY_TOOL_IDS
+                    if self._peer_memory_access is not None and self._peer_memory_access(principal)
                     else ()
                 ),
                 *(

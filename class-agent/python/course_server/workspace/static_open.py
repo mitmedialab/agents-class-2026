@@ -17,7 +17,7 @@ from course_server.notifications import (
 
 from .models import OpenWorkspaceCommand, WorkspacePanel
 
-StaticOpenTarget = Literal["schedule", "grading", "notification", "assignment"]
+StaticOpenTarget = Literal["schedule", "grading", "notification", "assignment", "people"]
 _DOCUMENT_MEDIA_TYPES = frozenset({"text/markdown", "text/plain", "application/pdf"})
 
 
@@ -105,6 +105,9 @@ async def static_open_command(
         if assignment is None:
             raise StaticWorkspaceUnavailable("assignment not available")
         return assignment_workspace_command(assignment)
+    if target == "people":
+        # The People panel is owner-scoped and opened by the API adapter, which holds the service.
+        raise StaticWorkspaceUnavailable("people panel is opened by the API adapter")
     if notification_id is None or notifications is None:
         raise StaticWorkspaceUnavailable("notification not available")
     try:

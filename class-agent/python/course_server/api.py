@@ -120,6 +120,12 @@ from course_server.notifications import (
     NotificationCenterService,
     PostgresNotificationItemReadStore,
 )
+from course_server.peer_memory import (
+    PeerMemoryService,
+    PostgresPeerMemoryStore,
+    people_workspace_command,
+)
+from course_server.peer_memory_routes import create_peer_memory_router
 from course_server.postgres.auth_store import PostgresAuthStore, create_auth_pool
 from course_server.postgres.conversation_store import PostgresConversationStore
 from course_server.student_communications import StudentCommunicationService
@@ -350,6 +356,7 @@ class AppServices:
     course_resources: CourseResourceCatalog | None = None
     assignments: AssignmentStore | None = None
     grades: FileGradeBook | None = None
+    peer_memory: PeerMemoryService | None = None
     uploads: TemporaryUploadStore | None = None
     workspace_registry: ComponentRegistry | None = None
     browser: BrowserSessionService | None = None
@@ -913,6 +920,12 @@ def create_app(
             preview_path=resolved_settings.grade_preview_data_path,
             preview_only=resolved_settings.grade_preview_only,
         )
+        peer_memory_service = PeerMemoryService(
+            PostgresPeerMemoryStore(pool),
+            student_access=(
+                None if course_roster is None else course_roster.permits_student_username
+            ),
+        )
         instructor_message_store = PostgresInstructorMessageStore(pool)
         instructor_message_service = InstructorMessageService(
             messages=instructor_message_store,
@@ -994,8 +1007,11 @@ def create_app(
                     student_communications=student_communication_service,
                     faq_updates=faq_knowledge,
                     course_roster=course_roster,
+                    peer_memory=peer_memory_service,
+                    conversations=conversation_store,
                 ),
                 conversations=conversation_store,
+                memories=peer_memory_service,
                 capability_policy=CourseCapabilityPolicy(
                     course_resources,
                     browser_enabled=browser_service is not None,
@@ -1003,6 +1019,7 @@ def create_app(
                     assignments_enabled=True,
                     grades_enabled=True,
                     grade_access=grade_store.can_access,
+                    peer_memory_access=peer_memory_service.can_access,
                     instructor_messaging_enabled=True,
                     student_communications_enabled=True,
                     faq_updates_enabled=True,
@@ -1022,6 +1039,7 @@ def create_app(
             course_resources=course_resources,
             assignments=assignment_store,
             grades=grade_store,
+            peer_memory=peer_memory_service,
             uploads=upload_store,
             workspace_registry=component_registry,
             browser=browser_service,
@@ -1652,15 +1670,20 @@ def create_app(
         services = state.services
         resources = services.course_resources or FileResourceProvider.from_registry()
         try:
-            command = await static_open_command(
-                target=payload.target,
-                notification_id=payload.notification_id,
-                assignment_id=payload.assignment_id,
-                principal=principal,
-                resources=resources,
-                notifications=services.notification_center,
-                assignments=services.assignments,
-            )
+            if payload.target == "people":
+                if services.peer_memory is None or not services.peer_memory.can_access(principal):
+                    raise StaticWorkspaceUnavailable("people not available")
+                command = people_workspace_command()
+            else:
+                command = await static_open_command(
+                    target=payload.target,
+                    notification_id=payload.notification_id,
+                    assignment_id=payload.assignment_id,
+                    principal=principal,
+                    resources=resources,
+                    notifications=services.notification_center,
+                    assignments=services.assignments,
+                )
         except StaticWorkspaceUnavailable as error:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="not found"
@@ -2632,6 +2655,15 @@ def create_app(
         )
         return RunResponse.from_result(result)
 
+    def _peer_memory_service(request: Request) -> PeerMemoryService | None:
+        state = _get_app_state(request)
+        assert state.services is not None
+        return state.services.peer_memory
+
+    people_router = create_peer_memory_router(
+        require_principal=_require_principal, service_for=_peer_memory_service
+    )
+    router.include_router(people_router)
     app.include_router(router, prefix=API_PREFIX)
     app.include_router(router, include_in_schema=False)
     return app

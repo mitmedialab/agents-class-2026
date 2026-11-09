@@ -16,6 +16,7 @@ from agent_core import (
     Capability,
     Conversation,
     Event,
+    Memory,
     PrincipalContext,
 )
 from course_server.uploads import TemporaryUploadStore, UploadError
@@ -111,6 +112,12 @@ class AgentAttentionProvider(Protocol):
     async def mark_updates_seen(self, principal: PrincipalContext) -> None: ...
 
 
+class AgentMemoryProvider(Protocol):
+    """Supplies the principal's own selected memories (constitution section 22)."""
+
+    async def selected_memories(self, principal: PrincipalContext) -> list[Memory]: ...
+
+
 def _principal_references(principal: PrincipalContext) -> dict[str, UUID | None]:
     return {
         "principal_user_id": principal.user_id,
@@ -183,6 +190,7 @@ class CourseAgentService:
         workspace_registry: ComponentRegistry | None = None,
         uploads: TemporaryUploadStore | None = None,
         attention: AgentAttentionProvider | None = None,
+        memories: AgentMemoryProvider | None = None,
     ) -> None:
         self._runtime = runtime
         self._conversations = conversations
@@ -191,6 +199,7 @@ class CourseAgentService:
         self._workspace_registry = workspace_registry or load_component_registry()
         self._uploads = uploads
         self._attention = attention
+        self._memories = memories
 
     async def _authorized_upload_uris(
         self,
@@ -436,10 +445,16 @@ class CourseAgentService:
             if self._attention is not None and principal.authenticated
             else []
         )
+        selected_memories = (
+            await self._memories.selected_memories(principal)
+            if self._memories is not None and principal.authenticated
+            else []
+        )
         context = AgentContext(
             principal=principal,
             conversation_id=conversation_id,
             recent_events=_recent_context_events(previous_events),
+            selected_memories=selected_memories,
             capabilities=[
                 Capability(id=tool_id, status="available") for tool_id in permitted_tool_ids
             ],

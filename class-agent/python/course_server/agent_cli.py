@@ -86,6 +86,14 @@ from course_server.instructor_messages import (
 )
 from course_server.mail import CourseAskTATool, TAQuestionService
 from course_server.migrations import apply_migrations
+from course_server.peer_memory import (
+    FindPeerHelpersTool,
+    ForgetMyMemoryTool,
+    GetMyMemoriesTool,
+    PeerMemoryService,
+    RequestPeerIntroductionTool,
+    SaveMyMemoryTool,
+)
 from course_server.postgres.auth_store import PostgresAuthStore, create_auth_pool
 from course_server.postgres.conversation_store import PostgresConversationStore
 from course_server.slide_pages import CourseSlidePageService
@@ -180,6 +188,8 @@ def build_runtime(
     faq_updates: FaqKnowledgeStore | None = None,
     student_projects: StudentProjectCatalog | None = None,
     course_roster: CourseRoster | None = None,
+    peer_memory: PeerMemoryService | None = None,
+    conversations: ConversationStore | None = None,
 ) -> SmolagentsRuntime:
     resolved_roster = course_roster or load_course_roster(settings.course_roster_path)
     if resources is None and resolved_roster is not None:
@@ -245,6 +255,17 @@ def build_runtime(
         CourseListAssignmentsTool(assignment_store),
         CourseGetAssignmentTool(assignment_store),
         GetMyGradesTool(grade_store),
+        *(
+            (
+                GetMyMemoriesTool(peer_memory),
+                SaveMyMemoryTool(peer_memory, conversations),
+                ForgetMyMemoryTool(peer_memory),
+                FindPeerHelpersTool(peer_memory),
+                RequestPeerIntroductionTool(peer_memory),
+            )
+            if peer_memory is not None and conversations is not None
+            else ()
+        ),
         ReadTemporaryUploadTool(upload_store),
         DocumentInspectPageTool(
             course_resources,
