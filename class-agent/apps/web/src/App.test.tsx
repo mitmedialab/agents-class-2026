@@ -27,6 +27,12 @@ vi.mock("./api.js", () => ({
   getPendingActionConversation: vi.fn(),
   getPrincipal: vi.fn(),
   listConversations: vi.fn(),
+  listLearningTrail: vi.fn(),
+  listLearningTrailConnections: vi.fn(),
+  listLearningTrailTopics: vi.fn(),
+  getLearningTrailDraft: vi.fn(),
+  acceptLearningTrailDraft: vi.fn(),
+  discardLearningTrailDraft: vi.fn(),
   login: vi.fn(),
   logout: vi.fn(),
   markNotificationCenterItemRead: vi.fn(),
@@ -234,7 +240,27 @@ async function openExistingConversation(): Promise<void> {
   await screen.findByText("The earlier response.");
 }
 
+/** Opens the newest conversation on load, without going through the logs. */
+function startInConversationMoments(): void {
+  vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
+  vi.mocked(api.getPendingActionConversation).mockImplementation(() =>
+    api.getConversation(conversation.id),
+  );
+}
+
 describe("Course Agent interface", () => {
+  it("shows a log's whole chat in place, with no separate view", async () => {
+    render(<App />);
+    await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Week one/ }));
+
+    const chat = await screen.findByRole("list", { name: "Chat history" });
+    expect(within(chat).getByText("The earlier response.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Full chat" })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Full conversation" })).toBeNull();
+  });
+
   it("introduces the course before revealing the interface", async () => {
     vi.useFakeTimers();
     try {
@@ -305,7 +331,7 @@ describe("Course Agent interface", () => {
     expect(screen.getByRole("button", { name: /Week one/ })).toBeInTheDocument();
   });
 
-  it("scrolls backward through assistant moments and restores their workspace", async () => {
+  it("shows every message of a conversation in one chat that scrolls", async () => {
     vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
     vi.mocked(api.getNotificationCenter).mockResolvedValue({
       generated_at: "2026-09-05T12:00:00Z",
@@ -398,113 +424,18 @@ describe("Course Agent interface", () => {
       ],
     });
 
+    startInConversationMoments();
     render(<App />);
-    await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
-    fireEvent.click(await screen.findByRole("button", { name: /Week one/ }));
 
-    expect(await screen.findByText("The current response.")).toBeInTheDocument();
-    expect(within(document.querySelector(".timeline-message-group")!).getByText("Close the schedule and summarize it.")).toBeInTheDocument();
-    expect(screen.queryByRole("complementary", { name: "Workspace" })).not.toBeInTheDocument();
-    expect(screen.getByRole("complementary", { name: "Notification center" })).toBeInTheDocument();
-
-    const stage = document.querySelector(".response-stage")!;
-    Object.defineProperty(stage, "scrollHeight", { configurable: true, value: 600 });
-    Object.defineProperty(stage, "clientHeight", { configurable: true, value: 300 });
-    Object.defineProperty(stage, "scrollTop", { configurable: true, writable: true, value: 80 });
-    const ordinaryScroll = new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: -80 });
-    stage.dispatchEvent(ordinaryScroll);
-    expect(ordinaryScroll.defaultPrevented).toBe(false);
-    expect(document.querySelector(".timeline-preview-message-group")).not.toBeInTheDocument();
-    stage.scrollTop = 0;
-
-    const timelineScroll = new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: -160 });
-    act(() => { stage.dispatchEvent(timelineScroll); });
-    expect(timelineScroll.defaultPrevented).toBe(true);
-    expect(document.querySelector(".timeline-preview-message-group")).toHaveTextContent("Show me the course schedule.");
-    expect(document.querySelector(".timeline-workspace-preview")).toHaveAttribute("aria-hidden", "true");
-    expect(document.querySelector(".conversation-timeline")).toHaveAttribute("data-scrubbing", "true");
-    expect(document.querySelector(".course-agent")).toHaveAttribute("data-timeline-transition", "true");
-    expect(document.querySelector(".timeline-message-group .latest-response")).toHaveAttribute("data-response-fit", "fixed");
-    expect(document.querySelector(".timeline-preview-message-group .latest-response")).toHaveAttribute("data-response-fit", "fixed");
-    const agent = document.querySelector<HTMLElement>(".course-agent")!;
-    expect(agent.style.getPropertyValue("--timeline-outgoing-opacity")).toBe("0");
-    expect(agent.style.getPropertyValue("--timeline-incoming-opacity")).toBe("0");
-    expect(agent.style.getPropertyValue("--timeline-header-opacity")).toBe("0");
-    expect(agent.style.getPropertyValue("--timeline-notification-opacity")).toBe("0");
-    fireEvent.wheel(stage, { deltaY: -40 });
-    expect(agent).toHaveAttribute("data-timeline-target-flow", "true");
-    expect(agent.style.getPropertyValue("--timeline-outgoing-opacity")).toBe("0");
-    expect(agent.style.getPropertyValue("--timeline-incoming-opacity")).toBe("0");
-    fireEvent.wheel(stage, { deltaY: 120 });
-    expect(within(document.querySelector(".timeline-message-group")!).getByText("The current response.")).toBeInTheDocument();
-    await waitFor(() =>
-      expect(document.querySelector(".conversation-timeline")).toHaveAttribute("data-active", "false"),
-    );
-    fireEvent.wheel(stage, { deltaY: -120 });
-    fireEvent.wheel(stage, { deltaY: -120 });
-    expect(document.querySelector(".timeline-preview-message-group")).toHaveTextContent("The schedule is open.");
-
-    await waitFor(() =>
-      expect(within(document.querySelector(".timeline-message-group:not(.timeline-preview-message-group)")!).getByText("The schedule is open.")).toBeInTheDocument(),
-    );
-    expect(within(document.querySelector(".timeline-message-group")!).getByText("Show me the course schedule.")).toBeInTheDocument();
-    expect(screen.queryByText("Close the schedule and summarize it.")).not.toBeInTheDocument();
-    const historicalWorkspace = screen.getByRole("complementary", {
-      name: "Workspace",
-    });
-    expect(historicalWorkspace).toHaveAttribute("data-history", "true");
-    expect(screen.queryByRole("complementary", { name: "Notification center" })).not.toBeInTheDocument();
-    expect(screen.getByTestId("course-agent-interface").parentElement).toHaveAttribute("data-notifications-open", "false");
-    expect(historicalWorkspace.querySelector("[inert]")).toBeNull();
-    fireEvent.click(await screen.findByRole("button", { name: "Month" }));
-    expect(screen.getByRole("button", { name: "Month" })).toHaveAttribute("aria-pressed", "true");
-    expect(api.recordWorkspaceInteraction).not.toHaveBeenCalled();
-    expect(screen.getByRole("textbox", { name: "Message" })).toBeDisabled();
-    expect(document.querySelector(".timeline-pager")).toHaveAttribute("aria-description", "Moment 2 of 3");
-
-    fireEvent.click(screen.getByRole("button", { name: "Go to an older assistant response" }));
-    expect(screen.getByRole("complementary", { name: "Notification center" })).toBeInTheDocument();
-    expect(screen.queryByRole("complementary", { name: "Workspace" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Go to a newer assistant response" }));
-    expect(screen.queryByRole("complementary", { name: "Notification center" })).not.toBeInTheDocument();
-    expect(screen.getByRole("complementary", { name: "Workspace" })).toHaveAttribute("data-history", "true");
-
-    stage.scrollTop = 300;
-    fireEvent.wheel(stage, { deltaY: 100 });
-    expect(document.querySelector(".timeline-preview-message-group")).toHaveTextContent("The current response.");
-    fireEvent.wheel(stage, { deltaY: -60 });
-    await waitFor(() =>
-      expect(document.querySelector(".timeline-preview-message-group")).not.toBeInTheDocument(),
-    );
-    expect(screen.getByRole("complementary", { name: "Workspace" })).toHaveAttribute("data-history", "true");
-
-    fireEvent.click(screen.getByRole("button", { name: "Return to current response" }));
-
-    expect(await screen.findByText("The current response.")).toBeInTheDocument();
-    expect(within(document.querySelector(".timeline-message-group")!).getByText("Close the schedule and summarize it.")).toBeInTheDocument();
-    expect(screen.queryByRole("complementary", { name: "Workspace" })).not.toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "Message" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Schedule" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Discuss update: Project update" })).toBeEnabled();
-
-    fireEvent.touchStart(stage, { touches: [{ clientY: 200 }] });
-    fireEvent.touchMove(stage, { touches: [{ clientY: 440 }] });
-    expect(document.querySelector(".conversation-timeline")).toHaveAttribute("data-scrubbing", "true");
-    expect(within(document.querySelector(".timeline-message-group")!).getByText("The current response.")).toBeInTheDocument();
-    fireEvent.touchEnd(stage, { changedTouches: [{ clientY: 440 }] });
-    await waitFor(() =>
-      expect(within(document.querySelector(".timeline-message-group:not(.timeline-preview-message-group)")!).getByText("Show me the course schedule.")).toBeInTheDocument(),
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Go to an older assistant response" }));
-    expect(screen.getByRole("button", { name: "Schedule" })).toBeEnabled();
-    expect(screen.getByRole("complementary", { name: "Notification center" })).not.toHaveAttribute("inert");
-    fireEvent.click(screen.getByRole("button", { name: "Schedule" }));
-    await waitFor(() =>
-      expect(api.openStaticWorkspace).toHaveBeenCalledWith(conversation.id, "schedule", undefined),
-    );
-    expect(api.streamAgentRun).not.toHaveBeenCalled();
-    expect(document.querySelector(".course-agent")).toHaveAttribute("data-time-traveling", "false");
+    const chat = await screen.findByRole("list", { name: "Chat history" });
+    const items = within(chat).getAllByRole("listitem").map((item) => item.textContent ?? "");
+    expect(items).toHaveLength(5);
+    expect(items[0]).toContain("The earlier response.");
+    expect(items[1]).toContain("Show me the course schedule.");
+    expect(items[2]).toContain("The schedule is open.");
+    expect(items[3]).toContain("Close the schedule and summarize it.");
+    expect(items[4]).toContain("The current response.");
+    expect(document.querySelector(".timeline-message-group")).toBeNull();
   });
 
   it("reveals notifications in an older chat moment even when the current workspace hides them", async () => {
@@ -558,11 +489,10 @@ describe("Course Agent interface", () => {
       ],
     });
 
+    startInConversationMoments();
     render(<App />);
     await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
-    fireEvent.click(await screen.findByRole("button", { name: /Week one/ }));
-    expect(await screen.findByText("The schedule is open.")).toBeInTheDocument();
+      expect(await screen.findByText("The schedule is open.")).toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "Workspace" })).toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Notification center" })).not.toBeInTheDocument();
 
@@ -613,11 +543,10 @@ describe("Course Agent interface", () => {
       ],
     });
 
+    startInConversationMoments();
     render(<App />);
     await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
-    fireEvent.click(await screen.findByRole("button", { name: /Week one/ }));
-    expect(await screen.findByText("The latest response.")).toBeInTheDocument();
+      expect(await screen.findByText("The latest response.")).toBeInTheDocument();
 
     const stage = document.querySelector(".response-stage")!;
     Object.defineProperty(stage, "scrollHeight", { configurable: true, value: 300 });
@@ -941,7 +870,7 @@ describe("Course Agent interface", () => {
     await waitFor(() => expect(api.listConversations).toHaveBeenCalled());
     fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
     fireEvent.click(screen.getByRole("button", { name: /Week one/ }));
-
+  
     expect(
       await screen.findByText(
         "The question is with course staff. Let's continue with your other topic.",
@@ -1662,6 +1591,51 @@ describe("Course Agent interface", () => {
     expect(api.confirmInstructorMessage).not.toHaveBeenCalled();
   });
 
+  it("opens My builds without an agent run and sends a question from it", async () => {
+    vi.mocked(api.listLearningTrail).mockResolvedValue([
+      {
+        id: "10000000-0000-4000-8000-000000000001",
+        week: 6,
+        build_title: "Bedside agent",
+        build_url: null,
+        reflection: "The baseline was stale.",
+        topics: [],
+        still_relevant: true,
+        shared_with_staff: false,
+        shared_with_class: false,
+        feedback: [],
+        created_at: "2026-10-01T00:00:00Z",
+        updated_at: "2026-10-01T00:00:00Z",
+      },
+    ]);
+    vi.mocked(api.listLearningTrailConnections).mockResolvedValue({});
+    vi.mocked(api.listLearningTrailTopics).mockResolvedValue({
+      topics: [],
+      coverage: { practiced: [], not_yet: [] },
+    });
+    vi.mocked(api.getLearningTrailDraft).mockResolvedValue(null);
+    vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
+    render(<App />);
+    await openExistingConversation();
+
+    fireEvent.click(screen.getByRole("button", { name: "My builds" }));
+
+    expect(await screen.findByRole("button", { name: /Bedside agent/ })).toBeInTheDocument();
+    expect(api.streamAgentRun).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Ask about my next build" }));
+
+    await waitFor(() =>
+      expect(api.streamAgentRun).toHaveBeenCalledWith(
+        conversation.id,
+        expect.stringContaining("my next build"),
+        expect.any(Function),
+        expect.any(AbortSignal),
+      ),
+    );
+    expect(screen.queryByRole("dialog", { name: "My builds" })).not.toBeInTheDocument();
+  });
+
   it("does not open the application draft from typed message text", async () => {
     render(<App />);
     await openExistingConversation();
@@ -1890,7 +1864,7 @@ describe("Course Agent interface", () => {
     finishRun();
   });
 
-  it("replaces the previous response after a new message", async () => {
+  it("keeps earlier messages in the chat after a new message", async () => {
     vi.mocked(api.streamAgentRun).mockImplementation(async (_id, _text, onEvent) => {
       onEvent({
         kind: "activity",
@@ -1904,15 +1878,37 @@ describe("Course Agent interface", () => {
       onEvent({ kind: "text_final", text: "The new response." });
       onEvent({ kind: "done" });
     });
+    startInConversationMoments();
     render(<App />);
-    await openExistingConversation();
+    await waitFor(() => expect(api.getPendingActionConversation).toHaveBeenCalled());
+    await screen.findByText("The earlier response.");
+    vi.mocked(api.getConversation).mockResolvedValue({
+      conversation,
+      events: [
+        previousEvent,
+        {
+          ...previousEvent,
+          id: "30000000-0000-4000-8000-000000000020",
+          type: "user.message",
+          actor: "user",
+          payload: { text: "What is due?" },
+        },
+        {
+          ...previousEvent,
+          id: "30000000-0000-4000-8000-000000000021",
+          payload: { text: "The new response." },
+        },
+      ],
+    });
 
     const composer = screen.getByRole("textbox", { name: "Message" });
     fireEvent.change(composer, { target: { value: "What is due?" } });
     fireEvent.keyDown(composer, { key: "Enter" });
 
-    expect(await screen.findByText("The new response.")).toBeInTheDocument();
-    expect(screen.queryByText("The earlier response.")).not.toBeInTheDocument();
+    const chat = await screen.findByRole("list", { name: "Chat history" });
+    expect(await within(chat).findByText("The new response.")).toBeInTheDocument();
+    expect(within(chat).getByText("What is due?")).toBeInTheDocument();
+    expect(within(chat).getByText("The earlier response.")).toBeInTheDocument();
     expect(api.streamAgentRun).toHaveBeenCalledWith(
       conversation.id,
       "What is due?",
@@ -1921,7 +1917,7 @@ describe("Course Agent interface", () => {
     );
   });
 
-  it("shows frame-coalesced streamed text with an active cursor", async () => {
+  it("streams the reply into the chat under the question", async () => {
     let releaseStream = () => {};
     vi.mocked(api.streamAgentRun).mockImplementation(async (_id, _text, onEvent) => {
       onEvent({ kind: "text", text: "Now." });
@@ -1931,21 +1927,17 @@ describe("Course Agent interface", () => {
       onEvent({ kind: "text_final", text: "Now done." });
       onEvent({ kind: "done" });
     });
+    startInConversationMoments();
     render(<App />);
-    await openExistingConversation();
+    await waitFor(() => expect(api.getPendingActionConversation).toHaveBeenCalled());
 
     const composer = screen.getByRole("textbox", { name: "Message" });
     fireEvent.change(composer, { target: { value: "Stream the answer" } });
     fireEvent.keyDown(composer, { key: "Enter" });
 
-    await waitFor(() =>
-      expect(document.querySelector(".latest-response")).toHaveTextContent("Now."),
-    );
-    expect(document.querySelector(".response-character")).not.toBeInTheDocument();
-    expect(document.querySelector(".latest-response")).toHaveAttribute(
-      "data-streaming",
-      "true",
-    );
+    const chat = await screen.findByRole("list", { name: "Chat history" });
+    await waitFor(() => expect(within(chat).getByText("Stream the answer")).toBeInTheDocument());
+    await waitFor(() => expect(chat).toHaveTextContent("Now."));
     expect(screen.getByTestId("response-agent-line").parentElement).toHaveClass(
       "response-stage-header",
     );

@@ -605,6 +605,27 @@ export const DRAFT_DOCUMENT_MANIFEST: ComponentManifest = {
   defaultSize: { width: 760, height: 720 },
 };
 
+export const LEARNING_TRAIL_MANIFEST: ComponentManifest = {
+  id: "learning-trail",
+  version: "1.0.0",
+  title: "Learning Trail",
+  description:
+    "Lets a logged-in student read, write, and manage their own weekly build reflections and feedback, and lets TAs and instructors read entries students shared and write feedback. The panel loads the data itself; never pass reflection text in props.",
+  propsSchema: {
+    type: "object",
+    properties: {
+      focus_entry_id: {
+        type: "string",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        maxLength: 36,
+      },
+    },
+    additionalProperties: false,
+  },
+  supportedOperations: ["open", "update", "focus", "close"],
+  defaultSize: { width: 720, height: 720 },
+};
+
 export const BUILT_IN_COMPONENT_MANIFESTS: readonly ComponentManifest[] = [
   DOCUMENT_VIEWER_MANIFEST,
   CALENDAR_MANIFEST,
@@ -613,4 +634,5 @@ export const BUILT_IN_COMPONENT_MANIFESTS: readonly ComponentManifest[] = [
   PAGE_CARDS_MANIFEST,
   VISUAL_COMPOSITION_MANIFEST,
   DRAFT_DOCUMENT_MANIFEST,
+  LEARNING_TRAIL_MANIFEST,
 ];

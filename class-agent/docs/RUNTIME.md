@@ -82,6 +82,7 @@ course.list_my_communications (exact student role only)
 course.read_my_communication (exact student role only)
 course.submit_application
 course.ask_ta (configured, exact student role only)
+memory.get_mine (logged-in student; own learning trail, read-only)
 course.list_assignments (logged-in student, TA, or instructor)
 course.get_assignment (logged-in student, TA, or instructor)
 grades.get_mine (active credit student only; own weekly build feedback)

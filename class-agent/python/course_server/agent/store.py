@@ -12,6 +12,10 @@ class ConversationAccessDenied(RuntimeError):
     """A conversation does not exist for the current principal."""
 
 
+class MemoryUnavailable(RuntimeError):
+    """Selected memories could not be loaded for this run."""
+
+
 class EventAlreadyExists(ValueError):
     """A canonical event with this stable ID was already persisted."""
 
@@ -39,6 +43,8 @@ class ConversationStore(Protocol):
     async def append_events(self, conversation_id: UUID, events: list[Event]) -> None: ...
 
     async def list_events(self, conversation_id: UUID) -> list[Event]: ...
+
+    async def first_user_messages(self, conversation_ids: list[UUID]) -> dict[UUID, str]: ...
 
 
 class InMemoryConversationStore:
@@ -100,6 +106,16 @@ class InMemoryConversationStore:
             self.events[conversation_id],
             key=lambda event: (event.timestamp, str(event.id)),
         )
+
+    async def first_user_messages(self, conversation_ids: list[UUID]) -> dict[UUID, str]:
+        first: dict[UUID, str] = {}
+        for conversation_id in conversation_ids:
+            for event in await self.list_events(conversation_id):
+                text = event.payload.get("text")
+                if event.type == "user.message" and isinstance(text, str):
+                    first[conversation_id] = text
+                    break
+        return first
 
 
 def _has_pending_action(events: list[Event]) -> bool:

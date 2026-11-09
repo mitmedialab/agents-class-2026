@@ -63,6 +63,12 @@ import {
   projectConversationTimeline,
   timelineFade,
 } from "./ConversationTimeline.js";
+import {
+  ConversationChat,
+  formatConversationTime,
+  projectConversationTranscript,
+} from "./ConversationTranscript.js";
+import { LearningTrailDialog } from "./LearningTrailPanel.js";
 import { historicalInteraction, historicalPanelAction } from "./historicalWorkspace.js";
 import {
   applyTAQuestionEvent,
@@ -176,7 +182,7 @@ function newestFirst(conversations: Conversation[]): Conversation[] {
   );
 }
 
-function conversationTitle(conversation: Conversation): string {
+function conversationTitle(conversation: Pick<Conversation, "title">): string {
   return conversation.title?.trim() || "Untitled conversation";
 }
 
@@ -236,13 +242,6 @@ function uploadValidationError(files: File[]): string | null {
   return unsupported
     ? `“${unsupported.name}” isn’t supported. Upload an image, PDF, text, CSV, JSON, or Markdown file.`
     : null;
-}
-
-function formatConversationDate(value: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-  }).format(new Date(value));
 }
 
 function workspaceFromEvents(events: Event[]): WorkspaceState {
@@ -314,6 +313,10 @@ export default function App() {
   const [pendingUploadCount, setPendingUploadCount] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [pendingLogMessage, setPendingLogMessage] = useState<string | null>(null);
+  const [logOpened, setLogOpened] = useState(false);
+  const [trailOpen, setTrailOpen] = useState(false);
+  const closeTrail = useCallback(() => setTrailOpen(false), []);
   const [aboutOpen, setAboutOpen] = useAboutRoute();
   const [syllabusPdfUrl, setSyllabusPdfUrl] = useState<string | undefined>();
   const [syllabusContent, setSyllabusContent] = useState<string | null>(null);
@@ -388,6 +391,15 @@ export default function App() {
   const timelineMoments = useMemo(
     () => projectConversationTimeline(conversationEvents),
     [conversationEvents],
+  );
+  // Once a student has written, or opens a log, the conversation reads as one chat that
+  // scrolls up and down.
+  const chatView = useMemo(
+    () =>
+      logOpened ||
+      (isRunning && pendingLogMessage !== null) ||
+      projectConversationTranscript(conversationEvents).some(({ from }) => from === "student"),
+    [conversationEvents, isRunning, logOpened, pendingLogMessage],
   );
   const historicalMoment =
     timelineOffset > 0 ? momentAtOffset(timelineMoments, timelineOffset) : null;
@@ -555,6 +567,8 @@ export default function App() {
     staticOpenGeneration.current += 1;
     operationInFlight.current = false;
     applicationReturnResponse.current = null;
+    setPendingLogMessage(null);
+    setLogOpened(false);
     setSelectedConversationId(null);
     setConversationEvents([]);
     setTimelineOffset(0);
@@ -579,10 +593,12 @@ export default function App() {
     requestAnimationFrame(() => composerRef.current?.focus());
   }, [showWelcomeMessage]);
 
-  async function showConversation(conversation: Conversation): Promise<void> {
+  async function showConversation(conversation: Conversation, fromLogs = false): Promise<void> {
     staticOpenGeneration.current += 1;
     operationInFlight.current = false;
     setIsOpeningStatic(false);
+    setPendingLogMessage(null);
+    setLogOpened(fromLogs);
     setCurrentAction("Loading conversation");
     setConversationEvents([]);
     setTimelineOffset(0);
@@ -1034,6 +1050,7 @@ export default function App() {
       setUploads([]);
       setUploadError(null);
     }
+    setPendingLogMessage(visibleText);
     setIsRunning(true);
     setIsStreamingText(false);
     setCurrentAction("Preparing conversation context");
@@ -1931,7 +1948,9 @@ export default function App() {
     }, delay);
   };
   const handleTimelineWheel = (event: globalThis.WheelEvent) => {
-    if (isRunning || Math.abs(event.deltaY) < 0.1 || timelineMoments.length < 2) return;
+    if (chatView || isRunning || Math.abs(event.deltaY) < 0.1 || timelineMoments.length < 2) {
+      return;
+    }
     const stage = responseStageRef.current;
     if (!stage) return;
     const wheelPixels = event.deltaY *
@@ -1981,7 +2000,9 @@ export default function App() {
     scheduleTimelineSettle(nextProgress >= 1 ? 70 : 150);
   };
   const handleTimelineTouchStart = (event: globalThis.TouchEvent) => {
-    if (isRunning || timelineMoments.length < 2 || event.touches.length !== 1) return;
+    if (chatView || isRunning || timelineMoments.length < 2 || event.touches.length !== 1) {
+      return;
+    }
     if (timelineGestureReset.current !== null) window.clearTimeout(timelineGestureReset.current);
     if (timelineSettleCommit.current !== null) window.clearTimeout(timelineSettleCommit.current);
     const stage = responseStageRef.current;
@@ -2066,11 +2087,15 @@ export default function App() {
   const headerPrompts = HEADER_PROMPTS.map((prompt) =>
     prompt.label === "Apply" && contactPrompt ? contactPrompt : prompt,
   );
+  const canUseTrail =
+    principal?.authenticated === true &&
+    principal.roles.some((role) => role === "student" || role === "ta" || role === "instructor");
   return (
     <div
       className="course-agent"
       data-about-open={aboutOpen}
       data-conversation-reading={selectedConversationId !== null}
+      data-log-chat={chatView}
       data-file-drag-active={isFileDragActive}
       data-mobile-notifications-open={
         notificationCenterVisible && activeMobileView === "updates"
@@ -2121,6 +2146,14 @@ export default function App() {
           </div>
         </div>
         <div className="header-utility">
+          {canUseTrail ? (
+            <Button
+              className="header-new-chat header-my-builds"
+              onClick={() => setTrailOpen(true)}
+            >
+              {principal?.roles.includes("student") ? "My builds" : "Student builds"}
+            </Button>
+          ) : null}
           <Button className="header-new-chat" onClick={startNewConversation}>
             New chat
           </Button>
@@ -2254,14 +2287,16 @@ export default function App() {
               <ActivityTrace activities={activities} currentLabel={currentAction} />
             </div>
           </div>
-          <ConversationTimeline
-            disabled={isRunning}
-            moments={timelineMoments}
-            offset={timelineOffset}
-            previewOffset={timelinePull?.targetOffset ?? null}
-            progress={timelinePull?.progress ?? 0}
-            onOffsetChange={handleTimelineOffsetChange}
-          />
+          {chatView ? null : (
+            <ConversationTimeline
+              disabled={isRunning}
+              moments={timelineMoments}
+              offset={timelineOffset}
+              previewOffset={timelinePull?.targetOffset ?? null}
+              progress={timelinePull?.progress ?? 0}
+              onOffsetChange={handleTimelineOffsetChange}
+            />
+          )}
           {!isTimeTraveling && presentedCommunication ? (
             <CommunicationDetailCard
               generatedAt={notificationCenter.generated_at}
@@ -2269,7 +2304,13 @@ export default function App() {
               onClose={handleClosePresentedCommunication}
             />
           ) : null}
-          {displayedResponse ? (
+          {chatView ? (
+            <ConversationChat
+              events={conversationEvents}
+              latestResponse={latestResponse}
+              pendingMessage={isRunning ? pendingLogMessage : null}
+            />
+          ) : displayedResponse ? (
             <div className="timeline-message-stack">
               <div
                 className="timeline-message-group"
@@ -2360,6 +2401,9 @@ export default function App() {
                   onInteraction={handleWorkspaceInteraction}
                   onCloseWorkspace={handleCloseWorkspace}
                   onPanelAction={handleWorkspacePanelAction}
+                  onAskAboutTrail={
+                    isTimeTraveling || isRunning ? undefined : (question) => void sendMessage(question)
+                  }
                   onCheckAssignment={
                     !isTimeTraveling && principal?.roles.includes("student")
                       ? (resourceUri) =>
@@ -2570,6 +2614,16 @@ export default function App() {
         </>
       )}
 
+      {trailOpen ? (
+        <LearningTrailDialog
+          onAsk={(question) => {
+            setTrailOpen(false);
+            setAboutOpen(false);
+            void sendMessage(question);
+          }}
+          onClose={closeTrail}
+        />
+      ) : null}
       {historyOpen ? (
         <div
           className="drawer-backdrop"
@@ -2612,11 +2666,11 @@ export default function App() {
                           selectedConversationId === conversation.id ? "page" : undefined
                         }
                         className="conversation-link"
-                        onClick={() => void showConversation(conversation)}
+                        onClick={() => void showConversation(conversation, true)}
                       >
                         <span>{conversationTitle(conversation)}</span>
                         <time dateTime={conversation.updated_at}>
-                          {formatConversationDate(conversation.updated_at)}
+                          {formatConversationTime(conversation.updated_at)}
                         </time>
                       </Button>
                     </li>
@@ -2641,9 +2695,21 @@ export default function App() {
                   <p className="account-name">
                     {principal.display_name || principal.username || "Course member"}
                   </p>
-                  <Button disabled={authSubmitting} onClick={() => void handleLogout()}>
-                    Log out
-                  </Button>
+                  <div className="account-actions">
+                    {canUseTrail ? (
+                      <Button
+                        onClick={() => {
+                          setHistoryOpen(false);
+                          setTrailOpen(true);
+                        }}
+                      >
+                        {principal.roles.includes("student") ? "My builds" : "Student builds"}
+                      </Button>
+                    ) : null}
+                    <Button disabled={authSubmitting} onClick={() => void handleLogout()}>
+                      Log out
+                    </Button>
+                  </div>
                 </>
               ) : (
                 <form className="login-form" onSubmit={(event) => void handleLogin(event)}>

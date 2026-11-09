@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
 import pytest
 
-from agent_core import AgentContext, AgentInput, AgentResult, Event, PrincipalContext
+from agent_core import AgentContext, AgentInput, AgentResult, Conversation, Event, PrincipalContext
 from course_server.agent import (
     ASK_TA_TOOL_ID,
     COURSE_APPLICATION_URI,
@@ -47,6 +48,7 @@ from course_server.agent import (
     ResourceDefinition,
     SkillCatalog,
 )
+from course_server.agent.conversation_titles import with_readable_title
 from course_server.agent_cli import _safe_failure_message, run_cli_turn
 from course_server.auth import InMemoryAuthStore
 from course_server.browser import BROWSER_TOOL_IDS
@@ -827,3 +829,18 @@ def test_cli_failure_message_rejects_unsafe_provider_fields() -> None:
 
     assert "[status=400]" in message
     assert "test-secret-value" not in message
+
+
+def test_titles_come_from_the_first_message_unless_someone_chose_one() -> None:
+    now = datetime.now(UTC)
+    base = {"id": uuid4(), "user_id": uuid4(), "created_at": now, "updated_at": now}
+    welcome = Conversation.model_validate({**base, "title": "Course Agent welcome"})
+    chosen = Conversation.model_validate({**base, "title": "Course application"})
+    untitled = Conversation.model_validate({**base, "title": None})
+
+    assert with_readable_title(welcome, None).title == "Course Agent welcome"
+    assert with_readable_title(chosen, "Help me").title == "Course application"
+    assert with_readable_title(welcome, "Plan   my\nbuild").title == "Plan my build"
+    assert with_readable_title(untitled, "x" * 100).title == f"{'x' * 55}…"
+    wrapped = "context\n<user_request>Check this\n[Temporary upload: abc]</user_request>"
+    assert with_readable_title(untitled, wrapped).title == "Check this"

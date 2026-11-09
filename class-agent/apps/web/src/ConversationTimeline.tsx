@@ -22,7 +22,7 @@ export function visibleUserMessage(value: string): string {
   return visible.trim();
 }
 
-function responseFromEvent(event: Event): string | null {
+export function responseFromEvent(event: Event): string | null {
   if (
     event.type === "email.ta_answer.received" &&
     typeof event.payload.answer === "string"

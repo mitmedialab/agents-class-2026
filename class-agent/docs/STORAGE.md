@@ -83,6 +83,21 @@ MCP tool call after the daily pruning interval. The staff-side aggregate report 
 returns individual digests. Database backups may retain older copies according to their
 separate retention policy.
 
+## Learning trails
+
+`LEARNING_TRAIL_DATA_PATH` defaults to `var/learning-trail/`, which Git ignores. Each student has one
+validated `<user_id>.json` file (mode `0600`, directory mode `0700`) replaced atomically on every
+change. The filename comes only from the trusted session's user UUID, and a file whose recorded
+`user_id` differs from its owner is rejected. Entries do not enter PostgreSQL or canonical events:
+workspace props carry at most an entry ID, and `memory.get_mine` stores only a summary in history.
+An agent reply that quotes an entry is still an ordinary `agent.message` event, so deleting an entry
+does not change past replies. TAs and instructors can read only entries a student shared, through
+the staff routes; feedback they write is stored in the student's file with `source: "staff"` and
+the author and role from their session. Create this directory before deploying, because the API service
+sandbox can write only to directories that already exist, and include it in protected production
+backups. See
+[the feature README](../python/course_server/learning_trail/README.md).
+
 ## Course assignments
 
 `ASSIGNMENT_DATA_PATH` defaults to `var/assignments/`. Each assignment directory contains a

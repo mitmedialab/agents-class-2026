@@ -42,6 +42,7 @@ from course_server.agent import (
     SkillCatalog,
     ToolValidationError,
 )
+from course_server.agent.conversation_titles import with_readable_title
 from course_server.agent.store import principal_owns_conversation
 from course_server.agent_cli import build_runtime
 from course_server.anonymous_quotas import (
@@ -66,6 +67,7 @@ from course_server.application_roster import initialize_student_application_acce
 from course_server.assignments import AssignmentStore, FileAssignmentStore
 from course_server.auth import (
     AuthenticationService,
+    AuthStore,
     InvalidCredentials,
     InvalidSession,
     LoginRateLimited,
@@ -106,6 +108,13 @@ from course_server.instructor_messages import (
     InstructorMessageStateError,
     PostgresInstructorMessageStore,
 )
+from course_server.learning_trail import (
+    ConnectionDocument,
+    FileDraftStore,
+    FileTrailStore,
+    LearningTrailService,
+)
+from course_server.learning_trail.routes import build_learning_trail_router
 from course_server.mail import (
     PostgresTAQuestionStore,
     TAQuestionAccessDenied,
@@ -357,6 +366,7 @@ class AppServices:
     instructor_messages: InstructorMessageService | None = None
     notifications: StudentNotificationService | None = None
     notification_center: NotificationCenterService | None = None
+    learning_trail: LearningTrailService | None = None
     anonymous_quotas: AnonymousQuotaStore = dataclass_field(
         default_factory=InMemoryAnonymousQuotaStore
     )
@@ -445,6 +455,44 @@ async def _consume_anonymous_upload_quota(
             detail=f"anonymous {error.metric.replace('_', ' ')} limit reached; sign in to continue",
             headers={"Retry-After": "604800"},
         ) from error
+
+
+async def _display_name(auth: AuthStore, user_id: UUID) -> str | None:
+    user = await auth.get_user_by_id(user_id)
+    return None if user is None else user.display_name
+
+
+def _course_material_loader(
+    catalog: Callable[[], CourseResourceCatalog],
+) -> Callable[[], Awaitable[list[ConnectionDocument]]]:
+    """Slides and readings for learning-trail connections, read once because they rarely change."""
+
+    cached: list[ConnectionDocument] | None = None
+
+    async def load() -> list[ConnectionDocument]:
+        nonlocal cached
+        if cached is None:
+            documents: list[ConnectionDocument] = []
+            for resource in catalog().list_public():
+                if not resource.uri.startswith(("course://slides/", "course://readings/")):
+                    continue
+                try:
+                    contents = await catalog().read(resource.uri)
+                except (ResourceNotFound, OSError, ValueError):
+                    logger.warning("Skipping unreadable course material %s", resource.uri)
+                    continue
+                documents.append(
+                    ConnectionDocument(
+                        kind="class",
+                        target_id=resource.uri,
+                        title=resource.title,
+                        text=contents.text,
+                    )
+                )
+            cached = documents
+        return cached
+
+    return load
 
 
 def _delete_cookie(response: Response, name: str) -> None:
@@ -913,6 +961,12 @@ def create_app(
             preview_path=resolved_settings.grade_preview_data_path,
             preview_only=resolved_settings.grade_preview_only,
         )
+        learning_trail = LearningTrailService(
+            FileTrailStore(resolved_settings.learning_trail_data_path),
+            student_name=lambda user_id: _display_name(auth_store, user_id),
+            course_materials=_course_material_loader(lambda: course_resources),
+            drafts=FileDraftStore(resolved_settings.learning_trail_data_path),
+        )
         instructor_message_store = PostgresInstructorMessageStore(pool)
         instructor_message_service = InstructorMessageService(
             messages=instructor_message_store,
@@ -994,6 +1048,7 @@ def create_app(
                     student_communications=student_communication_service,
                     faq_updates=faq_knowledge,
                     course_roster=course_roster,
+                    learning_trail=learning_trail,
                 ),
                 conversations=conversation_store,
                 capability_policy=CourseCapabilityPolicy(
@@ -1010,11 +1065,13 @@ def create_app(
                         resolved_settings.github_student_projects_enabled
                         or resolved_settings.student_project_fixtures_enabled
                     ),
+                    learning_trail_enabled=True,
                 ),
                 skills=skills,
                 workspace_registry=component_registry,
                 uploads=upload_store,
                 attention=notification_center,
+                memories=learning_trail,
             ),
             conversations=conversation_store,
             applicants=applicant_store,
@@ -1029,6 +1086,7 @@ def create_app(
             instructor_messages=instructor_message_service,
             notifications=StudentNotificationService(faqs=faq_store, auth=auth_store),
             notification_center=notification_center,
+            learning_trail=learning_trail,
             anonymous_quotas=PostgresAnonymousQuotaStore(pool),
             anonymous_quota_policy=AnonymousQuotaPolicy(
                 enabled=resolved_settings.anonymous_quotas_enabled,
@@ -1541,13 +1599,20 @@ def create_app(
         principal: Annotated[PrincipalContext, Depends(_require_principal)],
         limit: Annotated[int | None, Query(ge=1, le=100)] = None,
         offset: Annotated[int, Query(ge=0)] = 0,
+        started_only: bool = False,
     ) -> list[Conversation]:
         state = _get_app_state(request)
         assert state.services is not None
-        conversations = await state.services.conversations.list_conversations(principal)
-        if limit is None:
-            return conversations[offset:]
-        return conversations[offset : offset + limit]
+        store = state.services.conversations
+        conversations = await store.list_conversations(principal)
+        first_messages = await store.first_user_messages([item.id for item in conversations])
+        if started_only:
+            conversations = [item for item in conversations if item.id in first_messages]
+        end = None if limit is None else offset + limit
+        return [
+            with_readable_title(item, first_messages.get(item.id))
+            for item in conversations[offset:end]
+        ]
 
     @router.get(
         "/conversations/pending-action",
@@ -2632,6 +2697,16 @@ def create_app(
         )
         return RunResponse.from_result(result)
 
+    def _learning_trail_service(request: Request) -> LearningTrailService | None:
+        services = _get_app_state(request).services
+        return None if services is None else services.learning_trail
+
+    router.include_router(
+        build_learning_trail_router(
+            require_principal=_require_principal,
+            get_service=_learning_trail_service,
+        )
+    )
     app.include_router(router, prefix=API_PREFIX)
     app.include_router(router, include_in_schema=False)
     return app

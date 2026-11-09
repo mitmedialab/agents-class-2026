@@ -1,4 +1,14 @@
 import type { Conversation, Event, PrincipalContext, Uuid } from "@class-agent/protocol";
+import type {
+  LearningTrailEntry,
+  LearningTrailEntryDraft,
+  LearningTrailConnection,
+  LearningTrailCoverage,
+  LearningTrailPendingDraft,
+  LearningTrailTopic,
+  LearningTrailFeedbackDraft,
+  LearningTrailStudent,
+} from "@class-agent/ui";
 import type { JsonValue } from "@class-agent/workspace";
 import {
   confirmationFromPayload,
@@ -253,7 +263,8 @@ export async function logout(): Promise<void> {
 export function listConversations(
   options: { limit?: number; offset?: number } = {},
 ): Promise<Conversation[]> {
-  const query = new URLSearchParams();
+  // The drawer lists conversations someone took part in, not the greeting from each visit.
+  const query = new URLSearchParams({ started_only: "true" });
   if (options.limit !== undefined) query.set("limit", String(options.limit));
   if (options.offset !== undefined) query.set("offset", String(options.offset));
   const suffix = query.size > 0 ? `?${query.toString()}` : "";
@@ -379,6 +390,147 @@ export async function markNotificationCenterItemRead(itemId: Uuid): Promise<void
   if (!response.ok) {
     throw await responseError(response);
   }
+}
+
+export async function listLearningTrail(): Promise<LearningTrailEntry[]> {
+  const { entries } = await requestJson<{ entries: LearningTrailEntry[] }>("/learning-trail");
+  return entries;
+}
+
+export async function listLearningTrailConnections(): Promise<
+  Record<string, LearningTrailConnection[]>
+> {
+  const { connections } = await requestJson<{
+    connections: Record<string, LearningTrailConnection[]>;
+  }>("/learning-trail/connections");
+  return connections;
+}
+
+export async function listLearningTrailTopics(): Promise<{
+  topics: LearningTrailTopic[];
+  coverage: LearningTrailCoverage;
+}> {
+  return requestJson<{ topics: LearningTrailTopic[]; coverage: LearningTrailCoverage }>(
+    "/learning-trail/topics",
+  );
+}
+
+/** The entry the agent drafted from a debrief, or null when there is none. */
+export async function getLearningTrailDraft(): Promise<LearningTrailPendingDraft | null> {
+  try {
+    return await requestJson<LearningTrailPendingDraft>("/learning-trail/draft");
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+export function acceptLearningTrailDraft(
+  draft: LearningTrailEntryDraft,
+): Promise<LearningTrailEntry> {
+  return requestJson<LearningTrailEntry>("/learning-trail/draft/accept", {
+    method: "POST",
+    body: JSON.stringify(draft),
+  });
+}
+
+export async function discardLearningTrailDraft(): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/learning-trail/draft`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!response.ok) {
+    throw await responseError(response);
+  }
+}
+
+export function createLearningTrailEntry(
+  draft: LearningTrailEntryDraft,
+): Promise<LearningTrailEntry> {
+  return requestJson<LearningTrailEntry>("/learning-trail/entries", {
+    method: "POST",
+    body: JSON.stringify(draft),
+  });
+}
+
+export function updateLearningTrailEntry(
+  entryId: Uuid,
+  patch: Partial<LearningTrailEntryDraft> & { still_relevant?: boolean },
+): Promise<LearningTrailEntry> {
+  return requestJson<LearningTrailEntry>(
+    `/learning-trail/entries/${encodeURIComponent(entryId)}`,
+    { method: "PATCH", body: JSON.stringify(patch) },
+  );
+}
+
+export async function deleteLearningTrailEntry(entryId: Uuid): Promise<void> {
+  const response = await fetch(
+    `${API_BASE_URL}/learning-trail/entries/${encodeURIComponent(entryId)}`,
+    { method: "DELETE", credentials: "include" },
+  );
+  if (!response.ok) {
+    throw await responseError(response);
+  }
+}
+
+export function addLearningTrailFeedback(
+  entryId: Uuid,
+  draft: LearningTrailFeedbackDraft,
+): Promise<LearningTrailEntry> {
+  return requestJson<LearningTrailEntry>(
+    `/learning-trail/entries/${encodeURIComponent(entryId)}/feedback`,
+    { method: "POST", body: JSON.stringify(draft) },
+  );
+}
+
+export function deleteLearningTrailFeedback(
+  entryId: Uuid,
+  feedbackId: Uuid,
+): Promise<LearningTrailEntry> {
+  return requestJson<LearningTrailEntry>(
+    `/learning-trail/entries/${encodeURIComponent(entryId)}/feedback/${encodeURIComponent(feedbackId)}`,
+    { method: "DELETE" },
+  );
+}
+
+export async function listLearningTrailStudents(): Promise<LearningTrailStudent[]> {
+  const { students } = await requestJson<{ students: LearningTrailStudent[] }>(
+    "/learning-trail/students",
+  );
+  return students;
+}
+
+export async function listSharedLearningTrail(studentId: Uuid): Promise<LearningTrailEntry[]> {
+  const { entries } = await requestJson<{ entries: LearningTrailEntry[] }>(
+    `/learning-trail/students/${encodeURIComponent(studentId)}/entries`,
+  );
+  return entries;
+}
+
+function sharedFeedbackPath(studentId: Uuid, entryId: Uuid): string {
+  return `/learning-trail/students/${encodeURIComponent(studentId)}/entries/${encodeURIComponent(entryId)}/feedback`;
+}
+
+export function addStaffLearningTrailFeedback(
+  studentId: Uuid,
+  entryId: Uuid,
+  body: string,
+): Promise<LearningTrailEntry> {
+  return requestJson<LearningTrailEntry>(sharedFeedbackPath(studentId, entryId), {
+    method: "POST",
+    body: JSON.stringify({ body }),
+  });
+}
+
+export function deleteStaffLearningTrailFeedback(
+  studentId: Uuid,
+  entryId: Uuid,
+  feedbackId: Uuid,
+): Promise<LearningTrailEntry> {
+  return requestJson<LearningTrailEntry>(
+    `${sharedFeedbackPath(studentId, entryId)}/${encodeURIComponent(feedbackId)}`,
+    { method: "DELETE" },
+  );
 }
 
 export async function getCourseResourceContent(
