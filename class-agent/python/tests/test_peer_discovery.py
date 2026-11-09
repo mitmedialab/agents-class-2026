@@ -191,3 +191,25 @@ def test_open_weekly_pairs_without_chat_or_saved_recommendations(service: PeerDi
     updated = asyncio.run(service.prepare_weekly(user))["atlas"]
     assert isinstance(updated, dict)
     assert updated["pairs"] == []
+
+
+def test_chat_query_emits_only_matching_peer_builds(service: PeerDiscovery) -> None:
+    user = student("ada")
+    asyncio.run(service.refresh(user, ["agents2026-ada", "agents2026-grace"], [1]))
+    ctx = ToolExecutionContext(
+        principal=user, conversation_id=uuid4(), permitted_resource_uris=frozenset()
+    )
+    tool = PeerTool("query_builds", service, load_component_registry())
+    for query, count in [("voice", 1), ("unrepresented", 0)]:
+        reply = asyncio.run(tool.execute({"query": query}, ctx))
+        assert isinstance(reply.content, dict)
+        candidates = reply.content["candidates"]
+        assert isinstance(candidates, list) and len(candidates) == count
+        command = reply.emitted_events[0].payload["command"]
+        assert isinstance(command, dict)
+        panel = command["panel"]
+        assert isinstance(panel, dict)
+        assert panel["props"] == {
+            "view": "recommendations",
+            "build_ids": [b["id"] for b in candidates if isinstance(b, dict)],
+        }

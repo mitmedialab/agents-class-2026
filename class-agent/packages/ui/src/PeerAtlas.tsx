@@ -1,9 +1,13 @@
+import { AuthorMark } from "./AuthorMark.js";
+export { AuthorMark } from "./AuthorMark.js";
+import { parseScheduleMarkdown } from "./ScheduleMarkdown.js";
+import publishedSchedule from "../../../shared/course/schedule/schedule.md?raw";
 import { GalaxySphere } from "./GalaxySphere.js";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import "./peer-atlas.css";
 
 export const domains = ["Learning","Memory","Attention","Reasoning","Creativity","Reflection","Decision-making","Communication","Social connection"] as const;
-export type AtlasTab = "recommendations" | "domains" | "starred" | "galaxy";
+export type AtlasTab = "recommendations" | "domains" | "starred" | "galaxy" | "matches";
 export interface AtlasAuthor { id:string; name:string; mark:number; site:string }
 export interface AtlasBuild { id:string; author:string; title:string; week:number; domain:string; url:string; image?:string|null; excerpt?:string }
 export interface AtlasCatalog {
@@ -11,29 +15,33 @@ export interface AtlasCatalog {
   authors:AtlasAuthor[]; builds:AtlasBuild[];
   pairs:{mine:string; peer:string; borrow:string}[];
 }
-export function AuthorMark({index}:{index:number}) {
-  const family=index%5, n=5+Math.floor(index/5)*2;
-  return <svg className="atlas-mark" viewBox="-26 -26 52 52" aria-hidden="true">
-    {Array.from({length:n},(_,i)=><g key={i} transform={`rotate(${360*i/n})`}>
-      {family===0 && <ellipse cy="-9" ry="14" rx="6" fill="none" stroke="currentColor" strokeWidth="2"/>}
-      {family===1 && <path d="M0 -24 Q16 -23 3 -5 L-2 -7Z" fill="currentColor"/>}
-      {family===2 && <g fill="currentColor"><circle cy="-19" r="3"/><circle cy="-12" r="2"/></g>}
-      {family===3 && <path d="M0 -23 L6 -11 L0 -5" fill="none" stroke="currentColor" strokeWidth="3"/>}
-      {family===4 && <g stroke="currentColor" fill="currentColor"><path d="M0 -21V0"/><circle cy="-20" r="3"/></g>}
-    </g>)}
-  </svg>
-}
+const weekTitles = new Map(parseScheduleMarkdown(publishedSchedule).events.map(event => [event.week, event.title]));
 const plates = import.meta.glob("./domain-art/*.webp", {eager:true,import:"default"}) as Record<string,string>;
 
 function Thumb({down=false}:{down?:boolean}){
   return <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"><g transform={down?"rotate(180 12 12)":undefined}><path d="M3 10h4v11H3zM7 11l5-7q2-3 3 0v5h5q2 0 1.5 2L19 19q-.5 2-3 2H7z"/></g></svg>
 }
-export function PeerAtlas({catalog,tab,saved,toggle,rate,busy}:{catalog:AtlasCatalog;tab:AtlasTab;saved:string[];toggle:(id:string)=>void;rate:(id:string,rating:"helpful"|"not_relevant")=>void;busy?:boolean}){
+export type SendPeerMessage = (buildId: string, body: string, requestId: string) => Promise<void>;
+export function PeerAtlas({catalog,tab,saved,toggle,rate,busy,sendMessage,matchedBuildIds,initialWeek}:{catalog:AtlasCatalog;tab:AtlasTab;saved:string[];toggle:(id:string)=>void;rate:(id:string,rating:"helpful"|"not_relevant")=>void;busy?:boolean;sendMessage?:SendPeerMessage | undefined;matchedBuildIds?:string[] | undefined;initialWeek?:number}){
   const weeks=[...new Set(catalog.builds.map(b=>b.week))].sort((a,b)=>b-a);
-  const [week,setWeek]=useState(weeks.find(w => catalog.pairs.some(pair => catalog.builds.some(b => b.id === pair.mine && b.week === w))) ?? weeks[0]);
+  const [week,setWeek]=useState(initialWeek ?? weeks.find(w => catalog.pairs.some(pair => catalog.builds.some(b => b.id === pair.mine && b.week === w))) ?? weeks[0]);
   const [domain,setDomain]=useState("");
-  const [message,setMessage]=useState<{id:string;text:string}|null>(null);
-  const [copied,setCopied]=useState(false);
+  const [message,setMessage]=useState<{id:string;text:string;requestId:string}|null>(null);
+  const [sendStatus, setSendStatus] = useState("");
+  const sending = useRef(false);
+  const [isSending,setIsSending] = useState(false);
+  async function submitMessage() {
+    if (!message || !sendMessage || sending.current || !message.text.trim()) return;
+    sending.current = true; setIsSending(true); setSendStatus("");
+    try {
+      await sendMessage(message.id, message.text.trim(), message.requestId);
+      setMessage(null); setSendStatus("Message sent.");
+    } catch (error) {
+      setSendStatus(error instanceof Error ? error.message : "Sending failed. Try again.");
+    } finally {
+      sending.current = false; setIsSending(false);
+    }
+  }
   const [failedImages, setFailedImages] = useState<Set<string>>(() => new Set());
 
   const getAuthor=(id:string)=>catalog.authors.find(a=>a.id===id)!;
@@ -51,19 +59,29 @@ export function PeerAtlas({catalog,tab,saved,toggle,rate,busy}:{catalog:AtlasCat
   }
   const selected=catalog.builds.filter(b=>b.week===week);
   return <div className="atlas">
-    <div className="atlas-heading"><h2>{{recommendations:"Weekly pairs",domains:"cognitive augmentation-Domain",starred:"Starred builds",galaxy:"Class galaxy"}[tab]}</h2>
-    {(tab==="domains"||tab==="recommendations") && <select aria-label="Week" value={week} onChange={e=>setWeek(Number(e.target.value))}>{weeks.map(w=><option value={w} key={w}>Week {w}</option>)}</select>}</div>
+    {sendStatus && <p role="status">{sendStatus}</p>}
+    <div className="atlas-heading"><h2>{{recommendations:"Weekly pairs",domains:"cognitive augmentation-Domain",starred:"Starred builds",galaxy:"Class galaxy",matches:"Matching builds"}[tab]}</h2>
+    {(tab==="recommendations") && <select aria-label="Week" value={week} onChange={e=>setWeek(Number(e.target.value))}>{weeks.map(w=><option value={w} key={w}>Week {w}</option>)}</select>}</div>
     {tab==="recommendations" && !catalog.pairs.some(pair=>selected.some(b=>b.id===pair.mine)) && <p>No same-week match is available in the indexed builds yet.</p>}
     {tab==="recommendations" && catalog.pairs.filter(pair=>selected.some(b=>b.id===pair.mine)).map(pair=>{
       const mine=catalog.builds.find(b=>b.id===pair.mine)!,peer=catalog.builds.find(b=>b.id===pair.peer)!,author=getAuthor(peer.author);
       return <article className="atlas-pair" key={mine.id+peer.id}><div className="atlas-twins">{card(mine,"Your build")}<div className="atlas-orbit" aria-hidden="true">✦</div>{card(peer,"Paired build")}</div>
-      <p>{pair.borrow}</p><button onClick={()=>{setCopied(false);setMessage({id:peer.id,text:`Hi ${author.name}, I saw your build “${peer.title}” while working on “${mine.title}”. ${pair.borrow} Could we chat about how you designed it?`})}}>
+      <p>{pair.borrow}</p><button onClick={()=>{setSendStatus("");setMessage({id:peer.id,requestId:crypto.randomUUID(),text:`Hi ${author.name}, I saw your build “${peer.title}” while working on “${mine.title}”. ${pair.borrow} Could we chat about how you designed it?`})}}>
       <svg width="17" height="17" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M17 9a7 7 0 0 1-8 7l-5 2 1-4A7 7 0 1 1 17 9Z" stroke="currentColor" strokeWidth="1.4"/></svg> Connect</button> <button disabled={busy} onClick={()=>rate(peer.id,"helpful")}><Thumb/> Helpful</button> <button disabled={busy} onClick={()=>rate(peer.id,"not_relevant")}><Thumb down/> Not for me</button>
-      {message?.id===peer.id && <div className="atlas-compose"><label>Your message<textarea value={message.text} onChange={e=>{setCopied(false);setMessage({...message,text:e.target.value})}}/></label><button onClick={async()=>{await navigator.clipboard.writeText(message.text);setCopied(true)}}>{copied?"Copied":"Copy message"}</button> <button onClick={()=>setMessage(null)}>Close</button></div>}</article>
+      {message?.id===peer.id && <div className="atlas-compose"><label>Message to {author.name}<textarea disabled={isSending} maxLength={10000} value={message.text} onChange={e=>{setSendStatus("");setMessage({...message,requestId:crypto.randomUUID(),text:e.target.value})}}/></label>
+        <button disabled={isSending || !message.text.trim() || !sendMessage} onClick={()=>void submitMessage()}>{isSending ? "Sending…" : "Send"}</button> <button disabled={isSending} onClick={()=>{setMessage(null);setSendStatus("")}}>Close</button></div>}
+      </article>
     })}
     {tab==="domains" && <><div className="atlas-domains">{domains.map(d=><button key={d} aria-pressed={domain===d} onClick={()=>setDomain(d)}>
-      <strong>{d}</strong><img alt="" src={plates["./domain-art/"+d.replaceAll(" ","-")+".webp"]}/><small>{selected.filter(b=>b.domain===d).length} builds ↗</small></button>)}</div>
-      {domain && <section aria-live="polite"><h3>{domain} · Week {week}</h3><div className="atlas-list">{selected.filter(b=>b.domain===domain).map(b=>card(b))}</div>{!selected.some(b=>b.domain===domain)&&<p>No builds indexed for this week.</p>}</section>}</>}
+      <strong>{d}</strong><img alt="" src={plates["./domain-art/"+d.replaceAll(" ","-")+".webp"]}/><small>{catalog.builds.filter(b=>b.domain===d).length} builds ↗</small></button>)}</div>
+      {domain && <section aria-label={domain + " builds"}><h3>{domain}</h3>
+        {weeks.map(w => {
+          const builds = catalog.builds.filter(b => b.week === w && b.domain === domain);
+          return builds.length > 0 && <section key={w}><h4>Week {w}{weekTitles.has(w) && " · " + weekTitles.get(w)}</h4><div className="atlas-list">{builds.map(b=>card(b))}</div></section>;
+        })}
+        {!catalog.builds.some(b=>b.domain===domain) && <p>No builds indexed in this domain yet.</p>}
+      </section>}</>}
+    {tab==="matches" && <div className="atlas-list">{matchedBuildIds?.map(id => catalog.builds.find(b=>b.id===id)).filter((b): b is AtlasBuild=>Boolean(b)).map(b=>card(b))}{!matchedBuildIds?.length && <p>No matching builds found.</p>}</div>}
     {tab==="starred" && <div className="atlas-list">{catalog.builds.filter(b=>saved.includes(b.id)).map(b=>card(b))}{!saved.length&&<p>Star a build to keep it here.</p>}</div>}
     {tab==="galaxy" && <><p>{catalog.authors.length} course portfolios · Select a star to visit the student’s site.</p><GalaxySphere authors={catalog.authors}/></>}
   </div>

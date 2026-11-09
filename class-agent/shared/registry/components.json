@@ -587,7 +587,8 @@
               "memory",
               "coverage"
             ]
-          }
+          },
+          "build_ids": {"type": "array", "items": {"type":"string", "maxLength":100}, "maxItems":24}
         },
         "additionalProperties": false
       },

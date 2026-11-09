@@ -187,6 +187,7 @@ class AgentSettings(BaseModel):
     anonymous_max_upload_bytes: int = Field(default=20 * 1024 * 1024, ge=1, le=100 * 1024 * 1024)
     workspace_strict_visual_policy: bool = True
     mail_enabled: bool = False
+    peer_messaging_enabled: bool = False
     peer_discovery_path: Path = Path(__file__).resolve().parents[2] / "var/peer-discovery"
     showcase_history_path: Path = DEFAULT_SHOWCASE_HISTORY_PATH
     github_student_projects_enabled: bool = False
@@ -399,6 +400,8 @@ class AgentSettings(BaseModel):
             workspace_strict_visual_policy=strict_visual_policy in {"true", "1", "yes"},
             mail_enabled=mail_enabled in {"true", "1", "yes"},
             github_student_projects_enabled=github_projects_enabled in {"true", "1", "yes"},
+            peer_messaging_enabled=values.get("MCP_MESSAGING_ENABLED", "false").strip().casefold()
+            in {"true", "1", "yes"},
             peer_discovery_path=Path(
                 values.get(
                     "PEER_DISCOVERY_PATH",

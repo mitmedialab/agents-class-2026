@@ -514,6 +514,12 @@ class PeerDiscovery:
                 term in content for term in profile_terms
             )
 
+        if terms:
+            candidates = [
+                b
+                for b in candidates
+                if any(term in (b.title + " " + b.content).casefold() for term in terms)
+            ]
         candidates.sort(key=lambda b: (-score(b), b.project_id, b.id))
         return {
             "candidates": [b.model_dump(exclude={"content"}) for b in candidates[:24]],

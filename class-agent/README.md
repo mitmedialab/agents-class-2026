@@ -189,7 +189,12 @@ indexed build for the signed-in student's roster project and an eligible peer bu
 **Not for me** dismisses that build for the current account. Students can edit their
 goals and long-term focus in matching preferences. Their preferences, saved works and
 feedback are stored per account in the server's private `PEER_DISCOVERY_PATH` directory.
-**Connect** prepares an editable draft that the student can copy.
+**Connect** opens an editable draft. **Send** delivers it through course direct messaging
+when the active roster, mail and course messaging integration are configured. The server
+resolves the indexed build to its roster author and checks the sender's current pairs.
+In chat, a request such as “I want to learn from hardware projects” can open a list of
+source-backed builds in the workspace. Domains span all indexed weeks and group projects
+under the published weekly lecture topics.
 
 For a local evaluation, `uv run python examples/import_gardens_demo.py` imports the
 pinned Our Gardens public portfolio snapshot. Run it from `class-agent` with the same

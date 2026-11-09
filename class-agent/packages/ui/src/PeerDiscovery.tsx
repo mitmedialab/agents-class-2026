@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { PeerAtlas, type AtlasCatalog } from "./PeerAtlas.js";
+import { PeerAtlas, type AtlasCatalog, type AtlasTab, type SendPeerMessage } from "./PeerAtlas.js";
 import { Button } from "./Button.js";
 
 export interface PeerProfile {
@@ -51,6 +51,8 @@ export interface PeerDiscoveryProps {
   busy?: boolean;
   readOnly?: boolean;
   notice?: string;
+  matchedBuildIds?: string[] | undefined;
+  sendMessage?: SendPeerMessage | undefined;
   onOpenWeekly?: () => void;
   onSaveProfile: (profile: PeerProfile) => void;
   onForget: () => void;
@@ -83,12 +85,13 @@ export function PeerDiscovery({
   readOnly,
   notice,
   onOpenWeekly,
+  matchedBuildIds, sendMessage,
   onSaveProfile,
   onForget,
   onFeedback,
   onRefresh,
 }: PeerDiscoveryProps) {
-  const [tab, setTab] = useState<NonNullable<PeerDiscoveryProps["view"]> | "domains" | "starred" | "galaxy">(view);
+  const [tab, setTab] = useState<NonNullable<PeerDiscoveryProps["view"]> | AtlasTab>(matchedBuildIds ? "matches" : view);
   const [profile, setProfile] = useState(data.memory.profile);
   const [challengeText, setChallengeText] = useState(
     profile.challenges.join("\n"),
@@ -122,6 +125,7 @@ export function PeerDiscovery({
             ["domains", "Domains"],
             ["galaxy", "Class galaxy"],
             ["starred", "Starred builds"],
+            ...(matchedBuildIds ? [["matches","Matching builds"] as const] : []),
 
           ] as const
         ).map(([id, label]) => (
@@ -135,7 +139,7 @@ export function PeerDiscovery({
           </Button>
         ))}
       </nav>
-      {data.atlas && tab !== "memory" && tab !== "coverage" && <PeerAtlas catalog={data.atlas} tab={tab} busy={Boolean(disabled)} rate={(id,rating)=>onFeedback({build_id:id,rating,note:""})}
+      {data.atlas && tab !== "memory" && tab !== "coverage" && <PeerAtlas matchedBuildIds={matchedBuildIds} sendMessage={sendMessage} catalog={data.atlas} tab={tab} busy={Boolean(disabled)} rate={(id,rating)=>onFeedback({build_id:id,rating,note:""})}
         saved={data.atlas.builds.filter(build => data.memory.feedback.filter(f => f.build_id === build.id && (f.rating === "saved" || f.rating === "unsaved")).at(-1)?.rating === "saved").map(b=>b.id)}
         toggle={id => { const last = data.memory.feedback.filter(f => f.build_id === id && (f.rating === "saved" || f.rating === "unsaved")).at(-1);
           onFeedback({build_id:id,rating:last?.rating === "saved" ? "unsaved" : "saved",note:""}); }}/>}

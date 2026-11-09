@@ -6,15 +6,18 @@ import {
   updatePeerProfile,
   forgetPeerMemory,
   postPeerFeedback,
+  sendPeerMessage,
   refreshPeerBuilds,
 } from "./api.js";
 
 export function PeerDiscoveryPanel({
   view = "recommendations",
   historical = false,
+  matchedBuildIds,
 }: {
   view?: "recommendations" | "memory" | "coverage";
   historical?: boolean;
+  matchedBuildIds?: string[] | undefined;
 }) {
   const [data, setData] = useState<PeerDiscoveryData | null>(null);
   const [busy, setBusy] = useState(false);
@@ -23,7 +26,7 @@ export function PeerDiscoveryPanel({
   useEffect(() => {
     if (historical) return;
     let active = true;
-    (view === "recommendations" ? openWeeklyPairs() : getPeerDiscovery())
+    (view === "recommendations" && !matchedBuildIds ? openWeeklyPairs() : getPeerDiscovery())
       .then((value) => {
         if (active) setData(value);
       })
@@ -36,7 +39,7 @@ export function PeerDiscoveryPanel({
     return () => {
       active = false;
     };
-  }, [historical, view]);
+  }, [historical, view, matchedBuildIds]);
   async function change(
     action: () => Promise<PeerDiscoveryData>,
     message: string,
@@ -73,6 +76,8 @@ export function PeerDiscoveryPanel({
     <PeerDiscovery
       key={revision}
       data={data}
+      matchedBuildIds={matchedBuildIds}
+      sendMessage={sendPeerMessage}
       view={view}
       busy={busy}
       notice={notice}
@@ -89,7 +94,7 @@ export function PeerDiscoveryPanel({
       onFeedback={(feedback) =>
         void change(
           () => postPeerFeedback(feedback),
-          "Feedback remembered for future recommendations.",
+          feedback.rating === "saved" || feedback.rating === "unsaved" ? "" : "Feedback remembered for future recommendations.",
         )
       }
       onRefresh={(ids, weeks) =>

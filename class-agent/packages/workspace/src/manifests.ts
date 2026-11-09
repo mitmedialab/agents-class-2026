@@ -608,7 +608,7 @@ export const DRAFT_DOCUMENT_MANIFEST: ComponentManifest = {
 export const PEER_DISCOVERY_MANIFEST: ComponentManifest = {
   id: "peer-discovery", version: "1.0.0", title: "Peer learning",
   description: "Student-owned learning memory, source-backed peer-build recommendations and feedback. Native authenticated view; public build sources and private memory are resolved by the server.",
-  propsSchema: {type: "object", properties: {view: {type: "string", enum: ["recommendations", "memory", "coverage"]}}, additionalProperties: false},
+  propsSchema: {type: "object", properties: {view: {type: "string", enum: ["recommendations", "memory", "coverage"]}, build_ids: {type:"array", items:{type:"string", maxLength:100}, maxItems:24}}, additionalProperties: false},
   supportedOperations: ["open", "update", "focus", "close"],
   defaultSize: {width: 960, height: 720},
 };

@@ -161,12 +161,19 @@ class PeerTool:
         else:
             raise ToolValidationError("Unsupported peer-discovery operation.")
         emitted = []
-        if self.operation in {"get_context", "save_recommendations"}:
+        props: dict[str, JsonValue] = {"view": "recommendations"}
+        if isinstance(request, Query):
+            candidates = result.get("candidates")
+            if isinstance(candidates, list):
+                props["build_ids"] = [b["id"] for b in candidates if isinstance(b, dict)]
+        elif isinstance(request, Save):
+            props["build_ids"] = [b.build_id for b in request.recommendations]
+        if self.operation in {"get_context", "query_builds", "save_recommendations"}:
             opened = await WorkspaceOpenComponentTool(self.components).execute(
                 {
                     "component_id": "peer-discovery",
                     "title": "Peer learning",
-                    "props": {"view": "recommendations"},
+                    "props": props,
                 },
                 context,
             )

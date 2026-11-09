@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -37,6 +38,13 @@ class Build(StrictModel):
     source_hash: str
     observed_at: str
     truncated: bool = False
+
+
+class ReviewedMessage(StrictModel):
+    build_id: str = Field(min_length=1, max_length=100)
+    request_id: UUID
+    body: str = Field(min_length=1, max_length=10_000)
+    confirmed: Literal[True]
 
 
 class Feedback(StrictModel):

@@ -952,3 +952,9 @@ export function postPeerFeedback(feedback: import("@class-agent/ui").PeerFeedbac
 export function refreshPeerBuilds(projectIds: string[], weeks: number[]): Promise<unknown> {
   return requestJson("/peer-discovery/refresh", {method:"POST",body:JSON.stringify({project_ids:projectIds,weeks})});
 }
+
+export async function sendPeerMessage(buildId: string, body: string, requestId: string) {
+  await requestJson("/peer-discovery/messages", {method:"POST", body:JSON.stringify({
+    build_id:buildId, body, request_id:requestId, confirmed:true,
+  })});
+}

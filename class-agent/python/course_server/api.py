@@ -86,7 +86,8 @@ from course_server.browser.stream import BrowserStreamService
 from course_server.browser.stream_response import browser_stream_response
 from course_server.browser.tools import browser_page_props
 from course_server.config import AgentSettings
-from course_server.course_roster import load_course_roster, verify_roster_resources
+from course_server.course_direct_messages import CourseDirectMessageService
+from course_server.course_roster import CourseRoster, load_course_roster, verify_roster_resources
 from course_server.faq import (
     CourseNotification,
     LocalFaqKnowledgeStore,
@@ -377,6 +378,7 @@ class AppServices:
         default_factory=AnonymousQuotaPolicy
     )
     peer_discovery: PeerDiscovery | None = None
+    peer_messaging: tuple[CourseDirectMessageService, CourseRoster] | None = None
     favicon_fetcher: Callable[[str], tuple[bytes, str] | None] = fetch_public_favicon
 
 
@@ -990,6 +992,14 @@ def create_app(
         peer_service = build_peer_discovery(resolved_settings, course_roster)
         app.state.course_state.services = AppServices(
             peer_discovery=peer_service,
+            peer_messaging=(
+                CourseDirectMessageService(pool, auth_store, course_roster),
+                course_roster,
+            )
+            if resolved_settings.peer_messaging_enabled
+            and resolved_settings.mail_enabled
+            and course_roster is not None
+            else None,
             authentication=AuthenticationService(
                 auth_store,
                 user_access_policy=(
@@ -2694,7 +2704,14 @@ def create_app(
         assert services is not None
         return services.peer_discovery
 
-    router.include_router(peer_router(_require_principal, get_peer_service))
+    def get_peer_messaging(
+        request: Request,
+    ) -> tuple[CourseDirectMessageService, CourseRoster] | None:
+        services = _get_app_state(request).services
+        assert services is not None
+        return services.peer_messaging
+
+    router.include_router(peer_router(_require_principal, get_peer_service, get_peer_messaging))
     app.include_router(router, prefix=API_PREFIX)
     app.include_router(router, include_in_schema=False)
     return app

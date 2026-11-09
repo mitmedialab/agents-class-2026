@@ -594,7 +594,9 @@ function ResourcePanel({
   }
   if (panel.componentId === "peer-discovery") {
     const view = panel.props.view === "memory" || panel.props.view === "coverage" ? panel.props.view : "recommendations";
-    return <PeerDiscoveryPanel key={panel.id} view={view} historical={historical} />;
+    const ids = panel.props.build_ids;
+    const matchedBuildIds = Array.isArray(ids) && ids.every((id): id is string => typeof id === "string") ? ids : undefined;
+    return <PeerDiscoveryPanel key={panel.id + JSON.stringify(matchedBuildIds)} view={view} matchedBuildIds={matchedBuildIds} historical={historical} />;
   }
   if (panel.componentId === "page-cards") {
     const items = pageCardItems(panel.props.items, conversationId);

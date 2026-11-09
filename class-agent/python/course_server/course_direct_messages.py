@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
-from uuid import UUID, uuid4
+from uuid import UUID, uuid4, uuid5
 
 from psycopg_pool import AsyncConnectionPool
 from pydantic import BaseModel, ConfigDict
@@ -214,6 +214,7 @@ class CourseDirectMessageService:
         subject: str,
         body: str,
         reply_to: UUID | None = None,
+        request_id: UUID | None = None,
     ) -> CourseMessage:
         sender = await self._member(principal)
         if reply_to is not None:
@@ -225,9 +226,25 @@ class CourseDirectMessageService:
         recipient_kind, recipient_id = await self._target(sender, recipient_username)
         subject, body = self._content(subject, body)
         now = datetime.now(UTC)
-        message_id = uuid4()
+        message_id = uuid5(sender.id, str(request_id)) if request_id else uuid4()
         async with self._pool.connection() as connection, connection.transaction():
             await connection.execute("SELECT id FROM users WHERE id = %s FOR UPDATE", (sender.id,))
+            if request_id is not None:
+                prior = await (
+                    await connection.execute(
+                        _MESSAGE_SELECT + " WHERE m.id = %s AND m.sender_user_id = %s",
+                        (message_id, sender.id),
+                    )
+                ).fetchone()
+                if prior is not None:
+                    existing = CourseMessage.model_validate(prior)
+                    if (
+                        existing.recipient_user_id != recipient_id
+                        or existing.subject != subject
+                        or existing.body != body
+                    ):
+                        raise CourseMessageError("This send has different message details.")
+                    return existing
             counts = await (
                 await connection.execute(
                     """
