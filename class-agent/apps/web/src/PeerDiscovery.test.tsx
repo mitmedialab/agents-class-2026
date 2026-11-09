@@ -147,6 +147,7 @@ it("shows the agent's result set and sends only the student's edited message", a
   fireEvent.click(screen.getByRole("button",{name:"My Weekly Paired Stars"}));
   fireEvent.click(screen.getByRole("button",{name:"Connect"}));
   expect(screen.getByText(shownPair.reason)).toBeVisible();
+  expect(screen.queryByText("Why this pair?")).not.toBeInTheDocument();
   expect(screen.queryByText(shownPair.borrow)).not.toBeInTheDocument();
   expect(sendMessage).not.toHaveBeenCalled();
   fireEvent.change(screen.getByLabelText("Message to Ada"),{target:{value:"How did you test the board?"}});

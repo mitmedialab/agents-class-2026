@@ -186,7 +186,7 @@ indexed build alongside another student's work from the same week. Opening the p
 checks the course project directory and reuses a shared index of public portfolio pages.
 The first visit on an empty installation may take longer. Same-week matches require an
 indexed build for the signed-in student's roster project and an eligible peer build.
-The pair card explains a shared topic or saved focus supported by the write-ups and suggests what to compare. When only the assignment can be identified, it says so. Saved agent recommendations show their recorded rationale.
+The pair card explains a shared topic or saved focus supported by the write-ups and suggests what to compare. Automatic pairs require a supported shared topic, a saved focus, or a method the student could try in their own project. A common assignment alone does not qualify. Saved agent recommendations show their recorded rationale.
 **Not for me** dismisses that build for the current account. Students can edit their
 goals and long-term focus in matching preferences. Their preferences, saved works and
 feedback are stored per account in the server's private `PEER_DISCOVERY_PATH` directory.

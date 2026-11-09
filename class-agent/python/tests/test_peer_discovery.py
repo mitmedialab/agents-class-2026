@@ -186,8 +186,8 @@ def test_open_weekly_pairs_without_chat_or_saved_recommendations(service: PeerDi
     assert len(pairs) == 1
     assert user.user_id is not None
     assert not service.store.student(user.user_id).recommendations
-    assert pairs[0]["borrow"].startswith("Compare how the user can interrupt")
-    assert pairs[0]["reason"].startswith("Both write-ups discuss voice interaction.")
+    assert pairs[0]["borrow"] == pairs[0]["reason"]
+    assert "interrupt each voice interaction" in pairs[0]["reason"]
     service.feedback(user, Feedback(build_id=pairs[0]["peer"], rating="not_relevant"))
     updated = asyncio.run(service.prepare_weekly(user))["atlas"]
     assert isinstance(updated, dict)
@@ -258,11 +258,35 @@ def test_weekly_reason_distinguishes_shared_work_from_a_saved_focus(service: Pee
     catalog = catalog.model_copy(update={"builds": [own, peer]})
     assert user.user_id is not None
     memory = service.store.student(user.user_id)
-    assert "Week 1 assignment" in service.atlas(user, memory, catalog)["pairs"][0]["reason"]
+    assert service.atlas(user, memory, catalog)["pairs"] == []
     memory.profile.interests = ["sensor input"]
     reason = service.atlas(user, memory, catalog)["pairs"][0]["reason"]
     assert "your saved focus on sensor input" in reason
     assert "Both write-ups" not in reason
+
+
+def test_cross_topic_pair_suggests_a_transfer_from_the_peer_method(service: PeerDiscovery) -> None:
+    user = student("ada")
+    own, peer = sorted(seed(service, user), key=lambda b: b.project_id)
+    own = own.model_copy(
+        update={
+            "title": "Gallery guide",
+            "content": "A voice companion for museum visitors who want to discuss an artwork.",
+        }
+    )
+    peer = peer.model_copy(
+        update={
+            "title": "Final proposal",
+            "content": (
+                "A multi-agent network for promoting creativity and reducing "
+                "homogeneity of thought."
+            ),
+        }
+    )
+    catalog = service.store.catalog().model_copy(update={"builds": [own, peer]})
+    assert user.user_id is not None
+    reason = service.atlas(user, service.store.student(user.user_id), catalog)["pairs"][0]["reason"]
+    assert "several agents" in reason and "two readings of the same artwork" in reason
 
 
 def test_weekly_pair_uses_saved_recommendation_reason(service: PeerDiscovery) -> None:

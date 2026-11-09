@@ -263,16 +263,18 @@ class PeerDiscovery:
                 passages = evidence_passages(peer.content)
                 if not passages:
                     continue
-                reason, takeaway = pair_reason(
+                reason = pair_reason(
                     mine, peer, anchor & vocabulary[peer.id], focus & vocabulary[peer.id], frequency
                 )
+                if not reason:
+                    continue
                 existing.add(peer.id)
                 pairs.append(
                     {
                         "mine": mine.id,
                         "peer": peer.id,
-                        "reason": " ".join(filter(None, (reason, takeaway))),
-                        "borrow": takeaway or reason,
+                        "reason": reason,
+                        "borrow": reason,
                     }
                 )
         return {
