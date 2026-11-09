@@ -67,7 +67,8 @@ you commit it: it comes from your own repository and becomes public once it is i
 | `name`, `team`, `site` | strings, maintained by hand | profile picker and results |
 | `bio` | string, may be empty | profile preview |
 | `project` | required, at most 200 characters | what the character talks about; the base of every idea it starts |
-| `interests` | 1–5 entries, each a term (at most 40 characters) or `{term, description}` | the **term** is what the character offers and looks for, matched word for word and spoken in idea titles; the description is not read yet |
+| `interests` | 1–5 entries, each a term (at most 40 characters) or `{term, description}` | the **term** is matched word for word in template conversations; with Gemini, the description is what the agent talks about when it brings this interest |
 | `skills` | 1–5 short phrases | what the character offers to others' projects |
-| `weekly_builds` | list of `{week: "W01".."W99", title, summary}` | titles are passed to the profile as `alt`, which the simulation does not read yet; summaries are not passed |
+| `weekly_builds` | list of `{week: "W01".."W99", title, summary}` | with Gemini, each conversation starts from one weekly build or one interest description per agent, picked at random: richer summaries make richer conversations |
+| `avatar` | optional: `{"t", "h", "s", "p"}` (shirt, hair, skin and pants palette indexes) plus optional `"hs"` (hair style), `"g"` (glasses, 0 or 1) and `"face"` (35 of `s d e h`, from the camera) | your character's look; get it from **copy for my people/ file** in the page. The four current ones are placeholders |
 | `source` | free-form provenance | not used; tells readers where the data came from |

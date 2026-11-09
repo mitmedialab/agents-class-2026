@@ -5,6 +5,7 @@
   "team": "MIT Media Lab",
   "site": "",
   "bio": "",
+  "avatar": {"t": 4, "h": 3, "s": 0, "p": 4, "hs": 1, "g": 0},
   "project": "a cognitive agents project",
   "interests": [
     "agents"

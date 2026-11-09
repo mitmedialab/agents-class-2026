@@ -5,6 +5,7 @@
   "team": "MIT Media Lab",
   "site": "https://mitmedialab.github.io/agents2026-roma/",
   "bio": "Static agent interface (mit.s60 agent).",
+  "avatar": {"t": 5, "h": 4, "s": 0, "p": 1, "hs": 1, "g": 0},
   "project": "Liminal: sound that guides a sleeper into light sleep and wakes them with an idea",
   "interests": [
     "sleep",

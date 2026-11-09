@@ -171,6 +171,8 @@ select{font-size:12px;font-weight:500;color:var(--ink);background:var(--raise);b
 .notes ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
 code{font-family:ui-monospace,Menlo,monospace;font-size:11px;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:0 4px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.embed .band,.embed header,.embed .notes{display:none}
+.embed body{padding:0;background:transparent}
 </style>
 </head>
 <body>
@@ -208,6 +210,12 @@ code{font-family:ui-monospace,Menlo,monospace;font-size:11px;background:var(--pa
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const OUTN = { born: "idea born", join: "someone joins", evo: "idea evolves", ref: "referral", none: "no outcome" };
+/* standalone: the sample run in narrative-data.js. embedded in placelab's final report (src/report.js, an iframe
+   named "placelab-embed"): the parent page hands over the run that just ended. */
+const EMBED = window.name === "placelab-embed";
+const RUN = (() => { if (EMBED) try { const r = window.parent.placelabRunData(); if (r) return r; } catch (e) {}
+  return typeof SAMPLE_RUN !== "undefined" ? SAMPLE_RUN : { source: "", dayLen: 1620, days: 3, agents: [], convs: [], ideas: [] }; })();
+if (EMBED) document.documentElement.classList.add("embed");
 const A = Object.fromEntries(RUN.agents.map(a => [a.id, a]));
 const IDEA = Object.fromEntries(RUN.ideas.map(i => [i.id, i]));
 const TEAMS = [...new Set(RUN.agents.map(a => a.team))];
@@ -618,7 +626,7 @@ function legend() {
   const out = Object.entries(OUTN).filter(([k]) => k !== "ref" || CONVS.some(c => c.out === "ref"))
     .map(([k, n]) => `<button type="button" class="ofb" data-of="${k}" aria-pressed="${outFilter === k}" title="${outFilter === k ? "show all outcomes" : `highlight ${n} dots`}"><i class="dot ${k}" style="background:var(--o-${k})"></i>${n} · ${CONVS.filter(c => c.out === k).length}</button>`).join("");
   const lines = colorBy === "role"
-    ? ROLES.map(r => `<span><span class="sw" style="background:var(--r-${r.k})"></span><span class="nmx">${esc(r.n)}</span></span>`).join("")
+    ? ROLES.filter(r => RUN.agents.some(a => a.role === r.k)).map(r => `<span><span class="sw" style="background:var(--r-${r.k})"></span><span class="nmx">${esc(r.n)}</span></span>`).join("")
     : TEAMS.map((t, i) => `<span><span class="sw" style="background:var(--t${i % 7})"></span>${esc(t)}</span>`).join("");
   $("outlegend").innerHTML = out;
   $("outlegend").classList.toggle("filtering", outFilter != null);
@@ -631,7 +639,7 @@ function setTheme(t) { document.documentElement.dataset.theme = t; if (G) { appl
   document.querySelectorAll("[data-theme-btn]").forEach(b => b.setAttribute("aria-pressed", b.dataset.themeBtn === t));
   try { localStorage.setItem("sg-theme", t); } catch (e) {} }
 document.querySelectorAll("[data-theme-btn]").forEach(b => b.addEventListener("click", () => setTheme(b.dataset.themeBtn)));
-let saved = "light"; try { saved = localStorage.getItem("sg-theme") || "light"; } catch (e) {}
+let saved = "light"; try { saved = EMBED ? "light" : localStorage.getItem("sg-theme") || "light"; } catch (e) {}
 setTheme(saved);
 let rz = null; new ResizeObserver(() => { clearTimeout(rz); rz = setTimeout(() => { if (!anyPin()) hideTip(); fr = null; render(); afterLayout(); }, 80); }).observe($("wrap"));
 legend(); render();

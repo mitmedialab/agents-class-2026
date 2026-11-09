@@ -40,10 +40,26 @@ def load_person(path):
     if not isinstance(weeks,list) or not all(isinstance(w,dict) and re.fullmatch(r"W\d{2}",str(w.get("week",""))) and isinstance(w.get("title"),str) and w["title"].strip() and isinstance(w.get("summary",""),str) for w in weeks):
         err.append('weekly_builds: expected a list of {"week": "W03", "title": "...", "summary": "..."}');weeks=[]
     interests,skills=interest_terms(),strings("skills",1,MAX_LIST)
+    avatar=p.get("avatar")
+    if avatar is not None and not valid_avatar(avatar):
+        err.append('avatar: expected {"t": 0, "h": 0, "s": 0, "p": 0} with optional "hs", "g" (small non-negative integers) and "face" (35 of s d e h)')
     if err:return None,err
-    return {"code":code.strip(),"team":p.get("team","").strip() or "—","interests":interests,"skills":skills,"project":project.strip(),
-            "alt":[w["title"].strip() for w in sorted(weeks,key=lambda w:w["week"])],"bio":p.get("bio","").strip()[:400],
-            "site":p.get("site","").strip(),"name":p.get("name","").strip(),"active":True},[]
+    weeks=sorted(weeks,key=lambda w:w["week"])
+    notes=[{"term":x["term"].strip(),"description":x.get("description","").strip()} for x in p["interests"] if isinstance(x,dict) and x.get("description","").strip()]
+    prof={"code":code.strip(),"team":p.get("team","").strip() or "—","interests":interests,"skills":skills,"project":project.strip(),
+            "alt":[w["title"].strip() for w in weeks],"bio":p.get("bio","").strip()[:400],
+            "site":p.get("site","").strip(),"name":p.get("name","").strip(),"active":True,
+            # what the conversation model draws on: one weekly build or one interest is picked at random per conversation
+            "builds":[{"week":w["week"],"title":w["title"].strip(),"summary":w.get("summary","").strip()} for w in weeks],
+            "notes":notes}
+    if avatar is not None:prof["avatar"]=avatar
+    return prof,[]
+
+AVATAR_KEYS={"t","h","s","p","hs","g"}  # palette indexes; the page wraps them to its own palette sizes (src/scene.js)
+def valid_avatar(a):
+    if not isinstance(a,dict) or not {"t","h","s","p"}<=a.keys() or not a.keys()<=AVATAR_KEYS|{"face"}:return False
+    if not all(isinstance(a[k],int) and not isinstance(a[k],bool) and 0<=a[k]<100 for k in a if k!="face"):return False
+    return "face" not in a or (isinstance(a["face"],str) and re.fullmatch(r"[sdeh]{35}",a["face"]) is not None)
 
 def load_background(src):
     out=[]

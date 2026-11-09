@@ -1,6 +1,6 @@
 # Visual summary prototype
 
-A prototype of the results view for Placelab: a narrative chart of who talked to whom over the three simulated days. It is here for review and is not wired into the simulation.
+A narrative chart of who talked to whom over the simulated days. Opened on its own, it shows the sample run in `narrative-data.js`. Placelab's final report (the "who talked to whom" tab, `src/report.js`) embeds this same page in an iframe named `placelab-embed`; the page then reads the run that just ended from its parent instead of the sample, and hides its own header.
 
 ## Open it
 

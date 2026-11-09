@@ -20,6 +20,7 @@
           <label><span id="t-pfcode">tu código (sin nombres)</span><select id="pf-code"></select></label>
           <div class="svchar" id="pf-view" hidden></div>
           <div class="avatar" id="pf-avatar" hidden></div>
+          <div class="cam" id="cam" hidden><div class="camview"><canvas id="cam-view" width="128" height="192" aria-label="avatar preview"></canvas><span class="mono camlive" id="t-camlive">live</span></div><div class="camtxt"><p class="hint" id="t-camnote"></p><p class="err" id="cam-msg"></p><div class="ctl" style="gap:8px"><button type="button" class="go" id="cam-keep"><span id="t-camkeep">keep this look</span></button><button type="button" class="btn" id="cam-cancel"><span id="t-camcancel">cancel</span></button></div></div></div>
           <div class="ctl" id="pf-actions" style="gap:8px" hidden><button class="go" type="button" id="pf-accept"><span id="t-pfaccept">acepto que se use mi perfil</span></button><button class="btn" type="button" id="pf-modify"><span id="t-pfmodify">modificar mi perfil</span></button></div>
           <div id="pf-edit" hidden style="display:flex;flex-direction:column;gap:10px">
             <div id="pf-new" hidden style="display:flex;flex-direction:column;gap:10px"><label><span id="t-pfnname">your name</span><input id="pf-nname" type="text" maxlength="40"></label><label><span id="t-pfnteam">your group or school</span><input id="pf-nteam" type="text" maxlength="40"></label></div>
@@ -73,6 +74,7 @@
         <span><i class="dot" style="background:#FF4F12"></i><span id="t-k1">tu personaje · anillo naranja</span></span>
         <span><i class="dot" style="background:#FF8A5B"></i><span id="t-k3">calor de presencia</span></span>
         <span><i class="dot" style="background:#7FCF8E"></i><span id="t-k4">calor de propuestas</span></span>
+        <span class="hint" id="llm-mode"></span>
         <span id="t-k5">toca un personaje para abrir su memoria · acércate a la cafetería para oír la conversación</span>
       </div>
     </section>
@@ -106,6 +108,14 @@
 
   <!-- 3 · resultados -->
   <section id="sec-results" hidden>
+    <div class="rep-head"><div><div class="lab" id="t-replab">final report</div><h2 class="evt" id="rep-title"></h2></div>
+      <div class="ctl" style="gap:8px;flex-wrap:wrap"><label class="hint" for="rep-runs" id="t-reppick">report</label><select id="rep-runs"></select>
+        <button class="go" type="button" id="rep-again"><span id="t-again">run again</span></button><button class="btn" type="button" id="rep-forget"><span id="t-forget">forget earlier runs</span></button></div></div>
+    <p class="hint" id="rep-msg"></p>
+    <div class="tabs rep-tabs" role="tablist"><button class="tab" role="tab" id="rt-news" aria-selected="true">newsletter</button><button class="tab" role="tab" id="rt-arcs" aria-selected="false">who talked to whom</button><button class="tab" role="tab" id="rt-detail" aria-selected="false">details</button></div>
+    <div id="rp-news"><div id="rep-news"></div></div>
+    <div id="rp-arcs" hidden><p class="hint" id="rep-arcs-wait" hidden></p><div id="rep-arcs-body"><p class="hint" id="t-arcsnote"></p><iframe id="rep-frame" class="arcs" name="placelab-embed" title="who talked to whom" data-src="../visual-summary/narrative-arcs.html"></iframe></div></div>
+    <div id="rp-detail" hidden>
     <div id="res-verdict"></div>
 
     <section class="evid" style="margin-top:12px">
@@ -127,6 +137,7 @@
     <details class="more" style="margin-top:12px"><summary id="t-more">más lecturas: arquitectura</summary>
     <div class="arch" id="arch" style="margin-top:12px"></div>
     </details>
+    </div>
   </section>
 </div>
 
@@ -138,4 +149,8 @@
 <script src="memory.js"></script>
 <script src="agents.js"></script>
 <script src="i18n.js"></script>
+<script src="strings.js"></script>
+<script src="talk.js"></script>
+<script src="camera.js"></script>
+<script src="report.js"></script>
 <script src="sim.js"></script>
