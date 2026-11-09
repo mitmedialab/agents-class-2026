@@ -165,6 +165,62 @@ def test_introduction_requires_sender_click_and_helper_answer() -> None:
         asyncio.run(service.transition(bo, intro.id, "accept"))
 
 
+def test_helper_can_leave_a_note_only_when_accepting() -> None:
+    service = _service(_store())
+    ada, bo = principal(ADA, "ada"), principal(BO, "bo")
+    _save(service, bo, "can_help", "Knows MCP OAuth.", True)
+    intro, _ = asyncio.run(
+        service.draft_introduction(ada, helper_username="bo", topic="MCP auth", message="Hi Bo")
+    )
+    with pytest.raises(PeerMemoryConflict):  # the requester cannot attach a reply to Send
+        asyncio.run(service.transition(ada, intro.id, "send", reply="hello"))
+    asyncio.run(service.transition(ada, intro.id, "send"))
+    assert asyncio.run(service.introductions_view(bo))[0]["reply"] is None
+    with pytest.raises(PeerMemoryConflict):  # a decline never carries a message
+        asyncio.run(service.transition(bo, intro.id, "decline", reply="busy"))
+    with pytest.raises(PeerMemoryConflict):
+        asyncio.run(service.transition(bo, intro.id, "accept", reply="x" * 1001))
+
+    asyncio.run(service.transition(bo, intro.id, "accept", reply="  Happy to. Thursday?  "))
+    for who in (ada, bo):
+        [view] = asyncio.run(service.introductions_view(who))
+        assert view["status"] == "accepted" and view["reply"] == "Happy to. Thursday?"
+
+    second, _ = asyncio.run(
+        service.draft_introduction(ada, helper_username="bo", topic="Evals", message="Hi")
+    )
+    asyncio.run(service.transition(ada, second.id, "send"))
+    asyncio.run(service.transition(bo, second.id, "accept", reply="   "))
+    assert (
+        next(v for v in asyncio.run(service.introductions_view(ada)) if v["id"] == str(second.id))[
+            "reply"
+        ]
+        is None
+    )
+
+
+def test_requester_can_edit_the_draft_message_only_when_sending() -> None:
+    service = _service(_store())
+    ada, bo = principal(ADA, "ada"), principal(BO, "bo")
+    _save(service, bo, "can_help", "Knows MCP OAuth.", True)
+    intro, _ = asyncio.run(
+        service.draft_introduction(ada, helper_username="bo", topic="MCP", message="Agent text")
+    )
+    for bad in ("   ", "x" * 2001):
+        with pytest.raises(PeerMemoryConflict):
+            asyncio.run(service.transition(ada, intro.id, "send", message=bad))
+    with pytest.raises(PeerMemoryConflict):
+        asyncio.run(service.transition(ada, intro.id, "cancel", message="edit"))
+
+    asyncio.run(service.transition(ada, intro.id, "send", message="  My own words, Bo.  "))
+    [received] = asyncio.run(service.introductions_view(bo))
+    assert received["message"] == "My own words, Bo."
+    with pytest.raises(PeerMemoryConflict):  # sent text is final; the helper cannot alter it
+        asyncio.run(service.transition(bo, intro.id, "accept", message="changed"))
+    with pytest.raises(PeerMemoryConflict):  # and a sent request cannot be re-sent with edits
+        asyncio.run(service.transition(ada, intro.id, "send", message="again"))
+
+
 def test_helper_request_cap_protects_classmates() -> None:
     store = _store()
     service = _service(store)
@@ -337,6 +393,12 @@ def test_people_routes_are_owner_scoped() -> None:
     assert (
         client.post(f"/api/v1/people/mine/introductions/{uuid4()}", json={"action": "send"})
     ).status_code == 404
+    assert (
+        client.post(
+            f"/api/v1/people/mine/introductions/{uuid4()}",
+            json={"action": "accept", "reply": "x" * 1001},
+        )
+    ).status_code == 422
 
 
 TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
@@ -352,7 +414,7 @@ def test_postgres_peer_memory_store_matches_in_memory_rules() -> None:
     database_url = _schema_url(TEST_DATABASE_URL, schema_name)
 
     async def scenario() -> None:
-        assert apply_migrations(database_url)[-1] == "0019_peer_memories"
+        assert apply_migrations(database_url)[-1] == "0020_peer_introduction_replies"
         pool = create_auth_pool(database_url)
         await pool.open()
         try:
@@ -397,9 +459,11 @@ def test_postgres_peer_memory_store_matches_in_memory_rules() -> None:
             intro, _ = await service.draft_introduction(
                 ada, helper_username="BO", topic="MCP", message="Hi"
             )
-            await service.transition(ada, intro.id, "send")
-            await service.transition(bo, intro.id, "accept")
-            assert (await service.introductions_view(ada))[0]["status"] == "accepted"
+            await service.transition(ada, intro.id, "send", message="Edited before sending")
+            assert (await service.introductions_view(bo))[0]["message"] == "Edited before sending"
+            await service.transition(bo, intro.id, "accept", reply="  Free after class.  ")
+            [accepted] = await service.introductions_view(ada)
+            assert accepted["status"] == "accepted" and accepted["reply"] == "Free after class."
             updated = await service.update_mine(bo, shared.id, MemoryUpdate(privacy="personal"))
             assert updated.metadata["edited_by_student"] is True
             assert await service.classmate_offers(ada) == []

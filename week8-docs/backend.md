@@ -91,6 +91,29 @@ to active students.
   - lets `POST /conversations/{id}/workspace/open-static` accept `target: "people"`.
 - `workspace/static_open.py`: adds `"people"` to `StaticOpenTarget`.
 
+## Helper replies (`0020_peer_introduction_replies.sql`)
+
+- Adds a nullable `reply` column (1000 characters at most) to `peer_introductions`. A database
+  check allows it only on `accepted` rows. The migration only appends.
+- `PeerMemoryService.transition(..., reply=...)` accepts a note only with `accept`; a note on
+  send, cancel or decline is a conflict, and a blank note is stored as none.
+- `introductions_view` returns `reply` to both sides once accepted, and the requester's
+  `peer_reply` notification quotes it.
+- `POST /people/mine/introductions/{id}` takes an optional `reply` (over 1000 characters → `422`).
+- The same route takes an optional `message` with `send`: the requester's edit of the drafted
+  text, stored as the message the helper receives. With any other action it is a `409`.
+
+## Notifications (`notifications.py`)
+
+`NotificationCenterService(peer_introductions=...)` reads introductions only through
+`PeerMemoryService.introductions_view`, so the same visibility rules apply: drafts never notify
+the helper, and a decline is never reported to the requester.
+
+- `peer_request`: a sent request, shown to the helper under Communications. It stays active
+  and unread until the helper accepts or declines; it cannot be dismissed.
+- `peer_reply`: an accepted request, shown to the requester. It is unread until opened.
+- Tests: `test_notifications.py` (request, acceptance, decline and visibility cases).
+
 ## HTTP routes (`peer_memory_routes.py`, under `/api/v1`)
 
 All routes require a logged-in active student. A missing, foreign or forbidden item returns

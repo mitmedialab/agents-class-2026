@@ -76,7 +76,8 @@ group. Jad's and Stacey's statements were **written for the demo**; neither team
 
 ## Known gaps
 
-- The helper is not notified of a new request. It is visible only when they open People.
+- Notifications are not pushed: a new request or acceptance appears in the notification
+  center (and as a letter) the next time the page loads or polls for notifications.
 - There is no follow-up asking whether the help worked.
 - Matching is the model's judgement over all shared offers. That is enough for one class, but
   it would need retrieval as the number of offers grows.

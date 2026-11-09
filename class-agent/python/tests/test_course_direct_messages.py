@@ -96,7 +96,7 @@ def test_course_messages_require_human_confirmation_and_scope_replies() -> None:
     database_url = _schema_url(TEST_DATABASE_URL, schema_name)
 
     async def scenario() -> None:
-        assert apply_migrations(database_url)[-1] == "0019_peer_memories"
+        assert apply_migrations(database_url)[-1] == "0020_peer_introduction_replies"
         pool = create_auth_pool(database_url)
         await pool.open()
         await pool.wait()

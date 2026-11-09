@@ -21,6 +21,29 @@ All paths are under `class-agent/apps/web/src/`.
 No new component was added to the workspace registry. The panel reuses the registered
 `draft-document` component and is told apart by `document_kind`, as Grading is.
 
+## Editing a draft
+
+The message of your own draft is an editable text box. Send submits your edited text with the
+send action (`{"action": "send", "message": ...}`); the server accepts an edit only with Send,
+while the request is still a draft, and requires 1–2000 characters. After Send the text is final.
+
+## Helper note
+
+A request waiting for you has an optional **Note to …** box above Accept / Decline. The note is
+sent only with Accept, shown under the accepted introduction for both people, and quoted in the
+requester's acceptance notification and letter.
+
+## Notifications and the letter
+
+- `peer_request` and `peer_reply` notification cards show the classmate's full name and open
+  People (`openStatic("people")`), which also works from the Notifications tab in narrow view.
+- `PeerLetter.tsx`: the first time a browser sees a new request or acceptance, it plays once as a
+  letter (the envelope flies in, opens, and the letter unfolds) with **Answer in People** /
+  **Open in People** and **Later**. "Seen" is kept in `localStorage` as a per-browser
+  convenience. It is a modal dialog with keyboard focus and Escape; with reduced motion the
+  letter appears without animation.
+- Tests: `PeerLetter.test.tsx`, and the two People notification tests in `App.test.tsx`.
+
 ## The People panel
 
 Sections, top to bottom:

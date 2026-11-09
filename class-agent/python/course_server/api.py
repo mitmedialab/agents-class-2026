@@ -963,6 +963,7 @@ def create_app(
             assignments=assignment_store,
             instructor_messages=instructor_message_store,
             questions=question_store,
+            peer_introductions=peer_memory_service,
         )
         browser_service: BrowserSessionService | None = None
         if resolved_settings.browser_enabled:

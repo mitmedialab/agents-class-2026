@@ -51,6 +51,8 @@ MEMORY_KINDS: tuple[MemoryKind, ...] = (
 )
 IntroductionStatus = Literal["draft", "sent", "accepted", "declined", "cancelled"]
 IntroductionAction = Literal["send", "cancel", "accept", "decline"]
+REPLY_MAX_LENGTH = 1000  # Matches peer_introductions_reply_bounded (migration 0020).
+MESSAGE_MAX_LENGTH = 2000  # Matches peer_introductions_message_bounded (migration 0019).
 
 # Memories injected into every turn are bounded so a long-lived student does not crowd out the
 # conversation; the student can still list and edit all of them in the People panel.
@@ -115,6 +117,7 @@ class PeerIntroduction(BaseModel):
     updated_at: datetime
     sent_at: datetime | None = None
     responded_at: datetime | None = None
+    reply: str | None = None
 
 
 class MemoryUpdate(BaseModel):
@@ -277,7 +280,7 @@ def _identity_from_row(row: Mapping[str, Any]) -> PeerIdentity:
 
 _INTRODUCTION_COLUMNS = (
     "id, requester_user_id, helper_user_id, topic, message, status, created_at, updated_at, "
-    "sent_at, responded_at"
+    "sent_at, responded_at, reply"
 )
 
 
@@ -390,7 +393,7 @@ class PostgresPeerMemoryStore:
             await connection.execute(
                 f"""
                 INSERT INTO peer_introductions ({_INTRODUCTION_COLUMNS})
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     introduction.id,
@@ -403,6 +406,7 @@ class PostgresPeerMemoryStore:
                     introduction.updated_at,
                     introduction.sent_at,
                     introduction.responded_at,
+                    introduction.reply,
                 ),
             )
 
@@ -435,7 +439,8 @@ class PostgresPeerMemoryStore:
             await connection.execute(
                 """
                 UPDATE peer_introductions
-                SET status = %s, updated_at = %s, sent_at = %s, responded_at = %s
+                SET status = %s, updated_at = %s, sent_at = %s, responded_at = %s, reply = %s,
+                    message = %s
                 WHERE id = %s
                 """,
                 (
@@ -443,6 +448,8 @@ class PostgresPeerMemoryStore:
                     introduction.updated_at,
                     introduction.sent_at,
                     introduction.responded_at,
+                    introduction.reply,
+                    introduction.message,
                     introduction.id,
                 ),
             )
@@ -671,9 +678,27 @@ class PeerMemoryService:
         return introduction, helper
 
     async def transition(
-        self, principal: PrincipalContext, introduction_id: UUID, action: IntroductionAction
+        self,
+        principal: PrincipalContext,
+        introduction_id: UUID,
+        action: IntroductionAction,
+        *,
+        reply: str | None = None,
+        message: str | None = None,
     ) -> PeerIntroduction:
         user_id = self._require_student(principal)
+        edited = message.strip() if message is not None else None
+        if edited is not None and action != "send":
+            raise PeerMemoryConflict("The message can only be edited when sending a draft.")
+        if edited == "" or (edited is not None and len(edited) > MESSAGE_MAX_LENGTH):
+            raise PeerMemoryConflict(
+                f"The message must be between 1 and {MESSAGE_MAX_LENGTH} characters."
+            )
+        note = reply.strip() if reply is not None else ""
+        if note and action != "accept":
+            raise PeerMemoryConflict("A note can only be added when accepting a request.")
+        if len(note) > REPLY_MAX_LENGTH:
+            raise PeerMemoryConflict(f"A note can be at most {REPLY_MAX_LENGTH} characters.")
         introduction = await self._store.get_introduction(introduction_id)
         if introduction is None or user_id not in {
             introduction.requester_user_id,
@@ -696,8 +721,13 @@ class PeerMemoryService:
         changes: dict[str, object] = {"status": target, "updated_at": now}
         if action == "send":
             changes["sent_at"] = now
+            if edited is not None:
+                # The requester's own edit of the drafted text, made before Send.
+                changes["message"] = edited
         if action in {"accept", "decline"}:
             changes["responded_at"] = now
+        if action == "accept" and note:
+            changes["reply"] = note
         updated = introduction.model_copy(update=changes)
         await self._store.replace_introduction(updated)
         return updated
@@ -730,6 +760,8 @@ class PeerMemoryService:
                     "status": status,
                     "created_at": item.created_at.isoformat(),
                     "responded_at": item.responded_at.isoformat() if item.responded_at else None,
+                    # The helper's note; it exists only on accepted introductions.
+                    "reply": item.reply if item.status == "accepted" else None,
                 }
             )
         return views
@@ -994,7 +1026,7 @@ class _IntroductionArguments(BaseModel):
 
     helper_username: str = Field(min_length=1, max_length=200)
     topic: str = Field(min_length=1, max_length=200)
-    message: str = Field(min_length=1, max_length=2000)
+    message: str = Field(min_length=1, max_length=MESSAGE_MAX_LENGTH)
 
 
 class RequestPeerIntroductionTool:
@@ -1012,7 +1044,7 @@ class RequestPeerIntroductionTool:
         "properties": {
             "helper_username": {"type": "string", "minLength": 1, "maxLength": 200},
             "topic": {"type": "string", "minLength": 1, "maxLength": 200},
-            "message": {"type": "string", "minLength": 1, "maxLength": 2000},
+            "message": {"type": "string", "minLength": 1, "maxLength": MESSAGE_MAX_LENGTH},
         },
         "required": ["helper_username", "topic", "message"],
         "additionalProperties": False,

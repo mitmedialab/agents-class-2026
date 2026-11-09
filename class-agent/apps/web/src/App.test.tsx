@@ -7,7 +7,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App.js";
 import * as api from "./api.js";
 
@@ -234,7 +234,77 @@ async function openExistingConversation(): Promise<void> {
   await screen.findByText("The earlier response.");
 }
 
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+function preferReducedMotion(): void {
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn((query: string) => ({
+      matches: query === "(prefers-reduced-motion: reduce)",
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      onchange: null,
+      dispatchEvent: vi.fn(),
+    })),
+  );
+}
+
 describe("Course Agent interface", () => {
+  it("holds a classmate's letter until the opening title has finished", async () => {
+    vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
+    vi.mocked(api.listConversations).mockResolvedValue([]);
+    vi.mocked(api.getNotificationCenter).mockResolvedValue({
+      generated_at: "2026-09-05T12:00:00Z",
+      unread_count: 1,
+      items: [
+        {
+          id: "60000000-0000-4000-8000-000000000053",
+          section: "communications",
+          kind: "peer_request",
+          state: "pending",
+          title: "Memory architectures",
+          detail: "Could you help?",
+          timestamp: "2026-09-05T12:00:00Z",
+          due_at: null,
+          action_label: "Open People",
+          action_prompt: "Open People.",
+          unread: true,
+          dismissible: false,
+          sender: {
+            first_name: "Stacey",
+            display_name: "Stacey Cho",
+            resource_uri: null,
+            image_asset_id: null,
+          },
+        },
+      ],
+    });
+    window.localStorage.clear();
+    vi.useFakeTimers();
+    try {
+      render(<App />);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3_500);
+      });
+      expect(screen.getByTestId("opening-splash")).toBeInTheDocument();
+      expect(screen.queryByRole("dialog", { name: "Memory architectures" })).toBeNull();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+      expect(screen.queryByTestId("opening-splash")).not.toBeInTheDocument();
+      expect(screen.getByRole("dialog", { name: "Memory architectures" })).toBeInTheDocument();
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
   it("introduces the course before revealing the interface", async () => {
     vi.useFakeTimers();
     try {
@@ -1230,6 +1300,103 @@ describe("Course Agent interface", () => {
       vi.clearAllTimers();
       vi.useRealTimers();
     }
+  });
+
+  it("opens People from a classmate's help request notification", async () => {
+    vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
+    vi.mocked(api.listConversations).mockResolvedValue([]);
+    vi.mocked(api.getNotificationCenter).mockResolvedValue({
+      generated_at: "2026-09-05T12:00:00Z",
+      unread_count: 1,
+      items: [
+        {
+          id: "60000000-0000-4000-8000-000000000051",
+          section: "communications",
+          kind: "peer_request",
+          state: "pending",
+          title: "MCP OAuth redirect",
+          detail: "Could you help me with the redirect URI?",
+          timestamp: "2026-09-05T12:00:00Z",
+          due_at: null,
+          action_label: "Open People",
+          action_prompt: "Open People so I can answer Ada Lane's request.",
+          unread: true,
+          dismissible: false,
+          sender: {
+            first_name: "Ada",
+            display_name: "Ada Lane",
+            resource_uri: null,
+            image_asset_id: null,
+          },
+        },
+      ],
+    });
+
+    window.localStorage.clear();
+    preferReducedMotion(); // no opening splash, so the letter is presented immediately
+    render(<App />);
+
+    // The request first arrives as a letter; "Later" leaves it in Notifications.
+    const letter = await screen.findByRole("dialog", { name: "MCP OAuth redirect" });
+    expect(within(letter).getByText("A letter from Ada Lane")).toBeVisible();
+    fireEvent.click(within(letter).getByRole("button", { name: "Later" }));
+    expect(screen.queryByRole("dialog", { name: "MCP OAuth redirect" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open People: MCP OAuth redirect" }));
+
+    await waitFor(() =>
+      // The server accepts a notification id only for target "notification".
+      expect(api.openStaticWorkspace).toHaveBeenCalledWith(conversation.id, "people", undefined),
+    );
+    expect(api.streamAgentRun).not.toHaveBeenCalled();
+    expect(api.markNotificationCenterItemRead).not.toHaveBeenCalled();
+  });
+
+  it("opens People from an accepted request and acknowledges the reply", async () => {
+    vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
+    vi.mocked(api.listConversations).mockResolvedValue([]);
+    vi.mocked(api.getNotificationCenter).mockResolvedValue({
+      generated_at: "2026-09-05T12:00:00Z",
+      unread_count: 1,
+      items: [
+        {
+          id: "60000000-0000-4000-8000-000000000052",
+          section: "communications",
+          kind: "peer_reply",
+          state: "responded",
+          title: "MCP OAuth redirect",
+          detail: "Bo Park agreed to help.",
+          timestamp: "2026-09-05T12:00:00Z",
+          due_at: null,
+          action_label: "Open People",
+          action_prompt: "Open People.",
+          unread: true,
+          dismissible: true,
+          sender: {
+            first_name: "Bo",
+            display_name: "Bo Park",
+            resource_uri: null,
+            image_asset_id: null,
+          },
+        },
+      ],
+    });
+    window.localStorage.clear();
+    preferReducedMotion(); // no opening splash, so the letter is presented immediately
+    render(<App />);
+
+    const letter = await screen.findByRole("dialog", { name: "MCP OAuth redirect" });
+    expect(within(letter).getByText("Bo Park wrote back")).toBeVisible();
+    fireEvent.click(within(letter).getByRole("button", { name: "Open in People" }));
+
+    await waitFor(() =>
+      expect(api.openStaticWorkspace).toHaveBeenCalledWith(conversation.id, "people", undefined),
+    );
+    await waitFor(() =>
+      expect(api.markNotificationCenterItemRead).toHaveBeenCalledWith(
+        "60000000-0000-4000-8000-000000000052",
+      ),
+    );
   });
 
   it("starts the bounded submission check from an assignment notification", async () => {

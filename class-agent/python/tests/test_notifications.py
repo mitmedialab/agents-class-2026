@@ -35,6 +35,7 @@ from course_server.notifications import (
     NotificationCenterAccessDenied,
     NotificationCenterService,
 )
+from course_server.peer_memory import InMemoryPeerMemoryStore, PeerIdentity, PeerMemoryService
 
 
 async def _course_member(
@@ -523,6 +524,105 @@ def test_confirmed_instructor_message_appears_only_for_its_students() -> None:
 
         assert await center.mark_read(alice, item.id)
         assert (await center.get(alice)).items == []
+
+    asyncio.run(scenario())
+
+
+def test_peer_help_requests_notify_the_helper_and_acceptance_notifies_the_requester() -> None:
+    async def scenario() -> None:
+        auth = InMemoryAuthStore()
+        ada = await _course_member(auth, username="ada", role="student", display_name="Ada Lane")
+        bo = await _course_member(auth, username="bo", role="student", display_name="Bo Park")
+        cy = await _course_member(auth, username="cy", role="student")
+        prof = await _course_member(auth, username="prof", role="instructor")
+        identities = {
+            who.user_id: PeerIdentity(
+                who.user_id, str(who.username), str(who.display_name), who.roles[-1], True
+            )
+            for who in (ada, bo, cy, prof)
+            if who.user_id is not None
+        }
+        peers = PeerMemoryService(InMemoryPeerMemoryStore(identities))
+        await peers.save_mine(
+            bo,
+            kind="can_help",
+            content="MCP OAuth",
+            privacy="course_private",
+            source_event_ids=[],
+            source_excerpt=None,
+        )
+        reads = InMemoryNotificationItemReadStore()
+        center = NotificationCenterService(
+            faqs=InMemoryFaqStore(), reads=reads, auth=auth, peer_introductions=peers
+        )
+
+        intro, _ = await peers.draft_introduction(
+            ada, helper_username="bo", topic="MCP OAuth redirect", message="Could you help?"
+        )
+        # A draft notifies nobody: the requester has not pressed Send.
+        assert (await center.get(bo)).items == []
+        assert (await center.get(ada)).items == []
+
+        await peers.transition(ada, intro.id, "send")
+        bo_center = await center.get(bo)
+        assert bo_center.unread_count == 1
+        [request] = bo_center.items
+        assert request.kind == "peer_request" and request.state == "pending"
+        assert request.title == "MCP OAuth redirect"
+        assert request.sender is not None and request.sender.display_name == "Ada Lane"
+        assert not request.dismissible
+        assert not await center.mark_read(bo, request.id)  # cleared only by answering
+        assert (await center.get(cy)).items == []
+        assert (await center.get(prof)).items == []
+        assert (await center.get(ada)).items == []
+
+        await peers.transition(bo, intro.id, "accept", reply="Free after class Thursday.")
+        assert (await center.get(bo)).items == []
+        [reply] = (await center.get(ada)).items
+        assert reply.kind == "peer_reply" and reply.unread and reply.dismissible
+        assert reply.detail == "Bo Park agreed to help: “Free after class Thursday.”"
+        assert await center.mark_read(ada, reply.id)
+        assert (await center.get(ada)).items == []
+        assert [item.kind for item in (await center.get(ada)).history_items] == ["peer_reply"]
+
+    asyncio.run(scenario())
+
+
+def test_declined_peer_request_is_not_reported_to_the_requester() -> None:
+    async def scenario() -> None:
+        auth = InMemoryAuthStore()
+        ada = await _course_member(auth, username="ada", role="student")
+        bo = await _course_member(auth, username="bo", role="student")
+        identities = {
+            who.user_id: PeerIdentity(
+                who.user_id, str(who.username), str(who.display_name), "student", True
+            )
+            for who in (ada, bo)
+            if who.user_id is not None
+        }
+        peers = PeerMemoryService(InMemoryPeerMemoryStore(identities))
+        await peers.save_mine(
+            bo,
+            kind="can_help",
+            content="Evals",
+            privacy="course_private",
+            source_event_ids=[],
+            source_excerpt=None,
+        )
+        center = NotificationCenterService(
+            faqs=InMemoryFaqStore(),
+            reads=InMemoryNotificationItemReadStore(),
+            auth=auth,
+            peer_introductions=peers,
+        )
+        intro, _ = await peers.draft_introduction(
+            ada, helper_username="bo", topic="Evals", message="Hi"
+        )
+        await peers.transition(ada, intro.id, "send")
+        await peers.transition(bo, intro.id, "decline")
+
+        assert (await center.get(bo)).items == []
+        assert (await center.get(ada)).history_items == []
 
     asyncio.run(scenario())
 

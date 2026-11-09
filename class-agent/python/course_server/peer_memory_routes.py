@@ -6,10 +6,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from agent_core import PrincipalContext
 from course_server.peer_memory import (
+    MESSAGE_MAX_LENGTH,
+    REPLY_MAX_LENGTH,
     MemoryUpdate,
     PeerMemoryAccessDenied,
     PeerMemoryConflict,
@@ -25,6 +27,10 @@ class IntroductionActionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     action: Literal["send", "cancel", "accept", "decline"]
+    # Optional note from the helper; the service accepts it only with "accept".
+    reply: str | None = Field(default=None, max_length=REPLY_MAX_LENGTH)
+    # The requester's edited draft text; the service accepts it only with "send".
+    message: str | None = Field(default=None, max_length=MESSAGE_MAX_LENGTH)
 
 
 def create_peer_memory_router(
@@ -99,7 +105,13 @@ def create_peer_memory_router(
     ) -> Response:
         service = _service(request)
         try:
-            await service.transition(principal, introduction_id, payload.action)
+            await service.transition(
+                principal,
+                introduction_id,
+                payload.action,
+                reply=payload.reply,
+                message=payload.message,
+            )
             introductions = await service.introductions_view(principal)
         except (PeerMemoryAccessDenied, PeerMemoryNotFound) as error:
             raise _not_found(error) from error

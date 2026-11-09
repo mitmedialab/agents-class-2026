@@ -74,6 +74,7 @@ def test_postgres_auth_store_roundtrip() -> None:
             "0017_course_direct_messages",
             "0018_mcp_usage",
             "0019_peer_memories",
+            "0020_peer_introduction_replies",
         ]
         assert apply_migrations(scoped_url) == []
         assert index_resources(scoped_url) == [

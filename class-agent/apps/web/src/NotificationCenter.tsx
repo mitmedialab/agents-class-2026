@@ -92,6 +92,16 @@ function NotificationKindIcon({ kind }: { kind: NotificationCenterItem["kind"] }
         </>
       );
       break;
+    case "peer_request":
+    case "peer_reply":
+      drawing = (
+        <>
+          <circle cx="8.5" cy="8.5" r="2.75" />
+          <circle cx="15.5" cy="8.5" r="2.75" />
+          <path d="M3.75 19c.5-3 2.4-4.75 4.75-4.75S12.75 16 13.25 19M10.75 19c.5-3 2.4-4.75 4.75-4.75S19.75 16 20.25 19" />
+        </>
+      );
+      break;
     case "assignment_deadline":
       drawing = (
         <>
@@ -147,16 +157,24 @@ function NotificationTile({ item }: { item: NotificationCenterItem }) {
   return <NotificationKindIcon kind={item.kind} />;
 }
 
+const SENDER_NAME_KINDS = new Set<NotificationCenterItem["kind"]>([
+  "instructor_message",
+  "staff_reply",
+  "pending_student_question",
+  "peer_request",
+  "peer_reply",
+]);
+
+// Students are named in full so classmates can be told apart; staff by first name.
+const FULL_NAME_KINDS = new Set<NotificationCenterItem["kind"]>([
+  "pending_student_question",
+  "peer_request",
+  "peer_reply",
+]);
+
 function senderName(item: NotificationCenterItem): string | null {
-  if (
-    !item.sender ||
-    item.kind !== "instructor_message" &&
-    item.kind !== "staff_reply" &&
-    item.kind !== "pending_student_question"
-  ) {
-    return null;
-  }
-  return item.kind === "pending_student_question"
+  if (!item.sender || !SENDER_NAME_KINDS.has(item.kind)) return null;
+  return FULL_NAME_KINDS.has(item.kind)
     ? (item.sender.display_name ?? item.sender.first_name)
     : item.sender.first_name;
 }

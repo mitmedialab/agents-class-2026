@@ -43,6 +43,12 @@ import {
   NotificationCenter,
 } from "./NotificationCenter.js";
 import {
+  markPeerLetterSeen,
+  nextPeerLetter,
+  PeerLetter,
+  readSeenPeerLetters,
+} from "./PeerLetter.js";
+import {
   MobileViewSwitcher,
   type MobileView,
 } from "./MobileViewSwitcher.js";
@@ -331,6 +337,7 @@ export default function App() {
     useState<InstructorEmailDeliveryReference | null>(null);
   const [notificationCenter, setNotificationCenter] =
     useState<NotificationCenterData>(EMPTY_NOTIFICATION_CENTER);
+  const [seenPeerLetters, setSeenPeerLetters] = useState<string[]>(readSeenPeerLetters);
   const [notificationHistoryExpanded, setNotificationHistoryExpanded] =
     useState(false);
   const [mobileView, setMobileView] = useState<MobileView>("chat");
@@ -396,6 +403,12 @@ export default function App() {
     ? momentAtOffset(timelineMoments, timelinePull.targetOffset)
     : null;
   const isTimeTraveling = historicalMoment !== null;
+  // A classmate's letter plays once per browser, only for students, after the opening
+  // title splash has finished, and never while browsing an older chat moment.
+  const peerLetter =
+    !isOpening && !isTimeTraveling && principal?.roles.includes("student")
+      ? nextPeerLetter(notificationCenter.items, seenPeerLetters)
+      : null;
   const displayedResponse = historicalMoment?.response ?? latestResponse;
   const displayedWorkspaceState = historicalMoment
     ? historicalWorkspaceOverride?.momentId === historicalMoment.id
@@ -1653,6 +1666,14 @@ export default function App() {
     setAboutOpen(false);
     setHistoryOpen(false);
     setNotificationHistoryExpanded(false);
+    if (item.kind === "peer_request" || item.kind === "peer_reply") {
+      // Classmate help is answered in People, not in the chat thread. People takes no
+      // notification id, so an acceptance is acknowledged separately once People opens.
+      if ((await openStatic("people")) && item.dismissible) {
+        await handleNotificationRead(item.id);
+      }
+      return;
+    }
     if (item.section === "communications") {
       setMobileView("chat");
       setPresentedCommunication(item);
@@ -2573,6 +2594,18 @@ export default function App() {
           </main>
         </>
       )}
+
+      {peerLetter ? (
+        <PeerLetter
+          item={peerLetter}
+          key={peerLetter.id}
+          onClose={() => setSeenPeerLetters(markPeerLetterSeen(peerLetter.id))}
+          onOpen={() => {
+            setSeenPeerLetters(markPeerLetterSeen(peerLetter.id));
+            void handleNotificationAction(peerLetter);
+          }}
+        />
+      ) : null}
 
       {historyOpen ? (
         <div

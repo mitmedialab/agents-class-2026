@@ -43,9 +43,13 @@ NotificationKind = Literal[
     "staff_reply",
     "pending_student_question",
     "assignment_deadline",
+    "peer_request",
+    "peer_reply",
 ]
 NotificationState = Literal["unread", "read", "pending", "responded", "upcoming", "past"]
-READ_ACKNOWLEDGEABLE_KINDS = frozenset({"course_update", "instructor_message", "staff_reply"})
+READ_ACKNOWLEDGEABLE_KINDS = frozenset(
+    {"course_update", "instructor_message", "staff_reply", "peer_reply"}
+)
 
 
 def _clock() -> datetime:
@@ -150,6 +154,14 @@ class PostgresNotificationItemReadStore:
             )
 
 
+class PeerIntroductionFeed(Protocol):
+    """The peer-help service's own visibility-filtered view of a student's introductions."""
+
+    def can_access(self, principal: PrincipalContext) -> bool: ...
+
+    async def introductions_view(self, principal: PrincipalContext) -> list[dict[str, Any]]: ...
+
+
 class NotificationCenterAccessDenied(RuntimeError):
     """The active principal is not an authenticated course member."""
 
@@ -170,6 +182,7 @@ class NotificationCenterService:
         assignments: AssignmentStore | None = None,
         instructor_messages: InstructorMessageStore | None = None,
         questions: TAQuestionStore | None = None,
+        peer_introductions: PeerIntroductionFeed | None = None,
         clock: Callable[[], datetime] = _clock,
     ) -> None:
         self._faqs = faqs
@@ -182,6 +195,7 @@ class NotificationCenterService:
         self._assignments = assignments
         self._instructor_messages = instructor_messages
         self._questions = questions
+        self._peer_introductions = peer_introductions
         self._clock = clock
 
     async def get(self, principal: PrincipalContext) -> NotificationCenter:
@@ -192,6 +206,7 @@ class NotificationCenterService:
         history_items = [
             *await self._course_updates(principal, user, now, assignments),
             *await self._communications(principal, user),
+            *await self._peer_help(principal, user),
             *self._upcoming(principal, now, assignments),
             *lecture_slides,
         ]
@@ -677,6 +692,80 @@ class NotificationCenterService:
             )
         return items
 
+    async def _peer_help(
+        self,
+        principal: PrincipalContext,
+        user: User,
+    ) -> list[NotificationCenterItem]:
+        """Classmate help requests awaiting this helper, and accepted requests they sent.
+
+        Reads only through the peer-help service's own view, so drafts stay with the
+        requester and a decline is never reported to the requester as a decline.
+        """
+
+        feed = self._peer_introductions
+        if feed is None or user.role != "student" or not feed.can_access(principal):
+            return []
+        views = await feed.introductions_view(principal)
+        reply_ids = {
+            _item_id("peer-reply", str(view["id"]))
+            for view in views
+            if view["direction"] == "outgoing" and view["status"] == "accepted"
+        }
+        read_ids = await self._reads.list_read(user_id=user.id, item_ids=reply_ids)
+        items: list[NotificationCenterItem] = []
+        for view in views:
+            other = view["other"]
+            name = str(other["display_name"])
+            sender = NotificationSender(first_name=_first_name(name), display_name=name)
+            topic = str(view["topic"])
+            if view["direction"] == "incoming" and view["status"] == "sent":
+                items.append(
+                    NotificationCenterItem(
+                        id=_item_id("peer-request", str(view["id"])),
+                        section="communications",
+                        kind="peer_request",
+                        state="pending",
+                        title=topic,
+                        detail=str(view["message"]),
+                        timestamp=datetime.fromisoformat(str(view["created_at"])),
+                        action_label="Open People",
+                        action_prompt=(
+                            f"Open People so I can answer {name}'s request for help with “{topic}”."
+                        ),
+                        unread=True,
+                        sender=sender,
+                    )
+                )
+            elif view["direction"] == "outgoing" and view["status"] == "accepted":
+                item_id = _item_id("peer-reply", str(view["id"]))
+                unread = item_id not in read_ids
+                responded_at = view["responded_at"]
+                items.append(
+                    NotificationCenterItem(
+                        id=item_id,
+                        section="communications",
+                        kind="peer_reply",
+                        state="responded",
+                        title=topic,
+                        detail=(
+                            f"{name} agreed to help: “{view['reply']}”"
+                            if view.get("reply")
+                            else f"{name} agreed to help. "
+                            "Reach out in class or on the course channel."
+                        ),
+                        timestamp=(
+                            datetime.fromisoformat(str(responded_at)) if responded_at else None
+                        ),
+                        action_label="Open People",
+                        action_prompt=f"Open People to see {name}'s answer about “{topic}”.",
+                        unread=unread,
+                        dismissible=unread,
+                        sender=sender,
+                    )
+                )
+        return items
+
     async def _reply_sender(
         self,
         principal: PrincipalContext,
@@ -810,7 +899,7 @@ def _is_active(item: NotificationCenterItem, now: datetime) -> bool:
     if item.section == "notifications":
         return item.unread
     if item.section == "communications":
-        if item.kind in {"pending_message", "pending_student_question"}:
+        if item.kind in {"pending_message", "pending_student_question", "peer_request"}:
             return item.state == "pending"
         return item.unread
     return (

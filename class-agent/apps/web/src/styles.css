@@ -3670,85 +3670,294 @@ textarea {
   }
 }
 
+/* People: peer help. Editorial rules instead of cards; colour only marks meaning. */
 .people-panel {
   display: grid;
-  gap: var(--space-8);
+  gap: 3rem;
+  max-width: 46rem;
   padding: var(--space-6) clamp(1.25rem, 4vw, 3.5rem) 3rem;
 }
 
 .people-panel h2 {
   font-size: 1.25rem;
+  font-weight: 600;
   line-height: 1.2;
   margin: 0 0 var(--space-2);
 }
 
-.people-panel ul {
-  display: grid;
-  gap: var(--space-3);
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.people-intro h2 {
+  font-size: clamp(1.75rem, 3.2vw, 2.5rem);
+  letter-spacing: -0.01em;
+  line-height: 1.1;
 }
 
-.people-note {
+.people-section {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.people-eyebrow {
   color: var(--color-text-muted);
-  font-size: 0.9375rem;
-  line-height: 1.5;
-  margin: 0 0 var(--space-4);
-}
-
-.people-memory,
-.people-introduction {
-  background: var(--color-surface-raised);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  display: grid;
-  gap: var(--space-2);
-  padding: var(--space-4);
-}
-
-.people-memory > header,
-.people-introduction > header {
-  align-items: baseline;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-4);
-  justify-content: space-between;
-}
-
-.people-memory-kind {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  font-size: 0.6875rem;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  margin: 0 0 var(--space-3);
   text-transform: uppercase;
 }
 
-.people-memory[data-kind="can_help"] .people-memory-kind {
+.people-note,
+.people-meta {
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.people-note {
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  max-width: 38rem;
+}
+
+.people-meta {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+/* The open question: the centrepiece of the panel. */
+.people-ask {
+  border-top: 1px solid var(--color-text);
+  display: grid;
+  gap: var(--space-4);
+  padding-top: var(--space-4);
+}
+
+.people-ask .people-eyebrow {
+  margin: 0;
+}
+
+.people-ask-topic {
+  font-size: clamp(1.5rem, 2.8vw, 2.125rem);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.people-route {
+  align-items: center;
+  display: flex;
+  font-size: 0.9375rem;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.people-route-rule {
+  border-top: 1px solid var(--color-border);
+  flex: 0 1 4rem;
+}
+
+.people-letter {
+  border-left: 1px solid var(--color-border);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  margin: 0;
+  overflow-wrap: anywhere;
+  padding-left: var(--space-4);
+  white-space: pre-wrap;
+}
+
+textarea.people-letter-edit {
+  background: transparent;
+  border-bottom: 0;
+  border-right: 0;
+  border-top: 0;
+  border-left-color: var(--color-text-muted);
+  border-radius: 0;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  padding-bottom: 0;
+  padding-top: 0;
+  resize: vertical;
+  width: 100%;
+}
+
+textarea.people-letter-edit:hover {
+  border-left-color: var(--color-text);
+}
+
+textarea.people-letter-edit:focus-visible {
+  border-left-color: var(--color-text);
+  outline: 1px solid var(--color-border);
+  outline-offset: var(--space-2);
+}
+
+.people-stages {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+}
+
+.people-stages li {
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  padding-top: var(--space-2);
+  text-transform: uppercase;
+}
+
+.people-stages li[data-state="done"] {
+  border-top-color: var(--color-text-muted);
+}
+
+.people-stages li[data-state="current"] {
+  border-top: 2px solid var(--color-text);
+  color: var(--color-text);
+  padding-top: calc(var(--space-2) - 1px);
+}
+
+.people-framing {
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  margin: 0;
+  max-width: 36rem;
+}
+
+.people-ask[data-direction="outgoing"] .people-framing {
+  color: var(--color-text-muted);
+}
+
+.people-ask[data-direction="incoming"] .people-framing {
   color: var(--color-notification-reply);
 }
 
-.people-memory[data-kind="needs_help"] .people-memory-kind {
+.people-reply-field {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.people-reply-field .people-eyebrow {
+  margin: 0;
+}
+
+.people-reply-field textarea {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font: inherit;
+  line-height: 1.5;
+  padding: var(--space-3);
+  resize: vertical;
+}
+
+.people-reply-field textarea:focus-visible {
+  outline: 1px solid var(--color-text);
+  outline-offset: 2px;
+}
+
+.people-past-reply {
+  border-left: 1px solid var(--color-border);
+  line-height: 1.5;
+  margin: 0;
+  overflow-wrap: anywhere;
+  padding-left: var(--space-3);
+  white-space: pre-wrap;
+}
+
+.people-ask-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.people-ask-actions .ca-button[data-variant="outline"] {
+  background: var(--color-text);
+  border-color: var(--color-text);
+  color: var(--color-background);
+  font-weight: 600;
+  min-width: 8rem;
+}
+
+.people-ask-actions .ca-button[data-variant="plain"],
+.people-memory-actions .ca-button {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  text-decoration: underline;
+  text-decoration-color: var(--color-border);
+  text-underline-offset: 0.2em;
+}
+
+.people-ask-actions .ca-button[data-variant="plain"]:hover,
+.people-memory-actions .ca-button:hover {
+  color: var(--color-text);
+}
+
+.people-panel .ca-button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* Ruled ledger rows for memories and past introductions. */
+.people-group + .people-group {
+  margin-top: var(--space-8);
+}
+
+.people-count {
+  color: var(--color-text);
+  margin-left: var(--space-1);
+}
+
+.people-rows {
+  border-bottom: 1px solid var(--color-border);
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+}
+
+.people-row {
+  border-top: 1px solid var(--color-border);
+  display: grid;
+  gap: var(--space-2) var(--space-6);
+  grid-template-columns: minmax(7rem, 9rem) minmax(0, 1fr);
+  padding: var(--space-4) 0;
+}
+
+.people-row-label {
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  letter-spacing: 0.12em;
+  padding-top: 0.2rem;
+  text-transform: uppercase;
+}
+
+.people-memory[data-kind="can_help"] .people-row-label,
+.people-past[data-status="accepted"] .people-row-label,
+.people-past-next {
+  color: var(--color-notification-reply);
+}
+
+.people-memory[data-kind="needs_help"] .people-row-label {
   color: var(--color-notification-message);
 }
 
-.people-memory-date,
-.people-introduction > header > span {
-  color: var(--color-text-muted);
-  font-size: 0.8125rem;
+.people-row-body {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
-.people-memory p,
-.people-introduction p {
+.people-memory-content,
+.people-past-topic,
+.people-past-next {
   line-height: 1.5;
   margin: 0;
-}
-
-.people-memory blockquote {
-  border-left: 2px solid var(--color-border);
-  color: var(--color-text-muted);
-  font-size: 0.875rem;
-  margin: 0;
-  padding-left: var(--space-3);
+  overflow-wrap: anywhere;
 }
 
 .people-memory textarea {
@@ -3761,19 +3970,16 @@ textarea {
   resize: vertical;
 }
 
-.people-memory > footer {
+.people-memory-controls {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-3);
-  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
 }
 
-.people-memory label {
+.people-memory-controls label {
   align-items: center;
-  color: var(--color-text-muted);
   display: flex;
-  font-size: 0.875rem;
   gap: var(--space-2);
 }
 
@@ -3783,46 +3989,211 @@ textarea {
   border-radius: var(--radius-sm);
   color: var(--color-text);
   font: inherit;
+  font-size: 0.8125rem;
   padding: var(--space-1) var(--space-2);
 }
 
-.people-actions {
+.people-memory-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.people-actions button {
-  background: transparent;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  color: var(--color-text);
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.875rem;
-  padding: var(--space-1) var(--space-3);
-}
-
-.people-actions button:first-child {
-  background: var(--color-text);
-  border-color: var(--color-text);
-  color: var(--color-background);
-}
-
-.people-actions button:disabled {
-  cursor: default;
-  opacity: 0.5;
-}
-
-.people-introduction-topic {
-  font-weight: 600;
-}
-
-.people-introduction-next {
-  color: var(--color-notification-reply);
+  gap: var(--space-3);
+  margin-left: auto;
 }
 
 .people-panel [role="alert"] {
   color: var(--color-notification-deadline);
   font-size: 0.875rem;
+  margin: 0;
+}
+
+@media (max-width: 40rem) {
+  .people-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .people-memory-actions {
+    margin-left: 0;
+  }
+}
+
+/* Peer letter: a classmate's request (or reply) arrives as a letter, once per browser.
+   Sequence: the envelope flies in, the flap opens, the letter rises and unfolds. */
+.peer-letter-backdrop {
+  align-items: center;
+  animation: peer-letter-fade 240ms ease-out both;
+  background: rgb(0 0 0 / 72%);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: var(--space-4);
+  position: fixed;
+  z-index: 110;
+}
+
+.peer-letter-stage {
+  display: grid;
+  max-width: 26rem;
+  perspective: 900px;
+  place-items: center;
+  position: relative;
+  width: 100%;
+}
+
+.peer-letter-envelope,
+.peer-letter-paper {
+  grid-area: 1 / 1;
+}
+
+.peer-letter-envelope {
+  animation:
+    peer-letter-fly 700ms cubic-bezier(0.2, 0.8, 0.25, 1) both,
+    peer-letter-sink 450ms ease-in 1250ms forwards;
+  pointer-events: none;
+  position: relative;
+  width: min(16rem, 70vw);
+}
+
+.peer-letter-envelope svg {
+  display: block;
+  fill: var(--color-background);
+  overflow: visible;
+  stroke: var(--color-text);
+  stroke-linejoin: round;
+  stroke-width: 1.25;
+  width: 100%;
+}
+
+.peer-letter-envelope-flap {
+  animation: peer-letter-flap 420ms ease-in-out 750ms both;
+  left: 0;
+  position: absolute;
+  top: 0;
+  transform-origin: top center;
+}
+
+.peer-letter-paper {
+  animation: peer-letter-unfurl 650ms cubic-bezier(0.2, 0.8, 0.25, 1) 1150ms both;
+  background: var(--color-text);
+  border-radius: var(--radius-sm);
+  color: var(--color-background);
+  display: grid;
+  gap: var(--space-3);
+  max-height: calc(100dvh - 2 * var(--space-8));
+  overflow-y: auto;
+  padding: var(--space-8) var(--space-6) var(--space-6);
+  transform-origin: center 70%;
+  width: 100%;
+}
+
+.peer-letter-paper > * {
+  margin: 0;
+}
+
+.peer-letter-from {
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.peer-letter-paper h2 {
+  font-size: clamp(1.375rem, 5vw, 1.75rem);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.peer-letter-message {
+  border-left: 1px solid currentcolor;
+  font-size: 1rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  padding-left: var(--space-3);
+  white-space: pre-wrap;
+}
+
+.peer-letter-note {
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.peer-letter-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-top: var(--space-2);
+}
+
+.peer-letter-actions .ca-button[data-variant="outline"] {
+  background: var(--color-background);
+  border-color: var(--color-background);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.peer-letter-actions .ca-button[data-variant="plain"] {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.peer-letter-paper .ca-button:focus-visible {
+  outline-color: var(--color-background);
+}
+
+@keyframes peer-letter-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes peer-letter-fly {
+  from {
+    opacity: 0;
+    transform: translate(45vw, -55vh) rotate(-24deg) scale(0.6);
+  }
+}
+
+@keyframes peer-letter-flap {
+  to {
+    transform: rotateX(180deg);
+  }
+}
+
+@keyframes peer-letter-sink {
+  to {
+    opacity: 0;
+    transform: translateY(35%) scale(0.92);
+  }
+}
+
+@keyframes peer-letter-unfurl {
+  0% {
+    clip-path: inset(46% 6% 46% 6%);
+    opacity: 0;
+    transform: translateY(18%) scaleY(0.2);
+  }
+
+  45% {
+    clip-path: inset(30% 3% 30% 3%);
+    opacity: 1;
+    transform: translateY(-4%) scaleY(0.55);
+  }
+
+  100% {
+    clip-path: inset(0);
+    transform: none;
+  }
+}
+
+/* Reduced motion: the letter is simply there, readable and operable at once. */
+@media (prefers-reduced-motion: reduce) {
+  .peer-letter-backdrop,
+  .peer-letter-paper {
+    animation: none;
+  }
+
+  .peer-letter-envelope {
+    display: none;
+  }
 }

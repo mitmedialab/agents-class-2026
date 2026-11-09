@@ -80,7 +80,9 @@ export type NotificationCenterItemKind =
   | "pending_message"
   | "staff_reply"
   | "pending_student_question"
-  | "assignment_deadline";
+  | "assignment_deadline"
+  | "peer_request"
+  | "peer_reply";
 
 export interface NotificationSender {
   first_name: string;
@@ -217,6 +219,8 @@ export interface PeerIntroduction {
   status: "draft" | "sent" | "accepted" | "declined" | "unavailable" | "cancelled";
   created_at: string;
   responded_at: string | null;
+  /** The helper's optional note, present only once a request is accepted. */
+  reply?: string | null;
 }
 
 export interface PeopleOverview {
@@ -249,10 +253,16 @@ export async function deleteMyMemory(memoryId: string): Promise<void> {
 export function actOnIntroduction(
   introductionId: string,
   action: "send" | "cancel" | "accept" | "decline",
+  text: { reply?: string; message?: string } = {},
 ): Promise<{ introductions: PeerIntroduction[] }> {
+  // reply: the helper's optional note with "accept"; message: the edited draft with "send".
+  const reply = text.reply?.trim();
+  const body: { action: string; reply?: string; message?: string } = { action };
+  if (reply) body.reply = reply;
+  if (text.message !== undefined) body.message = text.message;
   return requestJson<{ introductions: PeerIntroduction[] }>(
     `/people/mine/introductions/${encodeURIComponent(introductionId)}`,
-    { method: "POST", body: JSON.stringify({ action }) },
+    { method: "POST", body: JSON.stringify(body) },
   );
 }
 
