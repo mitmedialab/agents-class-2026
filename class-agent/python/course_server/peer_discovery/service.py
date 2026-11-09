@@ -27,7 +27,8 @@ from .models import (
     StudentMemory,
     now,
 )
-from .preview import clean_title, project_description
+from .preview import clean_title, evidence_passages, project_description
+from .retrieval import query_terms
 from .store import PeerStore
 
 # These are extraction/coverage rules, never chat-intent routing or semantic rankings.
@@ -255,14 +256,10 @@ class PeerDiscovery:
                 key: 5 * len(words & focus) + sum(1 / frequency[t] for t in words & anchor)
                 for key, words in vocabulary.items()
             }
-            for peer in sorted(candidates, key=lambda b: (-scores[b.id], b.id))[
-                : max(0, 2 - len(existing))
-            ]:
-                passages = [
-                    line.strip()
-                    for line in re.split(r"\n|(?<=[.!?])\s+", peer.content)
-                    if 35 <= len(line.strip()) <= 320 and not re.search(r"https?://|!\[|\]\(", line)
-                ]
+            for peer in sorted(candidates, key=lambda b: (-scores[b.id], b.id)):
+                if len(existing) >= 2:
+                    break
+                passages = evidence_passages(peer.content)
                 if not passages:
                     continue
                 excerpt = max(
@@ -272,6 +269,7 @@ class PeerDiscovery:
                         + sum(1 / frequency[t] for t in terms(line) & anchor & vocabulary[peer.id])
                     ),
                 )
+                existing.add(peer.id)
                 pairs.append(
                     {
                         "mine": mine.id,
@@ -372,7 +370,11 @@ class PeerDiscovery:
                 if not root or not within_site(root, root):
                     return {"project_id": project_id, "error": "No HTTPS course website is listed."}
                 try:
-                    homepage, final = source_text(await asyncio.to_thread(self.visit, root))
+                    home = await asyncio.to_thread(self.visit, root)
+                    homepage, final = source_text(home)
+                    home_covers = (
+                        home.get("portfolio_covers", {}) if isinstance(home, Mapping) else {}
+                    )
                     if final and not within_site(final, root):
                         raise ValueError("Redirect left the listed course site.")
                 except Exception:
@@ -402,7 +404,9 @@ class PeerDiscovery:
                     try:
                         page = await asyncio.to_thread(self.visit, url)
                         content, final = source_text(page)
-                        cover = page.get("cover_url") if isinstance(page, Mapping) else None
+                        cover = home_covers.get(url) if isinstance(home_covers, Mapping) else None
+                        if not cover:
+                            cover = page.get("cover_url") if isinstance(page, Mapping) else None
                         image_url = (
                             cover if isinstance(cover, str) and within_site(cover, root) else None
                         )
@@ -479,7 +483,7 @@ class PeerDiscovery:
         user = student_id(principal)
         memory, catalog = self.store.student(user), self.store.catalog()
         dismissed = self.dismissed(memory)
-        terms = set(re.findall(r"[\w-]{3,}", query.casefold()))
+        terms = query_terms(query)
         needs = " ".join(
             [
                 memory.profile.long_term_focus,
@@ -514,6 +518,8 @@ class PeerDiscovery:
                 term in content for term in profile_terms
             )
 
+        if query.strip() and not terms:
+            candidates = []
         if terms:
             candidates = [
                 b

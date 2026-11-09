@@ -387,9 +387,15 @@ def fetch_public_webpage(
                             break
                     preview = {}
                     if peer_preview:
-                        from course_server.peer_discovery.preview import preview_metadata
+                        from course_server.peer_discovery.preview import (
+                            portfolio_covers,
+                            preview_metadata,
+                        )
 
-                        preview = preview_metadata(soup, current_url)
+                        preview = {
+                            **preview_metadata(soup, current_url),
+                            "portfolio_covers": portfolio_covers(soup, current_url),
+                        }
                     return {
                         **preview,
                         "url": current_url,

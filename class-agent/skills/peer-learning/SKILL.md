@@ -46,3 +46,23 @@ files under PEER_DISCOVERY_PATH persist across conversations/restarts. Public so
 snapshots are stored separately. Forget deletes this feature's profile, feedback and
 recommendations; canonical chat history follows the host's existing retention policy.
 There is no autonomous background crawler. Manual refresh is visible and bounded.
+
+## Conversation to workspace example
+
+Student prompt: “I’m struggling with sensor input and feedback design for my hardware
+prototype. Can you find classmates’ projects I could learn from and show them in the
+workspace?”
+
+Call `peer.get_context`, then `peer.query_builds` with concise terms such as
+`hardware sensor feedback`. The query emits a validated workspace command containing
+only eligible result IDs. The existing right-side workspace displays Matching builds.
+Read at least two candidates with `peer.read_build`, compare their source evidence,
+and use `peer.save_recommendations` for a justified shortlist. That action updates the
+same workspace with the selected IDs. Complete `workspace.review_presentation` before
+the final answer. Explain a concrete interaction or implementation to inspect in each
+project. Keep this request transient unless the student explicitly asks to remember it.
+
+The recording preview can use an explicitly labelled scripted model to demonstrate
+real tools, authenticated source retrieval and workspace events without a provider key.
+A scripted recording demonstrates the interaction flow. Semantic recommendation
+quality still needs verification with a configured model and student feedback.

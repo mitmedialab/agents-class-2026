@@ -52,3 +52,60 @@ def test_proposal_preview_uses_own_title_slide_and_intro() -> None:
     assert project_description("The agent moves the camera", "Camera tools") == (
         "The agent moves the camera"
     )
+
+
+def test_preview_rejects_architecture_and_results_charts() -> None:
+    root = "https://example.edu/week05/"
+    page = BeautifulSoup(
+        """
+    <main><h1>Reappraisal game</h1>
+    <h2>Interface</h2><img src="yourturn.png" alt="Your turn screen">
+    <h2>Results</h2><img src="emotion.png" alt="Feeling over three sessions">
+    <h2>Demo</h2><img src="architecture-diagram.png" alt="System architecture">
+    </main>""",
+        "html.parser",
+    )
+    assert preview_metadata(page, root)["cover_url"] == root + "yourturn.png"
+
+
+def test_preview_can_find_an_unlabelled_room_screenshot() -> None:
+    page = BeautifulSoup(
+        '<h1>The Library</h1><h2>Design framework</h2><img src="theory.png">'
+        '<h2>The room</h2><img src="a2f.png">',
+        "html.parser",
+    )
+    assert (
+        preview_metadata(page, "https://example.edu/week3/")["cover_url"]
+        == "https://example.edu/week3/a2f.png"
+    )
+
+
+def test_borrowing_excerpts_reject_table_rows_and_ai_disclosures() -> None:
+    from course_server.peer_discovery.preview import evidence_passages
+
+    sentence = (
+        "The interface keeps the previous branch visible while the student compares alternatives."
+    )
+    source = (
+        "| Diversity | Rated relevant | Runs passed | pass@3 |.\n"
+        "I used Claude Code and Codex as my coding assistants for this project.\n" + sentence
+    )
+    assert evidence_passages(source) == [sentence]
+
+
+def test_homepage_curated_poster_wins_over_decorative_disc() -> None:
+    from course_server.peer_discovery.preview import portfolio_covers
+
+    page = BeautifulSoup(
+        """
+    <a href="week02/"><img src="assets/disc-garden.png"></a>
+    <a href="week02/"><video poster="assets/week02/demo-cover.jpg"></video></a>
+    <a href="week03/"><img src="assets/week03/canvas.png"></a>
+    <a href="week04/"><img src="https://other.example/logo.jpg"></a>
+    """,
+        "html.parser",
+    )
+    assert portfolio_covers(page, "https://example.edu/raine/") == {
+        "https://example.edu/raine/week02/": "https://example.edu/raine/assets/week02/demo-cover.jpg",
+        "https://example.edu/raine/week03/": "https://example.edu/raine/assets/week03/canvas.png",
+    }

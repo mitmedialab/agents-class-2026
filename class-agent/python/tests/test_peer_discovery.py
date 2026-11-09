@@ -200,7 +200,12 @@ def test_chat_query_emits_only_matching_peer_builds(service: PeerDiscovery) -> N
         principal=user, conversation_id=uuid4(), permitted_resource_uris=frozenset()
     )
     tool = PeerTool("query_builds", service, load_component_registry())
-    for query, count in [("voice", 1), ("unrepresented", 0)]:
+    for query, count in [
+        ("voice", 1),
+        ("我想学习语音交互", 1),
+        ("I need help", 0),
+        ("unrepresented", 0),
+    ]:
         reply = asyncio.run(tool.execute({"query": query}, ctx))
         assert isinstance(reply.content, dict)
         candidates = reply.content["candidates"]
@@ -213,3 +218,20 @@ def test_chat_query_emits_only_matching_peer_builds(service: PeerDiscovery) -> N
             "view": "recommendations",
             "build_ids": [b["id"] for b in candidates if isinstance(b, dict)],
         }
+
+
+def test_refresh_prefers_author_homepage_cover(service: PeerDiscovery) -> None:
+    root = "https://example.edu/ada/"
+    cover = root + "assets/week01/demo-cover.jpg"
+
+    def curated_visit(url: str) -> dict[str, object]:
+        result = visit(url)
+        if url == root:
+            result["portfolio_covers"] = {root + "week01/": cover}
+        else:
+            result["cover_url"] = root + "assets/frog-idle.png"
+        return result
+
+    service.visit = curated_visit
+    asyncio.run(service.refresh(student(), ["agents2026-ada"], [1]))
+    assert service.store.catalog().builds[0].image_url == cover

@@ -15,8 +15,13 @@ function alternate(index: number, clip: string) {
       return turns(12,i=><circle cy="-17" r={2.3+1.8*(1+Math.cos(i*Math.PI/6))} fill="currentColor"/>);
     case 25: // Parallel-cut annulus
       return <g><defs><clipPath id={clip}><path clipRule="evenodd" d="M22 0A22 22 0 1 1-22 0A22 22 0 1 1 22 0ZM9 0A9 9 0 1 0-9 0A9 9 0 1 0 9 0Z"/></clipPath></defs><g clipPath={`url(#${clip})`}><g transform="rotate(38)" stroke="currentColor" strokeWidth="3.2">{[-24,-18,-12,-6,0,6,12,18,24].map(x=><path key={x} d={`M${x} -30v60`}/>)}</g></g></g>;
-    case 26: // A three-lobed continuous figure
-      return <path fill="currentColor" d="M-5-14C-6-24 8-26 10-16C11-8 4-5 9-1C13 2 19-1 22 6C27 17 12 23 7 14C4 7-2 5-7 12C-13 24-26 16-21 6C-18 0-12 2-8-1C-4-4-4-8-5-14Z"/>;
+    case 26: // Three sweeping arcs meet the rim around an open center.
+      return (
+        <g fill="none" stroke="currentColor" strokeWidth="2.7">
+          <circle r="21" />
+          {turns(3, () => <path d="M0-21C-13-19-17-5-9 4C-5 9 1 11 8 8" />)}
+        </g>
+      );
     case 30: // Short, curved strokes around a hollow center
       return turns(10,()=><g fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round"><path d="M-3-20q4 0 6 2"/><path d="M0-13l3 2"/></g>);
     case 32: // Two crossing orbital planes with distinct satellites
