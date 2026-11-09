@@ -6,6 +6,7 @@
   "site": "https://mitmedialab.github.io/agents2026-maya/",
   "project": "reflective listening tools that help people make sense of first-hand stories through spoken, evidence-linked reflection",
   "bio": "Maya Detwiller is a listener in the MIT Media Lab course Cognitive Agents (2026). They design agents for deep listening and sensemaking, where the AI does the mechanical labor and the human keeps the interpretive judgment.",
+  "avatar": {"t": 4, "h": 3, "s": 0, "p": 4, "hs": 1, "g": 0},
   "interests": [
     {
       "term": "sensemaking",

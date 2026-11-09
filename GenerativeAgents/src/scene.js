@@ -197,8 +197,9 @@ const ghosts=[];
 function ghost(x,z){const m=new THREE.Points(ringGeo,new THREE.PointsMaterial({size:.18,color:0x2B9A4C,map:dotTex,transparent:true,depthWrite:false,opacity:.95}));m.position.set(x,.08,z);m.scale.setScalar(.7);scene.add(m);ghosts.push({m,t:0})}
 
 /* ---------- arte píxel ---------- */
-function pixTex(rows,pal){const c=document.createElement("canvas");c.width=rows[0].length;c.height=rows.length;const g=c.getContext("2d");
-  rows.forEach((row,y)=>[...row].forEach((ch,x)=>{if(ch!=="."){g.fillStyle=pal[ch];g.fillRect(x,y,1,1)}}));
+function paintRows(c,rows,pal,k=1){c.width=rows[0].length*k;c.height=rows.length*k;const g=c.getContext("2d");g.clearRect(0,0,c.width,c.height);
+  rows.forEach((row,y)=>[...row].forEach((ch,x)=>{if(ch!=="."){g.fillStyle=pal[ch];g.fillRect(x*k,y*k,k,k)}}));return c}
+function pixTex(rows,pal){const c=paintRows(document.createElement("canvas"),rows,pal);
   const t=new THREE.CanvasTexture(c);t.magFilter=THREE.NearestFilter;t.minFilter=THREE.NearestFilter;t.url=c.toDataURL();return t}
 const FR=[
 ["................",".....hhhhhh.....","....hhhhhhhh....","....hhssssshh...","....hsssssssh...","....hsesssesh...","....hsssssssh...",".....ssssss.....","......ssss......",".....tttttt.....","....tttttttt....","...sttttttttts..","...sttttttttts..","...s.tttttt.s...",".....tttttt.....",".....pppppp.....",".....pppppp.....",".....pp..pp.....",".....pp..pp.....",".....pp..pp.....",".....bb..bb.....","....bbb..bbb....","................","................"],
@@ -206,8 +207,24 @@ const FR=[
 ["................",".....hhhhhh.....","....hhhhhhhh....","....hhssssshh...","....hsssssssh...","....hsesssesh...","....hsssssssh...",".....ssssss.....","......ssss......",".....tttttt.....","....tttttttt....","...sttttttttts..","..s.tttttttt.s..","....tttttttt....",".....tttttt.....",".....pppppp.....",".....pppppp.....","....ppp..pp.....","....pp...pp.....","....pp...pp.....","....bb...bb.....","...bbb...bbb....","................","................"]];
 const SKIN=["#F4C7A1","#E0A982","#C98B5E","#A66A3E","#7C4A2A","#5A3520"],HAIR=["#1E1A17","#4A2E1C","#8B5A2B","#C9A24C","#B14A2E","#2B2F6B","#6E6E78","#E7E1D0"],
   SHIRT=["#3D7FE0","#E0583D","#2FAF6A","#E8B33A","#9A4FD6","#F07AA8","#2BB5B5","#F2F0E6","#30343A","#D06A2C"],PANTS=["#263142","#3B3F48","#5A3A2A","#1F4A6E","#6B6F78","#2E5F3E"];
-const avatarIdx=i=>({t:i%SHIRT.length,h:Math.floor(i/SHIRT.length)%HAIR.length,s:(i*5+2)%SKIN.length,p:(i*7+3)%PANTS.length});
-function spriteFrom(av){const pal={h:HAIR[av.h%HAIR.length],s:SKIN[av.s%SKIN.length],e:"#17171B",t:SHIRT[av.t%SHIRT.length],p:PANTS[av.p%PANTS.length],b:"#15151A"};return FR.map(f=>pixTex(f,pal))}
+const avatarIdx=i=>({t:i%SHIRT.length,h:Math.floor(i/SHIRT.length)%HAIR.length,s:(i*5+2)%SKIN.length,p:(i*7+3)%PANTS.length,hs:0,g:0});
+/* avatar = palette indexes {t shirt, h hair, s skin, p pants} + optional hs (hair style), g (glasses) and face:
+   35 characters (7 columns × 5 rows over the face, s skin · d shade · e dark · h hair) written by the camera */
+const HAIRSTYLES=4,FACE_X=5,FACE_Y=3,FACE_W=7,FACE_H=5;
+const shade=(hex,k)=>"#"+[1,3,5].map(i=>Math.round(parseInt(hex.slice(i,i+2),16)*k).toString(16).padStart(2,"0")).join("");
+function avatarPal(av){const s=SKIN[av.s%SKIN.length];return {h:HAIR[av.h%HAIR.length],s,d:shade(s,.8),e:"#17171B",t:SHIRT[av.t%SHIRT.length],p:PANTS[av.p%PANTS.length],b:"#15151A",g:"#17171B",l:"#CFE3EE"}}
+function avatarRows(av,f=0,dx=0){
+  const R=FR[f].map(r=>[...r]),put=(y,x,ch)=>{if(R[y]&&x>=0&&x<16)R[y][x]=ch};
+  const hs=(av.hs||0)%HAIRSTYLES;
+  if(hs===1)[[7,4],[8,4],[9,4],[7,11],[8,11],[9,11],[8,5],[8,10]].forEach(([y,x])=>put(y,x,"h"));       // long
+  if(hs===2){for(let x=0;x<16;x++)if(R[1][x]==="h")R[1][x]=".";put(3,5,"s");put(3,11,"s")}                // buzz
+  if(hs===3){put(0,7,"h");put(0,8,"h")}                                                                  // bun
+  if(av.face&&av.face.length===FACE_W*FACE_H)for(let y=0;y<FACE_H;y++)for(let x=0;x<FACE_W;x++){const ch=av.face[y*FACE_W+x],cur=R[FACE_Y+y][FACE_X+x];if(cur==="s"||cur==="e")R[FACE_Y+y][FACE_X+x]=ch}
+  if(av.g)[["g",5],["l",6],["g",7],["g",8],["g",9],["l",10],["g",11]].forEach(([ch,x])=>put(5,x,ch));
+  if(dx)for(let y=0;y<=8;y++){const row=R[y];R[y]=dx>0?[".",...row.slice(0,15)]:[...row.slice(1),"."]}   // head tilt (camera preview)
+  return R.map(r=>r.join(""));
+}
+function spriteFrom(av){const pal=avatarPal(av);return FR.map((_,f)=>pixTex(avatarRows(av,f),pal))}
 function spriteSet(i){const pal={h:HAIR[Math.floor(i/SHIRT.length)%HAIR.length],s:SKIN[(i*5+2)%SKIN.length],e:"#17171B",t:SHIRT[i%SHIRT.length],p:PANTS[(i*7+3)%PANTS.length],b:"#15151A"};return FR.map(f=>pixTex(f,pal))}
 const bubbleTex=(()=>{const c=document.createElement("canvas");c.width=18;c.height=14;const g=c.getContext("2d");
   g.fillStyle="#161616";g.fillRect(1,0,16,10);g.fillRect(0,1,18,8);g.fillRect(6,10,5,2);g.fillRect(6,12,2,1);

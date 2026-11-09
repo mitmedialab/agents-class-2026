@@ -5,6 +5,7 @@
   "team": "City Science",
   "site": "https://mitmedialab.github.io/agents2026-leticia/",
   "bio": "Media designer and architect: digital media experiences, collaborative co-construction and the machine's role in city making; tools for healthier cities.",
+  "avatar": {"t": 2, "h": 2, "s": 2, "p": 3, "hs": 3, "g": 0},
   "project": "City Agents: simulate whether a city space will attract social interaction",
   "interests": [
     "cities",

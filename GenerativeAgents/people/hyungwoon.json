@@ -5,6 +5,7 @@
   "team": "MIT Media Lab",
   "site": "https://mitmedialab.github.io/agents2026-hyung/",
   "bio": "Builds context-aware wearable agents for informal learning. Instead of predicting what someone wants to learn, the agents create learning opportunities: an AI student on smart glasses asks naive questions, so answering exercises recall. Grounds the designs in Baddeley's working memory model and cognitive load theory, and mostly runs small local models.",
+  "avatar": {"t": 0, "h": 0, "s": 1, "p": 0, "hs": 0, "g": 1},
   "project": "an AI student on smart glasses that asks naive questions about what the wearer sees, timed by a simulated working memory",
   "interests": [
     {

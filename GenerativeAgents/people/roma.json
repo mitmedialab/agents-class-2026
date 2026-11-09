@@ -5,6 +5,7 @@
   "team": "MIT Media Lab",
   "site": "https://mitmedialab.github.io/agents2026-roma/",
   "bio": "Roma Luo studies at Harvard's Graduate School of Design and is cross-registered at the MIT Media Lab for Cognitive Agents (MAS.S60). He builds agents that act on real things, from his own sleep data to a camera on his desk, and cares about memory and about how well people judge what AI can do.",
+  "avatar": {"t": 5, "h": 4, "s": 0, "p": 1, "hs": 1, "g": 0},
   "project": "re:dream, an agent that interviews you about last night's dream and lets you step back into it as a spatial soundscape",
   "interests": [
     {
