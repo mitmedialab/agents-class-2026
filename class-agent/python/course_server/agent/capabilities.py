@@ -2718,6 +2718,7 @@ class CourseCapabilityPolicy:
         student_communications_enabled: bool = False,
         faq_updates_enabled: bool = False,
         student_projects_enabled: bool = False,
+        weekly_dream_enabled: bool = False,
     ) -> None:
         self._resources = resources
         self._browser_enabled = browser_enabled
@@ -2729,6 +2730,7 @@ class CourseCapabilityPolicy:
         self._student_communications_enabled = student_communications_enabled
         self._faq_updates_enabled = faq_updates_enabled
         self._student_projects_enabled = student_projects_enabled
+        self._weekly_dream_enabled = weekly_dream_enabled
 
     def authorize(self, principal: PrincipalContext) -> AuthorizedCapabilities:
         if self._resources is None:
@@ -2846,6 +2848,7 @@ class CourseCapabilityPolicy:
                     and "instructor" in principal.roles
                     else ()
                 ),
+                *(self._weekly_dream_tool_ids(principal)),
                 *course_member_project_tools,
                 *own_student_project_tools,
                 *staff_project_tools,
@@ -2865,6 +2868,17 @@ class CourseCapabilityPolicy:
                     for resource in visible_resources
                 ),
             ),
+        )
+
+    def _weekly_dream_tool_ids(self, principal: PrincipalContext) -> tuple[str, ...]:
+        from course_server.weekly_dream_ids import WEEKLY_DREAM_TOOL_IDS
+
+        return (
+            WEEKLY_DREAM_TOOL_IDS
+            if self._weekly_dream_enabled
+            and principal.authenticated
+            and "student" in principal.roles
+            else ()
         )
 
 

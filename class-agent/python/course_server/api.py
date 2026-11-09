@@ -42,6 +42,7 @@ from course_server.agent import (
     SkillCatalog,
     ToolValidationError,
 )
+from course_server.agent.service import StudentMemoryObserver
 from course_server.agent.store import principal_owns_conversation
 from course_server.agent_cli import build_runtime
 from course_server.anonymous_quotas import (
@@ -1024,11 +1025,17 @@ def create_app(
                     student_communications_enabled=True,
                     faq_updates_enabled=True,
                     student_projects_enabled=(resolved_settings.github_student_projects_enabled),
+                    weekly_dream_enabled=resolved_settings.weekly_dream_enabled,
                 ),
                 skills=skills,
                 workspace_registry=component_registry,
                 uploads=upload_store,
                 attention=notification_center,
+                student_memory=(
+                    _dream_profile_tracker(resolved_settings)
+                    if resolved_settings.weekly_dream_enabled
+                    else None
+                ),
             ),
             conversations=conversation_store,
             applicants=applicant_store,
@@ -2702,3 +2709,13 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+def _dream_profile_tracker(settings: AgentSettings) -> StudentMemoryObserver:
+    from course_server.dream_intelligence import intelligence_from_settings
+    from course_server.dream_learning import ProfileTracker
+    from course_server.weekly_dreams import FileDreamStore
+
+    return ProfileTracker(
+        FileDreamStore(settings.weekly_dream_data_path), intelligence_from_settings(settings)
+    )
