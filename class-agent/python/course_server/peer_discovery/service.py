@@ -27,6 +27,7 @@ from .models import (
     StudentMemory,
     now,
 )
+from .pair_reason import pair_reason
 from .preview import clean_title, evidence_passages, project_description
 from .retrieval import query_terms
 from .store import PeerStore
@@ -194,7 +195,7 @@ class PeerDiscovery:
         own = {b.week: b for b in works if b.project_id == self.own_project(principal)}
         by_id = {b.id: b for b in works}
         pairs = [
-            {"mine": own[b.week].id, "peer": b.id, "borrow": r.borrow}
+            {"mine": own[b.week].id, "peer": b.id, "borrow": r.borrow, "reason": r.reason}
             for r in memory.recommendations
             if (b := by_id.get(r.build_id)) and b.week in own and b.id not in self.dismissed(memory)
         ]
@@ -262,19 +263,16 @@ class PeerDiscovery:
                 passages = evidence_passages(peer.content)
                 if not passages:
                     continue
-                excerpt = max(
-                    passages,
-                    key=lambda line: (
-                        5 * len(terms(line) & focus)
-                        + sum(1 / frequency[t] for t in terms(line) & anchor & vocabulary[peer.id])
-                    ),
+                reason, takeaway = pair_reason(
+                    mine, peer, anchor & vocabulary[peer.id], focus & vocabulary[peer.id], frequency
                 )
                 existing.add(peer.id)
                 pairs.append(
                     {
                         "mine": mine.id,
                         "peer": peer.id,
-                        "borrow": f"From the paired build: “{excerpt}”",
+                        "reason": " ".join(filter(None, (reason, takeaway))),
+                        "borrow": takeaway or reason,
                     }
                 )
         return {

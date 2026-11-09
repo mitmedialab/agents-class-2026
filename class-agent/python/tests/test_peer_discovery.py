@@ -186,7 +186,8 @@ def test_open_weekly_pairs_without_chat_or_saved_recommendations(service: PeerDi
     assert len(pairs) == 1
     assert user.user_id is not None
     assert not service.store.student(user.user_id).recommendations
-    assert "visitor can pause" in pairs[0]["borrow"]
+    assert pairs[0]["borrow"].startswith("Compare how the user can interrupt")
+    assert pairs[0]["reason"].startswith("Both write-ups discuss voice interaction.")
     service.feedback(user, Feedback(build_id=pairs[0]["peer"], rating="not_relevant"))
     updated = asyncio.run(service.prepare_weekly(user))["atlas"]
     assert isinstance(updated, dict)
@@ -235,3 +236,44 @@ def test_refresh_prefers_author_homepage_cover(service: PeerDiscovery) -> None:
     service.visit = curated_visit
     asyncio.run(service.refresh(student(), ["agents2026-ada"], [1]))
     assert service.store.catalog().builds[0].image_url == cover
+
+
+def test_weekly_reason_distinguishes_shared_work_from_a_saved_focus(service: PeerDiscovery) -> None:
+    user = student("ada")
+    builds = seed(service, user)
+    catalog = service.store.catalog()
+    own, peer = sorted(builds, key=lambda b: b.project_id)
+    own = own.model_copy(
+        update={
+            "title": "Rehearsal",
+            "content": "Practise a difficult conversation by choosing what to say next.",
+        }
+    )
+    peer = peer.model_copy(
+        update={
+            "title": "Garden monitor",
+            "content": "The sensor measures moisture and lets a gardener know when to water.",
+        }
+    )
+    catalog = catalog.model_copy(update={"builds": [own, peer]})
+    assert user.user_id is not None
+    memory = service.store.student(user.user_id)
+    assert "Week 1 assignment" in service.atlas(user, memory, catalog)["pairs"][0]["reason"]
+    memory.profile.interests = ["sensor input"]
+    reason = service.atlas(user, memory, catalog)["pairs"][0]["reason"]
+    assert "your saved focus on sensor input" in reason
+    assert "Both write-ups" not in reason
+
+
+def test_weekly_pair_uses_saved_recommendation_reason(service: PeerDiscovery) -> None:
+    user = student("ada")
+    builds = seed(service, user)
+    peer = next(b for b in builds if b.project_id == "agents2026-grace")
+    rec = recommendation(peer.id)
+    service.save(user, [rec], {b.id: b.source_hash for b in builds})
+    assert user.user_id is not None
+    pair = service.atlas(user, service.store.student(user.user_id), service.store.catalog())[
+        "pairs"
+    ][0]
+    assert pair["reason"] == rec.reason
+    assert pair["borrow"] == rec.borrow

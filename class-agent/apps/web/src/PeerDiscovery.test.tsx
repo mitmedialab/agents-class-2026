@@ -122,13 +122,14 @@ describe("native peer discovery", () => {
   });
 });
 
+const shownPair = {mine:"a",peer:"b",borrow:"The sensor reports every second.",reason:"Both builds explore how feedback changes the next action."};
 const atlas = {
   ownAuthor:"mine",
   authors:[{id:"mine",name:"Raine",site:"https://example.edu/raine/",mark:0},{id:"peer",name:"Ada",site:"https://example.edu/ada/",mark:1}],
   builds:[{id:"a",author:"mine",title:"Garden",week:3,domain:"Memory",url:"https://example.edu/raine/3"},
           {id:"b",author:"peer",title:"Sensor board",week:3,domain:"Memory",url:"https://example.edu/ada/3"},
           {id:"c",author:"peer",title:"Camera",week:4,domain:"Memory",url:"https://example.edu/ada/4"}],
-  pairs:[{mine:"a",peer:"b",borrow:"Compare the sensor feedback."}],
+  pairs:[shownPair],
 };
 it("groups a domain across the published lecture weeks", () => {
   setup({data:{...peerFixture,atlas}});
@@ -145,6 +146,8 @@ it("shows the agent's result set and sends only the student's edited message", a
   expect(screen.queryByText("Camera")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button",{name:"My Weekly Paired Stars"}));
   fireEvent.click(screen.getByRole("button",{name:"Connect"}));
+  expect(screen.getByText(shownPair.reason)).toBeVisible();
+  expect(screen.queryByText(shownPair.borrow)).not.toBeInTheDocument();
   expect(sendMessage).not.toHaveBeenCalled();
   fireEvent.change(screen.getByLabelText("Message to Ada"),{target:{value:"How did you test the board?"}});
   fireEvent.click(screen.getByRole("button",{name:"Send"}));

@@ -13,7 +13,7 @@ export interface AtlasBuild { id:string; author:string; title:string; week:numbe
 export interface AtlasCatalog {
   ownAuthor?:string;
   authors:AtlasAuthor[]; builds:AtlasBuild[];
-  pairs:{mine:string; peer:string; borrow:string}[];
+  pairs:{mine:string; peer:string; borrow:string; reason?:string}[];
 }
 const weekTitles = new Map(parseScheduleMarkdown(publishedSchedule).events.map(event => [event.week, event.title]));
 const plates = import.meta.glob("./domain-art/*.webp", {eager:true,import:"default"}) as Record<string,string>;
@@ -66,7 +66,7 @@ export function PeerAtlas({catalog,tab,saved,toggle,rate,busy,sendMessage,matche
     {tab==="recommendations" && catalog.pairs.filter(pair=>selected.some(b=>b.id===pair.mine)).map(pair=>{
       const mine=catalog.builds.find(b=>b.id===pair.mine)!,peer=catalog.builds.find(b=>b.id===pair.peer)!,author=getAuthor(peer.author);
       return <article className="atlas-pair" key={mine.id+peer.id}><div className="atlas-twins">{card(mine,"Your build")}<div className="atlas-orbit" aria-hidden="true">✦</div>{card(peer,"Paired build")}</div>
-      <p>{pair.borrow}</p><button onClick={()=>{setSendStatus("");setMessage({id:peer.id,requestId:crypto.randomUUID(),text:`Hi ${author.name}, I saw your build “${peer.title}” while working on “${mine.title}”. ${pair.borrow} Could we chat about how you designed it?`})}}>
+      <p><strong>Why this pair?</strong> {pair.reason || `Both builds respond to the Week ${mine.week} assignment.`}</p><button onClick={()=>{setSendStatus("");setMessage({id:peer.id,requestId:crypto.randomUUID(),text:`Hi ${author.name}, I saw your build “${peer.title}” while working on “${mine.title}”. What did you learn from your approach that I could try in mine?`})}}>
       <svg width="17" height="17" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M17 9a7 7 0 0 1-8 7l-5 2 1-4A7 7 0 1 1 17 9Z" stroke="currentColor" strokeWidth="1.4"/></svg> Connect</button> <button disabled={busy} onClick={()=>rate(peer.id,"helpful")}><Thumb/> Helpful</button> <button disabled={busy} onClick={()=>rate(peer.id,"not_relevant")}><Thumb down/> Not for me</button>
       {message?.id===peer.id && <div className="atlas-compose"><label>Message to {author.name}<textarea disabled={isSending} maxLength={10000} value={message.text} onChange={e=>{setSendStatus("");setMessage({...message,requestId:crypto.randomUUID(),text:e.target.value})}}/></label>
         <button disabled={isSending || !message.text.trim() || !sendMessage} onClick={()=>void submitMessage()}>{isSending ? "Sending…" : "Send"}</button> <button disabled={isSending} onClick={()=>{setMessage(null);setSendStatus("")}}>Close</button></div>}
