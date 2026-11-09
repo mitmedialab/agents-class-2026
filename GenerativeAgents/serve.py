@@ -6,7 +6,7 @@
 Reads GEMINI_API_KEY (and optionally GEMINI_MODEL) from GenerativeAgents/.env or the environment.
 The key never reaches the browser: the page sends each conversation's context here, this server
 adds the prompt from prompts/, calls Gemini, checks the answer against a fixed shape and returns it.
-Without a key the page still runs, with its template conversations.
+Without a key the page still runs, with the offline conversations of src/offline.js (fixed rules, no AI).
 
 It also keeps the agents' episodic memory and finished runs in data/ (git-ignored, plain JSON):
     data/episodes.jsonl   one line per conversation, read back as memories in later runs
@@ -325,7 +325,7 @@ def main():
     if KEY:
         check_model()
     else:
-        print("No GEMINI_API_KEY in .env: agents will use template conversations. See .env.example.")
+        print("No GEMINI_API_KEY in .env: agents will talk by fixed rules, without AI (src/offline.js). See .env.example.")
     # on Windows, SO_REUSEADDR lets a second server silently share a busy port; fail clearly instead
     ThreadingHTTPServer.allow_reuse_address = os.name != "nt"
     try:

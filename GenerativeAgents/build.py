@@ -6,7 +6,7 @@ G=pathlib.Path(__file__).parent
 S=G/'src'
 html=(S/'index.html').read_text(encoding='utf-8')
 html=html.replace('<link rel="stylesheet" href="styles.css">','<style>\n'+(S/'styles.css').read_text(encoding='utf-8')+'</style>')
-order=['data/plan.js','profiles.js','scene.js','memory.js','agents.js','i18n.js','strings.js','talk.js','camera.js','report.js','sim.js']
+order=['data/plan.js','profiles.js','scene.js','memory.js','agents.js','i18n.js','strings.js','offline.js','talk.js','camera.js','report.js','sim.js']
 arcs=(G/'visual-summary'/'narrative-arcs.html').read_text(encoding='utf-8').replace('<script src="narrative-data.js"></script>\n','')
 js='const ARCS_HTML='+json.dumps(arcs).replace('</','<\\/')+';\n'+'\n'.join((S/f).read_text(encoding='utf-8') for f in order)
 for f in order: html=html.replace(f'<script src="{f}"></script>\n','')

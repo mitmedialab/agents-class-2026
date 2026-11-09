@@ -6,7 +6,7 @@
    that context to serve.py, which owns the prompt (prompts/converse.md) and checks the answer's shape.
    Every finished conversation becomes an episode: a memory chunk saved in data/episodes.jsonl and loaded
    into the agents' memory at the start of later runs, so they pick up earlier threads.
-   Without the server, or if a call fails, the template conversation in agents.js runs instead.
+   Without the model (no server, no key, or a failed call), offline.js answers the same request with fixed rules.
    ===================================================================== */
 const LLM={server:false,on:false,model:null,pending:0,token:0,fails:0};
 let EPISODES=[],runNo=1;
@@ -14,10 +14,18 @@ const api=(path,opt)=>fetch(path,opt).then(r=>r.ok?r.json():r.json().catch(()=>(
 const postJSON=(path,body)=>api(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
 
 async function llmInit(){
-  if(location.protocol==="file:")return;   // the single-file build has no server
-  try{const s=await api("/api/status");LLM.server=true;LLM.on=!!s.llm;LLM.model=s.model||null;runNo=(s.runs||0)+1;
-    const e=await api("/api/episodes");EPISODES=Array.isArray(e.episodes)?e.episodes:[]}
-  catch(e){LLM.server=false;LLM.on=false}
+  if(location.protocol!=="file:")   // the single-file build has no server
+    try{const s=await api("/api/status");LLM.server=true;LLM.on=!!s.llm;LLM.model=s.model||null;runNo=(s.runs||0)+1;
+      const e=await api("/api/episodes");EPISODES=Array.isArray(e.episodes)?e.episodes:[];return}
+    catch(e){LLM.server=false;LLM.on=false}
+  // no server: the memories live in this browser, and the run number follows them
+  try{EPISODES=JSON.parse(localStorage.getItem(EP_KEY)||"[]")}catch(e){EPISODES=[]}
+  runNo=1+EPISODES.reduce((m,e)=>Math.max(m,e.run||0),0);
+}
+const EP_KEY="placelab-episodes",EP_MAX=400;
+function saveEpisode(ep){
+  if(LLM.server){postJSON("/api/episodes",{episodes:[ep]}).catch(()=>{});return}
+  try{localStorage.setItem(EP_KEY,JSON.stringify(EPISODES.slice(-EP_MAX)))}catch(e){}
 }
 
 /* ---------- what each agent brings: one weekly build or one interest, at random ---------- */
@@ -49,11 +57,11 @@ function startModelTalk(a,b,place){
   const ctx={lang,place:placeEN(place),time:clock(),A:side(a,b,ta),B:side(b,a,tb),shared_history:shared.map(epText),ideas:[...inPlay,...earlier.slice(0,4)]};
   const c={clk:clock(),day,place,a,b,lines:[],start:simT,shown:0,born:[],adopt:[],evo:[],agree:false,pending:true,topics:{a:ta.label,b:tb.label},followup:shared.length>0};  // the same two talked before, in this run or an earlier one
   convs.unshift(c);if(convs.length>80)convs.pop();dirtyConv=true;
+  const offline=()=>{c.offline=true;return finishModelTalk(c,localConverse(ctx,shared[shared.length-1]),ctx)};   // offline.js
+  if(!LLM.on)return offline();   // no model: the fixed rules answer at once
   const token=LLM.token;LLM.pending++;
   postJSON("/api/converse",ctx).then(res=>{if(token!==LLM.token)return;finishModelTalk(c,res,ctx)})
-    .catch(err=>{if(token!==LLM.token)return;LLM.fails++;console.warn("model conversation failed, using a template:",err.message);
-      const i=convs.indexOf(c);if(i>=0)convs.splice(i,1);
-      const dur=templateTalk(a,b,place);[a,b].forEach(p=>{if(p.state==="talk"){p.timer=dur;p.scratch.chatting_end_time=simT+dur}})})
+    .catch(err=>{if(token!==LLM.token)return;LLM.fails++;console.warn("model conversation failed, using the offline rules:",err.message);offline()})
     .finally(()=>{if(token===LLM.token)LLM.pending=Math.max(0,LLM.pending-1);dirtyConv=true});
   return 1e9; // the pair stands talking until the answer arrives
 }
@@ -88,11 +96,11 @@ function finishModelTalk(c,res,ctx){
     addEpisodeNode(p,o,ep,[node.node_id]);
     reflect_on_convo(p,o,node,{adopt:c.adopt,props:{},agree:false,born:c.born,evo:c.evo});
   }
-  EPISODES.push(ep);if(LLM.server)postJSON("/api/episodes",{episodes:[ep]}).catch(()=>{});
+  EPISODES.push(ep);saveEpisode(ep);
   // each line stays up long enough to read: about 20 characters per simulated second, at least LINE_T
   let t=0;c.ends=lines.map(l=>t+=Math.max(LINE_T,l.t.length/20));const dur=t+1;
   for(const p of [a,b])if(p.state==="talk"&&p.conv===c){p.timer=dur;p.scratch.chatting_end_time=simT+dur}
-  dirtyMem=true;
+  dirtyMem=true;return dur;
 }
 /* an episode as a thought in the agent's memory: retrievable by topic words and by the other person */
 function addEpisodeNode(p,o,ep,filling){
@@ -105,5 +113,5 @@ function seedEpisodes(){
   const byCode=new Map(agents.filter(a=>a.active).map(a=>[a.pf.code,a]));
   for(const ep of EPISODES){if(ep.run>=runNo)continue;const A=byCode.get(ep.a),B=byCode.get(ep.b);if(!A||!B)continue;addEpisodeNode(A,B,ep);addEpisodeNode(B,A,ep)}
 }
-async function forgetEpisodes(){EPISODES=[];if(LLM.server)await api("/api/episodes",{method:"DELETE"}).catch(()=>{})}
+async function forgetEpisodes(){EPISODES=[];if(LLM.server)await api("/api/episodes",{method:"DELETE"}).catch(()=>{});else try{localStorage.removeItem(EP_KEY)}catch(e){}}
 const lineText=l=>l.llm?l.t:tr(l.t);

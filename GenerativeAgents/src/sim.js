@@ -96,10 +96,11 @@ function discuss(a,b){
   a.scratch.chatting_with=who(b);b.scratch.chatting_with=who(a);
   setAct(a,"conversa con",who(b));setAct(b,"conversa con",who(a));
   const place=spaceOf(a.x,a.z)||"cafe";
-  if(LLM.on){const dur=startModelTalk(a,b,place);a.conv=b.conv=convs[0];return dur}  // talk.js: the model writes it
-  return templateTalk(a,b,place);
+  // talk.js: Gemini writes it, or offline.js when there is no model; the older templates are the last resort
+  try{const c0=convs[0],dur=startModelTalk(a,b,place);a.conv=b.conv=convs[0];return dur}
+  catch(err){console.warn("conversation rules failed, using the templates:",err);if(convs[0]&&convs[0].pending&&convs[0].a===a)convs.shift();return templateTalk(a,b,place)}
 }
-/* the template conversation (agents.js LLM_utterance): used without the server, or when a model call fails */
+/* the original template conversation (agents.js LLM_utterance): kept as a last resort */
 function templateTalk(a,b,place){
   const {chat,ctx}=agent_chat_v2(a,b);
   const lines=chat.map(([w,t,spk,evidence,res])=>({w:spk,t,evidence,pitch:res.pitch||null,born:res.born||null,adopt:res.adopt||null,agree:!!res.agree,evo:res.evo||null}));
