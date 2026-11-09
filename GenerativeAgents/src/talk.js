@@ -10,7 +10,10 @@
    ===================================================================== */
 const LLM={server:false,on:false,model:null,pending:0,token:0,fails:0};
 let EPISODES=[],runNo=1;
-const api=(path,opt)=>fetch(path,opt).then(r=>r.ok?r.json():r.json().catch(()=>({})).then(j=>Promise.reject(new Error(j.error||r.status))));
+/* API paths are resolved from the page's own URL (src/ -> ../api/), so the same page works at serve.py's
+   root and behind a prefix such as the course site's /placelab-live/ proxy */
+const apiURL=path=>new URL(".."+path,location.href).href;
+const api=(path,opt)=>fetch(apiURL(path),opt).then(r=>r.ok?r.json():r.json().catch(()=>({})).then(j=>Promise.reject(new Error(j.error||r.status))));
 const postJSON=(path,body)=>api(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
 
 async function llmInit(){

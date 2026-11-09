@@ -3,7 +3,11 @@ import { useCallback, useEffect, useState } from "react";
 /* The Place Lab simulation (GenerativeAgents/) opens inside the course site at /placelab, the same
    way About opens at /about: a real URL, so the browser's back button and a reload both work. */
 const PLACE_LAB_PATH = "/placelab";
-export const PLACE_LAB_APP_URL = "/placelab/index.html?theme=dark";  // the site is dark; the simulation follows
+// the site is dark; the simulation follows. The static build always exists; the live one is
+// GenerativeAgents/serve.py behind the dev proxy, used when it answers (Gemini, memory across runs).
+export const PLACE_LAB_APP_URL = "/placelab/index.html?theme=dark";
+export const PLACE_LAB_LIVE_URL = "/placelab-live/src/?theme=dark";
+export const PLACE_LAB_LIVE_PROBE = "/placelab-live/api/status";
 
 function isPlaceLabPath(pathname: string): boolean {
   return pathname === PLACE_LAB_PATH || pathname === `${PLACE_LAB_PATH}/`;

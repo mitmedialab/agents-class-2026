@@ -13,7 +13,9 @@ run written up), **where** (the idea heat map: the plan warms up where conversat
 where ideas were born, with a time slider from day 1 to day 3, and a few lines on each space) and
 **evaluation** (reserved, still to be written). The page follows the system's light or dark mode; the
 switch in the band pins one. It also opens inside the course site (`class-agent/apps/web`) under the
-**Place Lab** entry of its header, at `/placelab`. Run it again and the agents remember earlier runs. The interface is in English by
+**Place Lab** entry of its header, at `/placelab`: by default the single file from `build.py`
+(template conversations); if `python serve.py --port 8010` is running next to `pnpm dev`, the site
+frames that server instead, with Gemini conversations and memory across runs. Run it again and the agents remember earlier runs. The interface is in English by
 default, with a Spanish switch at the top right.
 
 ## The pipeline
