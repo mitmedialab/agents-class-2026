@@ -268,7 +268,7 @@ def test_tool_schemas_survive_runtime_property_projection(tmp_path: Path) -> Non
     assert "source_ids" in json.dumps(save_schema["properties"])
 
 
-def test_retention_remains_bounded_after_many_weeks(tmp_path: Path) -> None:
+def test_full_history_is_retained_after_many_weeks(tmp_path: Path) -> None:
     service, context = setup_service(tmp_path)
     for i in range(10):
         prepare(service, context)
@@ -282,8 +282,8 @@ def test_retention_remains_bounded_after_many_weeks(tmp_path: Path) -> None:
             ),
         )
     memory = service.store.read(context.principal)
-    assert len(memory.dreams) == 8
-    assert len(memory.feedback) == 8
+    assert len(memory.dreams) == 10
+    assert len(memory.feedback) == 10
     retained = {d.id for d in memory.dreams}
     assert all(f.dream_id in retained for f in memory.feedback)
 

@@ -1,54 +1,78 @@
 # Weekly dream implementation notes
 
-This is an opt-in extension of the existing Course Agent, not a separate agent.
-Enable `WEEKLY_DREAM_ENABLED=true` to register six student-owned tools in the
-existing runtime and capability policy. The default is disabled.
+This opt-in feature extends the existing Course Agent. `WEEKLY_DREAM_ENABLED=true`
+enables the private tools and automatic student-profile projection. Default: disabled.
 
-## Content and memory
+## Profile learning
 
-The weekly-dream Skill guides the model through prepare, history, and save.
-Preparation gathers explicitly selected authorized public course resources, the
-student's own roster entry and optional own-repository files, their editable
-focus, recent suggestions, and explicit feedback. Peer suggestions require the
-authorized student roster and a matching active member. Source content is data,
-not instructions.
+The editable profile contains interests, current weekly build, prior builds, questions
+engaged with the Course Agent, open questions, and the original free-text project field.
+The authenticated course conversation service records owned student-message observations.
+On first use it also imports the student's own nonarchived conversation messages once.
+It never imports another student's messages, assistant answers as student beliefs, or
+synthetic greetings. Clearing feature memory prevents automatic historical re-import;
+new student interactions can create new observations afterwards.
 
-The trusted principal supplies ownership; tool inputs cannot select another
-student. Validated JSON lives under `var/weekly-dreams/<user-UUID>.json` (override
-with the configured store path). Directories are private and files use mode 0600;
-this is file permission protection, not encryption. Each record keeps an editable
-profile, eight recent dreams, and up to 32 explicit feedback entries. Only sources
-cited by a saved dream are retained with it. Retention is bounded by count, not age.
-Students can inspect, correct, or clear their own feature memory. Server operators
-can access the backing files; clearing does not erase backups or existing chats.
-No engagement tracking is implemented.
+When the dream tool reads authorized own-build files, it records those observations too.
+The student’s own roster metadata can supply interests, but cannot establish a completed
+build or a question the student asked.
+The same Course Agent/provider performs an isolated structured learning pass over new
+observations in chronological batches. It can add/remove interests, prior builds and
+engaged questions, or set the current build. Replacing a current build moves the old one
+into prior builds. Every inferred change retains an observation ID and an exact source
+quote. Identity comes from trusted execution context; output cannot select a student.
+Exact quotation proves provenance, not semantic correctness. These inferences still need
+live-model evaluation. Students can inspect observations and update provenance in private
+history, and edit all profile fields. Student corrections supersede older pending
+observations; optimistic revision checks reject in-flight stale learning writes.
 
-Save validates source identifiers, course and personal grounding, known reading
-links (including URLs embedded in prose/headlines), verified peer identities, profile
-revision, and recently repeated item keys.
-These checks do not prove factual entailment or detect every semantic repetition.
-Output aims for 75–100 words, with a hard 110-word limit including headings.
+Automatic learning uses additional configured-provider calls. No calls are made for
+anonymous users or when the feature is disabled. Failed inference leaves observations
+pending for retry, without claiming the profile was updated or breaking the course reply.
+The local sample preview does not pretend to learn from its synthetic Generate command.
 
-## Email and review
+## Storage and retrieval
 
-`dream_email.py` renders a short plain-text subject and body. The intended delivery
-is just after the existing weekly class email. Brooke confirmed that the Course Agent sends the weekly class email. Scheduling
-and sending are not yet wired: its specific sender path must be located so a trusted
-successful-send event can trigger the dream. The existing Graph/Gmail mail worker provides transport, but its confirmed
-message delivery is not a weekly announcement trigger. Do not infer consent or
-recipients from generated text. Any production integration must use trusted roster
-recipients, explicit delivery configuration, and an idempotent per-student/week
-outbox to avoid duplicates on retry.
+JSON is stored at `var/weekly-dreams/<trusted-user-UUID>.json` (configurable root), with
+private directory/file permissions. This is not encryption. All dreams, all feedback
+revisions, profile observations and change evidence are retained until explicitly cleared;
+there is no fixed count or age cutoff. Server operators can access these records. Other
+students cannot retrieve them through the feature. Clearing does not erase backups or the
+original course conversations.
 
-The loopback preview is deliberately separate from the production API. Run from
-`class-agent/` with `.venv/bin/python -m course_server.dream_preview`, then open
-http://127.0.0.1:8767. Its test identity represents Brooke and contains no private
-roster. Reviewed examples are fixed fixtures, explicitly labeled; the follow-up
-requires marking the first connection Already explored. The explicitly confirmed
-Reset Brooke sample action restores the original sample profile for replay; ordinary
-Clear local dream memory stays cleared across restarts. Optional live generation
-uses the existing runtime and a server-side `OPENAI_API_KEY` in the uncommitted
-`.env`. No live model generation has been verified without that key. The preview
-does not send email, and its JSON under `var/dream-preview` is ignored by Git.
+The application record is now schema version 2. Version 1 files are accepted and upgraded
+on their next successful read/write; old profiles, dreams, feedback, IDs and timestamps
+are preserved, with new fields defaulted. Data already discarded by the former eight-dream
+cutoff cannot be recovered. No stable core/wire schema or SQL migration changes.
 
-These are engineering notes, not the group's assignment writeup or reflection.
+Preparation reads the entire saved profile and dream/feedback history. Below the configured
+`WEEKLY_DREAM_COMPACTION_CHARS` threshold (default 24000 characters), it returns the full
+profile, all drafts and feedback. Above it, the same agent summarizes that context in
+bounded batches, recursively if needed. The returned context pack identifies its
+representation as `full` or `summarized`; in the latter case `history_summary` represents
+the profile and history, and the raw profile/draft/feedback fields are omitted or empty.
+Current authorized course sources and evidence references are still supplied separately.
+Original records are never rewritten or deleted by summarization. Each summary must
+account for every input entry ID; semantic fidelity still requires evaluation. Missing
+coverage, lack of size reduction or model failure stops preparation with a clear error.
+This is an explicitly implemented feature compactor, not a claim that the upstream
+runtime already had automatic summarization. Its ordinary recent-chat window is separate.
+
+## Generation and delivery
+
+The Skill guides generation through prepare, history and validated save. Each suggestion
+needs course and student grounding; links (including those in prose) must appear in cited
+sources, and peer suggestions need an authorized roster match. Output uses the DreamDraft
+schema and a hard 110-word limit. These checks do not prove entailment or semantic novelty.
+
+`dream_email.py` renders the short email. Intended delivery follows the Course Agent's
+weekly class email, but its exact sender path/trigger has not been integrated. Sending
+and scheduling remain disabled. Production delivery still needs trusted roster recipients
+and a per-student/week outbox to avoid duplicate sends.
+
+Run `.venv/bin/python -m course_server.dream_preview` from `class-agent/`, then open
+http://127.0.0.1:8767. The fixed Brooke examples are labeled scripted fixtures. Optional live
+generation uses a server-side key in the uncommitted `.env`; no paid provider run has been
+verified. The simulated-provider tests exercise learning, isolation, retention, compaction
+and the existing runtime without API spend. These are engineering notes, not outcome
+results or the group's reflection.

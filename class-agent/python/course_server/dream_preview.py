@@ -212,6 +212,14 @@ def create_preview_app(
                         raise ToolValidationError(
                             "Set OPENAI_API_KEY in your uncommitted .env to run live generation."
                         )
+                    from course_server.dream_intelligence import RuntimeDreamIntelligence
+
+                    provider = OpenAIModelProvider(
+                        model_id=os.environ.get("MODEL_ID")
+                        or str(AgentSettings.model_fields["model_id"].default),
+                        api_key=SecretStr(key),
+                    )
+                    service.tracker.intelligence = RuntimeDreamIntelligence(provider)
                     skills = SkillCatalog.from_registry(ROOT / "skills")
                     tools = ToolCatalog(
                         [
@@ -223,11 +231,7 @@ def create_preview_app(
                         ]
                     )
                     runtime = SmolagentsRuntime(
-                        model_provider=OpenAIModelProvider(
-                            model_id=os.environ.get("MODEL_ID")
-                            or str(AgentSettings.model_fields["model_id"].default),
-                            api_key=SecretStr(key),
-                        ),
+                        model_provider=provider,
                         tools=tools,
                         public_resource_index=(r.title for r in resources.list_public()),
                         max_steps=12,

@@ -1,7 +1,7 @@
 """Private weekly lookaheads: application-owned memory and Course Agent tools.
 
 The existing Course Agent generates the content. This module enforces identity,
-bounded evidence, persistence, and explicit feedback; it does not infer preferences.
+evidence, persistence, and explicit feedback; it does not infer preferences.
 """
 
 from __future__ import annotations
@@ -30,10 +30,16 @@ from course_server.agent.capabilities import (
     ToolValidationError,
 )
 from course_server.course_roster import CourseRoster
+from course_server.dream_compaction import compact_history
+from course_server.dream_learning import (
+    DreamIntelligence,
+    Observation,
+    ProfileChange,
+    ProfileTracker,
+)
 from course_server.weekly_dream_ids import WEEKLY_DREAM_TOOL_IDS
 
 # Intentional context/storage bounds for a small class, not deployment defaults.
-HISTORY_LIMIT = 8
 SOURCE_LIMIT = 6
 SOURCE_TEXT_LIMIT = 16000
 MAX_DREAM_WORDS = 110
@@ -51,9 +57,12 @@ class DreamModel(BaseModel):
 class StudentFocus(DreamModel):
     """Student-confirmed additions; roster remains a separate source of truth."""
 
-    interests: list[ShortText] = Field(default_factory=list, max_length=12)
+    interests: list[ShortText] = Field(default_factory=list)
     project: str = Field(default="", max_length=3000)
     open_questions: list[Text] = Field(default_factory=list, max_length=6)
+    current_weekly_build: str = Field(default="", max_length=3000)
+    prior_builds: list[str] = Field(default_factory=list)
+    engaged_questions: list[Text] = Field(default_factory=list)
     revision: int = Field(default=0, ge=0)
 
 
@@ -100,10 +109,14 @@ class SavedDream(DreamModel):
 
 
 class DreamMemory(DreamModel):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 2
     profile: StudentFocus = Field(default_factory=StudentFocus)
-    dreams: list[SavedDream] = Field(default_factory=list, max_length=HISTORY_LIMIT)
-    feedback: list[DreamFeedback] = Field(default_factory=list, max_length=HISTORY_LIMIT * 4)
+    dreams: list[SavedDream] = Field(default_factory=list)
+    feedback: list[DreamFeedback] = Field(default_factory=list)
+    observations: list[Observation] = Field(default_factory=list)
+    processed_observations: list[str] = Field(default_factory=list)
+    profile_updates: list[ProfileChange] = Field(default_factory=list)
+    conversation_backfilled: bool = False
 
 
 def student_owner(principal: PrincipalContext) -> UUID:
@@ -113,10 +126,11 @@ def student_owner(principal: PrincipalContext) -> UUID:
 
 
 class FileDreamStore:
-    """One bounded private JSON record per trusted user UUID, with atomic locked updates.
+    """One private JSON record per trusted user UUID, with atomic locked updates.
 
     Matches the application's existing local-file storage pattern. No user-selectable
-    filenames, roster copies, raw chat logs, or framework memory are persisted here.
+    filenames or framework memory are persisted here. Owned student-message observations
+    and their evidence-backed profile changes remain inspectable in this private record.
     """
 
     def __init__(self, root: Path) -> None:
@@ -138,6 +152,7 @@ class FileDreamStore:
                 if path.exists()
                 else DreamMemory()
             )
+            memory.schema_version = 2
             yield memory
             with tempfile.NamedTemporaryFile(mode="w", dir=self.root, delete=False) as output:
                 temporary = Path(output.name)
@@ -158,11 +173,15 @@ class FileDreamStore:
 class DreamBundle(DreamModel):
     week: int
     student_name: str
-    profile: StudentFocus
+    profile: StudentFocus | None
+    profile_revision: int
     roster_context: str
     sources: list[DreamSource]
     peer_names: list[str]
     previous_suggestions: list[DreamDraft]
+    history_summary: str | None = None
+    history_representation: Literal["full", "summarized"] = "full"
+    learning_pending: bool = False
     feedback: list[DreamFeedback]
 
 
@@ -193,11 +212,15 @@ class WeeklyDreamService:
         resources: CourseResourceCatalog,
         roster: CourseRoster | None = None,
         own_project_reader: ExecutableTool | None = None,
+        intelligence: DreamIntelligence | None = None,
+        compaction_chars: int = 24000,
     ) -> None:
         self.store = store
         self.resources = resources
         self.roster = roster
         self.own_project_reader = own_project_reader
+        self.tracker = ProfileTracker(store, intelligence)
+        self.compaction_chars = compaction_chars
 
     async def prepare(
         self,
@@ -211,7 +234,6 @@ class WeeklyDreamService:
             raise ToolValidationError("Choose a week and one to six course resources.")
         if len(set(resource_uris)) != len(resource_uris):
             raise ToolValidationError("Do not repeat course resources.")
-        memory = self.store.read(context.principal)
         sources: list[DreamSource] = []
         for index, uri in enumerate(resource_uris):
             if uri not in context.permitted_resource_uris or not self.resources.is_public(uri):
@@ -235,6 +257,17 @@ class WeeklyDreamService:
                         json.dumps(result.content),
                     )
                 )
+                source = sources[-1]
+                self.tracker.record(
+                    context.principal,
+                    Observation(
+                        id="project:" + source.digest,
+                        kind="own_build",
+                        text=source.text,
+                        source=source.title,
+                        week=week,
+                    ),
+                )
         roster_context = "No course roster available; use only the student's confirmed focus."
         peer_names: list[str] = []
         if self.roster is not None:
@@ -253,6 +286,16 @@ class WeeklyDreamService:
                     roster_context,
                 )
             )
+            own_source = sources[-1]
+            self.tracker.record(
+                context.principal,
+                Observation(
+                    id="roster:" + own_source.digest,
+                    kind="own_roster",
+                    text=own_source.text,
+                    source=own_source.uri,
+                ),
+            )
             if "course://students/roster" in context.permitted_resource_uris:
                 for index, member in enumerate(self.roster.active_members):
                     if member.username == own.username:
@@ -264,7 +307,18 @@ class WeeklyDreamService:
                         make_source(f"peer-{index}", member.name, "course://students/roster", text)
                     )
                     peer_names.append(member.name)
-        if memory.profile.project or memory.profile.interests or memory.profile.open_questions:
+        await self.tracker.refresh(context.principal)
+        memory = self.store.read(context.principal)
+        if any(
+            (
+                memory.profile.project,
+                memory.profile.interests,
+                memory.profile.open_questions,
+                memory.profile.current_weekly_build,
+                memory.profile.prior_builds,
+                memory.profile.engaged_questions,
+            )
+        ):
             sources.append(
                 make_source(
                     "student-focus",
@@ -273,15 +327,24 @@ class WeeklyDreamService:
                     memory.profile.model_dump_json(),
                 )
             )
+        summary = await compact_history(
+            context.principal, memory, self.tracker.intelligence, self.compaction_chars
+        )
         bundle = DreamBundle(
             week=week,
             student_name=context.principal.display_name or context.principal.username or "Student",
-            profile=memory.profile,
+            profile=None if summary else memory.profile,
+            profile_revision=memory.profile.revision,
             roster_context=roster_context,
             sources=sources,
             peer_names=peer_names,
-            previous_suggestions=[dream.draft for dream in memory.dreams],
-            feedback=memory.feedback,
+            previous_suggestions=[] if summary else [dream.draft for dream in memory.dreams],
+            feedback=[] if summary else memory.feedback,
+            history_summary=summary,
+            history_representation="summarized" if summary else "full",
+            learning_pending=any(
+                o.id not in memory.processed_observations for o in memory.observations
+            ),
         )
         context.transient_state[_BUNDLE_KEY] = bundle.model_dump(mode="json")
         return bundle
@@ -345,7 +408,7 @@ class WeeklyDreamService:
         if not headline_links.issubset({link for s in used_ids for link in sources[s].links}):
             raise ToolValidationError("Links in the headline must occur in cited sources.")
         with self.store.transaction(context.principal) as memory:
-            if memory.profile.revision != bundle.profile.revision:
+            if memory.profile.revision != bundle.profile_revision:
                 raise ToolValidationError("Your focus changed; prepare fresh context first.")
             previous_keys = {i.key for d in memory.dreams for i in d.draft.items}
             if previous_keys.intersection(keys):
@@ -357,9 +420,7 @@ class WeeklyDreamService:
                 sources=[s for s in bundle.sources if s.id in used],
                 mode=mode,
             )
-            memory.dreams = [dream, *memory.dreams][:HISTORY_LIMIT]
-            retained = {d.id for d in memory.dreams}
-            memory.feedback = [f for f in memory.feedback if f.dream_id in retained]
+            memory.dreams = [dream, *memory.dreams]
         context.transient_state.pop(_BUNDLE_KEY, None)
         return dream
 
@@ -368,17 +429,23 @@ class WeeklyDreamService:
             dream = next((d for d in memory.dreams if d.id == feedback.dream_id), None)
             if dream is None or feedback.item_key not in {i.key for i in dream.draft.items}:
                 raise ToolValidationError("Suggestion not found in your private dream history.")
-            memory.feedback = [
-                f
-                for f in memory.feedback
-                if (f.dream_id, f.item_key) != (feedback.dream_id, feedback.item_key)
-            ] + [feedback]
+            # Keep every feedback revision, including changed opinions about an item.
+            memory.feedback.append(feedback)
 
     def update_profile(self, principal: PrincipalContext, profile: StudentFocus) -> StudentFocus:
         with self.store.transaction(principal) as memory:
             if memory.profile.revision != profile.revision:
                 raise ToolValidationError("Focus changed; read your current memory before editing.")
-            memory.profile = profile.model_copy(update={"revision": profile.revision + 1})
+            values = profile.model_dump(include=profile.model_fields_set - {"revision"})
+            memory.profile = StudentFocus.model_validate(
+                {
+                    **memory.profile.model_dump(),
+                    **values,
+                    "revision": profile.revision + 1,
+                }
+            )
+            # An explicit correction supersedes older, not-yet-processed observations.
+            memory.processed_observations = [o.id for o in memory.observations]
             return memory.profile
 
 
@@ -488,6 +555,10 @@ class WeeklyDreamTool:
             with self.service.store.transaction(context.principal) as memory:
                 memory.dreams = []
                 memory.feedback = []
+                memory.observations = []
+                memory.processed_observations = []
+                memory.profile_updates = []
+                memory.conversation_backfilled = True
                 memory.profile = StudentFocus(revision=memory.profile.revision + 1)
             context.transient_state.pop(_BUNDLE_KEY, None)
             return ToolExecutionResult(

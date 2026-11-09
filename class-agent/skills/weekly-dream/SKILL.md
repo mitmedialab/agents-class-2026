@@ -11,9 +11,12 @@ has not enabled weekly dreams. Never simulate a saved dream or feedback.
 1. Ask which course week if unclear. Read the current assignment, schedule and registered
    resources rather than inferring week numbering from the date. Do not confuse lecture
    numbering with weekly build numbering.
-2. Use `dream.history_mine` to inspect the student's confirmed focus, previous dreams and
+2. Use `dream.history_mine` to inspect the student's editable profile, previous dreams and
    feedback. The roster provides initial interests; it is not proof of a current preference.
-   Only change the focus through `dream.update_profile_mine` after the student requests it.
+   The platform automatically refines interests, current/prior builds and engaged questions
+   from owned course messages and authorized build files, with evidence quotes. Student edits
+   through `dream.update_profile_mine` supersede older pending observations. Do not label
+   inferred updates as student-confirmed; their provenance remains inspectable.
 3. Discover current week resources with the existing course tools. When own GitHub access is
    enabled, inspect the student's repository tree, then select up to four relevant published
    build/writeup paths. Pass their exact paths to `dream.prepare_mine` along with one to six
@@ -43,7 +46,12 @@ has not enabled weekly dreams. Never simulate a saved dream or feedback.
    main email body. The existing `visual-composition` component
    can present headings, text and links; use only registered schema elements. Alternatively,
    use readable chat. Do not invent a new workspace component.
-8. Invite feedback on specific items. Save only feedback the student actually gives using
+8. Preparation loads all saved dreams and feedback, without a count/age retention cutoff.
+   If the history exceeds the configured context budget, it returns a summary covering that
+   history instead of the raw arrays; use `history_representation` and `history_summary`.
+   Compaction never deletes original records. Summaries may lose nuance; use history inspection
+   when exact feedback matters. If preparation reports a compaction error, do not claim success.
+9. Invite feedback on specific items. Save only feedback the student actually gives using
    `dream.feedback_mine`. The next preparation retrieves that memory across conversations.
    Let the student inspect, correct, clear, or leave their memory alone.
 

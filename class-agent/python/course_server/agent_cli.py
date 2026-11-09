@@ -379,11 +379,15 @@ def build_runtime(
             if project_catalog is not None
             else None
         )
+        from course_server.dream_intelligence import intelligence_from_settings
+
         dream_service = WeeklyDreamService(
             FileDreamStore(settings.weekly_dream_data_path),
             course_resources,
             resolved_roster,
             own_reader,
+            intelligence=intelligence_from_settings(settings),
+            compaction_chars=settings.weekly_dream_compaction_chars,
         )
         executable_tools.extend(WeeklyDreamTool(tool_id, dream_service) for tool_id in TOOL_IDS)
     tools = ToolCatalog(executable_tools)

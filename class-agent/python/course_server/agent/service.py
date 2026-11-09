@@ -103,6 +103,16 @@ class ObservableAgentRuntime(Protocol):
     ) -> AgentResult: ...
 
 
+class StudentMemoryObserver(Protocol):
+    """Optional private course-memory projection over trusted student inputs."""
+
+    async def observe(self, principal: PrincipalContext, event: Event) -> None: ...
+
+    async def backfill(
+        self, principal: PrincipalContext, conversations: ConversationStore
+    ) -> None: ...
+
+
 class AgentAttentionProvider(Protocol):
     """Supplies already-authorized, user-specific items that merit agent attention."""
 
@@ -192,6 +202,7 @@ class CourseAgentService:
         workspace_registry: ComponentRegistry | None = None,
         uploads: TemporaryUploadStore | None = None,
         attention: AgentAttentionProvider | None = None,
+        student_memory: StudentMemoryObserver | None = None,
     ) -> None:
         self._runtime = runtime
         self._conversations = conversations
@@ -200,6 +211,7 @@ class CourseAgentService:
         self._workspace_registry = workspace_registry or load_component_registry()
         self._uploads = uploads
         self._attention = attention
+        self._student_memory = student_memory
 
     async def _authorized_upload_uris(
         self,
@@ -266,6 +278,9 @@ class CourseAgentService:
             **_principal_references(principal),
         )
         await self._conversations.append_events(conversation_id, [user_event])
+        if self._student_memory is not None:
+            await self._student_memory.backfill(principal, self._conversations)
+            await self._student_memory.observe(principal, user_event)
 
         return await self._execute(
             principal=principal,

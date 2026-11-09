@@ -36,3 +36,5 @@ accepted-applicants.json
 var/student-showcase/
 var/weekly-dreams/
 var/dream-preview/
+var/dream-evaluation/
+var/dream-email-demo/

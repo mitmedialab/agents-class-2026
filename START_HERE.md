@@ -28,8 +28,9 @@ they are not evidence of a successful live model call.
 ## Review control
 
 Use VS Code's Source Control view or `git diff` to inspect every change. The feature
-extends the existing runtime rather than defining a separate student agent. No automatic
-email, scheduler, new public sharing, or new stable `agent_core` contract is introduced.
+extends the existing runtime rather than defining a separate student agent. No automatic email delivery, scheduler, new public sharing, or new stable
+`agent_core` contract is introduced. Enabled deployments automatically refine the private
+student profile from owned course messages and build-file observations.
 Do not add credentials or real private roster data to this repository.
 
 ## Review checkpoint — November 8
@@ -56,3 +57,12 @@ identified before connecting a successful-send trigger.
 
 The student outcome evaluation is the next work item;
 the automated tests check software behavior, not whether students learn more.
+
+## Memory revision
+
+The local revision adds automatic evidence-backed profile updates, complete dream/feedback
+retention, and context-only summarization when history becomes large. See
+`class-agent/docs/WEEKLY_DREAM.md` for version-2 compatibility and operational details.
+`dream_learning.py` owns observations and profile changes; `dream_intelligence.py` uses
+the existing runtime/provider for structured learning and summarization passes;
+`dream_compaction.py` constructs the generation-context summary without deleting originals.

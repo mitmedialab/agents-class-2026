@@ -162,6 +162,7 @@ class AgentSettings(BaseModel):
     brave_search_api_key: SecretStr = Field(repr=False)
     max_steps: int = Field(default=10, ge=1, le=50)
     weekly_dream_enabled: bool = False
+    weekly_dream_compaction_chars: int = Field(default=24000, ge=4000, le=200000)
     weekly_dream_data_path: Path = Path(__file__).resolve().parents[2] / "var/weekly-dreams"
     database_url: str
     course_data_path: Path = Path(__file__).resolve().parents[2] / "data"
@@ -407,6 +408,7 @@ class AgentSettings(BaseModel):
                 )
             ),
             weekly_dream_enabled=values.get("WEEKLY_DREAM_ENABLED", "false"),
+            weekly_dream_compaction_chars=values.get("WEEKLY_DREAM_COMPACTION_CHARS", "24000"),
             weekly_dream_data_path=Path(
                 values.get(
                     "WEEKLY_DREAM_DATA_PATH",
