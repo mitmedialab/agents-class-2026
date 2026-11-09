@@ -3764,3 +3764,8 @@ textarea {
     transition: none;
   }
 }
+
+.drawer-peer-learning { margin-top: 0.5rem; }
+
+.peer-panel-loading { display:grid; place-items:center; height:100%; min-height: min(65vh, 38rem); text-align:center; }
+.workspace-pane .workspace-panel:has(> .peer-panel-loading) { padding-block: 0; }

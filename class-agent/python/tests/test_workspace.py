@@ -136,6 +136,7 @@ def test_workspace_tools_validate_and_apply_complete_panel_lifecycle() -> None:
             "page-cards",
             "visual-composition",
             "draft-document",
+            "peer-discovery",
         ]
 
         opened = await WorkspaceOpenComponentTool(registry).execute(

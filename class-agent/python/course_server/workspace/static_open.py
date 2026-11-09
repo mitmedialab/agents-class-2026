@@ -17,7 +17,7 @@ from course_server.notifications import (
 
 from .models import OpenWorkspaceCommand, WorkspacePanel
 
-StaticOpenTarget = Literal["schedule", "grading", "notification", "assignment"]
+StaticOpenTarget = Literal["schedule", "grading", "notification", "assignment", "peer-learning"]
 _DOCUMENT_MEDIA_TYPES = frozenset({"text/markdown", "text/plain", "application/pdf"})
 
 
@@ -92,6 +92,17 @@ async def static_open_command(
     notifications: NotificationCenterService | None,
     assignments: AssignmentStore | None,
 ) -> OpenWorkspaceCommand:
+    if target == "peer-learning":
+        if not principal.authenticated or "student" not in principal.roles:
+            raise StaticWorkspaceUnavailable("student workspace unavailable")
+        return OpenWorkspaceCommand(
+            panel=WorkspacePanel(
+                id=uuid4(),
+                component_id="peer-discovery",
+                title="Peer learning",
+                props={"view": "recommendations"},
+            )
+        )
     if target == "schedule":
         return _resource_command(resources, principal, COURSE_SCHEDULE_URI)
     if target == "grading":

@@ -45,6 +45,11 @@
       "id": "weekly-build-showcase",
       "directory": "weekly-build-showcase",
       "audience": "instructors"
+    },
+    {
+      "id": "peer-learning",
+      "directory": "peer-learning",
+      "audience": "students"
     }
   ]
 }

@@ -181,6 +181,21 @@ repository derived from their trusted account username. The credential remains s
 configured organization, prefix, and exclusions are enforced in platform code. See
 [docs/STUDENT_PROJECTS.md](docs/STUDENT_PROJECTS.md).
 
+Students can open **Your logs → Peer learning → My Weekly Paired Stars** to see their
+indexed build alongside another student's work from the same week. Opening the panel
+checks the course project directory and reuses a shared index of public portfolio pages.
+The first visit on an empty installation may take longer. Same-week matches require an
+indexed build for the signed-in student's roster project and an eligible peer build.
+**Not for me** dismisses that build for the current account. Students can edit their
+goals and long-term focus in matching preferences. Their preferences, saved works and
+feedback are stored per account in the server's private `PEER_DISCOVERY_PATH` directory.
+**Connect** prepares an editable draft that the student can copy.
+
+For a local evaluation, `uv run python examples/import_gardens_demo.py` imports the
+pinned Our Gardens public portfolio snapshot. Run it from `class-agent` with the same
+`PEER_DISCOVERY_PATH` as the API. It can supplement the live directory with reviewed
+titles and source excerpts. Student accounts and their private history are provisioned separately.
+
 Weekly showcase selection is available to staff through the read-only project integration:
 two rubric-ranked builds plus two weighted random draws, with no presentation cooldown and reduced
 weight for prior appearances. All four slots prioritize students who have never presented,

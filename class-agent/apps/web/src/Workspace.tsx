@@ -34,6 +34,7 @@ import {
   type WeeklyBuildGrade,
 } from "./api.js";
 
+import { PeerDiscoveryPanel } from "./PeerDiscoveryPanel.js";
 import { StreamingBrowserViewer } from "./StreamingBrowserViewer.js";
 import { splitWeeklyFeedback } from "./weeklyFeedback.js";
 
@@ -497,6 +498,7 @@ function ResourcePanel({
     if (
       panel.componentId === "webpage-viewer" ||
       panel.componentId === "browser-viewer" ||
+      panel.componentId === "peer-discovery" ||
       panel.componentId === "page-cards" ||
       panel.componentId === "visual-composition" ||
       panel.componentId === "draft-document"
@@ -589,6 +591,10 @@ function ResourcePanel({
         url={webpageUrl}
       />
     );
+  }
+  if (panel.componentId === "peer-discovery") {
+    const view = panel.props.view === "memory" || panel.props.view === "coverage" ? panel.props.view : "recommendations";
+    return <PeerDiscoveryPanel key={panel.id} view={view} historical={historical} />;
   }
   if (panel.componentId === "page-cards") {
     const items = pageCardItems(panel.props.items, conversationId);

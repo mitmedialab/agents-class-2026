@@ -1226,7 +1226,7 @@ export default function App() {
   }
 
   async function openStatic(
-    target: "schedule" | "grading" | "notification" | "assignment",
+    target: "schedule" | "grading" | "notification" | "assignment" | "peer-learning",
     notification?: NotificationCenterItem,
     assignmentId?: string,
   ): Promise<boolean> {
@@ -1247,7 +1247,7 @@ export default function App() {
     let createdConversation = false;
     try {
       if (!conversationId) {
-        const title = notification?.title ?? (target === "grading" ? "Grading" : target === "assignment" ? "Weekly build" : "Schedule");
+        const title = notification?.title ?? (target === "peer-learning" ? "Peer learning" : target === "grading" ? "Grading" : target === "assignment" ? "Weekly build" : "Schedule");
         const created = await createConversation(titleFromMessage(title));
         if (generation !== staticOpenGeneration.current) return false;
         conversationId = created.id;
@@ -2598,6 +2598,15 @@ export default function App() {
             <Button className="new-conversation" onClick={startNewConversation} variant="outline">
               New conversation
             </Button>
+
+            {principal?.roles.includes("student") && (
+              <Button className="new-conversation drawer-peer-learning" variant="outline"
+                disabled={isInitializing || isOpeningStatic || isRunning || isUploading || Boolean(awaitingConfirmationAction) || timelinePull !== null}
+                onClick={() => void openStatic("peer-learning")}
+              >
+                Peer learning
+              </Button>
+            )}
 
             <nav aria-label="Conversations" className="conversation-navigation">
               <p className="drawer-label">Conversations</p>
