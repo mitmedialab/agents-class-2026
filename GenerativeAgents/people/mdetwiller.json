@@ -1,20 +1,53 @@
 {
   "schema_version": 1,
   "code": "S17",
-  "name": "mdetwiller",
-  "team": "MIT Media Lab",
-  "site": "",
-  "bio": "",
-  "project": "a cognitive agents project",
+  "name": "Maya Detwiller",
+  "team": "MIT Center for Constructive Communication",
+  "site": "https://mitmedialab.github.io/agents2026-maya/",
+  "project": "reflective listening tools that help people make sense of first-hand stories through spoken, evidence-linked reflection",
+  "bio": "Maya Detwiller is a listener in the MIT Media Lab course Cognitive Agents (2026). They design agents for deep listening and sensemaking, where the AI does the mechanical labor and the human keeps the interpretive judgment.",
   "interests": [
-    "agents"
+    {
+      "term": "sensemaking",
+      "description": "Making sense of many people's first-hand stories in response to the same open-ended question. They see the traditional process of highlighting, codestorming, and tagging as frictionful and cognitively taxing, and as a place where contextual and relational information gets lost. Their work explores how agents can hold multiple threads so the listener can orient and reorient their curiosity instead."
+    },
+    {
+      "term": "reflective listening",
+      "description": "Treating listening and reflection as the main task rather than categorizing. Their week 3 prototype asks the listener to speak a voice reflection at the end of each transcript, anchored by their own research questions, and files approved reflections with their evidence into a running memo."
+    },
+    {
+      "term": "human interpretive authority",
+      "description": "Keeping the human as the interpretive engine when AI joins an analysis. Their designs hide the AI's interpretation until the user has voiced their own, keep AI-proposed items visibly distinct, require explicit approval before anything enters the memo, and archive edits and rejections for an interpretive record."
+    },
+    {
+      "term": "qualitative analysis without coding",
+      "description": "Moving away from top-down codebooks and hard-to-iterate tags toward a more fluid process anchored on the listener's goals. They draw on research on LLM-supported thematic analysis without coding and on reflexivity-centered analysis tools, and their phase 2 spec proposes AI-synthesized \"code families\" as a stepping stone toward a codebook rather than a tagging system."
+    }
   ],
   "skills": [
-    "prototyping"
+    "interfaces",
+    "interaction specification",
+    "physical prototyping"
   ],
-  "weekly_builds": [],
+  "weekly_builds": [
+    {
+      "week": "W01",
+      "title": "Agent Eden course website",
+      "summary": "They set up their course website, themed as a Garden of Eden (\"a place to name creations, eat an apple, or talk to a snake\"), with a table of weekly assignments that open project pages in a modal. A GitHub Actions workflow publishes the website folder to GitHub Pages. The week 1 write-up pages are still placeholders."
+    },
+    {
+      "week": "W02",
+      "title": "Astrology reading agent",
+      "summary": "They built a smolagents CodeAgent on a Claude model with tools for geocoding a birthplace, computing a natal chart, and reading and writing Google Docs. The agent writes a chart reading into a Google Doc, then checks the doc for unresolved comments and replies to each with an alternate-placement suggestion. A reusable skill file sets the reading's voice: warm, second-person, plain-language trait first and astrological reasoning in parentheses."
+    },
+    {
+      "week": "W03",
+      "title": "Reflective listening prototype (Notes in Margin Memos)",
+      "summary": "They specified and built a transcript reader (FastAPI backend, React frontend) where the listener highlights passages, leaves margin memos, and records a spoken reflection at the end of each transcript, transcribed locally with faster-whisper. An AI review step proposes connections to the listener's research questions with cited evidence, which they approve, edit, or reject before it is filed into a running memo per question. A second phase added AI gists for every conversation in the corpus and next-step suggestions of unvisited conversations grounded in what the listener wants to hear next; the build log notes these were verified with real model calls and synthetic audio, with the author as the only tester so far."
+    }
+  ],
   "source": {
-    "method": "placeholder until she provides her own data",
-    "date": "2026-11-07"
+    "method": "drafted by Claude from the agents2026-maya documentation repository",
+    "date": "2026-11-09"
   }
 }
