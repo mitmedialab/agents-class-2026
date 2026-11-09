@@ -561,11 +561,10 @@ function loop(now){
 /* ---------- theme: light / dark. Default follows the system; the band switch pins one (saved in this browser) ---------- */
 function setTheme(t,save=true){const r=document.documentElement;if(t==="light"||t==="dark")r.dataset.theme=t;else delete r.dataset.theme;
   if(save)try{if(t==="light"||t==="dark")localStorage.setItem("placelab-theme",t);else localStorage.removeItem("placelab-theme")}catch(e){}
-  $("th-light").setAttribute("aria-pressed",r.dataset.theme==="light");$("th-dark").setAttribute("aria-pressed",r.dataset.theme==="dark");
+  const b=$("th-toggle");if(b){b.textContent=TH.dark?"◑":"◐";b.setAttribute("aria-pressed",String(TH.dark))}
   applySceneTheme();if(agents&&agents.length){if(nav==="results")drawDemandAll();drawSchema()}
   const f=$("rep-frame");if(f&&f.contentWindow)try{f.contentWindow.postMessage({placelabTheme:TH.dark?"dark":"light"},"*")}catch(e){}}
-$("th-light").addEventListener("click",()=>setTheme(document.documentElement.dataset.theme==="light"?null:"light"));
-$("th-dark").addEventListener("click",()=>setTheme(document.documentElement.dataset.theme==="dark"?null:"dark"));
+$("th-toggle").addEventListener("click",()=>setTheme(TH.dark?"light":"dark"));  // one button: flips the look in use and pins it
 {let t=null;try{t=localStorage.getItem("placelab-theme")}catch(e){}if(!t){const q=new URLSearchParams(location.search).get("theme");if(q==="dark"||q==="light")t=q}setTheme(t,false)}  // ?theme=dark: the host page (the course site) asks for its own look
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>{if(!document.documentElement.dataset.theme)setTheme(null,false)});
 // ask serve.py first whether the model, earlier runs and memories are available (talk.js); without it, templates

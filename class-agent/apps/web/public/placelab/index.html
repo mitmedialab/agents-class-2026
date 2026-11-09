@@ -150,7 +150,7 @@ aside{background:var(--panel);border:1px solid var(--line);border-radius:6px;dis
 .subh{font-size:10.5px;color:var(--muted);margin-bottom:4px;text-transform:lowercase}
 #live-title{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:16px}
 .langsw{margin-left:auto;display:inline-flex;border:1px solid #555;border-radius:999px;overflow:hidden}
-.langsw button{font:inherit;font-size:11px;text-transform:uppercase;letter-spacing:.06em;background:transparent;color:#BDBDB7;border:0;padding:4px 10px;cursor:pointer}
+.langsw button{font:inherit;font-size:10px;text-transform:uppercase;letter-spacing:.06em;background:transparent;color:#BDBDB7;border:0;padding:3px 8px;cursor:pointer;line-height:1.2}
 .langsw button[aria-pressed="true"]{background:var(--band-ink);color:var(--band)}
 .mono7{display:inline-grid;grid-template-columns:repeat(7,4px);grid-auto-rows:4px;gap:1px;flex:none;vertical-align:middle}
 .mono7 i{display:block;background:#2A2A2A}
@@ -363,7 +363,8 @@ iframe.arcs{display:block;width:100%;min-height:160px;border:1px solid var(--lin
 
 :root[data-theme="dark"] .sb.perc,:root[data-theme="dark"] .sb.prof,:root[data-theme="dark"] .sb.self,:root[data-theme="dark"] .sb.reason,:root[data-theme="dark"] .sb.evo,:root[data-theme="dark"] .sb.left{background:var(--panel)}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .sb.perc,:root:not([data-theme="light"]) .sb.prof,:root:not([data-theme="light"]) .sb.self,:root:not([data-theme="light"]) .sb.reason,:root:not([data-theme="light"]) .sb.evo,:root:not([data-theme="light"]) .sb.left{background:var(--panel)}}
-.themesw{margin-left:0}
+.theme{width:28px;height:28px;flex:none;border:1px solid #777;border-radius:999px;background:transparent;color:#E4E4E0;cursor:pointer;font-size:16px;line-height:1;padding:0;display:grid;place-items:center}
+.theme:hover{color:var(--band-ink);border-color:var(--band-ink)}
 
 /* ---------- report: tabs row with the run controls at its right; the "where" tab ---------- */
 .rep-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 20px}
@@ -376,7 +377,7 @@ iframe.arcs{display:block;width:100%;min-height:160px;border:1px solid var(--lin
 .space-notes .lead{grid-column:1/-1;border-top:0;padding-top:0;font-size:13px;max-width:72ch}
 
 </style>
-<div class="band"><div class="bandin"><span id="band-glyph"></span><span class="bandt"><b id="t-sim">GA Cognitive Agents</b> <span id="t-band">· e14 / e15 · tercer piso</span></span><span class="langsw" role="group" aria-label="idioma / language"><button id="lang-es" aria-pressed="true">es</button><button id="lang-en" aria-pressed="false">en</button></span><span class="langsw themesw" role="group" aria-label="theme"><button id="th-light" aria-pressed="false">light</button><button id="th-dark" aria-pressed="false">dark</button></span></div></div>
+<div class="band"><div class="bandin"><span id="band-glyph"></span><span class="bandt"><b id="t-sim">GA Cognitive Agents</b> <span id="t-band">· e14 / e15 · tercer piso</span></span><span class="langsw" role="group" aria-label="idioma / language"><button id="lang-es" aria-pressed="true">es</button><button id="lang-en" aria-pressed="false">en</button></span><button class="theme" id="th-toggle" type="button" title="light / dark" aria-label="light / dark">◐</button></div></div>
 <div class="wrap">
   <header>
     <div><div class="lab" id="t-tagline" style="margin-bottom:4px">¿qué ideas nacen cuando la clase se cruza?</div><h1 id="t-title">placelab</h1><div class="steps" role="tablist"><button id="nav-survey" aria-pressed="true"><b>1</b><span id="t-nav1">perfil</span></button><button id="nav-sim" aria-pressed="false"><b>2</b><span id="t-nav2">simulación</span></button><button id="nav-results" aria-pressed="false"><b>3</b><span id="t-nav3">resultados</span></button></div></div>
@@ -1315,7 +1316,7 @@ const UI2={
     thinking:"thinking…",brings:"brings",showTalk:n=>`read the conversation · ${n} lines`,hideTalk:"fold",insight:"insight",followup:"follow-up",ffThinking:"agents are talking",
     llmOn:m=>`conversations by ${m}`,llmOff:"offline conversations: fixed rules over each person's file · start serve.py with a Gemini key for AI ones",
     repLab:"final report",repTitle:(n,d)=>`run ${n} · ${d} ${d===1?"day":"days"}`,repLive:"run in progress",
-    repRunning:"the run is still going. the newsletter and the chart are written when it ends; until then, the details tab follows it live.",
+    repRunning:"the run is still going. the newsletter and the chart are written when it ends; until then, skip to the end, or watch the where tab follow it live.",
     tabNews:"newsletter",tabArcs:"who talked to whom",tabDetail:"where",tabEval:"evaluation",
     again:"run again",forget:"forget earlier runs",forgetQ:"forget everything the agents remember from earlier runs? the saved reports stay.",forgotten:"the agents start the next run without memories of earlier runs.",
     pickRun:"report",thisRun:"this run",pastRun:n=>`run ${n}`,writing:"writing the newsletter…",
@@ -1345,7 +1346,7 @@ const UI2={
     thinking:"pensando…",brings:"trae",showTalk:n=>`leer la conversación · ${n} frases`,hideTalk:"plegar",insight:"intuición",followup:"seguimiento",ffThinking:"los agentes están hablando",
     llmOn:m=>`conversaciones con ${m}`,llmOff:"conversaciones sin IA: reglas fijas sobre el archivo de cada persona · arranca serve.py con una clave de Gemini para conversaciones con IA",
     repLab:"informe final",repTitle:(n,d)=>`tanda ${n} · ${d} ${d===1?"día":"días"}`,repLive:"tanda en marcha",
-    repRunning:"la tanda sigue en marcha. el boletín y el gráfico se escriben al terminar; mientras, la pestaña de detalles la sigue en directo.",
+    repRunning:"la tanda sigue en marcha. el boletín y el gráfico se escriben al terminar; mientras, salta al final o mira la pestaña dónde, que la sigue en directo.",
     tabNews:"boletín",tabArcs:"quién habló con quién",tabDetail:"dónde",tabEval:"evaluación",
     again:"otra tanda",forget:"olvidar tandas anteriores",forgetQ:"¿olvidar todo lo que los agentes recuerdan de tandas anteriores? los informes guardados se quedan.",forgotten:"los agentes empiezan la próxima tanda sin recuerdos de las anteriores.",
     pickRun:"informe",thisRun:"esta tanda",pastRun:n=>`tanda ${n}`,writing:"escribiendo el boletín…",
@@ -2325,11 +2326,10 @@ function loop(now){
 /* ---------- theme: light / dark. Default follows the system; the band switch pins one (saved in this browser) ---------- */
 function setTheme(t,save=true){const r=document.documentElement;if(t==="light"||t==="dark")r.dataset.theme=t;else delete r.dataset.theme;
   if(save)try{if(t==="light"||t==="dark")localStorage.setItem("placelab-theme",t);else localStorage.removeItem("placelab-theme")}catch(e){}
-  $("th-light").setAttribute("aria-pressed",r.dataset.theme==="light");$("th-dark").setAttribute("aria-pressed",r.dataset.theme==="dark");
+  const b=$("th-toggle");if(b){b.textContent=TH.dark?"◑":"◐";b.setAttribute("aria-pressed",String(TH.dark))}
   applySceneTheme();if(agents&&agents.length){if(nav==="results")drawDemandAll();drawSchema()}
   const f=$("rep-frame");if(f&&f.contentWindow)try{f.contentWindow.postMessage({placelabTheme:TH.dark?"dark":"light"},"*")}catch(e){}}
-$("th-light").addEventListener("click",()=>setTheme(document.documentElement.dataset.theme==="light"?null:"light"));
-$("th-dark").addEventListener("click",()=>setTheme(document.documentElement.dataset.theme==="dark"?null:"dark"));
+$("th-toggle").addEventListener("click",()=>setTheme(TH.dark?"light":"dark"));  // one button: flips the look in use and pins it
 {let t=null;try{t=localStorage.getItem("placelab-theme")}catch(e){}if(!t){const q=new URLSearchParams(location.search).get("theme");if(q==="dark"||q==="light")t=q}setTheme(t,false)}  // ?theme=dark: the host page (the course site) asks for its own look
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>{if(!document.documentElement.dataset.theme)setTheme(null,false)});
 // ask serve.py first whether the model, earlier runs and memories are available (talk.js); without it, templates

@@ -144,7 +144,7 @@ aside{background:var(--panel);border:1px solid var(--line);border-radius:6px;dis
 .subh{font-size:10.5px;color:var(--muted);margin-bottom:4px;text-transform:lowercase}
 #live-title{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:16px}
 .langsw{margin-left:auto;display:inline-flex;border:1px solid #555;border-radius:999px;overflow:hidden}
-.langsw button{font:inherit;font-size:11px;text-transform:uppercase;letter-spacing:.06em;background:transparent;color:#BDBDB7;border:0;padding:4px 10px;cursor:pointer}
+.langsw button{font:inherit;font-size:10px;text-transform:uppercase;letter-spacing:.06em;background:transparent;color:#BDBDB7;border:0;padding:3px 8px;cursor:pointer;line-height:1.2}
 .langsw button[aria-pressed="true"]{background:var(--band-ink);color:var(--band)}
 .mono7{display:inline-grid;grid-template-columns:repeat(7,4px);grid-auto-rows:4px;gap:1px;flex:none;vertical-align:middle}
 .mono7 i{display:block;background:#2A2A2A}
@@ -357,7 +357,8 @@ iframe.arcs{display:block;width:100%;min-height:160px;border:1px solid var(--lin
 
 :root[data-theme="dark"] .sb.perc,:root[data-theme="dark"] .sb.prof,:root[data-theme="dark"] .sb.self,:root[data-theme="dark"] .sb.reason,:root[data-theme="dark"] .sb.evo,:root[data-theme="dark"] .sb.left{background:var(--panel)}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .sb.perc,:root:not([data-theme="light"]) .sb.prof,:root:not([data-theme="light"]) .sb.self,:root:not([data-theme="light"]) .sb.reason,:root:not([data-theme="light"]) .sb.evo,:root:not([data-theme="light"]) .sb.left{background:var(--panel)}}
-.themesw{margin-left:0}
+.theme{width:28px;height:28px;flex:none;border:1px solid #777;border-radius:999px;background:transparent;color:#E4E4E0;cursor:pointer;font-size:16px;line-height:1;padding:0;display:grid;place-items:center}
+.theme:hover{color:var(--band-ink);border-color:var(--band-ink)}
 
 /* ---------- report: tabs row with the run controls at its right; the "where" tab ---------- */
 .rep-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 20px}
