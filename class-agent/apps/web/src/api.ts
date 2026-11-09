@@ -1,4 +1,4 @@
-import type { Conversation, Event, PrincipalContext, Uuid } from "@class-agent/protocol";
+import type { Conversation, Event, Memory, PrincipalContext, Uuid } from "@class-agent/protocol";
 import type { JsonValue } from "@class-agent/workspace";
 import {
   confirmationFromPayload,
@@ -227,6 +227,27 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return (await response.json()) as T;
+}
+
+export function listMemories(): Promise<Memory[]> {
+  return requestJson<Memory[]>("/memories");
+}
+
+export function updateMemory(memoryId: Uuid, content: string): Promise<Memory> {
+  return requestJson<Memory>(`/memories/${encodeURIComponent(memoryId)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ content }),
+  });
+}
+
+export async function deleteMemory(memoryId: Uuid): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/memories/${encodeURIComponent(memoryId)}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!response.ok) {
+    throw await responseError(response);
+  }
 }
 
 export function getPrincipal(): Promise<PrincipalContext> {
@@ -847,6 +868,7 @@ export async function streamAgentRun(
   text: string,
   onEvent: (event: AgentStreamEvent) => void,
   signal?: AbortSignal,
+  useMemory = true,
 ): Promise<void> {
   const request: RequestInit = {
     method: "POST",
@@ -855,7 +877,7 @@ export async function streamAgentRun(
       Accept: "text/event-stream",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text, use_memory: useMemory }),
   };
   if (signal) {
     request.signal = signal;

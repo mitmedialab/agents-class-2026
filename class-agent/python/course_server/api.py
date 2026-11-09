@@ -27,7 +27,7 @@ from pydantic import (
     model_validator,
 )
 
-from agent_core import AgentResult, Conversation, Event, PrincipalContext
+from agent_core import AgentResult, Conversation, Event, Memory, PrincipalContext
 from course_server.agent import (
     ApplicantStore,
     ConversationAccessDenied,
@@ -112,6 +112,12 @@ from course_server.mail import (
     TAQuestionService,
     TAQuestionStateError,
 )
+from course_server.memory import (
+    MAX_LISTED_MEMORIES,
+    MAX_MEMORY_CONTENT_LENGTH,
+    MemoryManager,
+    PostgresMemoryStore,
+)
 from course_server.migrations import apply_migrations
 from course_server.notification_portraits import StudentNotificationPortraitRegistry
 from course_server.notifications import (
@@ -192,6 +198,19 @@ class CreateConversationRequest(ApiModel):
 
 class RunRequest(ApiModel):
     text: PromptText
+
+
+class StreamRunRequest(RunRequest):
+    use_memory: bool = True
+
+
+class UpdateMemoryRequest(ApiModel):
+    content: Annotated[
+        str,
+        StringConstraints(
+            strip_whitespace=True, min_length=1, max_length=MAX_MEMORY_CONTENT_LENGTH
+        ),
+    ]
 
 
 class AgentRunRequest(RunRequest):
@@ -357,6 +376,7 @@ class AppServices:
     instructor_messages: InstructorMessageService | None = None
     notifications: StudentNotificationService | None = None
     notification_center: NotificationCenterService | None = None
+    memories: MemoryManager | None = None
     anonymous_quotas: AnonymousQuotaStore = dataclass_field(
         default_factory=InMemoryAnonymousQuotaStore
     )
@@ -515,6 +535,16 @@ async def _resolve_or_create_principal(
     return principal
 
 
+def _memory_owner(request: Request, principal: PrincipalContext) -> tuple[MemoryManager, UUID]:
+    state = _get_app_state(request)
+    assert state.services is not None
+    if state.services.memories is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+    if not principal.authenticated or principal.user_id is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="course login required")
+    return state.services.memories, principal.user_id
+
+
 async def _require_principal(request: Request) -> PrincipalContext:
     return await _resolve_or_create_principal(request, _get_app_state(request))
 
@@ -663,6 +693,7 @@ async def _run_agent(
     text: str,
     event_observer: Callable[[Event], None] | None = None,
     text_delta_observer: Callable[[str], None] | None = None,
+    use_memory: bool = True,
 ) -> AgentResult:
     assert state.services is not None
     try:
@@ -681,6 +712,7 @@ async def _run_agent(
             text=text,
             event_observer=event_observer,
             text_delta_observer=text_delta_observer,
+            use_memory=use_memory,
         )
         if application_event is None:
             return result
@@ -751,6 +783,7 @@ async def _stream_agent_run(
     principal: PrincipalContext,
     conversation_id: UUID,
     text: str,
+    use_memory: bool = True,
 ) -> AsyncIterator[str]:
     yield _sse(
         event="status",
@@ -782,6 +815,7 @@ async def _stream_agent_run(
             text=text,
             event_observer=observe_event,
             text_delta_observer=observe_text_delta,
+            use_memory=use_memory,
         )
     )
     run_task.add_done_callback(lambda _task: event_queue.put_nowait(None))
@@ -882,6 +916,7 @@ def create_app(
         conversation_store = PostgresConversationStore(pool)
         faq_store = PostgresFaqStore(pool)
         question_store = PostgresTAQuestionStore(pool)
+        memory_store = PostgresMemoryStore(pool)
         faq_knowledge = LocalFaqKnowledgeStore(resolved_settings.published_faq_path)
         ta_question_service = (
             TAQuestionService(
@@ -994,6 +1029,7 @@ def create_app(
                     student_communications=student_communication_service,
                     faq_updates=faq_knowledge,
                     course_roster=course_roster,
+                    memories=memory_store,
                 ),
                 conversations=conversation_store,
                 capability_policy=CourseCapabilityPolicy(
@@ -1010,11 +1046,13 @@ def create_app(
                         resolved_settings.github_student_projects_enabled
                         or resolved_settings.student_project_fixtures_enabled
                     ),
+                    memories_enabled=True,
                 ),
                 skills=skills,
                 workspace_registry=component_registry,
                 uploads=upload_store,
                 attention=notification_center,
+                memories=memory_store,
             ),
             conversations=conversation_store,
             applicants=applicant_store,
@@ -1029,6 +1067,7 @@ def create_app(
             instructor_messages=instructor_message_service,
             notifications=StudentNotificationService(faqs=faq_store, auth=auth_store),
             notification_center=notification_center,
+            memories=memory_store,
             anonymous_quotas=PostgresAnonymousQuotaStore(pool),
             anonymous_quota_policy=AnonymousQuotaPolicy(
                 enabled=resolved_settings.anonymous_quotas_enabled,
@@ -1157,6 +1196,43 @@ def create_app(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="student login required",
             ) from error
+
+    @router.get("/memories", response_model=list[Memory])
+    async def list_my_memories(
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> list[Memory]:
+        store, user_id = _memory_owner(request, principal)
+        return await store.list_recent(user_id, MAX_LISTED_MEMORIES)
+
+    @router.patch("/memories/{memory_id}", response_model=Memory)
+    async def update_my_memory(
+        memory_id: UUID,
+        payload: UpdateMemoryRequest,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> Memory:
+        store, user_id = _memory_owner(request, principal)
+        memory = await store.update_content(
+            user_id=user_id,
+            memory_id=memory_id,
+            content=payload.content,
+            updated_at=datetime.now(UTC),
+        )
+        if memory is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+        return memory
+
+    @router.delete("/memories/{memory_id}", status_code=status.HTTP_204_NO_CONTENT)
+    async def delete_my_memory(
+        memory_id: UUID,
+        request: Request,
+        principal: Annotated[PrincipalContext, Depends(_require_principal)],
+    ) -> Response:
+        store, user_id = _memory_owner(request, principal)
+        if not await store.delete(user_id=user_id, memory_id=memory_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     @router.post(
         "/notifications/{notification_id}/read",
@@ -2568,7 +2644,7 @@ def create_app(
     @router.post("/conversations/{conversation_id}/run/stream")
     async def stream_conversation_run(
         conversation_id: UUID,
-        payload: RunRequest,
+        payload: StreamRunRequest,
         request: Request,
         principal: Annotated[PrincipalContext, Depends(_require_principal)],
     ) -> StreamingResponse:
@@ -2592,6 +2668,7 @@ def create_app(
                 principal=principal,
                 conversation_id=conversation_id,
                 text=payload.text,
+                use_memory=payload.use_memory,
             )
         )
 

@@ -18,6 +18,7 @@ from agent_core import (
     Event,
     PrincipalContext,
 )
+from course_server.memory import MemoryReader
 from course_server.uploads import TemporaryUploadStore, UploadError
 from course_server.workspace import (
     ComponentRegistry,
@@ -28,6 +29,7 @@ from course_server.workspace import (
 from .capabilities import (
     ASK_TA_TOOL_ID,
     INSTRUCTOR_MESSAGE_STUDENTS_TOOL_ID,
+    SAVE_MY_MEMORY_TOOL_ID,
     CourseCapabilityPolicy,
 )
 from .skills import (
@@ -183,6 +185,7 @@ class CourseAgentService:
         workspace_registry: ComponentRegistry | None = None,
         uploads: TemporaryUploadStore | None = None,
         attention: AgentAttentionProvider | None = None,
+        memories: MemoryReader | None = None,
     ) -> None:
         self._runtime = runtime
         self._conversations = conversations
@@ -191,6 +194,7 @@ class CourseAgentService:
         self._workspace_registry = workspace_registry or load_component_registry()
         self._uploads = uploads
         self._attention = attention
+        self._memories = memories
 
     async def _authorized_upload_uris(
         self,
@@ -246,6 +250,7 @@ class CourseAgentService:
         text: str,
         event_observer: EventObserver | None = None,
         text_delta_observer: TextDeltaObserver | None = None,
+        use_memory: bool = True,
     ) -> AgentResult:
         previous_events = await self._owned_conversation_events(principal, conversation_id)
         agent_input = AgentInput(conversation_id=conversation_id, text=text)
@@ -265,6 +270,7 @@ class CourseAgentService:
             previous_events=previous_events,
             event_observer=event_observer,
             text_delta_observer=text_delta_observer,
+            use_memory=use_memory,
         )
 
     async def greet_on_page_load(
@@ -410,7 +416,10 @@ class CourseAgentService:
         blocked_tool_ids: frozenset[str] = frozenset(),
         event_observer: EventObserver | None = None,
         text_delta_observer: TextDeltaObserver | None = None,
+        use_memory: bool = True,
     ) -> AgentResult:
+        if not use_memory:
+            blocked_tool_ids |= {SAVE_MY_MEMORY_TOOL_ID}
 
         authorized = self._capability_policy.authorize(principal)
         authorized_skills = self._skills.authorized_metadata(principal) if self._skills else ()
@@ -436,10 +445,16 @@ class CourseAgentService:
             if self._attention is not None and principal.authenticated
             else []
         )
+        selected_memories = (
+            await self._memories.list_recent(principal.user_id)
+            if use_memory and self._memories is not None and principal.user_id is not None
+            else []
+        )
         context = AgentContext(
             principal=principal,
             conversation_id=conversation_id,
             recent_events=_recent_context_events(previous_events),
+            selected_memories=selected_memories,
             capabilities=[
                 Capability(id=tool_id, status="available") for tool_id in permitted_tool_ids
             ],

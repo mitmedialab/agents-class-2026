@@ -69,6 +69,8 @@ Other roles and anonymous visitors retain Apply.
 Submitting a new prompt immediately removes the prior answer and resets the
 activity trace, so only the new run's process is visible until its answer begins.
 Canonical history is still persisted as events and is available through the conversation drawer.
+Signed-in users reach the onboarding questionnaire (`/onboarding`) and their memory list
+(`/memories`, with edit and delete) from the account section of Your logs.
 Open the About page from the right side of the header or link directly to `/about`.
 The browser URL and Back/Forward navigation remain synchronized with that page. Notifications and their desktop/mobile layout state are hidden while About is open and restored when returning to chat. It
 contains a concise description, new/history navigation, and student login or logout

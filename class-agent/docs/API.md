@@ -42,6 +42,13 @@ POST /api/v1/conversations/{conversation_id}/run/stream
 POST /api/v1/agent/run
 ```
 
+`run/stream` accepts an optional `use_memory` (default `true`). When `false`, that run does not
+load the user's memories and cannot save new ones.
+
+`GET /api/v1/memories`, `PATCH /api/v1/memories/{memory_id}` (`content` only), and
+`DELETE /api/v1/memories/{memory_id}` act only on the logged-in user's own memories. Anonymous
+callers receive `403`; another user's memory returns `404`.
+
 The TA-question confirmation route accepts only `send` or `cancel`, plus a bounded
 `reporter_visibility` of `named` or `anonymous`. On `send`, the browser may submit the complete
 reviewed `question` shown in the confirmation; edits on `cancel` are rejected. The stored subject

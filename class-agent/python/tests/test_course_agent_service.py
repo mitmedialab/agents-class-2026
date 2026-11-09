@@ -3,11 +3,11 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 from typing import Literal
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
-from agent_core import AgentContext, AgentInput, AgentResult, Event, PrincipalContext
+from agent_core import AgentContext, AgentInput, AgentResult, Event, Memory, PrincipalContext
 from course_server.agent import (
     ASK_TA_TOOL_ID,
     COURSE_APPLICATION_URI,
@@ -47,6 +47,7 @@ from course_server.agent import (
     ResourceDefinition,
     SkillCatalog,
 )
+from course_server.agent.capabilities import SAVE_MY_MEMORY_TOOL_ID
 from course_server.agent_cli import _safe_failure_message, run_cli_turn
 from course_server.auth import InMemoryAuthStore
 from course_server.browser import BROWSER_TOOL_IDS
@@ -698,6 +699,78 @@ def test_course_agent_continuation_distinguishes_online_question_resolution() ->
         )
         assert "resolved" not in runtime.inputs[0].text
         assert "error" not in runtime.inputs[0].text
+
+    asyncio.run(scenario())
+
+
+def test_course_agent_selects_only_the_principals_own_memories() -> None:
+    class Memories:
+        def __init__(self, memories: list[Memory]) -> None:
+            self.memories = memories
+            self.reads: list[UUID] = []
+
+        async def list_recent(self, user_id: UUID) -> list[Memory]:
+            self.reads.append(user_id)
+            return [memory for memory in self.memories if memory.user_id == user_id]
+
+    async def scenario() -> None:
+        owner, other, anonymous = (
+            authenticated_principal("student"),
+            authenticated_principal("student"),
+            public_principal(),
+        )
+        assert owner.user_id is not None and other.user_id is not None
+        mine = Memory(user_id=owner.user_id, kind="preference", content="Mine", privacy="personal")
+        theirs = Memory(
+            user_id=other.user_id, kind="preference", content="Theirs", privacy="personal"
+        )
+        runtime = RecordingRuntime()
+        memories = Memories([mine, theirs])
+        service = CourseAgentService(
+            runtime=runtime,
+            conversations=InMemoryConversationStore(),
+            memories=memories,
+        )
+
+        for principal in (owner, anonymous):
+            conversation = await service.create_conversation(principal, title="Chat")
+            await service.run(principal=principal, conversation_id=conversation.id, text="Hello")
+
+        assert runtime.contexts[0].selected_memories == [mine]
+        assert runtime.contexts[1].selected_memories == []
+        assert memories.reads == [owner.user_id]
+
+        conversation = await service.create_conversation(owner, title="Chat")
+        await service.run(
+            principal=owner, conversation_id=conversation.id, text="Hello", use_memory=False
+        )
+        assert runtime.contexts[2].selected_memories == []
+        assert memories.reads == [owner.user_id]
+
+    asyncio.run(scenario())
+
+
+def test_use_memory_false_makes_the_save_tool_unavailable_for_that_run() -> None:
+    async def scenario() -> None:
+        owner = authenticated_principal("student")
+        runtime = RecordingRuntime()
+        service = CourseAgentService(
+            runtime=runtime,
+            conversations=InMemoryConversationStore(),
+            capability_policy=CourseCapabilityPolicy(memories_enabled=True),
+        )
+        conversation = await service.create_conversation(owner, title="Chat")
+
+        for use_memory in (True, False):
+            await service.run(
+                principal=owner,
+                conversation_id=conversation.id,
+                text="Hello",
+                use_memory=use_memory,
+            )
+
+        assert SAVE_MY_MEMORY_TOOL_ID in runtime.contexts[0].permitted_tool_ids
+        assert SAVE_MY_MEMORY_TOOL_ID not in runtime.contexts[1].permitted_tool_ids
 
     asyncio.run(scenario())
 

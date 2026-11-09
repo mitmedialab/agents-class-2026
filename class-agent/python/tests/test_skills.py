@@ -67,18 +67,21 @@ def test_skill_catalog_scans_metadata_and_filters_before_disclosure() -> None:
     assert "course-help" in public_ids
     assert "student-course-resources" not in public_ids
     assert "instructor-application-review" not in public_ids
+    assert "onboarding-questionnaire" not in public_ids
     assert student_ids == public_ids | {
         "assignment-submission-check",
+        "onboarding-questionnaire",
         "student-course-resources",
     }
     assert instructor_ids == public_ids | {
         "instructor-messaging",
+        "onboarding-questionnaire",
         "weekly-build-showcase",
         "assignment-submission-check",
         "student-course-resources",
         "instructor-application-review",
     }
-    assert ta_ids == admin_ids == public_ids
+    assert ta_ids == admin_ids == public_ids | {"onboarding-questionnaire"}
 
     course_help = next(
         skill

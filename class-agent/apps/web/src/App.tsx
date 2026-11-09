@@ -96,8 +96,10 @@ import {
 } from "react";
 import { mergeNotificationCenterUpdates } from "./notifications.js";
 import { readStartupQuery, urlWithoutStartupQuery } from "./startupQuery.js";
-import { useAboutRoute } from "./aboutRoute.js";
-
+import { usePageRoute } from "./aboutRoute.js";
+import { MemoriesPage } from "./MemoriesPage.js";
+import { OnboardingQuestionnaire } from "./OnboardingQuestionnaire.js";
+import type { OnboardingAnswers } from "./onboardingQuestions.js";
 const CONNECTION_ERROR = "I couldn’t reach the Course Agent. Please try again.";
 const WELCOME_MESSAGE =
   "Welcome. I’m the Course Agent. This agent is the class website—ask me for class information, or talk with me if you’d like to apply.";
@@ -297,6 +299,7 @@ export default function App() {
     emptyWorkspaceState,
   );
   const [message, setMessage] = useState("");
+  const [memoryEnabled, setMemoryEnabled] = useState(true);
   const [isInitializing, setIsInitializing] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
   const [isOpeningStatic, setIsOpeningStatic] = useState(false);
@@ -314,7 +317,14 @@ export default function App() {
   const [pendingUploadCount, setPendingUploadCount] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [aboutOpen, setAboutOpen] = useAboutRoute();
+  const [pageRoute, setPageRoute] = usePageRoute();
+  const aboutOpen = pageRoute === "about";
+  const onboardingOpen = pageRoute === "onboarding" && principal?.authenticated === true;
+  const memoriesOpen = pageRoute === "memories" && principal?.authenticated === true;
+  const pageOpen = aboutOpen || onboardingOpen || memoriesOpen;
+  // Every setAboutOpen(false) means "back to the conversation", so it leaves onboarding too.
+  const setAboutOpen = (open: boolean) => setPageRoute(open ? "about" : null);
+  const [onboardingAnswers, setOnboardingAnswers] = useState<OnboardingAnswers>({});
   const [syllabusPdfUrl, setSyllabusPdfUrl] = useState<string | undefined>();
   const [syllabusContent, setSyllabusContent] = useState<string | null>(null);
   const [syllabusError, setSyllabusError] = useState<string | null>(null);
@@ -425,14 +435,14 @@ export default function App() {
       ? historyNotifications
       : notificationCenter;
   const currentNotificationVisible =
-    !aboutOpen &&
+    !pageOpen &&
     principal?.authenticated === true &&
     hasNotificationHistory(currentNotificationData) &&
     !hasOpenWorkspace &&
     (isTimeTraveling || presentedCommunication === null);
   const previewNotificationVisible =
     timelinePull !== null &&
-    !aboutOpen &&
+    !pageOpen &&
     principal?.authenticated === true &&
     hasNotificationHistory(previewNotificationData) &&
     previewWorkspaceState.panels.length === 0 &&
@@ -899,7 +909,7 @@ export default function App() {
       observer?.disconnect();
       window.removeEventListener("resize", updateComposerHeight);
     };
-  }, [aboutOpen]);
+  }, [pageOpen]);
 
   useEffect(() => {
     function focusComposer(event: globalThis.KeyboardEvent) {
@@ -907,7 +917,7 @@ export default function App() {
       if (
         isOpening ||
         historyOpen ||
-        aboutOpen ||
+        pageOpen ||
         event.metaKey ||
         event.ctrlKey ||
         event.altKey ||
@@ -923,7 +933,7 @@ export default function App() {
 
     window.addEventListener("keydown", focusComposer);
     return () => window.removeEventListener("keydown", focusComposer);
-  }, [aboutOpen, historyOpen, isOpening]);
+  }, [pageOpen, historyOpen, isOpening]);
 
   useEffect(() => {
     if (!historyOpen) return;
@@ -975,6 +985,7 @@ export default function App() {
     existingConversationId?: string,
     operationAlreadyClaimed = false,
     communication: NotificationCenterItem | null = null,
+    onboardingSubmission = false,
   ): Promise<boolean> {
     const isSuggestedPrompt = suggestedMessage !== undefined;
     const visibleText = (suggestedMessage ?? message).trim();
@@ -1028,6 +1039,10 @@ export default function App() {
     setMobileView("chat");
     setTimelineOffset(0);
     setPresentedCommunication(communicationContext);
+    if (onboardingSubmission) {
+      setPageRoute(null);
+      setOnboardingAnswers({});
+    }
 
     if (!isSuggestedPrompt) {
       setMessage("");
@@ -1155,7 +1170,13 @@ export default function App() {
         }
       };
 
-      await streamAgentRun(conversationId, text, handleStreamEvent, controller.signal);
+      await streamAgentRun(
+        conversationId,
+        text,
+        handleStreamEvent,
+        controller.signal,
+        memoryEnabled || onboardingSubmission,
+      );
       if (streamedTextFrame !== 0) flushStreamedText();
       completed = !receivedError;
       if (!receivedError) {
@@ -1323,7 +1344,7 @@ export default function App() {
   }
 
   const canDropFiles =
-    !aboutOpen &&
+    !pageOpen &&
     !historyOpen &&
     !isTimeTraveling &&
     !isInitializing &&
@@ -1419,6 +1440,7 @@ export default function App() {
       await logout();
       const nextPrincipal = await getPrincipal();
       setPrincipal(nextPrincipal);
+      setOnboardingAnswers({});
       setNotificationCenter(EMPTY_NOTIFICATION_CENTER);
       setNotificationHistoryExpanded(false);
       setMobileView("chat");
@@ -1855,7 +1877,7 @@ export default function App() {
   const activeMobileView: MobileView =
     mobileView === mobileSecondaryView ? mobileView : "chat";
   const mobileViewSwitcherVisible =
-    !aboutOpen && (hasOpenWorkspace || notificationCenterVisible);
+    !pageOpen && (hasOpenWorkspace || notificationCenterVisible);
   const handleResponseStageScroll = (event: UIEvent<HTMLElement>) => {
     const nextScrolled = event.currentTarget.scrollTop > 1;
     setResponseStageScrolled((current) =>
@@ -2055,7 +2077,7 @@ export default function App() {
       stage.removeEventListener("touchend", onTouchEnd);
       stage.removeEventListener("touchcancel", onTouchCancel);
     };
-  }, [aboutOpen]);
+  }, [pageOpen]);
   const contactPrompt = principal?.authenticated
     ? principal.roles.includes("instructor")
       ? INSTRUCTOR_CONTACT_PROMPT
@@ -2069,14 +2091,14 @@ export default function App() {
   return (
     <div
       className="course-agent"
-      data-about-open={aboutOpen}
+      data-about-open={pageOpen}
       data-conversation-reading={selectedConversationId !== null}
       data-file-drag-active={isFileDragActive}
       data-mobile-notifications-open={
         notificationCenterVisible && activeMobileView === "updates"
       }
       data-mobile-workspace-open={
-        !aboutOpen && hasOpenWorkspace && activeMobileView === "workspace"
+        !pageOpen && hasOpenWorkspace && activeMobileView === "workspace"
       }
       data-notifications-open={notificationCenterAffectsLayout}
       data-opening={isOpening}
@@ -2084,7 +2106,7 @@ export default function App() {
       data-timeline-target-flow={targetFlow}
       data-timeline-transition={timelinePull !== null}
       data-time-traveling={isTimeTraveling}
-      data-workspace-open={!aboutOpen && hasOpenWorkspace}
+      data-workspace-open={!pageOpen && hasOpenWorkspace}
       style={timelineStyle}
       onDragEnter={handleFileDragEnter}
       onDragLeave={handleFileDragLeave}
@@ -2124,7 +2146,7 @@ export default function App() {
           <Button className="header-new-chat" onClick={startNewConversation}>
             New chat
           </Button>
-          {displayedWorkspaceState.panels.length === 0 || aboutOpen ? (
+          {displayedWorkspaceState.panels.length === 0 || pageOpen ? (
             <nav aria-label="Course shortcuts" className="header-actions">
               {headerPrompts.map((prompt) => (
                 <Button
@@ -2223,6 +2245,31 @@ export default function App() {
           pdfDownloadUrl={syllabusPdfUrl}
           error={syllabusError}
           loading={syllabusLoading}
+        />
+      ) : memoriesOpen ? (
+        <MemoriesPage
+          onBack={() => {
+            setPageRoute(null);
+            requestAnimationFrame(() => composerRef.current?.focus());
+          }}
+        />
+      ) : onboardingOpen ? (
+        <OnboardingQuestionnaire
+          answers={onboardingAnswers}
+          busy={
+            isInitializing ||
+            isRunning ||
+            isOpeningStatic ||
+            isUploading ||
+            awaitingConfirmationAction ||
+            timelinePull !== null
+          }
+          onAnswersChange={setOnboardingAnswers}
+          onBack={() => {
+            setPageRoute(null);
+            requestAnimationFrame(() => composerRef.current?.focus());
+          }}
+          onSubmit={(text) => void sendMessage(text, undefined, false, null, true)}
         />
       ) : (
         <>
@@ -2547,6 +2594,17 @@ export default function App() {
                 </svg>
                 {isUploading ? "Uploading" : "Attach"}
               </button>
+              {principal?.authenticated ? (
+                <label className="composer-memory-toggle">
+                  <input
+                    checked={memoryEnabled}
+                    disabled={isRunning}
+                    onChange={(event) => setMemoryEnabled(event.target.checked)}
+                    type="checkbox"
+                  />
+                  Use memory
+                </label>
+              ) : null}
               {message.length > 0 || uploads.length > 0 ? (
                 <button
                   className="composer-draft-action"
@@ -2641,6 +2699,24 @@ export default function App() {
                   <p className="account-name">
                     {principal.display_name || principal.username || "Course member"}
                   </p>
+                  <Button
+                    className="onboarding-link"
+                    onClick={() => {
+                      setHistoryOpen(false);
+                      setPageRoute("onboarding");
+                    }}
+                  >
+                    Onboarding questionnaire
+                  </Button>
+                  <Button
+                    className="onboarding-link"
+                    onClick={() => {
+                      setHistoryOpen(false);
+                      setPageRoute("memories");
+                    }}
+                  >
+                    Your memories
+                  </Button>
                   <Button disabled={authSubmitting} onClick={() => void handleLogout()}>
                     Log out
                   </Button>

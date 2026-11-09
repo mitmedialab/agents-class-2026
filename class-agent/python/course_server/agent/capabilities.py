@@ -83,6 +83,7 @@ DOCUMENT_INSPECT_PAGE_TOOL_ID = "document.inspect_page"
 COURSE_INSPECT_SLIDE_PAGE_TOOL_ID = "course.inspect_slide_page"
 LIST_PRIVATE_RESOURCES_TOOL_ID = "course.list_private_resources"
 GET_MY_GRADES_TOOL_ID = "grades.get_mine"
+SAVE_MY_MEMORY_TOOL_ID = "memory.save_mine"
 READ_PRIVATE_RESOURCE_TOOL_ID = "course.read_private_resource"
 INSTRUCTOR_LIST_APPLICATIONS_TOOL_ID = "instructor.list_applications"
 INSTRUCTOR_READ_APPLICATION_TOOL_ID = "instructor.read_application"
@@ -2701,6 +2702,7 @@ class CourseCapabilityPolicy:
         student_communications_enabled: bool = False,
         faq_updates_enabled: bool = False,
         student_projects_enabled: bool = False,
+        memories_enabled: bool = False,
     ) -> None:
         self._resources = resources
         self._browser_enabled = browser_enabled
@@ -2712,6 +2714,7 @@ class CourseCapabilityPolicy:
         self._student_communications_enabled = student_communications_enabled
         self._faq_updates_enabled = faq_updates_enabled
         self._student_projects_enabled = student_projects_enabled
+        self._memories_enabled = memories_enabled
 
     def authorize(self, principal: PrincipalContext) -> AuthorizedCapabilities:
         if self._resources is None:
@@ -2813,6 +2816,11 @@ class CourseCapabilityPolicy:
                     if self._grades_enabled
                     and self._grade_access is not None
                     and self._grade_access(principal)
+                    else ()
+                ),
+                *(
+                    (SAVE_MY_MEMORY_TOOL_ID,)
+                    if self._memories_enabled and principal.authenticated
                     else ()
                 ),
                 *(

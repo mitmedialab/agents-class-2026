@@ -22,6 +22,11 @@
       "audience": "public"
     },
     {
+      "id": "onboarding-questionnaire",
+      "directory": "onboarding-questionnaire",
+      "audience": "authenticated"
+    },
+    {
       "id": "student-course-resources",
       "directory": "student-course-resources",
       "audience": "students"

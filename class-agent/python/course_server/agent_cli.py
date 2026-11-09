@@ -43,6 +43,7 @@ from course_server.agent import (
     ToolCatalog,
 )
 from course_server.agent.capabilities import ExecutableTool
+from course_server.agent.memory_tool import SaveMyMemoryTool
 from course_server.agent.store import ConversationStore
 from course_server.application_access import ApplicationAccessPolicy
 from course_server.application_roster import initialize_student_application_access
@@ -85,6 +86,7 @@ from course_server.instructor_messages import (
     InstructorMessageStudentsTool,
 )
 from course_server.mail import CourseAskTATool, TAQuestionService
+from course_server.memory import MemoryWriter
 from course_server.migrations import apply_migrations
 from course_server.postgres.auth_store import PostgresAuthStore, create_auth_pool
 from course_server.postgres.conversation_store import PostgresConversationStore
@@ -180,6 +182,7 @@ def build_runtime(
     faq_updates: FaqKnowledgeStore | None = None,
     student_projects: StudentProjectCatalog | None = None,
     course_roster: CourseRoster | None = None,
+    memories: MemoryWriter | None = None,
 ) -> SmolagentsRuntime:
     resolved_roster = course_roster or load_course_roster(settings.course_roster_path)
     if resources is None and resolved_roster is not None:
@@ -324,6 +327,8 @@ def build_runtime(
         executable_tools.extend([ReadSkillTool(skills), ReadSkillReferenceTool(skills)])
     if ta_questions is not None:
         executable_tools.append(CourseAskTATool(ta_questions))
+    if memories is not None:
+        executable_tools.append(SaveMyMemoryTool(memories))
     if instructor_messages is not None:
         executable_tools.extend(
             [

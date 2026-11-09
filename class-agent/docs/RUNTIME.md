@@ -33,6 +33,13 @@ concisely, avoid repeating an item already discussed in recent dialogue, suggest
 use authorized tools before adding details not present in the trusted snapshot. Anonymous runs
 receive no user-specific attention data.
 
+Authenticated runs may call `memory.save_mine` to add one memory, usually while following the
+`onboarding-questionnaire` skill. The owner comes from `PrincipalContext`, never from the model.
+The tool's arguments are redacted from events and its result stored only as a summary, so tool
+events do not keep the memory text after the memory is deleted. Text the user or agent writes in
+the conversation is still kept in that conversation's `user.message` and `agent.message` events. A
+run with `use_memory` set to `false` does not get the tool.
+
 An authenticated page load uses `CourseAgentService.greet_on_page_load` in a fresh conversation.
 The method appends an inspectable `agent.greeting.requested` platform event and gives the runtime a
 neutral greeting task without appending a fake user message. All active projected items—including a
