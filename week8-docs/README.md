@@ -8,6 +8,17 @@ reviewers. The Week 8 writeup and reflection are written separately by the group
 - [backend.md](backend.md): database, service, agent tools, prompt, HTTP routes, tests.
 - [frontend.md](frontend.md): People panel, API client, header button, styles, tests.
 
+## Build order
+
+The group builds in sequence on this branch:
+
+1. Backend: Yuxiang (done; first version of the People panel included).
+2. Frontend: Jad, continuing from the People panel described in frontend.md.
+3. Documentation and writeup: Stacey, using this folder as the technical reference.
+
+The contribution statement in the writeup should say who wrote each layer. The backend
+and the first version of the panel were built by Yuxiang with AI assistance (Claude Code).
+
 ## What the feature does
 
 The Course Agent remembers what a student says about themself and uses it in later
