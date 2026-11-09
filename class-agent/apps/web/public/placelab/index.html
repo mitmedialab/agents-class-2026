@@ -363,6 +363,8 @@ iframe.arcs{display:block;width:100%;min-height:160px;border:1px solid var(--lin
 
 :root[data-theme="dark"] .sb.perc,:root[data-theme="dark"] .sb.prof,:root[data-theme="dark"] .sb.self,:root[data-theme="dark"] .sb.reason,:root[data-theme="dark"] .sb.evo,:root[data-theme="dark"] .sb.left{background:var(--panel)}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .sb.perc,:root:not([data-theme="light"]) .sb.prof,:root:not([data-theme="light"]) .sb.self,:root:not([data-theme="light"]) .sb.reason,:root:not([data-theme="light"]) .sb.evo,:root:not([data-theme="light"]) .sb.left{background:var(--panel)}}
+.lng{margin-left:auto;height:28px;flex:none;border:1px solid #777;border-radius:999px;background:transparent;color:#E4E4E0;cursor:pointer;font:inherit;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;padding:0 11px;line-height:1}
+.lng:hover{color:var(--band-ink);border-color:var(--band-ink)}
 .theme{width:28px;height:28px;flex:none;border:1px solid #777;border-radius:999px;background:transparent;color:#E4E4E0;cursor:pointer;font-size:16px;line-height:1;padding:0;display:grid;place-items:center}
 .theme:hover{color:var(--band-ink);border-color:var(--band-ink)}
 
@@ -377,7 +379,7 @@ iframe.arcs{display:block;width:100%;min-height:160px;border:1px solid var(--lin
 .space-notes .lead{grid-column:1/-1;border-top:0;padding-top:0;font-size:13px;max-width:72ch}
 
 </style>
-<div class="band"><div class="bandin"><span id="band-glyph"></span><span class="bandt"><b id="t-sim">GA Cognitive Agents</b> <span id="t-band">· e14 / e15 · tercer piso</span></span><span class="langsw" role="group" aria-label="idioma / language"><button id="lang-es" aria-pressed="true">es</button><button id="lang-en" aria-pressed="false">en</button></span><button class="theme" id="th-toggle" type="button" title="light / dark" aria-label="light / dark">◐</button></div></div>
+<div class="band"><div class="bandin"><span id="band-glyph"></span><span class="bandt"><b id="t-sim">GA Cognitive Agents</b> <span id="t-band">· e14 / e15 · tercer piso</span></span><button class="lng" id="lang-toggle" type="button" title="language · idioma" aria-label="language · idioma">lng · en</button><button class="theme" id="th-toggle" type="button" title="light / dark" aria-label="light / dark">◐</button></div></div>
 <div class="wrap">
   <header>
     <div><div class="lab" id="t-tagline" style="margin-bottom:4px">¿qué ideas nacen cuando la clase se cruza?</div><h1 id="t-title">placelab</h1><div class="steps" role="tablist"><button id="nav-survey" aria-pressed="true"><b>1</b><span id="t-nav1">perfil</span></button><button id="nav-sim" aria-pressed="false"><b>2</b><span id="t-nav2">simulación</span></button><button id="nav-results" aria-pressed="false"><b>3</b><span id="t-nav3">resultados</span></button></div></div>
@@ -1298,11 +1300,11 @@ function applyLang(){
   const rp=$("t-resplay");if(rp)rp.textContent=L("res").play;
   if(typeof renderYouCard==="function"&&typeof userAgent!=="undefined")renderYouCard();
   if(typeof fillCodeOptions==="function"){const cur=$("pf-code").value;fillCodeOptions();$("pf-code").value=cur;if(typeof pfPreview==="function")pfPreview()}
-  $("lang-es").setAttribute("aria-pressed",lang==="es");$("lang-en").setAttribute("aria-pressed",lang==="en");
+  {const b=$("lang-toggle");if(b)b.textContent=`lng · ${lang}`}
   dirtyConv=dirtyMem=true;
 }
 function setLang(l){lang=l;try{localStorage.setItem("placelab341-lang",lang)}catch(e){}applyLang();if(typeof renderAll==="function")renderAll()}
-$("lang-es").addEventListener("click",()=>setLang("es"));$("lang-en").addEventListener("click",()=>setLang("en"));
+$("lang-toggle").addEventListener("click",()=>setLang(lang==="en"?"es":"en"));  // one button: shows the language in use, flips it
 
 /* Interface texts for the camera avatar, model conversations and the final report (EN/ES).
    The older texts live in i18n.js (UI); these follow the same pattern: L2("key"). */

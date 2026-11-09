@@ -170,8 +170,8 @@ function applyLang(){
   const rp=$("t-resplay");if(rp)rp.textContent=L("res").play;
   if(typeof renderYouCard==="function"&&typeof userAgent!=="undefined")renderYouCard();
   if(typeof fillCodeOptions==="function"){const cur=$("pf-code").value;fillCodeOptions();$("pf-code").value=cur;if(typeof pfPreview==="function")pfPreview()}
-  $("lang-es").setAttribute("aria-pressed",lang==="es");$("lang-en").setAttribute("aria-pressed",lang==="en");
+  {const b=$("lang-toggle");if(b)b.textContent=`lng · ${lang}`}
   dirtyConv=dirtyMem=true;
 }
 function setLang(l){lang=l;try{localStorage.setItem("placelab341-lang",lang)}catch(e){}applyLang();if(typeof renderAll==="function")renderAll()}
-$("lang-es").addEventListener("click",()=>setLang("es"));$("lang-en").addEventListener("click",()=>setLang("en"));
+$("lang-toggle").addEventListener("click",()=>setLang(lang==="en"?"es":"en"));  // one button: shows the language in use, flips it

@@ -357,6 +357,8 @@ iframe.arcs{display:block;width:100%;min-height:160px;border:1px solid var(--lin
 
 :root[data-theme="dark"] .sb.perc,:root[data-theme="dark"] .sb.prof,:root[data-theme="dark"] .sb.self,:root[data-theme="dark"] .sb.reason,:root[data-theme="dark"] .sb.evo,:root[data-theme="dark"] .sb.left{background:var(--panel)}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .sb.perc,:root:not([data-theme="light"]) .sb.prof,:root:not([data-theme="light"]) .sb.self,:root:not([data-theme="light"]) .sb.reason,:root:not([data-theme="light"]) .sb.evo,:root:not([data-theme="light"]) .sb.left{background:var(--panel)}}
+.lng{margin-left:auto;height:28px;flex:none;border:1px solid #777;border-radius:999px;background:transparent;color:#E4E4E0;cursor:pointer;font:inherit;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;padding:0 11px;line-height:1}
+.lng:hover{color:var(--band-ink);border-color:var(--band-ink)}
 .theme{width:28px;height:28px;flex:none;border:1px solid #777;border-radius:999px;background:transparent;color:#E4E4E0;cursor:pointer;font-size:16px;line-height:1;padding:0;display:grid;place-items:center}
 .theme:hover{color:var(--band-ink);border-color:var(--band-ink)}
 
