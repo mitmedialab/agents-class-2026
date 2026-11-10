@@ -39,6 +39,7 @@ website and invites visitors to ask for course information or discuss applying.
 The text-only New chat header action remains available while a workspace is open. At phone
 widths, it stays at the start of the right-side actions; About and history remain visible,
 while course shortcuts are available through the conversation.
+Signed-in students can open their weekly pairs from **Peer learning**, immediately after **About** in the course shortcuts.
 Opening the site with a non-empty `q` query parameter starts a fresh conversation and submits the
 decoded value through the same agent path as typed text. For example,
 `/?q=Show%20me%20the%20course%20schedule` opens with that request instead of generating a separate

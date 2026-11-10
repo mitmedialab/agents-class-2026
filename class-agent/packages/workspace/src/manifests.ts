@@ -605,6 +605,14 @@ export const DRAFT_DOCUMENT_MANIFEST: ComponentManifest = {
   defaultSize: { width: 760, height: 720 },
 };
 
+export const PEER_DISCOVERY_MANIFEST: ComponentManifest = {
+  id: "peer-discovery", version: "1.0.0", title: "Peer learning",
+  description: "Student-owned learning memory, source-backed peer-build recommendations and feedback. Native authenticated view; public build sources and private memory are resolved by the server.",
+  propsSchema: {type: "object", properties: {view: {type: "string", enum: ["recommendations", "memory", "coverage"]}, build_ids: {type:"array", items:{type:"string", maxLength:100}, maxItems:24}}, additionalProperties: false},
+  supportedOperations: ["open", "update", "focus", "close"],
+  defaultSize: {width: 960, height: 720},
+};
+
 export const BUILT_IN_COMPONENT_MANIFESTS: readonly ComponentManifest[] = [
   DOCUMENT_VIEWER_MANIFEST,
   CALENDAR_MANIFEST,
@@ -613,4 +621,5 @@ export const BUILT_IN_COMPONENT_MANIFESTS: readonly ComponentManifest[] = [
   PAGE_CARDS_MANIFEST,
   VISUAL_COMPOSITION_MANIFEST,
   DRAFT_DOCUMENT_MANIFEST,
+  PEER_DISCOVERY_MANIFEST,
 ];

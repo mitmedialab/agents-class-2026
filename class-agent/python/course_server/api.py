@@ -86,7 +86,8 @@ from course_server.browser.stream import BrowserStreamService
 from course_server.browser.stream_response import browser_stream_response
 from course_server.browser.tools import browser_page_props
 from course_server.config import AgentSettings
-from course_server.course_roster import load_course_roster, verify_roster_resources
+from course_server.course_direct_messages import CourseDirectMessageService
+from course_server.course_roster import CourseRoster, load_course_roster, verify_roster_resources
 from course_server.faq import (
     CourseNotification,
     LocalFaqKnowledgeStore,
@@ -120,6 +121,9 @@ from course_server.notifications import (
     NotificationCenterService,
     PostgresNotificationItemReadStore,
 )
+from course_server.peer_discovery.api import peer_router
+from course_server.peer_discovery.factory import build_peer_discovery
+from course_server.peer_discovery.service import PeerDiscovery
 from course_server.postgres.auth_store import PostgresAuthStore, create_auth_pool
 from course_server.postgres.conversation_store import PostgresConversationStore
 from course_server.question_discussions import (
@@ -373,6 +377,8 @@ class AppServices:
     anonymous_quota_policy: AnonymousQuotaPolicy = dataclass_field(
         default_factory=AnonymousQuotaPolicy
     )
+    peer_discovery: PeerDiscovery | None = None
+    peer_messaging: tuple[CourseDirectMessageService, CourseRoster] | None = None
     favicon_fetcher: Callable[[str], tuple[bytes, str] | None] = fetch_public_favicon
 
 
@@ -983,7 +989,17 @@ def create_app(
             else:
                 browser_service = playwright_browser
                 resources.browser = browser_service
+        peer_service = build_peer_discovery(resolved_settings, course_roster)
         app.state.course_state.services = AppServices(
+            peer_discovery=peer_service,
+            peer_messaging=(
+                CourseDirectMessageService(pool, auth_store, course_roster),
+                course_roster,
+            )
+            if resolved_settings.peer_messaging_enabled
+            and resolved_settings.mail_enabled
+            and course_roster is not None
+            else None,
             authentication=AuthenticationService(
                 auth_store,
                 user_access_policy=(
@@ -1011,6 +1027,7 @@ def create_app(
                     student_communications=student_communication_service,
                     faq_updates=faq_knowledge,
                     course_roster=course_roster,
+                    peer_discovery=peer_service,
                 ),
                 conversations=conversation_store,
                 capability_policy=CourseCapabilityPolicy(
@@ -1053,9 +1070,16 @@ def create_app(
                 max_upload_bytes=resolved_settings.anonymous_max_upload_bytes,
             ),
         )
+        peer_refresh = (
+            asyncio.create_task(peer_service.maintain_catalog()) if peer_service else None
+        )
         try:
             yield
         finally:
+            if peer_refresh is not None:
+                peer_refresh.cancel()
+                with suppress(asyncio.CancelledError):
+                    await peer_refresh
             app.state.course_state.services = None
             if browser_service is not None:
                 await browser_service.close()
@@ -2682,6 +2706,19 @@ def create_app(
         )
         return RunResponse.from_result(result)
 
+    def get_peer_service(request: Request) -> PeerDiscovery | None:
+        services = _get_app_state(request).services
+        assert services is not None
+        return services.peer_discovery
+
+    def get_peer_messaging(
+        request: Request,
+    ) -> tuple[CourseDirectMessageService, CourseRoster] | None:
+        services = _get_app_state(request).services
+        assert services is not None
+        return services.peer_messaging
+
+    router.include_router(peer_router(_require_principal, get_peer_service, get_peer_messaging))
     app.include_router(router, prefix=API_PREFIX)
     app.include_router(router, include_in_schema=False)
     return app

@@ -145,9 +145,31 @@ def test_course_messages_require_human_confirmation_and_scope_replies() -> None:
                 "tauser",
                 COURSE_STAFF_RECIPIENT,
             }
+            request_id = uuid4()
             draft = await service.prepare(
-                alice, recipient_username="bob", subject="Study group", body="Can we compare ideas?"
+                alice,
+                request_id=request_id,
+                recipient_username="bob",
+                subject="Study group",
+                body="Can we compare ideas?",
             )
+            assert (
+                await service.prepare(
+                    alice,
+                    request_id=request_id,
+                    recipient_username="bob",
+                    subject="Study group",
+                    body="Can we compare ideas?",
+                )
+            ).id == draft.id
+            with pytest.raises(CourseMessageError, match="different message details"):
+                await service.prepare(
+                    alice,
+                    request_id=request_id,
+                    recipient_username="bob",
+                    subject="Study group",
+                    body="A different message",
+                )
             assert (await service.list_mine(bob))["total"] == 0
             with pytest.raises(CourseMessageError, match="unavailable"):
                 await service.read_mine(bob, draft.id)

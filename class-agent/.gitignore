@@ -34,3 +34,6 @@ data/instructors/*
 accepted-applicants.json
 
 var/student-showcase/
+
+# Student-private personalization and shared source cache.
+var/peer-discovery/

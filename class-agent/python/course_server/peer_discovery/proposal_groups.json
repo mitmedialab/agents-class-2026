@@ -1,0 +1,45 @@
+[
+  {
+    "title": "ArtSide",
+    "members": {"agents2026-stacey": "Stacey", "agents2026-raine": "Raine"},
+    "pages": ["https://mitmedialab.github.io/agents2026-raine/week07/"],
+    "source": "https://mitmedialab.github.io/agents2026-raine/week07/#slides",
+    "summary": "A camera-enabled museum companion adjusts its spoken guidance to the artwork and the visitor.",
+    "offers": {
+      "interpretation": "ArtSide grounds a conversation in the artwork a visitor is looking at and lets the visitor set the pace.",
+      "dialogue": "ArtSide proposes shifting between explaining an artwork and asking the visitor a question."
+    },
+    "applications": {
+      "interpretation": "In ArtSide, try offering two readings of the same artwork and letting the visitor choose which detail to explore.",
+      "dialogue": "In ArtSide, first acknowledge what the visitor noticed, then ask which detail in the artwork supports that reading."
+    }
+  },
+  {
+    "title": "Associative Multi-Agent Network Design for Creativity",
+    "members": {"agents2026-brooke": "Brooke", "agents2026-david": "David"},
+    "pages": ["https://mitmedialab.github.io/agents2026-david/week07/index.html", "https://mitmedialab.github.io/agents2026-brooke/week07/"],
+    "source": "https://mitmedialab.github.io/agents2026-david/week07/aans-proposal.pdf",
+    "summary": "An associative network distributes features across agents, shares cues between them and leaves idea selection to the person.",
+    "offers": {
+      "interpretation": "Brooke and David propose giving different features to different agents so the person can choose among the ideas they generate."
+    },
+    "applications": {
+      "interpretation": "Try letting the person select one feature of the original prompt before your agents generate their next round of ideas.",
+      "dialogue": "Test whether assigning one agent to extend an idea and another to question it produces different ideas from open discussion."
+    }
+  },
+  {
+    "title": "Wise(r) Mind",
+    "members": {"agents2026-jad": "Jad", "agents2026-hyung": "Hyung", "agents2026-manasi": "Manasi"},
+    "pages": ["https://mitmedialab.github.io/agents2026-jad/weeks/week-07.html"],
+    "source": "https://docs.google.com/presentation/d/1g1S3el1uvwI-f3qHbvASIQ-GhQ8W1DAtIx-5KGWI8OI/edit",
+    "summary": "A biosignal-informed reflection system separates acknowledging a person's feelings from questioning their choices.",
+    "offers": {
+      "dialogue": "Wise(r) Mind gives two agents different jobs: one acknowledges a feeling, and the other questions a choice."
+    },
+    "applications": {
+      "interpretation": "After the two agents reflect on an episode, let the person choose which perspective to revisit instead of merging both into one conclusion.",
+      "dialogue": "Try letting the person decide when the conversation moves from describing an episode to asking what they might do differently."
+    }
+  }
+]

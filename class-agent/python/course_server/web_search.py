@@ -310,6 +310,7 @@ def fetch_public_webpage(
     url: str,
     *,
     transport: httpx.BaseTransport | None = None,
+    peer_preview: bool = False,
 ) -> str | dict[str, object]:
     """Fetch readable text and resolved image DOM metadata with safe redirects."""
 
@@ -384,7 +385,19 @@ def fetch_public_webpage(
                         images.append(image)
                         if len(images) >= _MAX_PAGE_IMAGES:
                             break
+                    preview = {}
+                    if peer_preview:
+                        from course_server.peer_discovery.preview import (
+                            portfolio_covers,
+                            preview_metadata,
+                        )
+
+                        preview = {
+                            **preview_metadata(soup, current_url),
+                            "portfolio_covers": portfolio_covers(soup, current_url),
+                        }
                     return {
+                        **preview,
                         "url": current_url,
                         "text": markdownify(text).strip(),
                         "images": images,

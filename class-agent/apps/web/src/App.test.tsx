@@ -287,6 +287,7 @@ describe("Course Agent interface", () => {
       screen.getByRole("navigation", { name: "Course shortcuts" }).previousElementSibling,
     ).toBe(newChat);
     expect(screen.getByRole("button", { name: "Your logs" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Peer learning" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Apply" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Schedule" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Grading" })).toBeInTheDocument();
@@ -305,6 +306,20 @@ describe("Course Agent interface", () => {
     expect(workspaceShell).toContainElement(composerForm);
     fireEvent.click(screen.getByRole("button", { name: "Your logs" }));
     expect(screen.getByRole("button", { name: /Week one/ })).toBeInTheDocument();
+  });
+
+  it("opens the student’s peer workspace from the shortcut after About", async () => {
+    vi.mocked(api.getPrincipal).mockResolvedValue(studentPrincipal);
+    render(<App />);
+
+    const peer = await screen.findByRole("button", { name: "Peer learning" });
+    expect(peer.previousElementSibling).toBe(screen.getByRole("button", { name: "About" }));
+    expect(peer.nextElementSibling).toBe(screen.getByRole("link", { name: "Connect AI" }));
+    await waitFor(() => expect(peer).toBeEnabled());
+    fireEvent.click(peer);
+    await waitFor(() =>
+      expect(api.openStaticWorkspace).toHaveBeenCalledWith(conversation.id, "peer-learning", undefined),
+    );
   });
 
   it("scrolls backward through assistant moments and restores their workspace", async () => {

@@ -48,3 +48,6 @@ export {
 export { WebpageViewer, type WebpageViewerProps } from "./WebpageViewer.js";
 
 export { PdfDownload, type PdfDownloadProps } from "./PdfDownload.js";
+export { PeerDiscovery, type PeerDiscoveryProps, type PeerDiscoveryData, type PeerProfile, type PeerFeedback } from "./PeerDiscovery.js";
+
+export { domains as peerDomains, AuthorMark, type AtlasCatalog, type AtlasBuild } from "./PeerAtlas.js";

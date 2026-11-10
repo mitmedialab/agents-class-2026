@@ -571,6 +571,37 @@
       },
       "supported_operations": ["open", "update", "focus", "close"],
       "default_size": { "width": 760, "height": 720 }
+    },
+    {
+      "id": "peer-discovery",
+      "version": "1.0.0",
+      "title": "Peer learning",
+      "description": "Student-owned learning memory, source-backed peer-build recommendations and feedback. Native authenticated view; public build sources and private memory are resolved by the server.",
+      "props_schema": {
+        "type": "object",
+        "properties": {
+          "view": {
+            "type": "string",
+            "enum": [
+              "recommendations",
+              "memory",
+              "coverage"
+            ]
+          },
+          "build_ids": {"type": "array", "items": {"type":"string", "maxLength":100}, "maxItems":24}
+        },
+        "additionalProperties": false
+      },
+      "supported_operations": [
+        "open",
+        "update",
+        "focus",
+        "close"
+      ],
+      "default_size": {
+        "width": 960,
+        "height": 720
+      }
     }
   ]
 }

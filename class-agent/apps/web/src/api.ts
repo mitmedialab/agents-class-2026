@@ -487,7 +487,7 @@ export function applyWorkspacePanelAction(
 
 export function openStaticWorkspace(
   conversationId: Uuid,
-  target: "schedule" | "grading" | "notification" | "assignment",
+  target: "schedule" | "grading" | "notification" | "assignment" | "peer-learning",
   notificationId?: Uuid,
   assignmentId?: string,
 ): Promise<Event> {
@@ -932,4 +932,29 @@ export async function streamAgentRun(
       return;
     }
   }
+}
+
+export function getPeerDiscovery(): Promise<import("@class-agent/ui").PeerDiscoveryData> {
+  return requestJson("/peer-discovery");
+}
+export function openWeeklyPairs(): Promise<import("@class-agent/ui").PeerDiscoveryData> {
+  return requestJson("/peer-discovery/weekly", {method:"POST"});
+}
+export function updatePeerProfile(profile: import("@class-agent/ui").PeerProfile): Promise<import("@class-agent/ui").PeerDiscoveryData> {
+  return requestJson("/peer-discovery/profile", {method:"PUT",body:JSON.stringify({...profile,confirmed:true})});
+}
+export function forgetPeerMemory(): Promise<import("@class-agent/ui").PeerDiscoveryData> {
+  return requestJson("/peer-discovery/memory", {method:"DELETE"});
+}
+export function postPeerFeedback(feedback: import("@class-agent/ui").PeerFeedback): Promise<import("@class-agent/ui").PeerDiscoveryData> {
+  return requestJson("/peer-discovery/feedback", {method:"POST",body:JSON.stringify(feedback)});
+}
+export function refreshPeerBuilds(projectIds: string[], weeks: number[]): Promise<unknown> {
+  return requestJson("/peer-discovery/refresh", {method:"POST",body:JSON.stringify({project_ids:projectIds,weeks})});
+}
+
+export async function sendPeerMessage(buildId: string, body: string, requestId: string) {
+  await requestJson("/peer-discovery/messages", {method:"POST", body:JSON.stringify({
+    build_id:buildId, body, request_id:requestId, confirmed:true,
+  })});
 }

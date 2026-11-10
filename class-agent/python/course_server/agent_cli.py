@@ -6,6 +6,7 @@ import argparse
 import asyncio
 import re
 from collections.abc import Sequence
+from typing import cast
 
 from dotenv import load_dotenv
 
@@ -86,6 +87,10 @@ from course_server.instructor_messages import (
 )
 from course_server.mail import CourseAskTATool, TAQuestionService
 from course_server.migrations import apply_migrations
+from course_server.peer_discovery.service import PeerDiscovery
+from course_server.peer_discovery.store import PeerStore
+from course_server.peer_discovery.tools import Operation, PeerTool
+from course_server.peer_tool_ids import PEER_TOOL_IDS
 from course_server.postgres.auth_store import PostgresAuthStore, create_auth_pool
 from course_server.postgres.conversation_store import PostgresConversationStore
 from course_server.slide_pages import CourseSlidePageService
@@ -179,6 +184,7 @@ def build_runtime(
     faq_updates: FaqKnowledgeStore | None = None,
     student_projects: StudentProjectCatalog | None = None,
     course_roster: CourseRoster | None = None,
+    peer_discovery: PeerDiscovery | None = None,
 ) -> SmolagentsRuntime:
     resolved_roster = course_roster or load_course_roster(settings.course_roster_path)
     if resources is None and resolved_roster is not None:
@@ -363,6 +369,18 @@ def build_runtime(
                     project_catalog, fetch_public_webpage, settings.showcase_history_path
                 ),
             ]
+        )
+    if project_catalog is not None:
+        peer = peer_discovery or PeerDiscovery(
+            PeerStore(settings.peer_discovery_path),
+            project_catalog,
+            fetch_public_webpage,
+            student_project_aliases,
+            settings.github_repository_prefix,
+        )
+        executable_tools.extend(
+            PeerTool(cast(Operation, tool_id.removeprefix("peer.")), peer, component_registry)
+            for tool_id in PEER_TOOL_IDS
         )
     tools = ToolCatalog(executable_tools)
     provider = OpenAIModelProvider(

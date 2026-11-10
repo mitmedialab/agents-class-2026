@@ -43,6 +43,7 @@ from course_server.course_application import (
     SCHOOL_OPTIONS,
     CourseApplication,
 )
+from course_server.peer_tool_ids import PEER_TOOL_IDS
 from course_server.resource_text import (
     ResourceTextExtractionError,
     extract_resource_text,
@@ -2848,6 +2849,7 @@ class CourseCapabilityPolicy:
                 ),
                 *course_member_project_tools,
                 *own_student_project_tools,
+                *(PEER_TOOL_IDS if own_student_project_tools else ()),
                 *staff_project_tools,
                 *(BROWSER_TOOL_IDS if self._browser_enabled else ()),
                 *(

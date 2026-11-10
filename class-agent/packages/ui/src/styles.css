@@ -2349,3 +2349,93 @@
 .ca-page-cards[data-presentation="thumbnails"] .ca-page-card footer {
   min-height: 0;
 }
+
+/* Peer learning uses the host's editorial workspace and design tokens. */
+.ca-peer { color:var(--color-text); padding:var(--space-8); max-width:68rem; margin-inline:auto; }
+.ca-peer__header { margin-bottom:var(--space-8); }
+.ca-peer__header h1 { font-size:clamp(1.8rem,3vw,3rem); line-height:1.12; font-weight:500; letter-spacing:-.035em; margin:var(--space-4) 0; }
+.ca-peer p { line-height:1.6; }
+.ca-peer__header>p:last-child,.ca-peer__feedback,.ca-peer__form>p,.ca-peer details p { color:var(--color-text-muted); }
+.ca-peer__eyebrow { color:var(--color-text-muted); font-size:.7rem; letter-spacing:.12em; text-transform:uppercase; }
+.ca-peer__tabs { display:flex; flex-wrap:wrap; gap:var(--space-6); border-bottom:1px solid var(--color-border); padding-bottom:var(--space-4); }
+.ca-peer__tabs button { color:var(--color-text-muted); }
+.ca-peer__tabs button[aria-pressed=true] { color:var(--color-text); text-decoration:underline; text-underline-offset:.5rem; }
+.ca-peer__context { margin-block:var(--space-8); }
+.ca-peer__context>span,.ca-peer h3 { color:var(--color-text-muted); font-size:.75rem; font-weight:400; letter-spacing:.08em; text-transform:uppercase; }
+.ca-peer__recommendation { border-top:1px solid var(--color-border); padding-block:var(--space-8); }
+.ca-peer h2 { font-size:1.5rem; font-weight:500; line-height:1.25; }
+.ca-peer__borrow { border-left:1px solid var(--color-border); padding-left:var(--space-4); margin-block:var(--space-6); }
+.ca-peer__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: var(--space-6);
+}
+.ca-peer__actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid #666;
+  border-radius: 9px;
+  background: #171717;
+  color: #eee;
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.25;
+}
+.ca-peer__actions button:hover:enabled { border-color: #eee; }
+.ca-peer__actions button:focus-visible { outline: 2px solid white; outline-offset: 3px; }
+.ca-peer__actions button[aria-pressed=true] { background: #eee; color: #111; }
+.ca-peer__actions button:disabled { opacity: .55; }
+
+.ca-peer details { margin-block:var(--space-4); color:var(--color-text-muted); }
+.ca-peer summary { cursor:pointer; }
+.ca-peer blockquote { margin:var(--space-4) 0; border-left:1px solid var(--color-border); padding-left:var(--space-4); }
+.ca-peer__form { display:grid; gap:var(--space-6); margin-top:var(--space-8); }
+.ca-peer__form h2,.ca-peer__form p { margin:0; }
+.ca-peer textarea { resize:vertical; }
+.ca-peer__form>button { justify-self:start; }
+.ca-peer__draft { border-top:1px solid var(--color-border); padding-top:var(--space-6); }
+.ca-peer__draft button { margin-top:var(--space-4); }
+.ca-peer__notice { border-left:1px solid var(--color-border); padding-left:var(--space-4); }
+.ca-peer__empty { padding-block:var(--space-8); color:var(--color-text-muted); }
+.ca-peer dl div { border-top:1px solid var(--color-border); padding-block:var(--space-3); overflow-wrap:anywhere; }
+.ca-peer dt { font-size:.8rem; }.ca-peer dd { margin:var(--space-2) 0; }
+@media(max-width:600px) { .ca-peer { padding:var(--space-6) var(--space-4); }.ca-peer__tabs { gap:var(--space-4); font-size:.8rem; } }
+
+.ca-peer__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
+  gap: var(--space-6);
+}
+.ca-peer__grid .ca-peer__recommendation {
+  min-width: 0;
+  padding: clamp(1rem, 3vw, 2rem);
+  border: 1px solid var(--color-border);
+  border-radius: .85rem;
+  background: var(--color-surface);
+  overflow-wrap: anywhere;
+}
+.ca-peer__pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  position: relative;
+  padding: 1rem 0 1.5rem;
+  border-bottom: 1px solid var(--color-border);
+}
+.ca-peer__pair::before {
+  content: '';
+  position: absolute;
+  left: calc(25% + 2.7rem);
+  right: calc(25% + 2.7rem);
+  top: 3.75rem;
+  border-top: 1px dashed currentColor;
+  opacity: .6;
+}
+.ca-peer__node { display: flex; flex-direction: column; align-items: center; gap: .5rem; text-align: center; padding-inline: .25rem; }
+.ca-peer__mark { width: 5.5rem; height: 5.5rem; margin-bottom: .75rem; }
+.ca-peer__node strong,.ca-peer__node h2 { font: inherit; font-size: clamp(1rem, 2vw, 1.4rem); font-weight: 550; margin: 0; }
+.ca-peer__recommendation a { color: inherit; text-underline-offset: .25em; }
