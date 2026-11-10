@@ -2,6 +2,7 @@ import pytest
 from pydantic import SecretStr
 from smolagents import OpenAIModel
 
+from course_server.agent_cli import _openai_key
 from course_server.config import AgentSettings, ConfigurationError, MailSettings
 from runtime_smolagents import OpenAIModelProvider
 
@@ -356,3 +357,44 @@ def test_settings_reject_brave_api_key_line_breaks(line_break: str) -> None:
                 "BRAVE_API_KEY": f"test-brave-value{line_break}suffix",
             }
         )
+
+
+def test_anthropic_provider_uses_its_own_key_and_default_model() -> None:
+    settings = AgentSettings.from_environment(
+        {
+            "MODEL_PROVIDER": "anthropic",
+            "ANTHROPIC_API_KEY": "test-secret-value",
+            "BRAVE_API_KEY": "test-brave-value",
+            "DATABASE_URL": "postgresql://example",
+        }
+    )
+
+    assert settings.model_provider == "anthropic"
+    assert settings.model_id == "claude-opus-5-5"
+    assert settings.model_api_key.get_secret_value() == "test-secret-value"
+
+
+def test_anthropic_provider_does_not_accept_an_openai_key() -> None:
+    with pytest.raises(ConfigurationError, match="ANTHROPIC_API_KEY is required"):
+        AgentSettings.from_environment(
+            {
+                "MODEL_PROVIDER": "anthropic",
+                "OPENAI_API_KEY": "test-secret-value",
+                "BRAVE_API_KEY": "test-brave-value",
+                "DATABASE_URL": "postgresql://example",
+            }
+        )
+
+
+def test_a_claude_key_is_never_handed_to_the_openai_image_tools() -> None:
+    settings = AgentSettings.from_environment(
+        {
+            "MODEL_PROVIDER": "anthropic",
+            "ANTHROPIC_API_KEY": "test-secret-value",
+            "BRAVE_API_KEY": "test-brave-value",
+            "DATABASE_URL": "postgresql://example",
+        }
+    )
+
+    with pytest.raises(RuntimeError, match="MODEL_PROVIDER=openai"):
+        _openai_key(settings)

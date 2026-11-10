@@ -203,6 +203,11 @@ isolated `browser.*` tools; the user can scroll and click the rendered page with
 controls, and the resulting URL and title become current workspace state. See
 [`BROWSER.md`](BROWSER.md) for lifecycle, capacity, privacy, and network safeguards.
 
+`learning-trail` shows a logged-in student's own reflections, and shows TAs and instructors the
+entries students chose to share, where they can write feedback. Its only prop is an optional
+`focus_entry_id`; the panel loads entries from the authenticated API, so reflection text never enters
+workspace events. History views render what is saved now and allow no changes.
+
 `draft-document` is a general evolving-document surface, not an application-specific
 form. It renders safe Markdown prose, up to 50 structured fields, or both, without HTML
 injection. It can hold proposals, reports, notes, letters, outlines, plans, forms, and

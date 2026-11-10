@@ -34,6 +34,7 @@ import {
   type WeeklyBuildGrade,
 } from "./api.js";
 
+import { LearningTrailPanel } from "./LearningTrailPanel.js";
 import { StreamingBrowserViewer } from "./StreamingBrowserViewer.js";
 import { splitWeeklyFeedback } from "./weeklyFeedback.js";
 
@@ -46,6 +47,7 @@ interface WorkspaceProps {
   onCloseWorkspace: () => Promise<void>;
   onCheckAssignment?: ((resourceUri: string) => void) | undefined;
   onOpenAssignment?: ((assignmentId: string) => void) | undefined;
+  onAskAboutTrail?: ((message: string) => void) | undefined;
   onSubmitApplication?: (() => void) | undefined;
   onInteraction: (panelId: string, action: string, value: JsonValue) => Promise<void>;
   onBrowserScroll: (panelId: string, sessionId: string, deltaY: number) => Promise<void>;
@@ -412,6 +414,7 @@ function ResourcePanel({
   onInteraction,
   onCheckAssignment,
   onOpenAssignment,
+  onAskAboutTrail,
   onSubmitApplication,
 }: {
   browserControlsReady: boolean;
@@ -434,6 +437,7 @@ function ResourcePanel({
   onInteraction: (panelId: string, action: string, value: JsonValue) => Promise<void>;
   onCheckAssignment?: ((resourceUri: string) => void) | undefined;
   onOpenAssignment?: ((assignmentId: string) => void) | undefined;
+  onAskAboutTrail?: ((message: string) => void) | undefined;
   onSubmitApplication?: (() => void) | undefined;
 }) {
   const [resource, setResource] = useState<CourseResourceContent | null>(null);
@@ -499,7 +503,8 @@ function ResourcePanel({
       panel.componentId === "browser-viewer" ||
       panel.componentId === "page-cards" ||
       panel.componentId === "visual-composition" ||
-      panel.componentId === "draft-document"
+      panel.componentId === "draft-document" ||
+      panel.componentId === "learning-trail"
     ) {
       return;
     }
@@ -587,6 +592,15 @@ function ResourcePanel({
         mode={webpageMode === "live" ? "live" : "reader"}
         title={panel.title ?? "Web page"}
         url={webpageUrl}
+      />
+    );
+  }
+  if (panel.componentId === "learning-trail") {
+    return (
+      <LearningTrailPanel
+        focusEntryId={stringProp(panel.props, "focus_entry_id")}
+        onAsk={onAskAboutTrail}
+        readOnly={historical}
       />
     );
   }
@@ -784,6 +798,7 @@ export function Workspace({
   onCloseWorkspace,
   onCheckAssignment,
   onOpenAssignment,
+  onAskAboutTrail,
   onSubmitApplication,
   onInteraction,
   onBrowserScroll,
@@ -855,6 +870,7 @@ export function Workspace({
           onInteraction={onInteraction}
           onCheckAssignment={onCheckAssignment}
           onOpenAssignment={onOpenAssignment}
+          onAskAboutTrail={onAskAboutTrail}
           onSubmitApplication={onSubmitApplication}
           panel={focused}
         />

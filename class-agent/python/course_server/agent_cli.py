@@ -84,6 +84,8 @@ from course_server.instructor_messages import (
     InstructorMessageService,
     InstructorMessageStudentsTool,
 )
+from course_server.learning_trail import FileDraftStore, FileTrailStore, LearningTrailService
+from course_server.learning_trail.tools import MemoryGetMineTool, MemoryProposeMineTool
 from course_server.mail import CourseAskTATool, TAQuestionService
 from course_server.migrations import apply_migrations
 from course_server.postgres.auth_store import PostgresAuthStore, create_auth_pool
@@ -129,7 +131,7 @@ from course_server.workspace.tools import (
     WorkspaceReviewPresentationTool,
     WorkspaceUpdateComponentTool,
 )
-from runtime_smolagents import OpenAIModelProvider, SmolagentsRuntime
+from runtime_smolagents import AnthropicModelProvider, OpenAIModelProvider, SmolagentsRuntime
 
 _SAFE_PROVIDER_FIELD = re.compile(r"^[A-Za-z0-9_.\[\]-]{1,120}$")
 
@@ -163,6 +165,14 @@ async def run_cli_turn(
     return conversation, result
 
 
+def _openai_key(settings: AgentSettings) -> str:
+    """These image tools call OpenAI directly, so a Claude key must never reach them."""
+
+    if settings.model_provider != "openai":
+        raise RuntimeError("image inspection requires MODEL_PROVIDER=openai")
+    return settings.model_api_key.get_secret_value()
+
+
 def build_runtime(
     settings: AgentSettings,
     *,
@@ -180,6 +190,7 @@ def build_runtime(
     faq_updates: FaqKnowledgeStore | None = None,
     student_projects: StudentProjectCatalog | None = None,
     course_roster: CourseRoster | None = None,
+    learning_trail: LearningTrailService | None = None,
 ) -> SmolagentsRuntime:
     resolved_roster = course_roster or load_course_roster(settings.course_roster_path)
     if resources is None and resolved_roster is not None:
@@ -232,6 +243,10 @@ def build_runtime(
     application_access = ApplicationAccessPolicy(
         settings.applicant_data_path / "student-access.json"
     )
+    resolved_learning_trail = learning_trail or LearningTrailService(
+        FileTrailStore(settings.learning_trail_data_path),
+        drafts=FileDraftStore(settings.learning_trail_data_path),
+    )
     executable_tools: list[ExecutableTool] = [
         CourseReadSyllabusTool(course_resources),
         CourseReadPublicFileTool(course_resources),
@@ -245,6 +260,8 @@ def build_runtime(
         CourseListAssignmentsTool(assignment_store),
         CourseGetAssignmentTool(assignment_store),
         GetMyGradesTool(grade_store),
+        MemoryGetMineTool(resolved_learning_trail),
+        MemoryProposeMineTool(resolved_learning_trail),
         ReadTemporaryUploadTool(upload_store),
         DocumentInspectPageTool(
             course_resources,
@@ -253,7 +270,7 @@ def build_runtime(
                 image,
                 prompt,
                 model_id=settings.model_id,
-                api_key=settings.model_api_key.get_secret_value(),
+                api_key=_openai_key(settings),
             ),
         ),
         CourseInspectSlidePageTool(
@@ -262,7 +279,7 @@ def build_runtime(
                 image,
                 prompt,
                 model_id=settings.model_id,
-                api_key=settings.model_api_key.get_secret_value(),
+                api_key=_openai_key(settings),
             ),
         ),
         CourseSubmitApplicationTool(applicant_store, upload_store),
@@ -274,7 +291,7 @@ def build_runtime(
                 [(photo.media_type, photo.data) for photo in photos],
                 prompt,
                 model_id=settings.model_id,
-                api_key=settings.model_api_key.get_secret_value(),
+                api_key=_openai_key(settings),
             ),
             application_access,
         ),
@@ -290,7 +307,7 @@ def build_runtime(
                 urls,
                 prompt,
                 model_id=settings.model_id,
-                api_key=settings.model_api_key.get_secret_value(),
+                api_key=_openai_key(settings),
             ),
             probe_public_image_url,
         ),
@@ -375,7 +392,10 @@ def build_runtime(
             ]
         )
     tools = ToolCatalog(executable_tools)
-    provider = OpenAIModelProvider(
+    provider_type = (
+        AnthropicModelProvider if settings.model_provider == "anthropic" else OpenAIModelProvider
+    )
+    provider = provider_type(
         model_id=settings.model_id,
         api_key=settings.model_api_key,
     )

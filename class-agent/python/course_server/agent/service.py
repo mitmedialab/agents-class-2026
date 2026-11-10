@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Protocol, cast
+from typing import Protocol, cast, runtime_checkable
 from uuid import UUID, uuid4
+
+from pydantic import JsonValue
 
 from agent_core import (
     AgentContext,
@@ -16,6 +19,7 @@ from agent_core import (
     Capability,
     Conversation,
     Event,
+    Memory,
     PrincipalContext,
 )
 from course_server.uploads import TemporaryUploadStore, UploadError
@@ -35,7 +39,14 @@ from .skills import (
     READ_SKILL_TOOL_ID,
     SkillCatalog,
 )
-from .store import ConversationAccessDenied, ConversationStore, principal_owns_conversation
+from .store import (
+    ConversationAccessDenied,
+    ConversationStore,
+    MemoryUnavailable,
+    principal_owns_conversation,
+)
+
+logger = logging.getLogger(__name__)
 
 RECENT_DIALOGUE_EVENT_LIMIT = 24
 RECENT_SUPPORTING_EVENT_LIMIT = 16
@@ -79,7 +90,11 @@ _PAGE_LOAD_GREETING_INPUT = (
     f"Keep the whole response short, generally no more than {_PAGE_LOAD_GREETING_MAX_WORDS} words. "
     "If no items are supplied, briefly welcome the person and choose a useful course-related "
     "suggestion. Decide the wording and priorities yourself. Do not invent updates, deadlines, or "
-    "completed checks."
+    "completed checks. "
+    "If this student's saved learning-trail memories are supplied and one of them bears on a "
+    "pending assignment or on this week's topic, add one sentence that connects them, cited by "
+    "week and build title, such as a plan they wrote down that this assignment is a chance to try, "
+    "or staff feedback they have not acted on yet. Otherwise do not mention the trail."
 )
 EventObserver = Callable[[Event], None]
 TextDeltaObserver = Callable[[str], None]
@@ -109,6 +124,19 @@ class AgentAttentionProvider(Protocol):
     async def agent_attention(self, principal: PrincipalContext) -> list[dict[str, object]]: ...
 
     async def mark_updates_seen(self, principal: PrincipalContext) -> None: ...
+
+
+class MemorySelector(Protocol):
+    """Supplies the current principal's own memories for one run's context."""
+
+    async def select_memories(self, principal: PrincipalContext) -> list[Memory]: ...
+
+
+@runtime_checkable
+class MemoryOverviewProvider(Protocol):
+    """Optional platform-derived facts about the memories, such as course topics covered."""
+
+    async def memory_overview(self, principal: PrincipalContext) -> dict[str, JsonValue] | None: ...
 
 
 def _principal_references(principal: PrincipalContext) -> dict[str, UUID | None]:
@@ -183,6 +211,7 @@ class CourseAgentService:
         workspace_registry: ComponentRegistry | None = None,
         uploads: TemporaryUploadStore | None = None,
         attention: AgentAttentionProvider | None = None,
+        memories: MemorySelector | None = None,
     ) -> None:
         self._runtime = runtime
         self._conversations = conversations
@@ -191,6 +220,7 @@ class CourseAgentService:
         self._workspace_registry = workspace_registry or load_component_registry()
         self._uploads = uploads
         self._attention = attention
+        self._memories = memories
 
     async def _authorized_upload_uris(
         self,
@@ -436,10 +466,22 @@ class CourseAgentService:
             if self._attention is not None and principal.authenticated
             else []
         )
+        selected_memories: list[Memory] = []
+        memory_unavailable = False
+        memory_overview: dict[str, JsonValue] | None = None
+        if self._memories is not None and principal.authenticated:
+            try:
+                selected_memories = await self._memories.select_memories(principal)
+                if isinstance(self._memories, MemoryOverviewProvider):
+                    memory_overview = await self._memories.memory_overview(principal)
+            except MemoryUnavailable:
+                logger.warning("Selected memories are unavailable for this run", exc_info=True)
+                memory_unavailable = True
         context = AgentContext(
             principal=principal,
             conversation_id=conversation_id,
             recent_events=_recent_context_events(previous_events),
+            selected_memories=selected_memories,
             capabilities=[
                 Capability(id=tool_id, status="available") for tool_id in permitted_tool_ids
             ],
@@ -457,6 +499,8 @@ class CourseAgentService:
                     for skill in authorized_skills
                 ],
                 "attention_items": attention_items,
+                **({"memory_unavailable": True} if memory_unavailable else {}),
+                **({"memory_overview": memory_overview} if memory_overview is not None else {}),
             },
         )
         observed_method = getattr(self._runtime, "run_observed", None)

@@ -15,6 +15,23 @@ GET  /api/v1/auth/me
 
 GET  /api/v1/notifications
 POST /api/v1/notifications/{notification_id}/read
+
+GET    /api/v1/learning-trail
+GET    /api/v1/learning-trail/connections
+GET    /api/v1/learning-trail/topics
+GET    /api/v1/learning-trail/draft
+POST   /api/v1/learning-trail/draft/accept
+DELETE /api/v1/learning-trail/draft
+POST   /api/v1/learning-trail/entries
+PATCH  /api/v1/learning-trail/entries/{entry_id}
+DELETE /api/v1/learning-trail/entries/{entry_id}
+POST   /api/v1/learning-trail/entries/{entry_id}/feedback
+DELETE /api/v1/learning-trail/entries/{entry_id}/feedback/{feedback_id}
+GET    /api/v1/learning-trail/students
+GET    /api/v1/learning-trail/students/{student_id}/entries
+POST   /api/v1/learning-trail/students/{student_id}/entries/{entry_id}/feedback
+DELETE /api/v1/learning-trail/students/{student_id}/entries/{entry_id}/feedback/{feedback_id}
+
 GET  /api/v1/notification-center
 POST /api/v1/notification-center/{item_id}/read
 GET  /api/v1/notification-center/{item_id}/sender-image
@@ -113,7 +130,9 @@ successful result, the server acknowledges that user's current one-time Updates 
 Communications and Upcoming are not consumed by the greeting.
 
 The conversation list remains newest-first and accepts optional bounded `limit` and non-negative
-`offset` query parameters. Omitting them preserves the complete-list compatibility behavior. The
+`offset` query parameters. `started_only=true` leaves out conversations with no student message,
+such as the greeting created on each visit. A missing or placeholder title is replaced in the
+response with text from the first student message; this is a projection and nothing is written. Omitting them preserves the complete-list compatibility behavior. The
 web history drawer requests six summaries at first, displays five, and uses the extra result only to
 decide whether another five can be revealed. Conversation events are fetched only after a user
 opens that conversation.

@@ -1,0 +1,201 @@
+"""Validated learning-trail records. Pure data: no I/O, identity, or transport."""
+
+from __future__ import annotations
+
+from typing import Annotated, Literal, Self
+from uuid import UUID
+
+from pydantic import (
+    AfterValidator,
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    model_validator,
+)
+
+MAX_ENTRIES_PER_STUDENT = 64
+MAX_FEEDBACK_PER_ENTRY = 16
+MAX_TOPICS_PER_ENTRY = 8
+MAX_WEEK = 20
+
+FeedbackRole = Literal["instructor", "ta"]
+FeedbackSource = Literal["pasted_by_student", "staff"]
+ConnectionKind = Literal["build", "class", "classmate"]
+
+
+def _require_https(value: str) -> str:
+    # The panel renders this as a link, so only a plain https URL is an acceptable value.
+    if not value.startswith("https://") or any(character.isspace() for character in value):
+        raise ValueError("build_url must be an https URL")
+    return value
+
+
+Week = Annotated[int, Field(ge=1, le=MAX_WEEK)]
+BuildTitle = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+BuildUrl = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=2_048),
+    AfterValidator(_require_https),
+]
+Reflection = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=20_000)
+]
+FeedbackBody = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=10_000)
+]
+PersonName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+# A course topic is a slide deck or reading in the course catalog, so the list stays tied to what
+# the class actually covered and the agent cannot invent a topic.
+TopicId = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True, pattern=r"^course://(slides|readings)/[A-Za-z0-9._-]{1,120}$"
+    ),
+]
+Topics = Annotated[list[TopicId], Field(max_length=MAX_TOPICS_PER_ENTRY)]
+
+
+def _unique_topics(value: list[str]) -> list[str]:
+    if len(set(value)) != len(value):
+        raise ValueError("topics must not repeat")
+    return value
+
+
+class TrailModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+class TrailFeedback(TrailModel):
+    """Staff feedback attached to an entry.
+
+    `source` records provenance for the agent and the reader. `staff` means a logged-in TA or
+    instructor wrote it here. `pasted_by_student` means the student copied it from an email, so
+    the platform has not verified that staff wrote it.
+    """
+
+    id: UUID
+    from_role: FeedbackRole
+    from_name: PersonName | None = None
+    body: FeedbackBody
+    received_at: AwareDatetime | None = None
+    source: FeedbackSource
+    added_at: AwareDatetime
+
+
+class TrailEntry(TrailModel):
+    """One reflection on one weekly build."""
+
+    id: UUID
+    week: Week
+    build_title: BuildTitle
+    build_url: BuildUrl | None = None
+    reflection: Reflection
+    topics: Annotated[Topics, AfterValidator(_unique_topics)] = Field(default_factory=list)
+    still_relevant: bool = True
+    shared_with_staff: bool = False
+    shared_with_class: bool = False
+    feedback: list[TrailFeedback] = Field(default_factory=list, max_length=MAX_FEEDBACK_PER_ENTRY)
+    created_at: AwareDatetime
+    updated_at: AwareDatetime
+
+
+class TrailEntryDraft(TrailModel):
+    week: Week
+    build_title: BuildTitle
+    build_url: BuildUrl | None = None
+    reflection: Reflection
+    topics: Annotated[Topics, AfterValidator(_unique_topics)] = Field(default_factory=list)
+    shared_with_staff: bool = False
+    shared_with_class: bool = False
+
+
+class PendingDraft(TrailModel):
+    """An entry the Course Agent drafted from a debrief. Nothing is saved until the student
+    accepts it in the panel, where they can change every word first."""
+
+    draft: TrailEntryDraft
+    proposed_at: AwareDatetime
+
+
+class TrailTopic(TrailModel):
+    """A course topic a build can be tagged with: one slide deck or reading."""
+
+    id: TopicId
+    title: str
+    week: int | None = None
+
+
+class TopicCoverage(TrailModel):
+    """Which course topics this student's saved builds have practiced, for the panel and agent."""
+
+    practiced: list[TrailTopic]
+    not_yet: list[TrailTopic]
+
+
+class TrailEntryPatch(TrailModel):
+    """Only fields the client actually sent are applied; see `model_fields_set`."""
+
+    week: Week | None = None
+    build_title: BuildTitle | None = None
+    build_url: BuildUrl | None = None
+    reflection: Reflection | None = None
+    topics: Annotated[Topics, AfterValidator(_unique_topics)] | None = None
+    still_relevant: bool | None = None
+    shared_with_staff: bool | None = None
+    shared_with_class: bool | None = None
+
+    @model_validator(mode="after")
+    def validate_patch(self) -> Self:
+        if not self.model_fields_set:
+            raise ValueError("a patch must change at least one field")
+        # Only build_url can be cleared; every other field always has a value.
+        for name in self.model_fields_set - {"build_url"}:
+            if getattr(self, name) is None:
+                raise ValueError(f"{name} cannot be null")
+        return self
+
+
+class TrailFeedbackDraft(TrailModel):
+    from_role: FeedbackRole
+    from_name: PersonName | None = None
+    body: FeedbackBody
+    received_at: AwareDatetime | None = None
+
+
+class StaffFeedbackDraft(TrailModel):
+    """The author and role come from the staff member's session, never from the request."""
+
+    body: FeedbackBody
+
+
+class TrailConnection(TrailModel):
+    """One thing that resembles a build. A classmate's appears only if they chose to share it."""
+
+    kind: ConnectionKind
+    target_id: str
+    title: str
+    week: int | None = None
+    url: str | None = None
+    owner_name: str | None = None
+    excerpt: str
+    score: float
+    shared_terms: list[str]
+
+
+class SharedTrailSummary(TrailModel):
+    """What staff see in the list of students who have shared at least one entry."""
+
+    student_id: UUID
+    student_name: str
+    shared_entries: int
+    latest_week: int
+
+
+class TrailDocument(TrailModel):
+    """The durable per-student file. `user_id` is checked against the owner on every read."""
+
+    schema_version: Literal[1] = 1
+    user_id: UUID
+    entries: list[TrailEntry] = Field(default_factory=list, max_length=MAX_ENTRIES_PER_STUDENT)

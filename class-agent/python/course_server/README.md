@@ -11,6 +11,7 @@ Package boundaries:
 - `course_server.migrations` applies permanent checksummed SQL migrations.
 - `course_server.index_resources` generates the public registry from resource sidecars
   and refreshes normalized PostgreSQL course search data.
+- `course_server.learning_trail` owns each student's reflections, attached feedback, and their selection into agent context.
 - `course_server.uploads` owns principal-scoped, expiring chat attachment storage.
 - `course_server.admin` is the instructor/admin command line interface.
 - `course_server.agent_cli` is the model-backed smoke-test entry point.

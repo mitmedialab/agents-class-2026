@@ -46,7 +46,7 @@ describe("conversation history", () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      "/api/v1/conversations?limit=6&offset=5",
+      "/api/v1/conversations?started_only=true&limit=6&offset=5",
       expect.objectContaining({ credentials: "include" }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(

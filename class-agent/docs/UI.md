@@ -66,9 +66,20 @@ the shortcut does not send anything. Student email requires mail to be enabled, 
 messages use the existing in-app delivery. Both retain the platform's Send/Cancel confirmation.
 Other roles and anonymous visitors retain Apply.
 
-Submitting a new prompt immediately removes the prior answer and resets the
-activity trace, so only the new run's process is visible until its answer begins.
+Submitting a new prompt resets the activity trace, so only the new run's process is shown
+while it runs.
 Canonical history is still persisted as events and is available through the conversation drawer.
+A conversation reads as one chat that scrolls up and down: every student message and reply in
+order, each with its date and time, scrolled to the latest. It starts with the first student message
+and also applies to a conversation opened from the drawer. A new message is added at the bottom and
+the reply streams in under it. It is a browser projection of canonical events. A conversation with
+no student message yet, such as the opening greeting, keeps the single-moment view.
+**My builds** opens from the header for logged-in students. It lists each week's build with a
+skills map of course topics the builds practiced, connections to other builds, class materials,
+and classmates who share, a **Debrief this week with the agent** button that starts a short
+interview in chat, and, when the agent has drafted an entry from a debrief, a review form at the
+top that the student saves or discards.
+The drawer lists only conversations with a student message, titled from that message and showing the time of the latest activity.
 Open the About page from the right side of the header or link directly to `/about`.
 The browser URL and Back/Forward navigation remain synchronized with that page. Notifications and their desktop/mobile layout state are hidden while About is open and restored when returning to chat. It
 contains a concise description, new/history navigation, and student login or logout
