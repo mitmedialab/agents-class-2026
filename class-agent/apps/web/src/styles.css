@@ -209,6 +209,58 @@ textarea {
   color: var(--color-text-muted);
 }
 
+/* Place Lab: the simulation of the third floor, opened as a page of the site (/placelab) */
+.placelab-link {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.55em;
+}
+
+.placelab-link[aria-current="page"] {
+  color: var(--color-text-muted);
+}
+
+.placelab-dot {
+  background: currentColor;
+  border-radius: 50%;
+  display: inline-block;
+  flex: none;
+  height: 0.5rem;
+  width: 0.5rem;
+  animation: placelab-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes placelab-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.6);
+    opacity: 0.55;
+  }
+}
+
+.placelab-page {
+  background: var(--color-background);
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  padding: 5.5rem clamp(1rem, 8vw, 9rem) 3rem;
+}
+
+.placelab-frame {
+  background: var(--color-background);
+  border: 0;
+  display: block;
+  flex: 1 1 auto;
+  margin: 0 auto;
+  max-width: 1120px;
+  min-height: calc(100dvh - 8.5rem);
+  width: 100%;
+}
+
 .syllabus-page {
   background: var(--color-background);
   min-height: 100dvh;
@@ -3713,6 +3765,10 @@ textarea {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .placelab-dot {
+    animation: none;
+  }
+
   .course-agent-interface,
   .opening-splash-title,
   .agent-drawer,

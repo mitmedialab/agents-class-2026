@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "code": "S02",
+  "name": "Hyungwoon Lee",
+  "team": "MIT Media Lab",
+  "site": "https://mitmedialab.github.io/agents2026-hyung/",
+  "bio": "Builds context-aware wearable agents for informal learning. Instead of predicting what someone wants to learn, the agents create learning opportunities: an AI student on smart glasses asks naive questions, so answering exercises recall. Grounds the designs in Baddeley's working memory model and cognitive load theory, and mostly runs small local models.",
+  "avatar": {"t": 0, "h": 0, "s": 1, "p": 0, "hs": 0, "g": 1},
+  "project": "an AI student on smart glasses that asks naive questions about what the wearer sees, timed by a simulated working memory",
+  "interests": [
+    {
+      "term": "informal learning",
+      "description": "Learning in daily life rather than in the classroom. Instead of predicting what someone wants to learn from their past patterns, which can hold back growth, the agent opens new learning opportunities from the objects and moments around them. Treats motivation and curiosity as the bottleneck: 'process-as-goal' learning has no grade at the end, so it depends on the person wanting to explore. The aim is personal growth, not coursework."
+    },
+    {
+      "term": "wearables",
+      "description": "Smart glasses and on-body sensors (camera, microphones, gaze, heart rate) that give an agent context on both the environment and the wearer. Has built on Mentra Live and Aria Gen 2 glasses, prefers small models that run locally for privacy, and is interested in how hardware limits such as heat and battery shape what an agent can do."
+    },
+    {
+      "term": "working memory",
+      "description": "Baddeley's working memory model (visuospatial sketchpad, phonological loop, central executive, episodic buffer) as an environment an agent can observe: what the wearer has just seen and heard, how it fades, and what they are doing now. Builds on Promemassist and AiGet, adding gaze and physiological signals to model the central executive."
+    },
+    {
+      "term": "cognitive load",
+      "description": "Estimating intrinsic, extraneous and germane load from heart-rate variability and eye movements, both as a research question and as the signal for when an agent may interrupt. Wary of the limited ecological validity of in-lab datasets such as CLAS, so models are fine-tuned on the wearer's own ratings."
+    },
+    {
+      "term": "learning by teaching",
+      "description": "Flipping the usual roles: instead of asking the AI, the AI asks you. A naive AI student, sometimes wrong on purpose at a chosen level of Bloom's taxonomy, makes the wearer explain and correct it. This creates cognitive tension (in the spirit of antagonistic AI) and exercises information retrieval, which daily life rarely demands while the internet floods us with things to encode."
+    }
+  ],
+  "skills": [
+    "simulation",
+    "wearable sensing",
+    "local models",
+    "physiological signals",
+    "agent evaluation"
+  ],
+  "weekly_builds": [
+    {
+      "week": "W01",
+      "title": "documentation site, a hand-written agent loop and three project ideas",
+      "summary": "Built the course documentation site with Claude Code: a three.js 'Saturn' sphere whose ring is the menu, a cursor heatmap and brush, and a markdown system with nested panels. Wrote a minimal agent loop by hand on Qwen2.5-3B: the Sheep Summator Supervisor watches a sheep-counting machine that gets tired or hungry and miscounts, and can scold, shake or feed it until the count succeeds. Proposed three final project ideas: the Random Questioner (a context-aware debater that asks Socratic questions about objects around you), the Agentic Rebel (a wearable that questions your decisions at the right moment to surface hidden assumptions) and the Intention Detector (telling whether a learner cares about the process or only the result, and fostering learning only where they care)."
+    },
+    {
+      "week": "W02",
+      "title": "Telegram scheduler agent that pushes back",
+      "summary": "A personal scheduler, still in daily use, behind an owner-only Telegram bot (smolagents ToolCallingAgent with Claude). Two deterministic tools: resolve_when turns phrases like 'Fri EOD' into exact times or lists the candidates, and schedule_store reads, validates and conflict-checks a markdown schedule. A skill defines the format and when to push back on over-commitment with evidence; Google Calendar (read-only) and Google Maps (travel time only) come in over MCP. It deliberately keeps the human in the loop, on the theory that taking part in scheduling helps you remember and keep to it."
+    },
+    {
+      "week": "W03",
+      "title": "AI student on Mentra Live glasses",
+      "summary": "Set the cognitive augmentation objective: create informal learning opportunities with context-aware wearables, encourage motivation and curiosity, and exercise information retrieval through cognitive tension. Built a curious-student agent: a photo from the glasses goes through object detection (RT-DETR), a scene description (SmolVLM) and Qwen2.5-1.5B, which picks one object (half the time an unfamiliar one, half the time one connected to what it knows) and asks one naive question aloud. Spoken answers are transcribed, scored for voice emotion and answered as a student that records what it learned. Everything runs locally; the human-agent interaction space, failure modes and an evaluation plan (a quiz before and after) are written up. Also proposed that the course agent become a sparring partner that quizzes students instead of a middleman."
+    },
+    {
+      "week": "W04",
+      "title": "working memory simulation on Aria Gen 2",
+      "summary": "Analysed AiGet and Promemassist as agent environments, then simulated the wearer's working memory from Aria Gen 2 streams. A visual cache holds four detected objects that blur and fade unless looked at again; a phonological loop holds seven content words from the wearer's or others' speech; a central executive estimates cognitive load from heart-rate variability (an XGBoost model trained on the CLAS dataset, AUC 0.79 on unseen people, fine-tuned on the wearer's own ratings) and from gaze; an episodic buffer keeps four task episodes. The AI student turns what was seen and heard into notes ranked by the wearer's preferences, asks only at low-load moments, and stores what it learns in its own long-term memory."
+    },
+    {
+      "week": "W05",
+      "title": "evaluating the AI student",
+      "summary": "Defined six scores for the AI student: timing of the moment, grounding in what the wearer perceived, question quality, reading the answer correctly, precision of what it stores, and planting mistakes at a chosen level of Bloom's taxonomy (a new setting lets the student be wrong on purpose so that the wearer corrects it). Ran 90 trials over 10 simulated scenes with Claude Haiku 5.5 as judge, comparing Haiku with Qwen3-VL-4B and Gemma 3 4B on a laptop CPU: Haiku passed 40% of trials on the first try against 13%, and the local models failed mostly at storing knowledge, copying the skill file's example or believing vague answers. Also moved the agent out of the memory model, so the simulation is an environment of its own."
+    },
+    {
+      "week": "W06",
+      "title": "on-phone agent that keeps the glasses usable",
+      "summary": "An Android (Kotlin) agent running Qwen2.5-1.5B through llama.cpp under a GBNF grammar, so every output is a well-formed tool call. It watches the Mentra glasses and the phone over Bluetooth and read-only ADB, retakes photos that are too dark or blurry, and caps photo size, rate and streaming as the glasses heat up; as the phone heats up it steps itself down from a vision model to a text model to rules only. Deterministic safety limits back the model, and an MCP server exposes the same 18 tools to external agents. In tasks verified from device state, Claude Opus 5.5 and the 1.5B model passed everything and the 0.5B looped, but the 1.5B sometimes claimed a success it hadn't achieved."
+    }
+  ],
+  "source": {
+    "method": "summarized with Claude Code from the owner's documentation repository (website/docs, weeks 1-6 and final project ideas)",
+    "repo": "mitmedialab/agents2026-hyung",
+    "commit": "68229d3",
+    "date": "2026-11-07"
+  }
+}

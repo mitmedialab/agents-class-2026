@@ -1,0 +1,147 @@
+<meta charset="utf-8">
+<title>placelab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Silkscreen:wght@400;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+<div class="band"><div class="bandin"><span id="band-glyph"></span><span class="bandt"><b id="t-sim">GA Cognitive Agents</b> <span id="t-band">· e14 / e15 · tercer piso</span></span><button class="lng" id="lang-toggle" type="button" title="language · idioma" aria-label="language · idioma">lng · en</button><button class="theme" id="th-toggle" type="button" title="light / dark" aria-label="light / dark">◐</button></div></div>
+<div class="wrap">
+  <header>
+    <div><div class="lab" id="t-tagline" style="margin-bottom:4px">¿qué ideas nacen cuando la clase se cruza?</div><h1 id="t-title">placelab</h1><div class="steps" role="tablist"><button id="nav-survey" aria-pressed="true"><b>1</b><span id="t-nav1">perfil</span></button><button id="nav-sim" aria-pressed="false"><b>2</b><span id="t-nav2">simulación</span></button><button id="nav-results" aria-pressed="false"><b>3</b><span id="t-nav3">resultados</span></button></div></div>
+    <p class="ask" id="t-ask">los alumnos de Cognitive Agents entran como personajes sin nombre, con memoria, y se mueven solo por los espacios comunes del tercer piso: la 341, el foodcam, el atrio, la cafetería y los pasillos. al hablar, cruzan lo que traen (proyecto, intereses, habilidades) y de ahí nacen ideas nuevas. nada está escrito de antemano: las ideas salen de las conversaciones.</p>
+  </header>
+
+  <!-- 1 · perfil -->
+  <section id="sec-survey">
+    <div class="survey">
+      <div>
+        <div class="youcard" id="you-card" hidden><div id="you-face"></div><div><b id="t-youexists">tu personaje ya existe en este navegador</b><div class="hint" id="you-sub"></div><div class="ctl" style="gap:8px;margin-top:8px"><button type="button" class="btn orange" id="you-follow"><span id="t-youfollow">seguir a tu personaje</span></button><button type="button" class="btn" id="you-edit"><span id="t-youedit">modificar mi perfil</span></button><button type="button" class="btn" id="you-forget"><span id="t-youforget">olvidar y empezar de cero</span></button></div></div></div>
+        <div class="svform" id="pf-form">
+          <label><span id="t-pfcode">tu código (sin nombres)</span><select id="pf-code"></select></label>
+          <div class="svchar" id="pf-view" hidden></div>
+          <div class="avatar" id="pf-avatar" hidden></div>
+          <div class="cam" id="cam" hidden><div class="camview"><canvas id="cam-view" width="128" height="192" aria-label="avatar preview"></canvas><span class="mono camlive" id="t-camlive">live</span></div><div class="camtxt"><p class="hint" id="t-camnote"></p><p class="err" id="cam-msg"></p><div class="ctl" style="gap:8px"><button type="button" class="go" id="cam-keep"><span id="t-camkeep">keep this look</span></button><button type="button" class="btn" id="cam-cancel"><span id="t-camcancel">cancel</span></button></div></div></div>
+          <div class="ctl" id="pf-actions" style="gap:8px" hidden><button class="go" type="button" id="pf-accept"><span id="t-pfaccept">acepto que se use mi perfil</span></button><button class="btn" type="button" id="pf-modify"><span id="t-pfmodify">modificar mi perfil</span></button></div>
+          <div id="pf-edit" hidden style="display:flex;flex-direction:column;gap:10px">
+            <div id="pf-new" hidden style="display:flex;flex-direction:column;gap:10px"><label><span id="t-pfnname">your name</span><input id="pf-nname" type="text" maxlength="40"></label><label><span id="t-pfnteam">your group or school</span><input id="pf-nteam" type="text" maxlength="40"></label></div>
+            <label><span id="t-pfproject">proyecto (una frase)</span><textarea id="pf-project" maxlength="140"></textarea></label>
+            <label><span id="t-pfskills">habilidades (separadas por comas)</span><input id="pf-skills" type="text" maxlength="120"></label>
+            <label><span id="t-pfinterests">intereses (separados por comas)</span><input id="pf-interests" type="text" maxlength="120"></label>
+            <div class="err" id="pf-err"></div>
+            <div class="ctl" style="gap:8px"><button class="go" type="button" id="pf-save"><span id="t-pfsave">guardar y dar vida al personaje</span></button><button class="btn" type="button" id="pf-cancel"><span id="t-pfcancel">cancelar</span></button></div>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <p class="svnote" id="t-pfnote">tu perfil viene de los datos de la clase: equipo, intereses, habilidades y proyecto. si aceptas, da vida a un personaje sin nombre que sustituye al sintético de tu código; se le reconoce por la ropa y solo tú sabes quién es. puedes modificar el perfil antes o después; la versión original queda registrada.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 · simulación -->
+  <section id="sec-sim" hidden>
+  <div class="grid">
+    <section class="stage">
+      <div class="viewport" id="vp">
+        <div id="subs"></div>
+        <div class="hud">
+          <button class="ico" id="v3d" aria-pressed="true" aria-label="Vista 3D" title="Vista 3D"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg></button>
+          <button class="ico" id="vtop" aria-pressed="false" aria-label="Vista en planta" title="Vista en planta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="3.5" width="17" height="17"/><path d="M3.5 10h8v10.5M11.5 3.5V10"/></svg></button>
+          <button class="ico" id="vcafe" aria-pressed="false" aria-label="Entrar en la cafetería" title="Cafetería"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 9h12v5a5 5 0 01-5 5H9a5 5 0 01-5-5z"/><path d="M16 10h2a2.5 2.5 0 010 5h-2"/><path d="M8 3v3M12 3v3"/></svg></button>
+          <button class="ico heat" id="heat" aria-pressed="false" aria-label="Mapa de calor de presencia" title="Dónde ha estado la gente"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3c1 3 5 5 5 10a5 5 0 01-10 0c0-2 1-3 1-3s1 2 2 2c0-4 2-6 2-9z"/></svg></button>
+          <button class="ico you" id="follow" aria-pressed="false" aria-label="Seguir a tu personaje" title="Seguir a tu personaje"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg></button>
+          <button class="ico prop" id="prop" aria-pressed="false" aria-label="Mapa de calor de propuestas" title="Dónde se ha propuesto juntarse"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s-6-5.5-6-11a6 6 0 0112 0c0 5.5-6 11-6 11z"/><circle cx="12" cy="10" r="2"/></svg></button>
+        </div>
+      </div>
+      <div class="bar">
+        <div class="ctl">
+          <button class="ico" id="play" aria-label="Pausar" title="Pausar"><svg id="playicon" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg></button>
+          <select id="speed" aria-label="Velocidad"><option value="1">1×</option><option value="2" selected>2×</option><option value="4">4×</option><option value="8">8×</option></select>
+          <label class="hint" for="days" id="t-days">días</label>
+          <select id="days" aria-label="Días de deliberación"><option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="5">5</option></select>
+          <button class="ico" id="reset" aria-label="Volver a empezar" title="Volver a empezar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12a8 8 0 108-8H8"/><path d="M6 1v6h6"/></svg></button>
+          <button class="btn" id="ff-day"><span id="t-ffday">saltar al final del día</span></button>
+          <button class="btn" id="ff-all"><span id="t-ffall">saltar al final</span></button>
+        </div>
+        <div class="stat" id="st-conv" title="Personas convencidas de tu sitio / objetivo"><svg viewBox="0 0 24 24" fill="none" stroke="#FF4F12" stroke-width="1.8"><path d="M4 12l5 5L20 6"/></svg><span id="sConv">—</span></div>
+        <div class="stat" id="st-talks" title="Conversaciones en la cafetería"><svg viewBox="0 0 24 24" fill="none" stroke="#161616" stroke-width="1.8"><path d="M4 5h16v10H9l-5 4z"/></svg><span id="sTalks">0</span></div>
+        <div class="stat" id="st-meet" title="Encuentros en pasillos"><svg viewBox="0 0 24 24" fill="none" stroke="#161616" stroke-width="1.8"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M3 20c0-3 2.5-5 5-5s5 2 5 5M11 20c0-3 2.5-5 5-5s5 2 5 5"/></svg><span id="sMeet">0</span></div>
+        <canvas id="spark" aria-label="Encuentros a lo largo del tiempo"></canvas>
+      </div>
+      <div class="ffbar" id="ff-bar" hidden><span id="ff-txt"></span><i><b id="ff-fill" style="width:0%"></b></i></div>
+      <div class="youstrip" id="you-strip" hidden><span class="ys-face" id="ys-face"></span><span class="ys-txt"><b id="ys-who"></b><span id="ys-act"></span></span><span class="ys-pins" id="ys-pins"></span><span class="ys-score"><b id="ys-n"></b><small id="t-ysn">apoyos</small></span></div>
+      <div class="key">
+        <span><i class="dot" style="background:#FF4F12"></i><span id="t-k1">tu personaje · anillo naranja</span></span>
+        <span><i class="dot" style="background:#FF8A5B"></i><span id="t-k3">calor de presencia</span></span>
+        <span><i class="dot" style="background:#7FCF8E"></i><span id="t-k4">calor de propuestas</span></span>
+        <span class="hint" id="llm-mode"></span>
+        <span id="t-k5">toca un personaje para abrir su memoria · acércate a la cafetería para oír la conversación</span>
+      </div>
+    </section>
+
+    <aside>
+      <div class="top"><div class="clock"><span id="clock">09:00</span><small id="t-floor">tercer piso</small><span class="dayn" id="dayn"></span></div><div class="hint" id="count"></div></div>
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="tab-conv" aria-selected="true">conversaciones</button>
+        <button class="tab" role="tab" id="tab-mem" aria-selected="false">memoria</button>
+        <button class="tab" role="tab" id="tab-you" aria-selected="false">tú</button>
+      </div>
+      <div class="panel" id="p-conv"><p class="hint" id="t-convhint">cada conversación de la cafetería queda grabada aquí, frase a frase, mientras ocurre. toca una cara para abrir la memoria de esa persona.</p><div id="convs" style="display:flex;flex-direction:column;gap:10px"></div></div>
+      <div class="panel" id="p-mem" hidden></div>
+      <div class="panel" id="p-you" hidden></div>
+    </aside>
+  </div>
+
+  <details class="more" id="sim-more"><summary id="t-simmore">por dentro: quién está en el piso, la arquitectura en marcha y el esquema del agente</summary>
+    <div class="groups" id="groups" style="margin-top:10px"></div>
+    <section class="evid">
+    <div class="evh"><div><div class="lab" id="t-lvlab">ahora mismo</div><h2 class="evt" id="live-title"></h2></div><p class="hint" id="t-lvhint">la arquitectura en marcha para un personaje: lo que acaba de percibir, lo que guarda, lo que recuperó para su última frase, lo que dijo y planea, y lo que destiló. sigue a tu personaje cuando está en la cafetería; toca otro para seguirlo.</p></div>
+    <div class="live" id="live-grid"></div>
+  </section>
+
+    <section class="evid">
+    <div class="evh"><div><div class="lab" id="t-sclab">esquema</div><h2 class="evt" id="t-sctitle">arquitectura del agente en este experimento</h2></div><p class="hint" id="t-schint">el mismo esquema que el de un agente basado en LLM, con lo que hay aquí en cada bloque. el ejemplo de la izquierda es la última conversación real de la cafetería, escrita como trayectoria.</p></div>
+    <div class="sch" id="schema"></div>
+    </section>
+  </details>
+  </section>
+
+  <!-- 3 · resultados -->
+  <section id="sec-results" hidden>
+    <div class="rep-bar"><div class="tabs rep-tabs" role="tablist"><button class="tab" role="tab" id="rt-arcs" aria-selected="true">who talked to whom</button><button class="tab" role="tab" id="rt-news" aria-selected="false">newsletter</button><button class="tab" role="tab" id="rt-detail" aria-selected="false">where</button><button class="tab" role="tab" id="rt-eval" aria-selected="false">evaluation</button></div>
+      <div class="ctl rep-ctl" style="gap:8px;flex-wrap:wrap"><label class="hint" for="rep-runs" id="t-reppick" hidden>report</label><select id="rep-runs" hidden></select>
+        <button class="btn" type="button" id="rep-forget" hidden><span id="t-forget">forget earlier runs</span></button><button class="go" type="button" id="rep-again"><span id="t-again">run again</span></button></div></div>
+    <p class="hint" id="rep-msg" hidden></p>
+    <div id="rp-arcs"><p class="hint" id="rep-arcs-wait" hidden></p><div id="rep-arcs-body"><p class="hint" id="t-arcsnote"></p><iframe id="rep-frame" class="arcs" name="placelab-embed" title="who talked to whom" data-src="../visual-summary/narrative-arcs.html"></iframe></div></div>
+    <div id="rp-news" hidden><div id="rep-news"></div></div>
+    <div id="rp-detail" hidden>
+      <section class="evid">
+        <div class="evh"><div><div class="lab" id="t-maplab">idea heat map</div><h2 class="evt" id="t-maptitle">where the ideas were brewing</h2></div><p class="hint" id="t-maphint"></p></div>
+        <div class="ctl" style="gap:10px;flex-wrap:wrap"><input type="range" id="res-t" min="0" max="1000" value="1000" aria-label="moment of the simulation" style="flex:1;min-width:160px"><span class="mono" id="res-tlab"></span><button class="btn" id="res-play"><span id="t-resplay">play</span></button></div>
+        <canvas id="res-map" class="dmap" aria-label="heat map of conversations and ideas on the floor plan"></canvas>
+        <div class="space-notes" id="res-space"></div>
+      </section>
+    </div>
+    <div id="rp-eval" hidden>
+      <!-- evaluation: left empty on purpose; a teammate fills it in (render into #res-eval from a renderEvaluation() in sim.js) -->
+      <section class="evid"><div class="evh"><div><div class="lab" id="t-evlab">evaluation</div><h2 class="evt" id="t-evtitle"></h2></div><p class="hint" id="t-evhint"></p></div><div id="res-eval"></div></section>
+    </div>
+  </section>
+    </div>
+  </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="data/plan.js"></script>
+<script src="profiles.js"></script>
+<script src="scene.js"></script>
+<script src="memory.js"></script>
+<script src="agents.js"></script>
+<script src="i18n.js"></script>
+<script src="strings.js"></script>
+<script src="offline.js"></script>
+<script src="talk.js"></script>
+<script src="camera.js"></script>
+<script src="report.js"></script>
+<script src="sim.js"></script>

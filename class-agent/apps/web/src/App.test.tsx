@@ -281,7 +281,10 @@ describe("Course Agent interface", () => {
     expect(screen.getByRole("button", { name: "MIT" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "MIT Media Lab" })).toBeInTheDocument();
     const newChat = screen.getByRole("button", { name: "New chat" });
-    expect(newChat).toBe(document.querySelector(".header-utility")?.firstElementChild);
+    // Place Lab leads the header; New chat comes right after it
+    const utility = document.querySelector(".header-utility");
+    expect(utility?.firstElementChild).toBe(screen.getByRole("button", { name: "Place Lab" }));
+    expect(newChat).toBe(utility?.children[1]);
     expect(newChat.querySelector("svg")).toBeNull();
     expect(
       screen.getByRole("navigation", { name: "Course shortcuts" }).previousElementSibling,
@@ -2127,6 +2130,19 @@ describe("Course Agent interface", () => {
     await waitFor(() =>
       expect(api.getCourseResourceContent).toHaveBeenCalledTimes(2),
     );
+  });
+
+  it("opens Place Lab from the header and closes it from the same entry", async () => {
+    render(<App />);
+    await screen.findByRole("button", { name: "Place Lab" });
+    fireEvent.click(screen.getByRole("button", { name: "Place Lab" }));
+    expect(window.location.pathname).toBe("/placelab");
+    const frame = screen.getByTitle("Place Lab simulation");
+    expect(frame).toHaveAttribute("src", "/placelab/index.html?theme=dark");
+    expect(screen.getByRole("button", { name: "Place Lab" })).toHaveAttribute("aria-current", "page");
+    fireEvent.click(screen.getByRole("button", { name: "Place Lab" }));
+    expect(window.location.pathname).toBe("/");
+    expect(screen.queryByTitle("Place Lab simulation")).not.toBeInTheDocument();
   });
 
   it("opens About from its direct URL and follows browser navigation", async () => {
