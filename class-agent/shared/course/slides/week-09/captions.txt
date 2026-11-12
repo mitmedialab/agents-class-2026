@@ -1,0 +1,121 @@
+1 | The dark space image sets up the lecture's shift from text-only agents to agents that interpret several kinds of signals.
+4 | VideoPoet shows one generative system connecting several input and output modalities, introducing creative applications of multimodal AI.
+5 | The physical-sensing examples show that multimodal work also depends on signals from the material world, including touch and manufacturing data.
+6 | The health diagram broadens sensing beyond a single clinical reading to physical, social, and emotional context gathered over time.
+7 | The shopping task connects multimodal perception with agent action: a system must inspect the page, clarify goals, and act on the result.
+9 | The survey slide gives a map of the field before the lecture narrows to core challenges and current research directions.
+10 | The three-part visual definition shows why simply collecting several data types is insufficient; their connections and interactions matter.
+11 | Different shape streams make the challenge concrete: a model must combine heterogeneous inputs into a useful prediction or representation.
+12 | Highlighting one element in each stream focuses the representation problem on cross-modal relationships, not just whole-input summaries.
+13 | Fusion, coordination, and fission distinguish whether a model learns fewer, equal, or more representations than the number of input modalities.
+14 | Temporal, spatial, and hierarchical examples show that alignment must respect the internal structure of each modality.
+15 | The repeated reasoning blocks illustrate inference that uses aligned evidence from more than one modality to reach an answer.
+16 | Adding external knowledge shows how reasoning can draw on information beyond the immediate multimodal observation.
+17 | The arrows present the six challenges as related operations rather than isolated research topics.
+20 | The video still shows how visual context can change the kinds of questions a language model can answer about a conversation.
+21 | The staged diagram links multimodal understanding to interpretation, evidence retrieval, and generation using one conversational example.
+22 | This stage isolates the representation problem: text, video, and audio need a shared basis before the model can reason over them.
+23 | The added text output shows how a language model can verbalize an interpretation built from multimodal features.
+24 | The final stage extends a text answer toward retrieved evidence or new multimodal content.
+25 | Three parallel timelines make the temporal problem visible: speech, video, and audio do not naturally arrive as one aligned sequence.
+26 | Self-attention is presented as a mechanism for relating events across those separate modality streams.
+27 | The attention example shows why an eye roll and vocal emphasis can change the meaning of the spoken words to sarcasm.
+28 | The ViLT heatmaps show a model relating words to parts of images, an example of learned visual-language alignment.
+29 | The interpretation example transitions from multimodal representations to language-model output about a social scene.
+30 | The adapter diagram shows one way to condition a pretrained text model on an image while training only a small added component.
+31 | Answering the car-color question demonstrates the same adapter pattern on a visual question-answering task.
+32 | The few-shot examples show that an image-conditioned model can use preceding visual and text demonstrations to answer a new question.
+33 | The invented word dax tests whether the model can infer a new visual category from examples in its prompt.
+34 | Flamingo illustrates interleaved visual and text context rather than a single image followed by one question.
+35 | The two training stages separate learning image-text alignment from learning to follow multimodal instructions.
+36 | The dataset timeline shows the rapid growth of image-text pretraining collections and the later emphasis on filtering quality.
+37 | The table shows that multimodal instruction datasets vary in size, language coverage, and supervision, affecting what adaptation can teach.
+38 | The diagram marks the transition from interpreting multimodal evidence to retrieving or creating other content.
+39 | The generated pictures make text-to-image translation tangible: a short prompt can specify a scene and visual style.
+40 | The CLIP and diffusion pipeline explains how language features can guide image generation through an intermediate representation.
+41 | The positive and negative pairs show the training signal behind contrastive encoders: matching pairs move together and mismatches separate.
+42 | CLIP's image-text scores illustrate how paired representations support matching or classification without a task-specific classifier.
+43 | LIMBeR shows image features entering a frozen language model through a learned projection, a lightweight route to image-grounded text.
+44 | The conversational examples show image retrieval as a possible output of grounded language models.
+45 | The adapter is the first bridge from multimodal understanding toward an image-producing system.
+46 | Adding candidate generation and selection shows that an image response needs both language grounding and a visual generation step.
+47 | VisualWebArena turns multimodal browser agents into measurable tasks with visible pages, actions, and functional checks.
+48 | The printer example shows why page appearance and an accompanying image can both matter to a web-shopping agent.
+49 | The evaluation pairs demonstrate how a benchmark can check completed web actions rather than score only a written answer.
+50 | Marking interactive elements reduces the visual search problem, while the tree example illustrates the amount of text an agent might otherwise process.
+51 | The sequence connects visual grounding to a concrete click action, making the perception-to-action loop explicit.
+52 | The tabletop examples introduce embodied agents whose outputs are physical robot controls instead of text or browser actions.
+53 | The varied robot setups motivate models that can transfer across bodies and environments.
+54 | OpenVLA connects vision and language inputs to a learned action policy for closed-loop control.
+55 | The action tokenizer shows how a language-model backbone can emit commands that a robot can execute.
+56 | The three-column summary connects the field's definition, core challenges, and future agent directions before the applied examples.
+58 | The glove makes high-resolution, full-hand tactile sensing concrete and frames the engineering tradeoffs in cost and sampling rate.
+59 | The aligned room image and hand heatmaps show how first-person vision can be paired with distributed touch measurements.
+60 | OpenTouch is presented as a dataset that can support robotics, world models, and haptic applications from the same vision-touch recordings.
+61 | The insertion task shows that the dataset records both action context and detailed touch or pose signals during precise manipulation.
+62 | The slip-and-recovery task tests whether an agent can react when grasp stability changes over time.
+63 | The comparison table supports the claim that combining vision and touch can improve recognition or action over limited single-signal inputs.
+64 | The baseline model's sparse action rate makes the latency mismatch between slow vision and fast tactile feedback visible.
+65 | The revised diagram explains how a fast tactile path can refine action between slower visual observations.
+66 | The task comparison presents tactile input as a way to reduce manipulation error while increasing reaction speed.
+68 | The oregano demo connects an inexpensive physical sensor with the odor samples and readings used to build smell datasets.
+69 | The sensor traces and ingredient predictions show the route from volatile-compound signals to a recognizable food category.
+70 | The collection pipeline makes clear that smell recognition depends on controlled samples, repeated sensor readings, and labels.
+71 | The two devices expose the central tradeoff: portable real-time sensors are cheap but coarse, while lab instruments are detailed but slow and costly.
+72 | The training-only enriched modality explains how molecular information can teach a low-resolution sensor representation without requiring the lab device at inference time.
+73 | The grouped bars show the benefit of cross-modal alignment across several food categories, not just one demonstration smell.
+74 | The temporal model comparison shows that the shape of a sensor signal over time carries useful recognition information.
+75 | The allergen-detection setup turns smell classification into an assistive application near food packaging.
+77 | AromaGen's loop connects language about a smell with generated mixtures and user feedback, extending multimodal generation beyond images or audio.
+78 | The wheel and palette show why smell generation needs a workable descriptive vocabulary and a limited set of controllable ingredients.
+79 | The study chart presents user refinement as a way to improve perceived similarity to a target smell.
+81 | The proposed book, phone, and car placements shift the question from model accuracy to practical form factors for smell transmission.
+82 | The feedback arrow introduces self-evolving systems that can update their own capabilities as they encounter new multimodal contexts.
+83 | The framework links changes in memory, models, and teams of agents as related routes to self-evolution.
+85 | The plots motivate MEM1's internal state: it aims to keep active context bounded while long-horizon reasoning continues.
+87 | The rollout trace shows that MEM1 repeatedly rewrites a compact internal state while taking actions or answering.
+88 | The simplified rollout explains how pruning older states forces knowledge to be consolidated into the latest state.
+89 | The code trace makes the memory rule concrete by removing earlier contexts after an updated state appears.
+90 | The reward path shows how answer quality can train the rollout even when intermediate memory updates are internal.
+91 | The mask restricts what each new state can see during training, matching the limited context available at inference time.
+92 | The chart compares performance and context cost as question count rises, illustrating the long-horizon tradeoff MEM1 targets.
+93 | WebShop tests whether a memory-efficient reasoning method can also work in a multi-turn agent environment.
+94 | The table reports WebShop outcomes alongside token and time costs, so success can be weighed against efficiency.
+95 | The stored facts example shows an internal state retaining useful information from multiple questions without keeping the full trace.
+96 | The skipped-question example shows an agent allocating limited search effort when evidence remains unavailable.
+98 | The loop frames self-play as proposing problems, solving them, and using formal verification for feedback.
+99 | The added proposer tactics explain how difficulty can be adjusted as the solver improves.
+100 | The rising pass-rate curves show the method's iterative effect on two code and reasoning benchmarks.
+102 | The CORAL workflow extends self-evolution from one agent to several agents with specialized roles and shared outcomes.
+103 | The work-stream view shows how specialized agents can coordinate through shared memory and a heartbeat rather than duplicate the same search.
+104 | The kernel-engineering chart provides a concrete optimization setting for the multi-agent method.
+105 | The results table tests whether the multi-agent approach helps across several open-ended tasks.
+106 | Comparing one-agent accumulation with four-agent co-evolution makes the contribution of shared progress visible.
+108 | The shape transformations distinguish several kinds of generation, including translating between modalities and creating new content.
+109 | The enriched-modality diagram reprises the smell-sensing idea: a stronger signal can help train a weaker target modality.
+110 | The three pathways show different ways knowledge can cross modalities, from direct transfer to joint learning or induced models.
+111 | The examples turn quantification into measurable questions about data differences, interactions, and learning behavior.
+112 | The raw-to-abstract scale clarifies that a modality can mean a direct sensor signal or a derived representation such as object categories.
+114 | The examples show that two sensors can be relatively homogeneous while language and vision are structurally different.
+115 | The teacup scene anchors the overlap diagram in a concrete cross-modal relation between objects and language.
+116 | Matching positive signals from text and expression illustrate redundancy: either modality can support the same inference.
+117 | The neutral expression and sentence fragment illustrate that one modality may supply information absent from the other.
+118 | The eye roll and spoken word illustrate synergy, where sarcasm emerges from combining the signals.
+119 | The alignment diagrams distinguish matching individual elements from learning a continuous or shared representation.
+120 | The summary returns to the six challenges after the research examples, tying methods back to the field's basic questions.
+121 | The surrounding examples show the variety of signals a multisensory agent may need to combine in the world.
+127 | The four systems connect different sensor combinations to concrete cognitive support goals such as attention and learning.
+128 | The three systems extend the examples to silent communication, sensory substitution, and projected context.
+129 | The overview architecture prepares the tutorial's five adaptation approaches by locating encoders, the LLM, and output decoders.
+131 | Highlighting the encoder path isolates the first approach: learn paired representations before adding a larger reasoning model.
+132 | The red-boat pair shows contrastive training of encoders; the smaller figures connect this recipe to CLIP and audio-language variants.
+133 | The highlighted projection path shows where existing sensor encoders can connect to a frozen language model.
+134 | MiniGPT-4 demonstrates why training a projector can be cheaper than updating the entire visual encoder and LLM.
+135 | The LoRA highlight identifies the small trainable matrices used to adapt an existing multimodal model.
+136 | The diagram shows that LoRA changes a narrow part of the frozen model while teaching it a new multimodal task.
+137 | The output path identifies the point where a model must switch from text generation to a modality-specific decoder.
+138 | The frozen diffusion decoder example shows one way to train an output bridge without retraining the generator itself.
+139 | Turning motion measurements into a plot lets an existing vision-language model reason about a new signal without task-specific model training.
+141 | The tutoring-agent diagram translates the lecture's multimodal and tool-use ideas into a learner-facing system with memory and actions.
+142 | Hesitations and vocal cues illustrate information about learner uncertainty that plain transcript text may miss.
+143 | The response-action mapping shows how detected uncertainty could change a tutor's choice between encouragement, hints, and correction.

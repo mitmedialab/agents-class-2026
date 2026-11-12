@@ -90,10 +90,11 @@ def test_postgres_auth_store_roundtrip() -> None:
             "course://slides/week-06",
             "course://slides/week-07",
             "course://slides/week-08",
+            "course://slides/week-09",
             "course://readings/software-agents-bradshaw",
         ]
         with psycopg.connect(scoped_url) as connection:
-            assert connection.execute("SELECT count(*) FROM course_resources").fetchone() == (14,)
+            assert connection.execute("SELECT count(*) FROM course_resources").fetchone() == (15,)
             assert connection.execute(
                 "SELECT count(*) FROM faq_entries WHERE active"
             ).fetchone() == (8,)

@@ -1,0 +1,145 @@
+1 | Dark cover slide for Multimodal Agents, with small star-like marks and a credit to 2001: A Space Odyssey.
+2 | Black agenda slide listing Paul Liang's lecture, final project proposals, Week 8 demos, and Chitralekha Gupta's tutorial.
+3 | Paul Liang introduction slide with MIT Media Lab and MIT EECS logos and contact links.
+4 | VideoPoet diagram connects text, image, depth, optical flow, masked video, and other inputs to generated video, audio, and image outputs.
+5 | Three research image groups show tactile sensing gloves and physical sensors used in manufacturing and other real-world settings.
+6 | Health-sensing examples flank a central diagram linking physical, social, and emotional well-being with sensors, behavior, and context.
+7 | A web-shopping screenshot and loop of instructions, feedback, actions, and clarification illustrate a multimodal agent automating a digital task.
+8 | Text outline divides the lecture into what multimodal AI is, why it is hard, and what may come next.
+9 | Orange survey cover summarizes six core challenges, more than 50 taxonomic classes, and more than 700 cited papers.
+10 | Three-part diagram labels multimodal data heterogeneous, connected, and interacting, beside the definition of multimodal AI.
+11 | Rows of red triangles, blue circles, and green squares feed a multimodal model that produces a representation or prediction.
+12 | Two sequences of different colored shapes emphasize individual elements from two modalities as inputs to representation learning.
+13 | Three small diagrams compare fusion, coordination, and fission by the number of modalities and learned representations.
+14 | Parallel shape sequences and spatial and hierarchical examples show how elements can align across structured modalities.
+15 | Arrows pass two modality sequences through repeated reasoning blocks to a representation and predicted answer.
+16 | External knowledge joins the multimodal reasoning diagram before the final representation and predicted answer.
+17 | Overview diagram connects representation, alignment, reasoning, generation, transference, and quantification with arrows.
+18 | Text outline lists foundation models, multimodal LLM adaptation, generation, and agents or embodied AI as upcoming topics.
+19 | Large language model text points to examples such as question answering, translation, retrieval, math, and code writing.
+20 | A video still of two people stands between a language model and questions about tone, relationships, evidence, generation, and counterfactuals.
+21 | Diagram combines speech text and two video frames into a multimodal representation, interpretation of sarcasm and closeness, then generated follow-up content.
+22 | The first stage of the same diagram highlights representation learning from language, visual frames, and audio.
+23 | The second stage of the diagram adds text generation from the learned multimodal representation.
+24 | The third stage of the diagram adds retrieval or generation beyond text after multimodal interpretation.
+25 | Language, visual, and acoustic streams enter a box asking how to learn temporal representations across modalities.
+26 | The same three streams feed a transformer self-attention box and yield contextualized representations.
+27 | Transformer diagram aligns words, vocal emphasis, and an eye roll; a vision-to-language attention grid and formula lead to a sarcasm label.
+28 | Two photographs and token-alignment heatmaps illustrate how ViLT connects image regions with words such as flowers, wall, rug, chair, and painting.
+29 | Language and video frames feed a multimodal representation that produces a textual interpretation of a speaker's tone and relationship.
+30 | Red-boat image and text diagram shows a small adapter and a pretrained language model combined for image-conditioned output.
+31 | Car image and question diagram extends the adapter example to visual question answering, producing the answer blue.
+32 | A few-shot sequence of image and question examples ends with a question identifying Steve Jobs.
+33 | A few-shot sequence of fruit images and text examples ends with the new term dax.
+34 | Flamingo examples show interleaved image and text prompts with generated visual question answers.
+35 | MiniGPT-4 diagram and example compare image-text alignment training with instruction tuning through an adapter to an LLM.
+36 | Timeline and table compare image-text pretraining datasets from YFCC-100M through DataComp-12B and later filtered collections.
+37 | Table compares multimodal instruction-tuning datasets by tasks, languages, instances, and average manual instructions.
+38 | Representation diagram leads from language and video to an interpretation, retrieved visual evidence, and possible later generation.
+39 | Two generated images depict an astronaut on a colorful horse and a bowl of soup as a portal, paired with their text prompts.
+40 | CLIP-embedding and diffusion pipeline shows how a text prompt for an avocado-shaped armchair becomes a generated image.
+41 | Contrastive learning diagram pairs language and images, marks positive and negative examples, and displays the InfoNCE loss.
+42 | CLIP examples show an image and text matched to candidate descriptions with model similarity scores.
+43 | LIMBeR architecture diagram interleaves image and text inputs, CLIP features, a learned projection, and a frozen language model.
+44 | Three columns of image-grounded chat examples retrieve images in response to conversational text.
+45 | An adapter diagram combines visual and language encoders with an image-text input example for multimodal generation.
+46 | Expanded generation pipeline connects an adapter, image candidates, similarity selection, and a final generated visual response.
+47 | VisualWebArena benchmark slide combines website logos, a browser task screenshot, action types, and evaluation examples.
+48 | Shopping example shows a product website and an image of a color photo printer for a task to buy the cheapest one and ship it to Emily.
+49 | Four browser-task screenshots pair task specifications with executable checks for shopping, forum posting, Wikipedia lookup, and listing edits.
+50 | Side-by-side browser representations contrast a dense accessibility-tree or HTML dump with marked interactive elements for a vision-language model.
+51 | Webpage, marked elements, textual element list, and a click action form a step-by-step browser-agent workflow.
+52 | Photographs show a robot arm performing tabletop manipulation tasks involving containers and small objects.
+53 | Google RT-X collage shows several robots grasping or moving objects in different workspaces.
+54 | OpenVLA architecture connects robot training episodes and a vision-language-action model to closed-loop robot control.
+55 | OpenVLA diagram maps an input image and language instruction through a Llama-based model and action tokenizer to robot-arm motion.
+56 | Closing summary groups multimodal definitions, six core challenges, and future directions, with Paul Liang's contact information.
+57 | OpenTouch title slide lists collaborators beside portraits of Ray Song, Kaichen Zhou, and Devin Murphy.
+58 | Flex-Glove slide shows a hand wearing a flexible tactile sensing glove beside cost, assembly, resolution, and sampling details.
+59 | Egocentric room view and two red hand heatmaps illustrate aligned vision, hand pose, and touch data.
+60 | OpenTouch collage combines first-person action images, colored hand diagrams, and arrows to robotics, world models, and haptics.
+61 | Four-panel insertion-task display shows first-person manipulation, a 3D pose visualization, and time-series sensor plots.
+62 | Four-panel slip-and-recovery display shows a grasping task, a 3D pose visualization, and time-series sensor plots.
+63 | Results table compares action and grasp accuracy for combinations of vision, touch, and proprioception inputs.
+64 | Baseline vision-tactile action model diagram feeds slow vision and text into a language model and diffusion policy for sparse actions.
+65 | Revised action model adds a faster tactile stream, tactile encoder, and GRU action decoder alongside vision and language inputs.
+66 | Three task frames compare a vision-only baseline, vision plus tactile input, and an added tactile-editing condition, with error and rate figures.
+67 | SmellNet and AromaGen paper title pages appear beside portraits of Yunge Wen, Awu Chen, and Dewei Feng.
+68 | Oregano sensing photo shows spice jars, sample bowls, a small sensor board, and a plotted sensor reading.
+69 | Cashew sensing setup is paired with CO and NO2 response plots and a bar chart of predicted ingredients.
+70 | SmellNet pipeline diagram moves from food samples to sensor collection, gas analysis, testing, and classification.
+71 | Portable gas sensor board is compared with a large laboratory GCMS or LCMS instrument on resolution, selectivity, time, and cost.
+72 | Cross-modal training diagram uses high-resolution molecular information during training to improve a lower-resolution sensor modality.
+73 | Grouped bar chart compares ordinary and contrastive sensor encoders for fruits, herbs, nuts, spices, and vegetables.
+74 | Sensor time-series and model-results table compare temporal encoders for smell recognition.
+75 | Photos show a small gas sensor placed near a food package and a laptop interface for an allergen-detection application.
+76 | Near-blank white slide with a faint rectangular media area and no readable diagram or text.
+77 | AromaGen flow diagram shows text or audio descriptions, a person receiving scent, zero-shot mixture generation, and iterative refinement.
+78 | Smell vocabulary wheel and ingredient table group odor descriptors and aroma palette examples around a central concept.
+79 | Bar chart compares perceived smell similarity before and after AromaGen learning or refinement across study items.
+80 | Three interview excerpts discuss AI-inferred mixtures, memory-linked smells, and emotional social connections.
+81 | Photos of a book, phone, and car-mounted prototype accompany questions about where smell transmission might work.
+82 | Multimodal-input diagram feeds an evolving agent, then loops its new capabilities back into future action.
+83 | Self-evolving AI framework diagram groups agent, model, and multi-agent evolution in a repeated improvement loop.
+84 | MEM1 research-paper title page introduces context and memory evolution, with four team portraits along the right edge.
+85 | Line plots compare growing context demands with near-constant-memory reasoning, beside the proposed internal-state update.
+86 | Dark MEM1 demonstration image shows a question panel and a memory or internal-state panel linked by a small central control.
+87 | MEM1 rollout diagram and highlighted trace show an agent producing both an internal state and an action or answer at each turn.
+88 | Simplified rollout diagram shows successive queries and internal states, with text explaining memory consolidation.
+89 | Rollout diagram and code trace highlight removal of earlier contexts when a new internal state is generated.
+90 | MEM1 diagram connects a rollout trajectory to an exact-match or F1 outcome reward calculated from the answer.
+91 | Training pipeline and attention-mask grid show which tokens a new internal state may attend to during masked policy optimization.
+92 | Dense multi-series chart compares baseline and MEM1 performance and context use as the number of questions increases.
+93 | WebShop agent diagram shows natural-language queries, product choice, environment interaction, and reward feedback.
+94 | Results table compares MEM1 with other agents on WebShop reward, token use, dependency, and inference time.
+95 | Highlighted MEM1 trace stores key facts about two different questions separately in an internal state.
+96 | Short MEM1 trace shows an agent moving on after several searches fail to answer one question.
+97 | Propose, Solve, Verify research-paper title page introduces model evolution, with four team portraits at right.
+98 | Propose–solve–verify loop sits above Python unit-test and formally verified-code examples.
+99 | The same loop adds a proposer trace and three tactics: easy-to-hard decomposition, hard-to-easy decomposition, and improvement-based reward.
+100 | Two line plots under the propose–solve–verify loop compare pass rates over iterations on Dafny2Verus and MBPP.
+101 | CORAL research-paper title page introduces multi-agent evolution, with team portraits at right.
+102 | CORAL overview combines a two-agent evolution loop, research questions, and a table of proposer, solver, evaluator, and updater roles.
+103 | CORAL process screenshot shows several agent work streams, shared notes, and a control structure for specialization and autonomy.
+104 | Kernel-engineering progress charts and results table point toward operations research, systems engineering, and scientific discovery.
+105 | Results table compares CORAL with baselines across math, algorithms, and systems optimization tasks.
+106 | Two small tables compare knowledge accumulation by one agent and co-evolution among four agents.
+107 | Text summary reports cross-agent parent transfer, diversity of exploration, and balance of agent contributions.
+108 | Shape diagrams illustrate multimodal generation subchallenges: summarization, translation, creation, reduction, maintenance, and expansion.
+109 | Cross-modal transference diagram uses an enriched training modality to help a target modality with noisier or sparser data.
+110 | Three diagrams illustrate transfer, co-learning, and model induction between modalities.
+111 | Shapes, a cross-modal interaction diagram, and a loss curve illustrate heterogeneity, interactions, and learning as quantification topics.
+112 | Raw-to-abstract modality scale gives examples from speech signal to language and from image to detected objects and categories.
+113 | Definitions of multimodal culminate in heterogeneous, interconnected data, with connected and interacting underlined.
+114 | Shape examples contrast homogeneous sources, such as two cameras, with heterogeneous sources, such as language and vision.
+115 | Teacup-and-laptop photo and overlap diagrams illustrate shared and unique information between connected modalities.
+116 | Emoji, text sentiment, arrows, and overlap diagram illustrate redundant task information shared by two modalities.
+117 | Neutral face, incomplete sentence, arrows, and overlap diagram illustrate information unique to one modality or another.
+118 | Eye-roll emoji, elongated spoken word, arrows, and overlap diagram illustrate sarcasm emerging from modality interaction.
+119 | Three diagrams compare discrete alignment, continuous alignment, and aligned representations across sequences of shapes.
+120 | Summary diagram revisits multimodal properties and the six challenges: representation, alignment, reasoning, generation, transference, and quantification.
+121 | Multisensory-world diagram surrounds a globe and robot with speech, sensors, tables, radiology, voice, gestures, histology, vision, wearables, activities, networks, motion, and emotion.
+122 | Black course-updates slide announces assigned mentors and asks whether students have tried the class MCP.
+123 | Black assigned-mentors slide lists ten student groups and their staff mentors.
+124 | Black show-and-tell transition includes abstract art, a retro phone, and a Zoom meeting link.
+125 | Black Week 8 groups slide lists six groups of students and listeners, with MIT and MIT Media Lab logos.
+126 | Black title slide introduces Chitralekha Gupta's Multimodal AI for Cognitive Augmentation tutorial, dated 10 November 2026.
+127 | Four image-and-text examples show Dormio, AttentivU, Emotion-LLaMA, and Gaze to Guidance for dream, attention, social, and learning support.
+128 | Three image-and-text examples show AlterEgo silent speech, Scene2Audio perceptual augmentation, and SixthSense projected context.
+129 | Multimodal LLM architecture routes text, image, audio, video, and other inputs through encoders and tokenizers to an LLM and output decoders.
+130 | Text-only numbered list gives five approaches to building multimodal models, from contrastive encoders to modality conversion.
+131 | Multimodal architecture dims most paths and highlights the input encoders used by the first approach.
+132 | Contrastive encoder diagram trains separate image and text encoders on paired examples and compares their embeddings; smaller research figures sit below.
+133 | Multimodal architecture highlights feature projection and tokenization into a frozen language model.
+134 | MiniGPT-4 diagram freezes a visual encoder and LLM while training a projector to produce an image-conditioned sentence.
+135 | Multimodal architecture highlights LoRA adaptation of an existing model.
+136 | Visual encoder and frozen LLM diagram highlights small trainable LoRA matrices alongside instruction text and a tuning example.
+137 | Multimodal architecture highlights an image output projection and decoder for the fourth approach.
+138 | Image-generation pipeline trains an LLM-to-image projection while keeping an image diffusion decoder frozen.
+139 | Wearable-motion samples become a labeled line plot that an existing vision-language model uses to predict activity; a heatmap example appears below.
+140 | Text-only slide says a multimodal tutoring agent should understand learner needs, choose tools, and improve learning outcomes.
+141 | Tutor-agent block diagram connects a learner's spoken answer to perception, context and memory, orchestration, tools, environment, and final response.
+142 | Tutoring model diagram combines hesitant speech and audio features with an LLM, LoRA, and a human uncertainty label for training.
+143 | Tutoring model diagram maps text and vocal uncertainty to actions such as confirmation, hints, or revisiting a mismatch.
+144 | Assignment slide asks for a cognitive skill, a modality beyond text, one adaptation approach, and a baseline comparison; it gives a 30 November due date.
+145 | Black closing slide with MIT Media Lab and Fluid Interfaces marks thanks the audience and invites questions.

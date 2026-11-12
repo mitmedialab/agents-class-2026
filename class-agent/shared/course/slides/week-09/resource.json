@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "resource": {
+    "uri": "course://slides/week-09",
+    "title": "Multimodal Agents",
+    "description": "Slides for the ninth course meeting, including Paul Liang's lecture and Chitralekha Gupta's tutorial.",
+    "media_type": "application/pdf",
+    "file": "week-9-slides.pdf",
+    "accessibility_file": "accessibility.txt",
+    "caption_file": "captions.txt",
+    "visibility": "public",
+    "status": "published",
+    "order": 68
+  }
+}

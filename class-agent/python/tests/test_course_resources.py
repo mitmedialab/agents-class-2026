@@ -368,6 +368,35 @@ def test_week_eight_image_only_pages_have_registered_descriptions(
     assert "Slide caption: The InquiryBits chart shows" in contents.text
 
 
+def test_week_nine_multimodal_deck_has_page_descriptions_and_captions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def inline_to_thread(function: object, *args: object, **kwargs: object) -> object:
+        assert callable(function)
+        return function(*args, **kwargs)
+
+    monkeypatch.setattr(asyncio, "to_thread", inline_to_thread)
+    uri = "course://slides/week-09"
+    resource = next(
+        definition for definition in load_resource_definitions() if definition.uri == uri
+    )
+    assert resource.accessibility_path is not None
+    assert resource.caption_path is not None
+    descriptions = load_slide_accessibility(resource.accessibility_path)
+    captions = load_slide_captions(resource.caption_path)
+
+    assert len(descriptions) == len(PdfReader(resource.path).pages) == 145
+    assert "Near-blank white slide" in descriptions[75]
+    assert "Hesitations and vocal cues" in captions[142]
+    assert len(captions) > 100
+
+    provider = FileResourceProvider.from_registry()
+    assert uri in [summary.uri for summary in provider.list_public()]
+    contents = asyncio.run(provider.read(uri))
+    assert contents.text.count("Accessibility description:") == 145
+    assert "Slide caption: Hesitations and vocal cues" in contents.text
+
+
 def test_public_resource_registry_includes_provisional_schedule() -> None:
     resources = FileResourceProvider.from_registry()
 
@@ -387,6 +416,7 @@ def test_public_resource_registry_includes_provisional_schedule() -> None:
         "course://slides/week-06",
         "course://slides/week-07",
         "course://slides/week-08",
+        "course://slides/week-09",
         "course://readings/software-agents-bradshaw",
     ]
     instructors = next(summary for summary in summaries if summary.uri == COURSE_INSTRUCTORS_URI)

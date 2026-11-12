@@ -166,6 +166,20 @@
       }
     },
     {
+      "uri": "course://slides/week-09",
+      "title": "Multimodal Agents",
+      "description": "Slides for the ninth course meeting, including Paul Liang's lecture and Chitralekha Gupta's tutorial.",
+      "media_type": "application/pdf",
+      "path": "course/slides/week-09/week-9-slides.pdf",
+      "visibility": "public",
+      "status": "published",
+      "accessibility_path": "course/slides/week-09/accessibility.txt",
+      "caption_path": "course/slides/week-09/captions.txt",
+      "assets": {
+        "first_slide": "registry/slide-thumbnails/2d5efa2b586e406d18d7c3c6b7271ef89241e11ea8429ce03dbe4e0fcdce42ad.png"
+      }
+    },
+    {
       "uri": "course://readings/software-agents-bradshaw",
       "title": "An Introduction to Software Agents",
       "description": "Week 1 assigned reading by Jeffrey M. Bradshaw on the history, definitions, motivations, and attributes of software agents.",

@@ -685,6 +685,7 @@ def test_public_course_resource_catalog_marks_schedule_provisional() -> None:
         "course://slides/week-06",
         "course://slides/week-07",
         "course://slides/week-08",
+        "course://slides/week-09",
         "course://readings/software-agents-bradshaw",
     ]
     schedule = next(
