@@ -2,6 +2,10 @@
 
 Class Agent is the extensible Course Agent platform described in [CONSTITUTION.md](CONSTITUTION.md). It is designed for an MIT Media Lab course and favors explicit, portable contracts that students can inspect and extend.
 
+For a fork without the private course roster, use the
+[fictional local development setup](examples/memory_starter/README.md). It creates
+two test students and the protected roster resources without using real student data.
+
 The repository is currently at **Phase 7**, plus the explicitly authorized course-email workflow from Phase 10, private weekly feedback from Phase 9, and a student-only ChatGPT Course MCP pilot: validated native workspace components over the Phase 6 Course Agent, with an optional Gmail or Microsoft 365 mailbox worker for unanswered student questions and email-moderated FAQ publication. It contains stable core and workspace contracts, access-code and anonymous authentication, portable PostgreSQL conversation/event history, a `ToolCallingAgent` adapter, public course resources and search, private course applications, typed workspace tools, an event-derived panel workspace, visual compositions, a specific-artifact DocumentViewer, a month/agenda Calendar, and a role-scoped notification center for course releases, staff communications, and near assignment deadlines. It intentionally does not yet contain MCP Apps, Agent Bridge, or a browser extension. It loads standard `SKILL.md` bundles progressively: the model initially sees only login-authorized skill metadata and reads full instructions or references on demand.
 
 ## Requirements
@@ -89,12 +93,17 @@ In another terminal, run the web app:
 pnpm dev
 ```
 
-Vite serves the interface at `http://localhost:5173` and proxies `/api` to the
+Vite serves the interface at `https://localhost:5173` and proxies `/api` to the
 development API. Click the centered `Course Agent` title to open login and
 conversation navigation. The default production build uses same-origin
 `/api/v1`; set `VITE_API_BASE_URL` only when deploying the API elsewhere.
 
-The API's session cookies are always marked `Secure`, including in development. A browser must therefore access it through HTTPS to retain sessions; terminating local TLS at a development proxy is the closest production-equivalent setup. The API is documented at `/docs`, with canonical routes under `/api/v1`. Public resource metadata is available at `/api/v1/course/resources`; the schedule is marked `provisional` until its details are confirmed.
+The API's session cookies are always marked `Secure`, including in development. Vite's
+basic SSL plugin supplies local HTTPS; accept its local certificate warning once in
+your browser. Open the Vite URL, not the API's HTTP URL, for authenticated testing.
+The API is documented at `/docs`, with canonical routes under `/api/v1`. Public
+resource metadata is available at `/api/v1/course/resources`; the schedule is marked
+`provisional` until its details are confirmed.
 
 Chat attachments are stored for 24 hours under `UPLOAD_DATA_PATH` (default
 `var/uploads/`). Complete course applications submitted through the agent are written
