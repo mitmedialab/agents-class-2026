@@ -51,20 +51,32 @@ establish that a student missed an assignment or grade.
 
 ## Testing with a separate student account
 
-To test without using real feedback, configure both `GRADE_PREVIEW_USERNAME=test-student2`
-and `GRADE_PREVIEW_DATA_PATH=var/grades/test-student2-preview.json` on a separate API
-instance, then restart it. The preview account must already be an active student
-login. Its gradebook is separate from real student
-feedback and must contain only the configured `test-*` username. Create the ignored
-`var/grades/test-student2-preview.json` with fictional Week 3 feedback and checklist
-items. Keep the file mode `0600` and do not publish or commit it. Leave both settings
-unset to disable preview access. The preview account is not added to the canonical credit roster or
+For a live website preview, configure both `GRADE_PREVIEW_USERNAME=test-student2` and
+`GRADE_PREVIEW_DATA_PATH=var/grades/test-student2-preview.json` on the API host, then
+restart the API after deploying the frontend and backend changes. The preview account
+must already be an active student login. Its gradebook is separate from real student
+feedback and must contain only the configured `test-*` username. The repository's
+ignored `var/grades/test-student2-preview.json` is sample feedback for Week 3, with
+comments and marked checklist items. It has no real grade or student data. Keep it
+mode `0600` and do not publish or commit it. Leave both settings unset to disable
+preview access. The preview account is not added to the canonical credit roster or
 included in credit-student coverage counts.
-
 Set `GRADE_PREVIEW_ONLY=true` on a public preview service to deny real credit accounts
-on that instance. The normal API defaults this setting to false.
+until the grading feature is released on the main site. The normal API defaults this
+setting to false.
 
 After login, open **Grading** and select **Week 3 Build**. The assignment should show
 the sample comments and grading checklist beneath its instructions. Other graded
 weekly builds should say no feedback is posted. Week 1 and the Week 7 final project
 proposal should not appear in the Grading list.
+
+For the current host, the isolated live preview is built at
+`/home/wazeer/grade-preview-site/dist` with Vite base `/grade-preview/` and API base
+`/grade-preview/api/v1`. An administrator can install the separate port-8002 service
+and nginx location with `sudo bash deploy/enable-grade-preview.sh`. This exposes
+`https://cognitive-agents.media.mit.edu/grade-preview/` while the main site's
+frontend, API process, and port-8000 proxy remain in place. The script checks nginx
+syntax and the preview API health before reloading nginx; it backs up the existing
+site config and rolls back on failure. Remove the preview with
+`sudo bash deploy/disable-grade-preview.sh` after testing. The preview runs from the
+current checkout and should be stopped before changing its Python source.
