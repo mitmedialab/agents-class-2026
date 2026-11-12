@@ -12,6 +12,7 @@ from psycopg import sql
 from agent_core import Conversation, Event
 from course_server.auth import AuthenticationService, UserAdminService
 from course_server.auth.security import hash_session_token
+from course_server.config import InstructorMessageTestRecipient
 from course_server.faq import PostgresFaqStore
 from course_server.index_resources import index_resources
 from course_server.instructor_messages import (
@@ -548,6 +549,100 @@ def test_instructor_email_outbox_retries_only_failed_recipients() -> None:
                     assert adapter.send_message.call_count == 3
                 persisted = await messages.get(prepared.message.id)
                 assert persisted is not None and persisted.message.send_email
+            finally:
+                await pool.close()
+
+        asyncio.run(scenario())
+    finally:
+        with psycopg.connect(TEST_DATABASE_URL) as connection:
+            connection.execute(
+                sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(schema_name))
+            )
+
+
+def test_instructor_all_student_email_reaches_test_account_override() -> None:
+    from unittest.mock import AsyncMock
+
+    from course_server.mail.instructor_delivery import InstructorEmailDelivery
+    from course_server.mail.models import MailAdapter
+
+    assert TEST_DATABASE_URL is not None
+    schema_name = f"test_instructor_override_{uuid4().hex}"
+    with psycopg.connect(TEST_DATABASE_URL) as connection:
+        connection.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(schema_name)))
+    scoped_url = _database_url_for_schema(TEST_DATABASE_URL, schema_name)
+    try:
+        apply_migrations(scoped_url)
+
+        async def scenario() -> None:
+            pool = create_auth_pool(scoped_url)
+            await pool.open()
+            try:
+                store = PostgresAuthStore(pool)
+                admin = UserAdminService(store)
+                instructor = await admin.create_user(
+                    username="prof",
+                    display_name="Professor",
+                    email="instructor@example.org",
+                    role="instructor",
+                )
+                await admin.create_user(
+                    username="test-student2",
+                    display_name="Test Student 2",
+                    email="test-student2@example.com",
+                    role="student",
+                )
+                login = await AuthenticationService(store).login(
+                    username="prof", access_code=instructor.access_code
+                )
+                principal = await AuthenticationService(store).resolve_authenticated(login.token)
+                conversation = Conversation(user_id=instructor.user.id)
+                await PostgresConversationStore(pool).create_conversation(conversation)
+                test_recipient = InstructorMessageTestRecipient(
+                    username="test-student2", email="instructor@example.org"
+                )
+                service = InstructorMessageService(
+                    messages=PostgresInstructorMessageStore(pool),
+                    auth=store,
+                    email_enabled=True,
+                    student_access_policy=lambda user: False,
+                    test_recipient=test_recipient,
+                )
+                prepared = await service.prepare(
+                    principal=principal,
+                    conversation_id=conversation.id,
+                    draft=InstructorMessageDraft(
+                        greeting="Hello,",
+                        sign_off="Best,\nProfessor",
+                        audience="all_students",
+                        subject="Delivery check",
+                        message="Test body",
+                    ),
+                )
+                assert [user.username for user in prepared.recipients] == ["test-student2"]
+                await service.confirm(
+                    principal=principal,
+                    conversation_id=conversation.id,
+                    message_id=prepared.message.id,
+                    content=InstructorMessageContent(
+                        subject="Delivery check", message="Final body", send_email=True
+                    ),
+                )
+                adapter = AsyncMock(spec=MailAdapter)
+                adapter.send_message.return_value = SentMail(
+                    provider_message_id="sent", internet_message_id="<sent>"
+                )
+                await InstructorEmailDelivery(
+                    pool, adapter, test_recipient=test_recipient
+                ).run_once()
+                adapter.send_message.assert_awaited_once()
+                assert adapter.send_message.call_args.args[0].to == ("instructor@example.org",)
+                delivery = await service.get_email_delivery(
+                    principal=principal,
+                    conversation_id=conversation.id,
+                    message_id=prepared.message.id,
+                )
+                assert delivery.state == "sent"
             finally:
                 await pool.close()
 

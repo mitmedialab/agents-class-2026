@@ -68,6 +68,38 @@ def test_grade_preview_requires_a_separate_test_account_and_data_file() -> None:
             AgentSettings.from_environment(base | invalid)
 
 
+def test_instructor_message_test_recipient_requires_test_account_and_pair() -> None:
+    base = {
+        "DATABASE_URL": "postgresql://example",
+        "OPENAI_API_KEY": "test-secret-value",
+        "BRAVE_API_KEY": "test-brave-value",
+    }
+    settings = AgentSettings.from_environment(
+        base
+        | {
+            "INSTRUCTOR_MESSAGE_TEST_USERNAME": "test-student2",
+            "INSTRUCTOR_MESSAGE_TEST_EMAIL": "instructor@example.org",
+        }
+    )
+    assert settings.instructor_message_test_recipient is not None
+    assert settings.instructor_message_test_recipient.username == "test-student2"
+    assert settings.instructor_message_test_recipient.email == "instructor@example.org"
+    for invalid in (
+        {"INSTRUCTOR_MESSAGE_TEST_USERNAME": "test-student2"},
+        {"INSTRUCTOR_MESSAGE_TEST_EMAIL": "instructor@example.org"},
+        {
+            "INSTRUCTOR_MESSAGE_TEST_USERNAME": "real-student",
+            "INSTRUCTOR_MESSAGE_TEST_EMAIL": "instructor@example.org",
+        },
+        {
+            "INSTRUCTOR_MESSAGE_TEST_USERNAME": "test-student2",
+            "INSTRUCTOR_MESSAGE_TEST_EMAIL": "invalid-email",
+        },
+    ):
+        with pytest.raises(ConfigurationError, match=r"INSTRUCTOR_MESSAGE_TEST|Invalid instructor"):
+            AgentSettings.from_environment(base | invalid)
+
+
 def test_settings_load_read_only_github_student_project_scope_without_exposing_token() -> None:
     settings = AgentSettings.from_environment(
         {
@@ -219,6 +251,8 @@ def test_settings_load_optional_deployment_owned_outlook_configuration() -> None
         "MAIL_AUTHORIZED_REPLY_SENDERS": ("instructor@example.edu, teaching-assistant@example.edu"),
         "MAIL_POLL_INTERVAL_SECONDS": "45",
         "PUBLISHED_FAQ_PATH": "/srv/class-agent/course-knowledge/published-faq.json",
+        "INSTRUCTOR_MESSAGE_TEST_USERNAME": "test-student2",
+        "INSTRUCTOR_MESSAGE_TEST_EMAIL": "instructor@example.org",
     }
     settings = AgentSettings.from_environment(environment)
     mail = MailSettings.optional_from_environment(environment)
@@ -229,6 +263,7 @@ def test_settings_load_optional_deployment_owned_outlook_configuration() -> None
     assert str(mail.mailbox_address) == "course-agent@example.edu"
     assert str(mail.staff_recipient_address) == "course-staff@example.edu"
     assert mail.poll_interval_seconds == 45
+    assert mail.instructor_message_test_recipient == settings.instructor_message_test_recipient
     assert str(mail.published_faq_path) == ("/srv/class-agent/course-knowledge/published-faq.json")
     assert [str(value) for value in mail.authorized_reply_senders] == [
         "instructor@example.edu",

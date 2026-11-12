@@ -12,15 +12,33 @@ from typing import Any
 
 from psycopg_pool import AsyncConnectionPool
 
+from course_server.config import InstructorMessageTestRecipient
 from course_server.mail.models import MailAdapter, OutboundMail
 
 logger = logging.getLogger(__name__)
 
 
+def instructor_message_delivery_address(
+    username: str,
+    account_email: str,
+    test_recipient: InstructorMessageTestRecipient | None,
+) -> str:
+    if test_recipient is not None and username == test_recipient.username:
+        return str(test_recipient.email)
+    return account_email
+
+
 class InstructorEmailDelivery:
-    def __init__(self, pool: AsyncConnectionPool[Any], mail: MailAdapter) -> None:
+    def __init__(
+        self,
+        pool: AsyncConnectionPool[Any],
+        mail: MailAdapter,
+        *,
+        test_recipient: InstructorMessageTestRecipient | None = None,
+    ) -> None:
         self._pool = pool
         self._mail = mail
+        self._test_recipient = test_recipient
 
     async def run_once(self) -> None:
         async with self._pool.connection() as connection:
@@ -44,7 +62,7 @@ class InstructorEmailDelivery:
                 row = await (
                     await connection.execute(
                         """
-                        SELECT m.subject, m.body, u.email
+                        SELECT m.subject, m.body, u.email, u.username
                         FROM instructor_message_recipients r
                         JOIN instructor_messages m ON m.id = r.message_id
                         JOIN users u ON u.id = r.student_user_id
@@ -59,10 +77,13 @@ class InstructorEmailDelivery:
                 ).fetchone()
                 if row is None:
                     continue
+                recipient_email = instructor_message_delivery_address(
+                    row["username"], row["email"], self._test_recipient
+                )
                 try:
                     sent = await self._mail.send_message(
                         OutboundMail(
-                            to=(row["email"],),
+                            to=(recipient_email,),
                             subject=row["subject"],
                             text=row["body"],
                         )

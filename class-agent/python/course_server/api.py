@@ -934,6 +934,7 @@ def create_app(
                 if course_roster is None
                 else lambda user: course_roster.permits_student_username(user.username)
             ),
+            test_recipient=resolved_settings.instructor_message_test_recipient,
         )
         student_communication_service = StudentCommunicationService(
             auth=auth_store,

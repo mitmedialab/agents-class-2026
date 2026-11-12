@@ -10,6 +10,7 @@ from pydantic import JsonValue
 from agent_core import PrincipalContext
 from course_server.agent import ToolExecutionContext, ToolValidationError
 from course_server.auth import InMemoryAuthStore, UserAdminService
+from course_server.config import InstructorMessageTestRecipient
 from course_server.instructor_messages import (
     PENDING_QUESTION_RECIPIENT_PREFIX,
     InMemoryInstructorMessageStore,
@@ -163,6 +164,63 @@ def test_instructor_directory_and_all_student_messages_exclude_nonmembers() -> N
             ),
         )
         assert [student.username for student in prepared.recipients] == ["active-student"]
+
+    asyncio.run(scenario())
+
+
+def test_test_student_receives_all_student_message_at_configured_address() -> None:
+    async def scenario() -> None:
+        auth = InMemoryAuthStore()
+        instructor = await create_principal(
+            auth, username="prof", display_name="Professor", role="instructor"
+        )
+        await create_principal(
+            auth, username="active-student", display_name="Active Student", role="student"
+        )
+        await create_principal(
+            auth, username="former-student", display_name="Former Student", role="student"
+        )
+        await create_principal(
+            auth, username="test-student2", display_name="Test Student 2", role="student"
+        )
+        test_recipient = InstructorMessageTestRecipient(
+            username="test-student2", email="instructor@example.org"
+        )
+        service = InstructorMessageService(
+            messages=InMemoryInstructorMessageStore(),
+            auth=auth,
+            student_access_policy=lambda user: user.username == "active-student",
+            test_recipient=test_recipient,
+        )
+        students = await service.list_students(instructor)
+        assert [(student.username, str(student.email)) for student in students] == [
+            ("active-student", "active-student@mit.edu"),
+            ("test-student2", "instructor@example.org"),
+        ]
+        prepared = await service.prepare(
+            principal=instructor,
+            conversation_id=uuid4(),
+            draft=InstructorMessageDraft(
+                greeting="Hello,",
+                sign_off="Best,\nProfessor",
+                audience="all_students",
+                recipients=[],
+                subject="Test",
+                message="A message for current students.",
+            ),
+        )
+        assert [recipient.username for recipient in prepared.recipients] == [
+            "active-student",
+            "test-student2",
+        ]
+        assert str(prepared.recipient_previews[1].email) == "instructor@example.org"
+        stored_test = await auth.get_user_by_username("test-student2")
+        assert stored_test is not None
+        assert stored_test.email == "test-student2@mit.edu"
+        await UserAdminService(auth).deactivate_user("test-student2")
+        assert [student.username for student in await service.list_students(instructor)] == [
+            "active-student"
+        ]
 
     asyncio.run(scenario())
 

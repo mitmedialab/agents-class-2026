@@ -236,6 +236,15 @@ The instructor confirms this choice together with the exact edited subject and b
 cannot select email delivery. In-app delivery always occurs; question replies retain their existing
 visibility and staff-thread workflow.
 
+For a controlled all-student delivery check, set `INSTRUCTOR_MESSAGE_TEST_USERNAME` to an
+existing active student account whose name begins with `test-`, and set
+`INSTRUCTOR_MESSAGE_TEST_EMAIL` to the mailbox that should receive its instructor-message
+copies. Both settings belong in the shared API/worker environment. The account appears in the
+instructor recipient preview and receives in-app messages; the preview shows the delivery
+address. Its account email and login remain unchanged, and this override does not apply to
+student questions or other email types. Removing both settings removes the test account from
+the roster-filtered instructor messaging audience.
+
 The confirmed `send_email` flag and fixed recipient rows form a durable outbox, committed in the
 same conditional update as the reviewed content. The existing `course_server.mail_worker` sends
 one plain-text email per recipient using the configured mailbox and their current active student

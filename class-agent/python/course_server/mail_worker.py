@@ -65,7 +65,9 @@ async def run_worker(*, database_url: str, settings: MailSettings, once: bool = 
         staff_recipient=str(settings.staff_recipient_address),
         authorized_reply_senders=(str(value) for value in settings.authorized_reply_senders),
     )
-    instructor_delivery = InstructorEmailDelivery(pool, adapter)
+    instructor_delivery = InstructorEmailDelivery(
+        pool, adapter, test_recipient=settings.instructor_message_test_recipient
+    )
     course_message_delivery = CourseMessageEmailDelivery(
         pool,
         adapter,

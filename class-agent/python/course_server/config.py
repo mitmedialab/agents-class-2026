@@ -25,6 +25,33 @@ class ConfigurationError(RuntimeError):
     """Required runtime configuration is absent or unsupported."""
 
 
+class InstructorMessageTestRecipient(BaseModel):
+    """One test student included in instructor messaging, with a delivery address."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    username: str = Field(pattern=r"^test-[a-z0-9._-]+$")
+    email: EmailStr
+
+
+def _instructor_message_test_recipient(
+    values: Mapping[str, str],
+) -> InstructorMessageTestRecipient | None:
+    username = values.get("INSTRUCTOR_MESSAGE_TEST_USERNAME", "").strip().casefold()
+    email = values.get("INSTRUCTOR_MESSAGE_TEST_EMAIL", "").strip()
+    if bool(username) != bool(email):
+        raise ConfigurationError(
+            "INSTRUCTOR_MESSAGE_TEST_USERNAME and INSTRUCTOR_MESSAGE_TEST_EMAIL "
+            "must be set together"
+        )
+    if not username:
+        return None
+    try:
+        return InstructorMessageTestRecipient(username=username, email=email)
+    except ValueError as error:
+        raise ConfigurationError("Invalid instructor message test recipient") from error
+
+
 def _student_project_aliases(
     raw_value: str,
     *,
@@ -76,6 +103,7 @@ class MailSettings(BaseModel):
     poll_interval_seconds: int = Field(default=60, ge=15, le=3_600)
     published_faq_path: Path = DEFAULT_PUBLISHED_FAQ_PATH
     course_site_base_url: AnyHttpUrl | None = None
+    instructor_message_test_recipient: InstructorMessageTestRecipient | None = None
 
     @model_validator(mode="after")
     def validate_provider_configuration(self) -> Self:
@@ -145,6 +173,7 @@ class MailSettings(BaseModel):
             poll_interval_seconds=int(values.get("MAIL_POLL_INTERVAL_SECONDS", "60")),
             published_faq_path=published_faq_path,
             course_site_base_url=(values.get("MCP_PUBLIC_BASE_URL") or None),
+            instructor_message_test_recipient=_instructor_message_test_recipient(values),
         )
 
 
@@ -187,6 +216,7 @@ class AgentSettings(BaseModel):
     anonymous_max_upload_bytes: int = Field(default=20 * 1024 * 1024, ge=1, le=100 * 1024 * 1024)
     workspace_strict_visual_policy: bool = True
     mail_enabled: bool = False
+    instructor_message_test_recipient: InstructorMessageTestRecipient | None = None
     showcase_history_path: Path = DEFAULT_SHOWCASE_HISTORY_PATH
     github_student_projects_enabled: bool = False
     github_token: SecretStr | None = Field(default=None, repr=False)
@@ -397,6 +427,7 @@ class AgentSettings(BaseModel):
             ),
             workspace_strict_visual_policy=strict_visual_policy in {"true", "1", "yes"},
             mail_enabled=mail_enabled in {"true", "1", "yes"},
+            instructor_message_test_recipient=_instructor_message_test_recipient(values),
             github_student_projects_enabled=github_projects_enabled in {"true", "1", "yes"},
             showcase_history_path=Path(
                 values.get(

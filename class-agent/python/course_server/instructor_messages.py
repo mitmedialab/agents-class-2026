@@ -33,6 +33,7 @@ from course_server.agent.capabilities import (
 )
 from course_server.auth.models import User
 from course_server.auth.store import AuthStore
+from course_server.config import InstructorMessageTestRecipient
 from course_server.mail.models import PublicationDecision
 from course_server.mail.service import parse_staff_answer_reply
 from course_server.mail.store import TAQuestionStore
@@ -521,6 +522,7 @@ class InstructorMessageService:
         email_enabled: bool = False,
         clock: Callable[[], datetime] = _clock,
         student_access_policy: Callable[[User], bool] | None = None,
+        test_recipient: InstructorMessageTestRecipient | None = None,
     ) -> None:
         self._messages = messages
         self._auth = auth
@@ -528,6 +530,7 @@ class InstructorMessageService:
         self.email_enabled = email_enabled
         self._clock = clock
         self._student_access_policy = student_access_policy or (lambda user: True)
+        self._test_recipient = test_recipient
 
     async def prepare(
         self,
@@ -723,11 +726,20 @@ class InstructorMessageService:
     async def _active_students(self) -> list[User]:
         return sorted(
             (
-                user.public()
+                user.public().model_copy(update={"email": self._test_recipient.email})
+                if self._test_recipient is not None
+                and user.username == self._test_recipient.username
+                else user.public()
                 for user in await self._auth.list_users()
                 if user.active
                 and user.role == "student"
-                and self._student_access_policy(user.public())
+                and (
+                    self._student_access_policy(user.public())
+                    or (
+                        self._test_recipient is not None
+                        and user.username == self._test_recipient.username
+                    )
+                )
             ),
             key=lambda user: user.username,
         )
