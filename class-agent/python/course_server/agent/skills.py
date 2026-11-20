@@ -159,6 +159,22 @@ def _parse_frontmatter(text: str, skill_id: str) -> tuple[SkillFrontmatter, int]
     return frontmatter, match.end()
 
 
+def split_skill_text(text: str) -> tuple[SkillFrontmatter, str]:
+    """Validate an unregistered SKILL.md text; return its metadata and instructions."""
+
+    frontmatter, body_start = _parse_frontmatter(text, "draft")
+    instructions = text[body_start:].strip()
+    if not instructions:
+        raise SkillCatalogError("skill draft requires a non-empty body")
+    return frontmatter, instructions
+
+
+def parse_skill_text(text: str) -> SkillFrontmatter:
+    """Validate a complete SKILL.md text that is not yet a registered skill."""
+
+    return split_skill_text(text)[0]
+
+
 def _scan_skill_metadata(path: Path, entry: SkillRegistryEntry) -> SkillFrontmatter:
     frontmatter, _ = _parse_frontmatter(_read_skill_prefix(path, entry), entry.id)
     if frontmatter.name != entry.id:

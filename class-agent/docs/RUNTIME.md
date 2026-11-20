@@ -33,6 +33,11 @@ concisely, avoid repeating an item already discussed in recent dialogue, suggest
 use authorized tools before adding details not present in the trusted snapshot. Anonymous runs
 receive no user-specific attention data.
 
+When a guidance provider is configured, `CourseAgentService` places teaching guidance already
+adopted for the principal in `AgentContext.metadata["adaptive_guidance"]`, and the runtime renders
+it as a bounded instruction section. Only the experimental improvement loop supplies it, to student
+runs only; see [IMPROVEMENT.md](IMPROVEMENT.md). The stable `AgentContext` contract is unchanged.
+
 An authenticated page load uses `CourseAgentService.greet_on_page_load` in a fresh conversation.
 The method appends an inspectable `agent.greeting.requested` platform event and gives the runtime a
 neutral greeting task without appending a fake user message. All active projected items—including a

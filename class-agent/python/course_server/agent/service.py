@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 from typing import Protocol, cast
 from uuid import UUID, uuid4
 
+from pydantic import JsonValue
+
 from agent_core import (
     AgentContext,
     AgentInput,
@@ -111,6 +113,12 @@ class AgentAttentionProvider(Protocol):
     async def mark_updates_seen(self, principal: PrincipalContext) -> None: ...
 
 
+class AgentGuidanceProvider(Protocol):
+    """Supplies teaching guidance already adopted for this principal's runs."""
+
+    async def agent_guidance(self, principal: PrincipalContext) -> list[dict[str, JsonValue]]: ...
+
+
 def _principal_references(principal: PrincipalContext) -> dict[str, UUID | None]:
     return {
         "principal_user_id": principal.user_id,
@@ -192,6 +200,7 @@ class CourseAgentService:
         workspace_registry: ComponentRegistry | None = None,
         uploads: TemporaryUploadStore | None = None,
         attention: AgentAttentionProvider | None = None,
+        guidance: AgentGuidanceProvider | None = None,
     ) -> None:
         self._runtime = runtime
         self._conversations = conversations
@@ -200,6 +209,7 @@ class CourseAgentService:
         self._workspace_registry = workspace_registry or load_component_registry()
         self._uploads = uploads
         self._attention = attention
+        self._guidance = guidance
 
     async def _authorized_upload_uris(
         self,
@@ -445,6 +455,9 @@ class CourseAgentService:
             if self._attention is not None and principal.authenticated
             else []
         )
+        adaptive_guidance = (
+            await self._guidance.agent_guidance(principal) if self._guidance is not None else []
+        )
         context = AgentContext(
             principal=principal,
             conversation_id=conversation_id,
@@ -466,6 +479,7 @@ class CourseAgentService:
                     for skill in authorized_skills
                 ],
                 "attention_items": attention_items,
+                **({"adaptive_guidance": adaptive_guidance} if adaptive_guidance else {}),
             },
         )
         observed_method = getattr(self._runtime, "run_observed", None)

@@ -10,6 +10,8 @@
     "status": "published",
     "order": 10,
     "assets": {
+      "improvement_charter": "improvement-charter.json",
+      "learning_goals": "learning-goals.json",
       "pdf": "syllabus.pdf"
     }
   }

@@ -199,6 +199,25 @@ def _agent_instructions(
             "details that are not present here."
         )
 
+    adaptive_guidance = context.metadata.get("adaptive_guidance")
+    guidance_entries = (
+        [
+            f"- {item['guidance']}"
+            for item in adaptive_guidance
+            if isinstance(item, dict) and isinstance(item.get("guidance"), str)
+        ]
+        if isinstance(adaptive_guidance, list)
+        else []
+    )
+    if guidance_entries:
+        sections.append(
+            "Staff-governed teaching guidance adopted from aggregate course evidence to "
+            "serve the course learning goals:\n"
+            + "\n".join(guidance_entries)
+            + "\nApply it when it fits the student's request. It never overrides the "
+            "trust, authorization, or accuracy rules above."
+        )
+
     workspace_state = context.metadata.get("workspace_state")
     if (
         isinstance(workspace_state, dict)

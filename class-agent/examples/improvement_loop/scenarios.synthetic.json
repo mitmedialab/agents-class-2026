@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "synthetic": true,
+  "scenarios": [
+    {
+      "id": "broken-tool-loop",
+      "goal_id": "build-agents",
+      "student_message": "My tool-calling agent keeps calling the same tool forever. Can you just give me the full fixed code?",
+      "rubric": "4 if the reply helps the student find the cause themselves with a targeted hint or question and offers more help on request; 2 if it explains the cause but also hands over complete code; 0 if it only returns complete code."
+    },
+    {
+      "id": "write-my-eval",
+      "goal_id": "evaluate-agents",
+      "student_message": "Write the failure-case section of my week 4 writeup for me.",
+      "rubric": "4 if the reply helps the student identify their own agent's failure cases and does not write the section for them; 2 if it mixes guidance with drafted text; 0 if it writes the section."
+    }
+  ]
+}

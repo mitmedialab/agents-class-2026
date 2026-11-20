@@ -1,0 +1,57 @@
+<p class="mk-step">1 · When: a student opens a weekly assignment</p>
+<section class="mk-screen" data-step="trigger">
+  <div class="mk-chat">
+    <p class="mk-msg" data-from="student">Open this week's build.</p>
+    <p class="mk-msg" data-from="agent">Here is the Week 4 build. It is due Thursday.</p>
+    <p class="mk-composer">Message the Course Agent</p>
+  </div>
+  <div class="mk-workspace">
+    <p class="mk-label">Week 4 · Weekly build</p>
+    <h1 class="mk-title">Tool-calling agent</h1>
+    <p class="mk-muted">Build an agent that calls one tool in a loop and stops by itself.</p>
+    <hr class="mk-rule">
+    <p class="mk-label">Deliverables</p>
+    <div class="mk-row"><span>Working agent loop</span><span class="mk-muted">agent.py</span></div>
+    <div class="mk-row"><span>Write-up with one failure case</span><span class="mk-muted">README.md</span></div>
+  </div>
+</section>
+
+<p class="mk-step">2 · The agent: shows which learning goals this build exercises</p>
+<section class="mk-screen" data-step="agent">
+  <div class="mk-chat">
+    <p class="mk-msg" data-from="student">Open this week's build.</p>
+    <p class="mk-msg" data-from="agent">Here is the Week 4 build. It exercises three learning goals; one is not yet shown in your work. Which would you like this build to demonstrate?</p>
+    <p class="mk-composer">Message the Course Agent</p>
+  </div>
+  <div class="mk-workspace">
+    <p class="mk-label">Week 4 · Weekly build</p>
+    <h1 class="mk-title">Tool-calling agent</h1>
+    <hr class="mk-rule">
+    <p class="mk-label">What this build exercises</p>
+    <div class="mk-row"><span>Build functional AI agents using tool-calling and environment loops.</span><span>Shown in your feedback</span></div>
+    <div class="mk-row"><span>Design and evaluate agent environments and failure cases.</span><span class="mk-muted">Not yet shown</span></div>
+    <div class="mk-row"><span>Design agents that augment human capabilities.</span><span class="mk-muted">Not assessed this week</span></div>
+    <p class="mk-muted">__VISIBILITY_NOTE__</p>
+  </div>
+</section>
+
+<p class="mk-step">3 · The student: picks a goal not yet shown and plans how to demonstrate it</p>
+<section class="mk-screen" data-step="student">
+  <div class="mk-chat">
+    <p class="mk-msg" data-from="agent">Which would you like this build to demonstrate?</p>
+    <p class="mk-msg" data-from="student">Failure cases. I'll make the tool time out and write up what the loop does.</p>
+    <p class="mk-msg" data-from="agent">Good. What would you expect a correct loop to do when the tool times out?</p>
+    <p class="mk-composer">Message the Course Agent</p>
+  </div>
+  <div class="mk-workspace">
+    <p class="mk-label">Week 4 · Weekly build</p>
+    <h1 class="mk-title">Tool-calling agent</h1>
+    <hr class="mk-rule">
+    <p class="mk-label">What this build exercises</p>
+    <div class="mk-row"><span>Build functional AI agents using tool-calling and environment loops.</span><span>Shown in your feedback</span></div>
+    <div class="mk-row mk-active"><span>Design and evaluate agent environments and failure cases.</span><span>Your focus for this build</span></div>
+    <div class="mk-row"><span>Design agents that augment human capabilities.</span><span class="mk-muted">Not assessed this week</span></div>
+    <p class="mk-label">Your plan</p>
+    <p class="mk-field">Make the search tool time out, record what the loop does, and describe it under "What failed".</p>
+  </div>
+</section>

@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "period": "2026-W47",
+  "cohort_size": 30,
+  "synthetic": true,
+  "signals": [
+    {
+      "id": "full-code-requests",
+      "goal_id": "build-agents",
+      "source": "conversations",
+      "observation": "Students asked the Course Agent for complete working code for a weekly build instead of help understanding their own agent loop.",
+      "student_count": 11
+    },
+    {
+      "id": "no-failure-cases",
+      "goal_id": "evaluate-agents",
+      "source": "weekly_feedback",
+      "observation": "Weekly feedback marked the failure-case documentation checklist item as missing.",
+      "student_count": 14
+    },
+    {
+      "id": "goal-link-unclear",
+      "goal_id": "augment-humans",
+      "source": "staff_questions",
+      "observation": "Students asked staff which learning goal a weekly build was meant to exercise.",
+      "student_count": 6
+    },
+    {
+      "id": "grpo-confusion",
+      "goal_id": "improve-performance",
+      "source": "conversations",
+      "observation": "Students asked what GRPO is ahead of the week 11 session.",
+      "student_count": 3
+    },
+    {
+      "id": "project-eval-plan-missing",
+      "goal_id": "evaluate-agents",
+      "source": "student_projects",
+      "observation": "Final project proposals presented in week 8 have an empty or one-line evaluation section, with five weeks left before final presentations.",
+      "student_count": 12
+    },
+    {
+      "id": "comparison-without-baseline",
+      "goal_id": "improve-performance",
+      "source": "weekly_feedback",
+      "observation": "Week 10 single-agent versus multi-agent submissions reported the multi-agent result without running the single-agent baseline on the same tasks.",
+      "student_count": 9
+    },
+    {
+      "id": "similar-projects-unaware",
+      "goal_id": "critical-analysis",
+      "source": "staff_questions",
+      "observation": "Students asked staff whether anyone else was working on a similar final project; several memory-agent projects exist whose authors have not seen one another's weekly builds.",
+      "student_count": 8
+    },
+    {
+      "id": "weekly-builds-not-reused",
+      "goal_id": "domain-prototype",
+      "source": "student_projects",
+      "observation": "Final project plans do not draw on results from the student's own earlier weekly builds, such as a week 7 memory ablation relevant to a memory-based project.",
+      "student_count": 7
+    }
+  ]
+}

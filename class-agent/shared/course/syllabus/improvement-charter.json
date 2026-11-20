@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "purpose": "Find ideas and implementations that improve the experience of a student using the Course Agent.",
+  "directions": [
+    {
+      "id": "goal-progress",
+      "statement": "Help each student see their own progress on the learning goals and get help aimed at the goal they are weakest on."
+    },
+    {
+      "id": "peer-connection",
+      "statement": "Help students see one another's projects, engage with them, and support each other."
+    },
+    {
+      "id": "own-work",
+      "statement": "Tie the learning goals to the student's own recent work, such as questioning a submission they just made."
+    }
+  ],
+  "lenses": [
+    {
+      "id": "evidence",
+      "rubric": "Every claim about what students do, lack or want rests on a cited evidence signal or a notebook finding you can re-check, and the proposal claims no more than that evidence shows. Accept when the cited evidence shows the problem exists for the students and week the proposal names. Send back a claim with no cited support, evidence about a different week or group, or a proposal that treats missing data as proof of a need."
+    },
+    {
+      "id": "privacy",
+      "rubric": "Students' repository builds and commits are public within the course and may be read, shown and compared. Chat logs, grades, feedback and questions to staff are private. Private data may inform a general feature, for example an aggregate finding that shapes what is built. Accept when no one student's private data is shown to other students and any private data used is declared. Send back anything that shows, quotes or lets others infer one student's private data, or that uses private data without declaring it."
+    },
+    {
+      "id": "scope",
+      "rubric": "The proposal is one experience: one trigger, one thing the Course Agent does, one thing the student then does, continuing a named existing experience. Its deliverable is complete, matches the summary, and could be adopted as written. Accept when a reviewer can describe it in one sentence. Send back bundled flows, settings or surfaces the one flow does not need, safeguards that have grown into a second feature, or an unfinished deliverable."
+    },
+    {
+      "id": "usefulness",
+      "rubric": "It serves the charter's purpose: a real student would do the stated action at the stated moment, and using the Course Agent is better for it. Accept when the trigger is a moment students actually reach and the action is worth their time. Send back a trigger that rarely happens, an action that is a chore or a form to fill, or a benefit to the student that is unclear or indirect."
+    },
+    {
+      "id": "learning",
+      "rubric": "It serves its one learning goal directly, fits the current week and the path to the final project, and leaves the thinking to the student. Accept when the student does the reasoning and the agent prompts, questions or reflects. Send back anything where the agent does the work for the student, that invites overreliance, or whose link to the named goal or week is indirect."
+    }
+  ],
+  "trial_personas": [
+    {
+      "id": "engaged",
+      "description": "Has started the work, answers the agent's questions specifically, and wants to do it properly."
+    },
+    {
+      "id": "rushed",
+      "description": "Short on time, gives vague one-line answers, and asks the agent to just decide or write it for them."
+    }
+  ],
+  "sources": [
+    "course://syllabus",
+    "course://schedule",
+    "course://instructors"
+  ]
+}

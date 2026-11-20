@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "goals": [
+    {
+      "id": "build-agents",
+      "statement": "Build functional AI agents using large-language models, tool-calling, memory, planning, and environment loops."
+    },
+    {
+      "id": "multimodal-inputs",
+      "statement": "Connect agents to multimodal inputs such as vision, audio, wearables, or interaction traces."
+    },
+    {
+      "id": "evaluate-agents",
+      "statement": "Design and evaluate agent environments, benchmarks, simulations, and failure cases."
+    },
+    {
+      "id": "improve-performance",
+      "statement": "Understand techniques for improving agent performance, including fine-tuning, reinforcement learning approaches such as GRPO, preference optimization, and iterative evaluation."
+    },
+    {
+      "id": "domain-prototype",
+      "statement": "Prototype agents within a chosen domain that could include games, robotics, software control, organizations, personal productivity, education, and cognitive augmentation."
+    },
+    {
+      "id": "critical-analysis",
+      "statement": "Critically analyze the effects of AI agents on human cognition, agency, learning, overreliance, and social behavior."
+    },
+    {
+      "id": "augment-humans",
+      "statement": "Design agents that augment human capabilities rather than simply automate human tasks."
+    }
+  ]
+}

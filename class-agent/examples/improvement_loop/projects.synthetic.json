@@ -1,0 +1,31 @@
+{
+  "synthetic": true,
+  "note": "Invented repositories describing a plausible cohort in week 10 of the Fall 2026 schedule. No file comes from a real student.",
+  "projects": {
+    "agents2026-demo-a": {
+      "week-4/agent.py": "while True:\n    call = model(messages)\n    run_tool(call)\n",
+      "week-4/README.md": "# Week 4\nWhat I built: a tool-calling agent.\n",
+      "week-7/README.md": "# Week 7: memory\nBuilt a study helper that remembers which lecture topics I got wrong.\nCompared no memory vs. naive memory (append everything). Did not get to selective memory.\nNaive memory felt better but I did not measure it.\n",
+      "week-10/README.md": "# Week 10: single vs multi-agent\nPlanner + quizzer + grader agents for the study helper.\nThe multi-agent version is slower. I did not run the single-agent version on the same questions, so I can't say which is better.\n",
+      "final-project/PROPOSAL.md": "# Final project proposal (presented week 8)\n## Idea\nA study companion that quizzes me from my own lecture notes and remembers what I keep getting wrong.\n## Why\nRe-reading notes doesn't work for me.\n## Plan\nReuse my week 7 memory agent. Add a quiz generator.\n## Evaluation\nTBD. Maybe ask friends if it helps.\n## Open questions\nHow do I know it helps learning and isn't just telling me answers?\n"
+    },
+    "agents2026-demo-b": {
+      "week-4/agent.py": "for step in range(8):\n    messages.append(run(model(messages)))\n",
+      "week-4/README.md": "# Week 4\nWhat I built.\n## What failed\nNothing yet.\n",
+      "week-6/README.md": "# Week 6: browser agent\nPlaywright agent that books a slot on a practice booking page.\nSucceeds 7/10 runs. Fails when a date picker opens in a popup.\n",
+      "week-10/README.md": "# Week 10: single vs multi-agent\n| setup | success (20 tasks) | mean cost |\n| single agent | 14 | $0.04 |\n| navigator + verifier | 17 | $0.11 |\nThe verifier catches wrong-date bookings. Cost nearly triples.\n",
+      "final-project/PROPOSAL.md": "# Final project proposal (presented week 8)\n## Idea\nA browser agent that books shared lab equipment for a research group.\n## Plan\nExtend the week 6 browser agent; add an approval step before any booking is confirmed.\n## Evaluation\n30 scripted booking tasks, graded by final calendar state. Report success, cost, and every failure category.\n## Open questions\nWhen should it ask the human instead of acting?\n"
+    },
+    "agents2026-demo-c": {
+      "week-7/README.md": "# Week 7: memory\nMeeting-notes agent. Ablation on 15 recall questions:\n| no memory | 3/15 |\n| naive memory | 9/15 |\n| selective memory | 12/15 |\nSelective memory forgets action items older than two weeks, which was a bug.\n",
+      "week-9/README.md": "# Week 9: multimodal\nAdded audio: the agent transcribes a recorded meeting before writing notes.\nSpeaker attribution is often wrong with more than three speakers.\n",
+      "final-project/PROPOSAL.md": "# Final project proposal (presented week 8)\n## Idea\nA memory agent for a small team's meetings: it recalls past decisions when a topic comes up again.\n## Plan\nBuild on weeks 7 and 9.\n## Evaluation\nRecall questions written by me. Not sure how to test whether it is useful to people other than me.\n## Open questions\nWhat should it forget? Who else in the class is working on memory?\n"
+    },
+    "agents2026-demo-d": {
+      "week-7/README.md": "# Week 7: memory\nReminder agent that stores things I say I need to do.\nOnly built naive memory. No ablation.\n",
+      "week-9/README.md": "# Week 9: multimodal\nUses phone photos of my whiteboard as input.\n",
+      "week-10/README.md": "# Week 10: single vs multi-agent\nNot started. Spent the week on the final project.\n",
+      "final-project/PROPOSAL.md": "# Final project proposal (presented week 8)\n## Idea\nA wearable-context reminder agent: it remembers commitments I make in conversation and reminds me at the right moment.\n## Plan\nNaive memory from week 7 plus location context.\n## Evaluation\nNone yet.\n## Open questions\nHow should memory decide what to keep? My week 7 version keeps everything and gets noisy.\n"
+    }
+  }
+}

@@ -1,0 +1,47 @@
+/* Shell the platform wraps around every proposed interface mock-up, and gives the author to
+   build with. The color tokens mirror packages/ui/src/styles.css (a test keeps them equal);
+   the layout mirrors the web app's chat column beside the workspace panel. A mock-up is a
+   design reference only: the real feature is built from registered components. */
+:root {
+  --color-background: #000000;
+  --color-surface: #080808;
+  --color-surface-raised: #111111;
+  --color-text: #f5f5f2;
+  --color-text-muted: #8b8b86;
+  --color-border: #2a2a28;
+}
+body { margin: 0; padding: 24px; background: var(--color-background); color: var(--color-text);
+  font: 15px/1.5 "Helvetica Neue", Helvetica, Arial, sans-serif; }
+/* One step of the flow: a caption, then a full screen. */
+.mk-step { color: var(--color-text-muted); font-size: 12px; letter-spacing: 0.08em;
+  text-transform: uppercase; margin: 40px 0 10px; }
+.mk-step:first-child { margin-top: 0; }
+.mk-screen { display: grid; grid-template-columns: minmax(0, 40%) minmax(0, 60%);
+  min-height: 560px; border: 1px solid var(--color-border); background: var(--color-background); }
+/* Left: the conversation with the Course Agent. */
+.mk-chat { display: flex; flex-direction: column; gap: 16px; padding: 24px;
+  border-right: 1px solid var(--color-border); }
+.mk-msg { max-width: 92%; }
+.mk-msg[data-from="student"] { align-self: flex-end; background: var(--color-surface-raised);
+  padding: 10px 14px; border-radius: 0.8rem; }
+.mk-msg[data-from="agent"] { align-self: flex-start; }
+.mk-composer { margin-top: auto; border: 1px solid var(--color-border); border-radius: 0.8rem;
+  padding: 12px 14px; color: var(--color-text-muted); }
+/* Right: the workspace panel the agent opens. */
+.mk-workspace { padding: 32px; background: var(--color-surface); }
+.mk-title { font-size: 26px; font-weight: 400; margin: 0 0 6px; }
+.mk-label { color: var(--color-text-muted); font-size: 12px; letter-spacing: 0.08em;
+  text-transform: uppercase; }
+.mk-muted { color: var(--color-text-muted); }
+.mk-rule { border: 0; border-top: 1px solid var(--color-border); margin: 20px 0; }
+.mk-row { display: flex; justify-content: space-between; gap: 24px; padding: 14px 0;
+  border-bottom: 1px solid var(--color-border); }
+.mk-button { display: inline-block; border: 1px solid var(--color-text); border-radius: 0.45rem;
+  padding: 8px 14px; color: var(--color-text); text-decoration: none; }
+.mk-button[data-variant="quiet"] { border-color: var(--color-border); }
+.mk-field { border: 1px solid var(--color-border); border-radius: 0.45rem; padding: 10px 12px;
+  min-height: 72px; color: var(--color-text-muted); }
+/* What the student just did or selected on this screen. */
+.mk-active { outline: 1px solid var(--color-text); outline-offset: 4px; }
+@media (max-width: 720px) { .mk-screen { grid-template-columns: minmax(0, 1fr); }
+  .mk-chat { border-right: 0; border-bottom: 1px solid var(--color-border); } }

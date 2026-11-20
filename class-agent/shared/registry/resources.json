@@ -10,6 +10,8 @@
       "visibility": "public",
       "status": "published",
       "assets": {
+        "improvement_charter": "course/syllabus/improvement-charter.json",
+        "learning_goals": "course/syllabus/learning-goals.json",
         "pdf": "course/syllabus/syllabus.pdf"
       }
     },

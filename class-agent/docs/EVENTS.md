@@ -92,3 +92,15 @@ without recipient email fields still render correctly.
 The sent/cancelled private action payload includes `email_queued` (boolean, false on cancellation).
 This records the confirmed delivery choice, not provider delivery success. Older events omit these
 fields and preserve in-app-only behavior; the versioned Event envelope is unchanged.
+
+## Course-improvement loop payloads (experimental)
+
+- `improvement.phase.requested`: platform trigger that opens one loop phase run in a
+  conversation owned by the triggering instructor; payload is the `phase` name and, for a
+  graded or revising phase, the `proposal_id`, `revision`, and the platform-assigned `lens`,
+  replay `scenario_id`, or trial `persona`. A trial's Course Agent replies are not persisted
+  as a conversation; the transcript is kept on the proposal in loop state. There is no fabricated `user.message`.
+- `improvement.proposal.updated`: proposal ID, change kind, revision, status, and status reason
+  after a propose, revise, or critique tool call. The draft text stays in loop state.
+
+See [IMPROVEMENT.md](IMPROVEMENT.md).

@@ -37,6 +37,11 @@ dev = [
   "pytest>=8,<10",
   "ruff>=0.8,<1",
 ]
+tracing = [
+    "openinference-instrumentation-smolagents>=0.1.50",
+    "opentelemetry-exporter-otlp-proto-http>=1.45.2",
+    "opentelemetry-sdk>=1.45.2",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["python/agent_core", "python/course_server", "python/runtime_smolagents"]
