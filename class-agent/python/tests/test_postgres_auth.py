@@ -92,6 +92,7 @@ def test_postgres_auth_store_roundtrip() -> None:
             "course://slides/week-07",
             "course://slides/week-08",
             "course://slides/week-09",
+            "course://slides/week-10",
             "course://readings/software-agents-bradshaw",
         ]
         with psycopg.connect(scoped_url) as connection:

@@ -1,0 +1,63 @@
+1 | The city crowd frames the lecture around collective behavior and the question of what coordinated agents can do for people.
+3 | The three icons separate teams that share a task, persistent simulated societies, and swarms that coordinate through local rules.
+4 | The crowded pixel world introduces the idea of many autonomous characters occupying one shared environment.
+6 | The examples distinguish agents collaborating to produce an answer or action from simulated agents used to study social behavior.
+7 | The diagram makes coordination choices explicit: profiles, communication, orchestration, and adaptation govern how agents use a shared environment and answer a human.
+8 | MetaGPT illustrates role specialization and handoffs in a software team rather than merely running several identical prompts.
+9 | The timeline places current LLM teams in a longer history of multi-agent coordination ideas.
+10 | The small diagrams show that an agent's incentives shape whether interaction is cooperative, adversarial, or mixed.
+11 | The five topologies offer different ways to divide work and control information flow among agents.
+12 | The channel counts show the communication cost of everyone talking to everyone compared with routing through one hub.
+13 | The debate chart provides early evidence of gains from multiple models on selected reasoning tasks, motivating the next slides' limits.
+15 | The paper example ties collaboration gains to tasks that can be split; sequential dependencies can erase those gains.
+16 | The paper example limits the claim further: when one model is already strong, extra agents may add cost without improving the result.
+17 | The failure taxonomy grounds the warning that an agent team needs sound design, aligned messages, and checks on its outputs.
+19 | The island prompt asks students to imagine how much modern making depends on other people's knowledge and labor.
+21 | Pin-making turns specialization into a concrete productivity example: workers can divide a complex process into repeatable steps.
+22 | The Wealth of Nations image identifies the historical source of the pin-making example.
+23 | The toaster example shows that making even an ordinary object alone depends on knowledge accumulated across a society.
+24 | The mine scene makes the hidden supply chain behind a simple toaster visible.
+25 | The road image adds shared norms to specialization and knowledge: people also need compatible conventions to coordinate safely.
+26 | The Stockholm scene supplies a real-world example of a convention that many people had to change together.
+28 | The simulated town makes memory and planning concrete through agents coordinating a party in one persistent world.
+29 | The Project Sid screenshot illustrates a larger persistent society where economic and cultural patterns may emerge from many agents.
+32 | The hide-and-seek frames show increasingly complex tool use arising as agents adapt to one another within a simulation.
+33 | The two logos set up the following case about coordinated agents and an external service.
+36 | AgentSociety scales simulated interactions far beyond a small town, enabling experiments on social questions while raising validation concerns.
+38 | The mediator diagram shows AI helping real participants synthesize a shared statement from differing opinions and critiques.
+41 | The crowd prompt bridges human coordination to swarm behavior by asking for a simple local rule rather than a central plan.
+42 | The ant emphasizes that collective routing can arise from many individuals following local cues.
+43 | The ant video introduces biological swarm behavior before the lecture formalizes local rules with boids.
+44 | Separation, alignment, and cohesion show how simple neighbor-based actions can produce coordinated group movement without a leader.
+45 | The robot example translates flocking into physical agents that coordinate through local camera observations.
+47 | The comparison table makes the distinction between society and swarm practical: members, knowledge, goals, and failure modes differ.
+48 | The news example asks students to consider what large agent groups can do when their coordination is directed at an external system.
+49 | The three excerpts prompt discussion of whether a shared trail, explicit organization, or collective goal best describes the incident.
+51 | Learning, teaching, and social reasoning are the lecture's three proposed cognitive uses for agent groups.
+53 | Sotopia provides a sandbox where agents can practice social interactions such as negotiation and cooperation.
+55 | The privacy workflow shows why an agent modeling another person's beliefs must also decide which information may be disclosed.
+57 | AgentSchool's staged workflow separates building a plausible simulation from gathering evidence that its behavior is useful and valid.
+58 | The student digital-twin figure introduces educational simulations that model behavior over time rather than one isolated answer.
+60 | The paper warns that a synthetic user who cooperates too readily can make an agent seem more effective than it would be with people.
+61 | The four questions provide a validation checklist before treating findings from a simulated society as findings about humans.
+63 | The large classroom image establishes a shared environment for the lecture's hands-on comparison of agent communication modes.
+65 | The app screenshot shows the simulation as an inspectable run with a selected mode, transcript, and class state.
+67 | Mapping the classroom app onto the earlier system diagram shows how the same coordination pieces become concrete code and experiment settings.
+68 | The first three student profiles supply different strengths and mistakes so mode comparisons can reveal more than a uniform-agent baseline.
+69 | The remaining profiles complete a small, varied classroom in which explanations and errors may spread differently.
+70 | The four diagrams are the experiment's independent variable: they change who can teach, relay, talk to peers, or share a board.
+71 | The student loop makes each simulated learner's local process visible, including retrieval and memory between rounds.
+72 | The six bird pictures define the identification task used to compare the classroom modes.
+73 | The test scene separates a bird-identification score from a recall question, allowing the lecture to examine both outcomes.
+75 | The aggregate table shows the peer network leading this run, the relay trailing, and identical recall scores across modes.
+76 | The individual table exposes variation hidden by the aggregate scores, including which students improved or declined by mode.
+77 | The bird sequences offer a possible mechanism for the peer-network result: repeated explanations and correction of mistakes.
+78 | The real classroom study is offered as external context for peer discussion; it does not validate this particular agent simulation.
+80 | The relay birds show how a one-way chain can pass on mistakes without giving later students a chance to check the original lesson.
+81 | The broken-telephone paper gives a related mechanism for why repeated machine-generated retellings can drift.
+83 | The cited failure paper connects the classroom's relay errors to misalignment between agents in broader multi-agent systems.
+84 | Perfect recall across all modes is a warning sign: the simulated learners may be too capable for the human students they represent.
+85 | The human-versus-model question highlights the risk of reading synthetic test scores as predictions about real seventh-graders.
+88 | The three checks turn the classroom demonstration into a research plan using real students, repeated testing, and error comparisons.
+89 | The final claim returns to the opening question: the structure of communication matters more than the raw number of agents.
+90 | The second conclusion sets a limit on the classroom example: simulated people can explain possibilities without establishing human outcomes.

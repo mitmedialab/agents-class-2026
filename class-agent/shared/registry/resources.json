@@ -180,6 +180,20 @@
       }
     },
     {
+      "uri": "course://slides/week-10",
+      "title": "Multi-Agent Systems for Cognitive Augmentation",
+      "description": "Slides for the tenth course meeting on multi-agent coordination, simulated societies, swarms, and a classroom simulation.",
+      "media_type": "application/pdf",
+      "path": "course/slides/week-10/week-10-slides.pdf",
+      "visibility": "public",
+      "status": "published",
+      "accessibility_path": "course/slides/week-10/accessibility.txt",
+      "caption_path": "course/slides/week-10/captions.txt",
+      "assets": {
+        "first_slide": "registry/slide-thumbnails/ed97ab3c26ae0ae825db066b2cc54fb4df5587c1e3040073f433714d0bdeea04.png"
+      }
+    },
+    {
       "uri": "course://readings/software-agents-bradshaw",
       "title": "An Introduction to Software Agents",
       "description": "Week 1 assigned reading by Jeffrey M. Bradshaw on the history, definitions, motivations, and attributes of software agents.",

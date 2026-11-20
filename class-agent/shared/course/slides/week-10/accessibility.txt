@@ -1,0 +1,90 @@
+1 | Cover photo of a crowd walking through a city beneath the title Multi-Agent Systems for Cognitive Augmentation, credited to Rachel Poonsiriwong and Wazeer Zulfikar.
+2 | Black question slide asking whether a team of agents outperforms one agent.
+3 | Three icon-and-text columns define multi-agent systems, simulated societies, and swarm intelligence.
+4 | Image-only slide showing a crowded pixel-art world with many yellow characters and several blue objects.
+5 | Purple section divider with two pixel-art ducks exchanging messages: multi-agent systems as agents working as a team.
+6 | Two rows of small screenshots compare agents coordinating on a task with agents standing in for people in simulations.
+7 | System diagram links profiling, communication, orchestration, and adaptation to individual agents, an environment, and a human.
+8 | MetaGPT diagram shows software-team roles passing requirements, designs, code, and testing work to one another.
+9 | Timeline pairs pre-LLM multi-agent ideas with recent role-based teams, orchestration, and adaptive systems.
+10 | Three node-and-arrow diagrams distinguish cooperative, competitive, and mixed-motive agent interactions.
+11 | Five small network diagrams show independent parallel work, a sequential pipeline, supervisor and workers, peer network, and shared blackboard.
+12 | Dense peer-to-peer network labeled 56 channels sits beside a hub-and-spoke network labeled 14 channels.
+13 | Bar chart compares single-model and multi-model debate accuracy across biographies, MMLU, chess, arithmetic, and math tasks.
+14 | Text-only question slide asks whether multiple agents are necessarily better and answers, Not always.
+15 | Research-paper image accompanies the claim that teams help divisible tasks but can hurt sequential work.
+16 | Research-paper image accompanies the claim that a capable single agent may no longer benefit from collaboration.
+17 | Research-paper image accompanies a summary of recurring multi-agent failures from design, agent misalignment, and unchecked results.
+18 | Purple section divider titled Simulated societies.
+19 | Island photo supports a one-minute discussion prompt about what one person could make alone.
+20 | Black question slide asks what a society gives you.
+21 | Specialisation appears beside an old pin-making illustration and the example of ten workers making 48,000 pins.
+22 | The Wealth of Nations cover is added beside the pin-making illustration and specialisation example.
+23 | Toaster Project book cover joins the pin-making example to introduce accumulated knowledge.
+24 | Screenshot of a TED video about making a toaster from scratch shows two people working in a mine.
+25 | Three columns add shared norms, illustrated by a street scene, to specialisation and accumulated knowledge.
+26 | Historical street photograph labeled Stockholm, 1967, shows vehicles and pedestrians during the change in driving side.
+27 | The specialisation column returns alone with the pin-making illustration.
+28 | Generative Agents paper and pixel-town image accompany a story of 25 agents planning a party.
+29 | Project Sid video screenshot shows a Minecraft-like world with a character in front of large structures.
+30 | The specialisation column returns alone with the pin-making illustration.
+31 | The specialisation and accumulated-knowledge columns show the pin-making image and Toaster Project cover.
+32 | Three hide-and-seek simulation frames show agents discovering tool use, including blocking doors and moving boxes.
+33 | Image-only slide places the OpenAI knot logo beside a smiling hugging-face emoji.
+34 | The specialisation and accumulated-knowledge columns again show pin-making and the Toaster Project.
+35 | Three-column summary combines specialisation, accumulated knowledge, and shared norms with their example images.
+36 | AgentSociety paper diagram and text describe a simulation of ten thousand agents and five million interactions.
+37 | Research-paper image accompanies the claim that agents built from interviews can predict an individual's survey answers.
+38 | Habermas Machine diagram shows participants' opinions and critiques entering an AI mediator that produces a group statement.
+39 | Black question slide asks whether accurately simulated individuals imply trustworthy simulated crowd behavior.
+40 | Purple section divider titled Swarm intelligence.
+41 | Crowd photo supports a one-minute discussion prompt about a local rule for people finding a short route without a map or speech.
+42 | The same discussion prompt is dimmed behind a large ant image.
+43 | Image-only screenshot of a colorful animated ant video titled The World War of the Ants.
+44 | Three small diagrams and labels define boid separation, alignment, and cohesion rules for flocking.
+45 | Robotics paper image accompanies the claim that camera-only robots moved together without communication or memory.
+46 | Text slide reports a study of majority-following LLM agents and larger coordination groups for stronger models.
+47 | Comparison table contrasts societies and swarms by members, knowledge, goal awareness, and characteristic failure.
+48 | News screenshot reports a July 2026 incident involving a large OpenAI agent swarm and Hugging Face.
+49 | Three small text excerpts labeled The Trail, The Organisation, and The Good of the Collective appear under Swarm or society.
+50 | Purple divider with pixel-art duck and chick introduces multi-agent systems for cognitive augmentation.
+51 | Three illustrated columns propose agent groups for learning, teaching, and social reasoning.
+52 | Black section slide reads The human mind as the environment.
+53 | Sotopia graphic shows a small isometric town beside the subtitle An Open-ended Social Learning Environment.
+54 | SOTOPIA-TOM research-paper image accompanies a question about agents choosing what personal information to share.
+55 | SOTOPIA-TOM diagram divides a social interaction into agent profile, conversation, and evaluation of privacy decisions.
+56 | AgentSchool research-paper image accompanies the idea of educators rehearsing lessons with simulated students.
+57 | AgentSchool research diagram shows a staged workflow from implemented simulation to evidence and future evaluation.
+58 | Classroom Simulacra paper image illustrates student digital twins built to simulate learning behavior.
+59 | Black question slide asks whether the simulated students are accurate enough.
+60 | Research-paper image accompanies the warning that overly cooperative simulated users can exaggerate an agent's success.
+61 | Four bullet questions propose evaluating simulation believability, real-data fit, real-world transfer, and model robustness.
+62 | Purple divider with pixel-art students and teacher introduces a multi-agent classroom simulation.
+63 | Isometric pixel-art classroom with many students at tables and a teacher at the front, captioned we're in class.
+64 | Closer pixel-art classroom view shows a teacher, six students, desks, bookshelves, and a bird lesson.
+65 | Classroom-app screenshot shows the pixel-art room, a mode selector, run controls, a lesson transcript, and a class overview.
+66 | AgentSchool paper image repeats the claim that simulated students learn and change over time.
+67 | Classroom-system diagram maps profiling, communication, orchestration, and adaptation to agents, a bird lesson, and a human operator.
+68 | Profile cards introduce students Avery, Blake, and Casey with participation traits, strengths, and common bird-identification mistakes.
+69 | Profile cards introduce students Devon, Emery, and Finley with participation traits, strengths, and common bird-identification mistakes.
+70 | Four network diagrams label classroom modes teacher-led, relay, peer network, and shared blackboard.
+71 | AgentSchool student-loop diagram runs from perceive to retrieve, decide, and act, with memory feeding the next round.
+72 | Six pixel-art bird images are labeled mallard, teal, cardinal, rock pigeon, Canada goose, and mute swan.
+73 | Pixel-art classroom image shows students taking a test that includes a recall question.
+74 | Transition slide says the class will compare student performance across the four modes.
+75 | Aggregate-results table shows teacher-led 81.0 percent, relay 64.3 percent, peer network 85.7 percent, and shared blackboard 73.8 percent overall.
+76 | Individual-results table lists Avery, Blake, Casey, Devon, Emery, and Finley across the four classroom modes.
+77 | Pixel-bird sequences illustrate repeated explanations, peer correction, and all six students identifying the rock pigeon in the peer network.
+78 | Screenshot of a Science article accompanies the claim that peer discussion improves concept-question performance.
+79 | Text slide cites a decade of Harvard physics courses reporting gains from peer instruction.
+80 | Pixel-bird relay sequence illustrates hearing a lesson once, passing mistakes along, and zero correct answers for two birds in this simulation.
+81 | Research-paper image accompanies the broken-telephone analogy for distortion during repeated LLM output processing.
+82 | Scaling-agent-systems paper image accompanies a reminder about capability saturation in multi-agent systems.
+83 | Multi-agent-failures paper image accompanies the claim that agent misalignment is a major failure category.
+84 | Six pixel birds with green check marks illustrate all 24 simulated recall answers being correct.
+85 | Six gray pixel birds with check marks accompany a question about whether perfect recall is realistic for human seventh-graders.
+86 | Black discussion slide asks where the agent simulation may have fallen short.
+87 | Black question slide asks how simulated agents could be validated with real educators and students.
+88 | Three illustrated suggestions propose a longitudinal recall study, testing the four modes with humans, and comparing mistakes.
+89 | Chalkboard-style conclusion states that coordination, rather than agent count, makes agents smart together.
+90 | Chalkboard-style conclusion states that simulated people can illustrate an idea while still differing from humans.

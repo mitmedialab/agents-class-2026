@@ -397,6 +397,38 @@ def test_week_nine_multimodal_deck_has_page_descriptions_and_captions(
     assert "Slide caption: Hesitations and vocal cues" in contents.text
 
 
+def test_week_ten_multi_agent_deck_has_page_descriptions_and_captions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def inline_to_thread(function: object, *args: object, **kwargs: object) -> object:
+        assert callable(function)
+        return function(*args, **kwargs)
+
+    monkeypatch.setattr(asyncio, "to_thread", inline_to_thread)
+    uri = "course://slides/week-10"
+    resource = next(
+        definition for definition in load_resource_definitions() if definition.uri == uri
+    )
+    assert resource.accessibility_path is not None
+    assert resource.caption_path is not None
+    descriptions = load_slide_accessibility(resource.accessibility_path)
+    captions = load_slide_captions(resource.caption_path)
+
+    assert len(descriptions) == len(PdfReader(resource.path).pages) == 90
+    assert "pixel-art world" in descriptions[3]
+    assert "OpenAI knot logo" in descriptions[32]
+    assert "classroom-app screenshot" in descriptions[64].lower()
+    assert len(captions) > 50
+    assert "independent variable" in captions[70]
+
+    provider = FileResourceProvider.from_registry()
+    assert uri in [summary.uri for summary in provider.list_public()]
+    contents = asyncio.run(provider.read(uri))
+    assert contents.text.count("Accessibility description:") == 90
+    assert contents.text.count("Slide caption:") == len(captions)
+    assert "Slide caption: The aggregate table shows" in contents.text
+
+
 def test_public_resource_registry_includes_provisional_schedule() -> None:
     resources = FileResourceProvider.from_registry()
 
@@ -417,6 +449,7 @@ def test_public_resource_registry_includes_provisional_schedule() -> None:
         "course://slides/week-07",
         "course://slides/week-08",
         "course://slides/week-09",
+        "course://slides/week-10",
         "course://readings/software-agents-bradshaw",
     ]
     instructors = next(summary for summary in summaries if summary.uri == COURSE_INSTRUCTORS_URI)
