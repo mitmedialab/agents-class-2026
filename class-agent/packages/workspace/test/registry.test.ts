@@ -250,6 +250,28 @@ describe("component registry", () => {
 
     expect(registry.apply(emptyWorkspaceState(), visual).panels).toHaveLength(1);
 
+    const evidenceThread = registry.apply(emptyWorkspaceState(), {
+      type: "open",
+      panel: {
+        id: "40000000-0000-4000-8000-000000000019",
+        component_id: "draft-document",
+        title: "Final project write-up",
+        props: {
+          title: "Final project write-up",
+          content: "A project draft.",
+          evidence_thread: {
+            claim: "The domain agent makes visible constraint tradeoffs",
+            evidence: "A planning trace with conflicting deadlines",
+            status: "connected",
+          },
+        },
+        state: {},
+      },
+    });
+    expect(evidenceThread.panels[0]?.props.evidence_thread).toMatchObject({
+      status: "connected",
+    });
+
     expect(
       registry.apply(emptyWorkspaceState(), {
         ...visual,

@@ -24,12 +24,19 @@ export interface DraftDocumentField {
   validationError?: string | undefined;
 }
 
+export interface EvidenceThread {
+  claim: string;
+  evidence?: string | undefined;
+  status: "prompt" | "connected";
+}
+
 export interface DraftDocumentProps {
   title: string;
   description?: string | undefined;
   status?: DraftDocumentStatus | undefined;
   content?: string | undefined;
   fields?: readonly DraftDocumentField[] | undefined;
+  evidenceThread?: EvidenceThread | undefined;
   actionLabel?: string | undefined;
   actionDisabled?: boolean | undefined;
   onAction?: (() => void) | undefined;
@@ -191,6 +198,7 @@ export function DraftDocument({
   status = "draft",
   content,
   fields = [],
+  evidenceThread,
   actionLabel,
   actionDisabled = false,
   onAction,
@@ -272,6 +280,26 @@ export function DraftDocument({
             }}
           />
         </div>
+      ) : null}
+
+      {evidenceThread ? (
+        <section aria-label="Evidence thread" className="ca-evidence-thread" data-status={evidenceThread.status}>
+          <div aria-hidden="true" className="ca-evidence-thread-line" />
+          <div className="ca-evidence-thread-node ca-evidence-thread-claim">
+            <span>Project claim</span>
+            <strong>{evidenceThread.claim}</strong>
+          </div>
+          <div className="ca-evidence-thread-pin" aria-hidden="true" />
+          <div className="ca-evidence-thread-node ca-evidence-thread-artifact">
+            <span>{evidenceThread.status === "connected" ? "Artifact or planned test" : "Make one connection"}</span>
+            <strong>{evidenceThread.evidence ?? "Name a concrete artifact or planned test."}</strong>
+          </div>
+          <p>
+            {evidenceThread.status === "connected"
+              ? "Claim connected to evidence"
+              : "Connect this claim to one artifact or planned test"}
+          </p>
+        </section>
       ) : null}
 
       {fields.length ? (

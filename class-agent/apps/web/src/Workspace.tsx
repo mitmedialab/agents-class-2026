@@ -11,6 +11,7 @@ import {
   type DocumentResource,
   type DraftDocumentField,
   type DraftDocumentStatus,
+  type EvidenceThread,
   type DraftFieldInputType,
   type DraftFieldStatus,
   type PageCardItem,
@@ -356,6 +357,21 @@ function draftDocumentFields(value: JsonValue | undefined): DraftDocumentField[]
   return fields;
 }
 
+function evidenceThreadProp(value: JsonValue | undefined): EvidenceThread | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  if (
+    typeof value.claim !== "string" ||
+    (value.status !== "prompt" && value.status !== "connected")
+  ) {
+    return undefined;
+  }
+  return {
+    claim: value.claim,
+    status: value.status,
+    ...(typeof value.evidence === "string" ? { evidence: value.evidence } : {}),
+  };
+}
+
 function highlightProp(value: JsonValue | undefined): TextHighlightAnchor | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const uri = value.resource_uri;
@@ -644,7 +660,7 @@ function ResourcePanel({
   if (
     panel.componentId === "draft-document" &&
     draftFields &&
-    (draftFields.length > 0 || draftContent)
+    (draftFields.length > 0 || draftContent || evidenceThreadProp(panel.props.evidence_thread))
   ) {
     const status = stringProp(panel.props, "status");
     return (
@@ -656,6 +672,7 @@ function ResourcePanel({
           }
           description={stringProp(panel.props, "description")}
           content={draftContent}
+          evidenceThread={evidenceThreadProp(panel.props.evidence_thread)}
           fields={draftFields}
           onChange={commitDraftChange}
           status={
