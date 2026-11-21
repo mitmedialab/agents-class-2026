@@ -1066,7 +1066,7 @@ async def run_demo(
     for proposal in proposals:
         print(f"   {proposal.draft.title}\n       {_outcome(proposal)}")
 
-    out = out or HERE / "out"
+    out = (out or HERE / "out").resolve()
     out.mkdir(parents=True, exist_ok=True)
     for proposal in proposals:
         deliverable = review_file(proposal)
