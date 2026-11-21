@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "code": "S08",
+  "name": "Leticia Izquierdo",
+  "team": "City Science",
+  "site": "https://mitmedialab.github.io/agents2026-leticia/",
+  "bio": "Media designer and architect, PhD candidate in City Science at the MIT Media Lab. Her work explores digital media experiences, collaborative co-construction and the role of the machine in city making: richer, more personal ways of deliberating about the future of cities, for audiences spread across time, space and culture.",
+  "avatar": {"t": 2, "h": 2, "s": 2, "p": 3, "hs": 3, "g": 0},
+  "project": "City Agents: a simulation that predicts whether a physical city space will attract people and social interaction",
+  "interests": [
+    {"term": "cities", "description": "How physical places shape who meets whom. Her tools (Immersive Scope, ABM Mobility, environmental psychology and speculative design) aim at healthier cities and communities, and her City Agents project asks whether a simulation can tell in advance if a space will draw people in."},
+    {"term": "social interaction", "description": "The encounters a place makes likely or unlikely. In City Agents the measure of a good space is not footfall but the conversations and lingering it produces; the same question drives placelab, where ideas are born when two people cross paths."},
+    {"term": "ambient agents", "description": "Agents that live in the environment instead of a chat window: KoKoRo, a rooster-persona agent that sits at the desk or on a cap, filters attention rather than competing for it, and acts only with confirmation."},
+    {"term": "simulation", "description": "Agent-based models of mobility and behaviour as a way to deliberate about the future of cities: generative agents, pedestrian flows around buildings raised in Blender, and evaluating what an agent does to a person's attention."},
+    {"term": "attention", "description": "Measured as the environment of her agents: task success, app switches, seconds away from the document and self-reported mental load (TLX), compared with doing the same task by hand."}
+  ],
+  "skills": ["3D", "Blender", "simulation", "urban design", "evaluation"],
+  "weekly_builds": [
+    {
+      "week": "W01",
+      "title": "Build an Agent: KoKoRo, a rooster at your desk",
+      "summary": "KoKoRo, an agent embodied in a rooster that listens to what the user says and how they feel at the desk and recommends nearby activities on a fictional East Boston map with real places and distances. Built on the Generative Agents architecture, with a Tiled map rendered in Phaser on the front end and a local Python HTTP API for language and places. Open question left: how to extend indoor data collection across objects, not only the desk."
+    },
+    {
+      "week": "W02",
+      "title": "Connect to MCP servers: Claude drives Blender and Higgsfield",
+      "summary": "Claude as an MCP client drove Blender and Higgsfield to turn a 3D model of Mass Ave into previz and synthetic street videos, then became a smolagents agent with six declared tools that raise buildings and report the change in pedestrians. Lessons: conversational control is flexible but hard to repeat or audit; declared, bounded tools make the agent testable; precise references (numbered buildings) and honest measurements matter as much as the tools."
+    },
+    {
+      "week": "W03",
+      "title": "New interfaces for agents: KoKoRo as desktop widget and cap",
+      "summary": "KoKoRo re-embodied as a desktop widget for work and a cap for city walks, designed to filter attention rather than compete for it. Tools for calendar events, email search and drafting (nothing sent without confirmation), memory and reading what is on screen; the cap logs spoken thoughts and answers quick questions such as transit timing. Hardest parts: reading the screen accurately and designing the highlight-to-ask interaction."
+    },
+    {
+      "week": "W04",
+      "title": "Building and evaluating an agent environment: attention as the environment",
+      "summary": "The environment is the author's attention while working with KoKoRo, a voice agent that acts on the desktop. Six tasks and 23 episodes measured task success, app switches, seconds away from the document, total time and self-reported mental load (TLX): KoKoRo caused zero switches and zero seconds away, against about 21 seconds away by hand. Lesson: the reset failed to restore the document between repetitions, so the evaluator wrongly marked correct translations as failures, and speech recognition struggled with names."
+    },
+    {
+      "week": "W05",
+      "title": "City Agents: an interactive environment in Blender",
+      "summary": "An interactive Blender environment for City Agents: a city space where agents move and meet, built to test whether a simulation can predict if a physical place will attract people and social interaction, following on from the Mass Ave model and pedestrian counts of week 2."
+    },
+    {
+      "week": "W00",
+      "title": "Final project proposals",
+      "summary": "Three options: KoKoRo as an ambient agent embedded in different systems wherever it is needed; City Agents, asking whether a simulation can predict if a physical city space will attract people and social interaction; and Discovering people in the city, about neighbours and others, moving between simulation and reality."
+    }
+  ],
+  "source": {
+    "method": "written from the public course site https://mitmedialab.github.io/agents2026-leticia/ (index, final and week01-04 pages; the week05 page was not reachable, its summary comes from the index title)",
+    "date": "2026-11-09"
+  }
+}

@@ -1,0 +1,17 @@
+# one student site per line: repo slug (agents2026-xxx) or full URL
+agents2026-egemen
+agents2026-hyung
+agents2026-jad
+agents2026-juan-ruben
+agents2026-manasi
+agents2026-ray
+agents2026-roma
+agents2026-leticia
+agents2026-lilith
+agents2026-mateo
+agents2026-matti
+agents2026-stacey
+agents2026-yanning
+agents2026-yue
+agents2026-david
+agents2026-raine

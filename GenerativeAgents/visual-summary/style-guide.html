@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>placelab style guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Silkscreen:wght@400;700&display=swap">
+<style>
+/* Tokens copied from GenerativeAgents/src/styles.css (:root). The dark set is a proposal, not in the repo. */
+:root{
+  --bg:#FFFFFF; --panel:#F3F3F1; --raise:#FFFFFF; --ink:#000000; --muted:#6B6B68; --line:#D2D2CE;
+  --orange:#FF4F12; --leaf:#2B9A4C; --heat:#FF4F12;
+  --o-born:#FF4F12; --o-join:#2B9A4C; --o-evo:#2F6FE0; --o-agr:#8C95A2; --o-ref:#17171B; --o-none:#D9DCE2;
+  --hi-bg:#FFE7DC; --ok-ink:#1F6E3B; --ok-bg:#EAF5EC; --stage:#D9D9D4;
+  --f-display:"Archivo","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --f-mono:"Silkscreen","Archivo",monospace;
+  color-scheme:light;
+}
+:root[data-theme="dark"]{
+  --bg:#0B0B0A; --panel:#141413; --raise:#1B1B1A; --ink:#F2EFE6; --muted:#8F8D86; --line:#2E2E2B;
+  --orange:#FF5A22; --leaf:#3DBA62;
+  --o-born:#FF5A22; --o-join:#3DBA62; --o-evo:#5B8EF0; --o-agr:#6E7682; --o-ref:#F2EFE6; --o-none:#2E3036;
+  --hi-bg:#3A1A0E; --ok-ink:#6FD08E; --ok-bg:#12241A; --stage:#1F1F1D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--ink);margin:0}
+body{font-family:var(--f-display);font-size:12.5px;line-height:1.5;letter-spacing:.005em;padding:0 16px 40px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+button{font:inherit;color:inherit}
+
+/* ---- repo components (same rules as styles.css, token-driven) ---- */
+.band{background:#111;color:#fff;margin:0 -16px;padding:0 16px}
+.bandin{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:14px;padding-block:8px;flex-wrap:wrap}
+.bandt{font-size:12px}.bandt b{font-weight:600}.bandt span{text-transform:lowercase}
+.langsw{margin-left:auto;display:inline-flex;border:1px solid #555;border-radius:999px;overflow:hidden}
+.langsw button{font-size:11px;text-transform:uppercase;letter-spacing:.06em;background:transparent;color:#BDBDB7;border:0;padding:4px 10px;cursor:pointer}
+.langsw button[aria-pressed="true"]{background:#fff;color:#000}
+header{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:8px 40px;padding-block:18px 14px;border-bottom:1px solid var(--ink)}
+@media (max-width:760px){header{grid-template-columns:minmax(0,1fr)}}
+h1{font-weight:400;font-size:clamp(24px,3vw,32px);line-height:1.1;margin:0;letter-spacing:-.015em;text-transform:lowercase}
+.ask{margin:0;font-size:13px;line-height:1.55;max-width:62ch;text-transform:lowercase;padding-top:4px}
+.lab{font-size:12px;text-transform:lowercase;color:var(--muted);margin-bottom:10px}
+.hint{color:var(--muted);font-size:12px;margin:0;text-transform:lowercase}
+.evid{display:flex;flex-direction:column;gap:14px;border:1px solid var(--line);border-radius:6px;padding:14px;background:var(--panel)}
+.evh{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:6px 40px;align-items:start}
+@media (max-width:760px){.evh{grid-template-columns:minmax(0,1fr)}}
+.evt{font-weight:400;font-size:18px;margin:0;text-transform:lowercase;letter-spacing:-.01em}
+.mono{font-family:var(--f-mono)}
+.btn{font-size:12px;text-transform:lowercase;border:1.5px solid var(--ink);background:var(--raise);color:var(--ink);border-radius:999px;padding:6px 12px;cursor:pointer;box-shadow:0 1.5px 0 var(--ink)}
+.btn:active,.ico:active,.steps button:active{transform:translateY(1px);box-shadow:none}
+.btn.orange{background:var(--orange);border-color:var(--orange);color:#fff}
+.go{font-size:13px;text-transform:lowercase;background:var(--orange);color:#fff;border:1.5px solid var(--orange);border-radius:999px;padding:9px 18px;cursor:pointer;box-shadow:0 1.5px 0 var(--ink)}
+.ico{width:34px;height:34px;display:grid;place-items:center;border-radius:50%;border:1.5px solid var(--ink);background:var(--raise);color:var(--ink);cursor:pointer;padding:0;box-shadow:0 1.5px 0 var(--ink)}
+.ico svg{width:18px;height:18px}
+.ico[aria-pressed="true"]{background:var(--ink);color:var(--raise)}
+.ico.heat[aria-pressed="true"]{background:var(--orange);border-color:var(--orange);color:#fff}
+.ico.prop[aria-pressed="true"]{background:var(--leaf);border-color:var(--leaf);color:#fff}
+.steps{display:flex;gap:6px;flex-wrap:wrap}
+.steps button{font-size:12px;text-transform:lowercase;border:1.5px solid var(--ink);background:var(--raise);color:var(--ink);border-radius:999px;padding:6px 14px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;box-shadow:0 1.5px 0 var(--ink)}
+.steps button b{font-family:var(--f-mono);font-size:10px;font-weight:400;color:var(--muted)}
+.steps button[aria-pressed="true"]{background:var(--ink);color:var(--raise)}
+select{font:inherit;font-size:12px;font-weight:500;color:var(--ink);background:var(--raise);border:1.5px solid var(--ink);border-radius:999px;padding:5px 10px;box-shadow:0 1.5px 0 var(--ink)}
+.tabs{display:flex;border-bottom:1px solid var(--line);max-width:420px}
+.tab{flex:1;background:none;border:0;padding:10px 6px;cursor:pointer;font-weight:600;font-size:12px;text-transform:lowercase;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--orange)}
+.chip{font-size:10px;font-weight:600;letter-spacing:.02em;text-transform:lowercase;padding:1px 6px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.chip.thought{border-color:var(--orange);color:var(--orange)}.chip.chat{border-color:var(--leaf);color:var(--leaf)}
+.ev{font-family:var(--f-mono);font-size:9px;color:var(--orange);background:none;border:1px solid var(--line);border-radius:999px;padding:0 6px;cursor:pointer;vertical-align:middle;margin-left:2px}
+.ev:hover{border-color:var(--orange)}
+.youtag{font-family:var(--f-mono);font-size:9px;background:var(--orange);color:#fff;border-radius:999px;padding:1px 6px;vertical-align:middle;margin-left:4px}
+.face{width:22px;height:22px;image-rendering:pixelated;border-radius:4px;background:var(--line);object-fit:cover;object-position:50% 0;border:1px solid var(--line);vertical-align:middle;cursor:pointer}
+.face:hover{outline:1.5px solid var(--ink)}
+.face.you{outline:2px solid var(--orange)}
+.pair{display:inline-flex;gap:2px;vertical-align:middle}.pair .face{width:16px;height:16px}
+.conv{border:1px solid var(--line);border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:7px;background:var(--raise)}
+.conv.live{border-color:var(--orange);box-shadow:inset 3px 0 0 var(--orange)}
+.conv .meta{display:flex;align-items:center;gap:14px;font-size:11px;text-transform:lowercase;color:var(--muted)}
+.conv .meta b{color:var(--orange);font-family:var(--f-mono);font-weight:400;font-size:10.5px}
+.conv .meta .ok{color:var(--ok-ink);font-weight:600}
+.line{display:grid;grid-template-columns:22px minmax(0,1fr);gap:8px;align-items:start;font-size:12.5px}
+.pending{color:var(--muted)}
+.sub{position:relative;display:inline-block;max-width:250px;background:#fff;color:#161616;border:1.5px solid #161616;border-radius:8px;padding:6px 9px;font-size:12px;line-height:1.3;box-shadow:2px 2px 0 #161616;font-weight:500}
+.sub::after{content:"";position:absolute;left:50%;bottom:-7px;transform:translateX(-50%);border:6px solid transparent;border-top-color:#161616;border-bottom:0}
+.verdict{display:flex;align-items:center;gap:12px;border:1.5px solid var(--ink);border-radius:6px;padding:10px 14px;background:var(--panel)}
+.verdict.ok{border-color:var(--ok-ink);background:var(--ok-bg)}
+.vbig{font-family:var(--f-mono);font-size:22px;line-height:1}
+.vt{font-size:16px;font-weight:600;text-transform:lowercase}
+.idea{border:1px solid var(--line);border-radius:6px;padding:10px 12px;background:var(--raise);display:flex;flex-direction:column;gap:6px}
+.idea.mine{border-color:var(--orange)}
+.idea .it b{font-weight:600;font-size:13px}
+.idea .it p{margin:4px 0 0;font-size:12px}
+.vers{display:flex;flex-direction:column;gap:3px}
+.ver{display:grid;grid-template-columns:150px minmax(0,1fr);gap:8px;align-items:center;font-size:11.5px;color:var(--muted)}
+.ver.cur{color:var(--ink)}.ver .mono{font-size:10px}
+.cday{display:grid;grid-template-columns:64px minmax(0,1fr) 150px;gap:10px;align-items:center;padding:6px 0;border-bottom:1px dashed var(--line)}
+@media (max-width:560px){.cday{grid-template-columns:48px minmax(0,1fr)}.cday>b{display:none}}
+.cday>span:first-child,.cday>b{font-family:var(--f-mono);font-size:10.5px;color:var(--muted);font-weight:400}
+.cday>b{text-align:right}
+.cstrip{display:flex;flex-wrap:wrap;gap:3px}
+.csq{width:12px;height:12px;border-radius:2px;background:var(--o-none);display:inline-block;border:0;padding:0}
+.csq.born{background:var(--o-born)}.csq.join{background:var(--o-join)}.csq.evo{background:var(--o-evo)}.csq.agr{background:var(--o-agr)}.csq.ref{background:var(--o-ref)}
+.csq.mine{box-shadow:0 0 0 1.5px var(--bg),0 0 0 3px var(--orange)}
+.meter{display:block;height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+.meter b{display:block;height:100%;background:var(--orange)}
+.mono7{display:inline-grid;grid-template-columns:repeat(7,4px);grid-auto-rows:4px;gap:1px;vertical-align:middle}
+.mono7 i{display:block;background:#2A2A2A}.mono7 i.on{background:#fff}
+.mono7.dark i{background:var(--line)}.mono7.dark i.on{background:var(--ink)}
+.mono7.acc i.on{background:var(--orange)}
+details.more{border:1px solid var(--line);border-radius:6px;padding:10px 14px;background:var(--panel)}
+details.more summary{cursor:pointer;font-size:12px;text-transform:lowercase;color:var(--muted)}
+.m{display:grid;grid-template-columns:40px 60px minmax(0,1fr);gap:8px;align-items:baseline;font-size:12px;padding:5px 0;border-top:1px solid var(--line)}
+.m time{font-family:var(--f-mono);font-size:9.5px;color:var(--muted)}
+.m.hi{background:var(--hi-bg);outline:1.5px solid var(--orange);border-radius:4px;padding-inline:6px}
+
+/* ---- style-guide-only scaffolding ---- */
+.sg-sec{display:flex;flex-direction:column;gap:14px}
+.sg-h{display:flex;align-items:baseline;gap:12px;border-bottom:1px solid var(--line);padding-bottom:6px}
+.sg-h h2{font-weight:400;font-size:18px;margin:0;text-transform:lowercase}
+.sg-h .mono{font-size:10px;color:var(--muted)}
+.row{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.sw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.sw{border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--raise)}
+.sw i{display:block;height:44px;border-bottom:1px solid var(--line)}
+.sw div{padding:6px 8px;display:flex;flex-direction:column;gap:1px}
+.sw b{font-weight:600;font-size:11.5px}.sw span{font-family:var(--f-mono);font-size:9.5px;color:var(--muted)}
+.sw small{font-size:11px;color:var(--muted)}
+.type{display:grid;grid-template-columns:170px minmax(0,1fr);gap:8px 18px;align-items:baseline}
+@media (max-width:560px){.type{grid-template-columns:minmax(0,1fr)}}
+.type>span{font-family:var(--f-mono);font-size:9.5px;color:var(--muted)}
+.demo{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.cell{display:flex;flex-direction:column;gap:8px;min-width:0}
+.cell>.cap{font-family:var(--f-mono);font-size:9.5px;color:var(--muted)}
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.rules ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.rules h3{margin:0 0 6px;font-size:12px;font-weight:600;text-transform:lowercase}
+.themesw{display:inline-flex;border:1.5px solid var(--ink);border-radius:999px;overflow:hidden;box-shadow:0 1.5px 0 var(--ink)}
+.themesw button{background:var(--raise);border:0;padding:6px 12px;font-size:12px;text-transform:lowercase;cursor:pointer}
+.themesw button[aria-pressed="true"]{background:var(--ink);color:var(--raise)}
+code{font-family:ui-monospace,Menlo,monospace;font-size:11px;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+
+/* ---- sandbox ---- */
+.sbx{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:14px;align-items:start}
+@media (max-width:900px){.sbx{grid-template-columns:minmax(0,1fr)}}
+.ilist{display:flex;flex-direction:column;gap:8px}
+.ilist .idea{cursor:pointer;text-align:left;font:inherit;color:inherit}
+.ilist .idea[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 3px 0 0 var(--orange)}
+.ilist .idea.future{opacity:.35}
+.csq.hit{box-shadow:0 0 0 1.5px var(--bg),0 0 0 3px var(--ink)}
+.csq.future{opacity:.25}
+.csq:focus-visible{outline-offset:1px}
+.thread{position:relative;display:flex;flex-direction:column;gap:0;padding-left:18px}
+.thread::before{content:"";position:absolute;left:5px;top:6px;bottom:6px;width:1px;background:var(--line)}
+.tn{position:relative;display:flex;flex-direction:column;gap:3px;padding:6px 0 10px}
+.tn::before{content:"";position:absolute;left:-17px;top:11px;width:9px;height:9px;border-radius:2px;background:var(--o-none)}
+.tn.born::before{background:var(--o-born)}.tn.join::before{background:var(--o-join)}.tn.evo::before{background:var(--o-evo)}
+.tn.future{opacity:.3}
+.tn .mono{font-size:10px;color:var(--muted)}
+.readout{min-height:2.6em;font-size:12px;border-left:2px solid var(--line);padding-left:10px}
+.scrub{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.scrub input{flex:1;min-width:160px;accent-color:var(--orange)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:11px;color:var(--muted);text-transform:lowercase}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="band"><div class="bandin"><span id="band-glyph"></span><span class="bandt"><b>GA Cognitive Agents</b> <span>· placelab · style guide</span></span>
+  <span class="langsw" role="group" aria-label="theme"><button data-theme-btn="light" aria-pressed="true">light</button><button data-theme-btn="dark" aria-pressed="false">dark</button></span></div></div>
+
+<div class="wrap">
+<header>
+  <div><div class="lab" style="margin-bottom:4px">placelab · visual summary</div><h1>style guide</h1></div>
+  <p class="ask">tokens, type and components taken from GenerativeAgents/src/styles.css, plus a sandbox with sample data shaped like IDEAS and CLOG for prototyping the visual summary. "light" is the current placelab look; "dark" is a proposal for the Cognitive Agents black ground and is not in the repo yet.</p>
+</header>
+
+<!-- 1 · color -->
+<section class="sg-sec">
+  <div class="sg-h"><h2>1 · color</h2><span class="mono">--tokens</span></div>
+  <div class="lab" style="margin:0">surface and ink</div>
+  <div class="sw-grid" id="sw-base"></div>
+  <div class="lab" style="margin:0">accents</div>
+  <div class="sw-grid" id="sw-acc"></div>
+  <div class="lab" style="margin:0">conversation outcomes (csq classes) — the summary's main encoding</div>
+  <div class="sw-grid" id="sw-out"></div>
+  <p class="hint">orange carries "you", "live" and "born". green is joining or agreeing, blue is an idea evolving. everything else stays black, gray and white.</p>
+</section>
+
+<!-- 2 · type -->
+<section class="sg-sec">
+  <div class="sg-h"><h2>2 · type</h2><span class="mono">archivo + silkscreen</span></div>
+  <div class="type">
+    <span>h1 · archivo 400 · 24–32px</span><h1 style="font-size:clamp(24px,3vw,32px)">what ideas are born</h1>
+    <span>.evt · archivo 400 · 18px</span><div class="evt">what came out of crossing paths</div>
+    <span>.vt · archivo 600 · 16px</span><div class="vt">7 new ideas</div>
+    <span>body · archivo 400 · 12.5px</span><div>Agent E1·03 crossed their haptic sketching project with E2·11's interest in plant sensing.</div>
+    <span>.lab / .hint · 12px muted</span><div class="hint">3 · new ideas</div>
+    <span>.vbig · silkscreen · 22–34px</span><div class="vbig">12 / 3</div>
+    <span>clock · silkscreen · 22px</span><div class="mono" style="font-size:22px;letter-spacing:.04em">14:20</div>
+    <span>meta · silkscreen · 9.5–10.5px</span><div class="mono" style="font-size:10px;color:var(--muted)">v2 · 11:40 · café</div>
+  </div>
+  <p class="hint">labels and headings are lowercase. silkscreen is only for numbers, times, ids and codes — never sentences.</p>
+</section>
+
+<!-- 3 · components -->
+<section class="sg-sec">
+  <div class="sg-h"><h2>3 · components</h2><span class="mono">same class names as the repo</span></div>
+  <div class="demo">
+    <div class="cell"><span class="cap">.btn · .btn.orange · .go</span>
+      <div class="row"><button class="btn">replay</button><button class="btn orange">follow your character</button><button class="go">save</button></div></div>
+    <div class="cell"><span class="cap">.ico — aria-pressed toggles fill</span>
+      <div class="row" id="icos">
+        <button class="ico" aria-pressed="true" aria-label="3d view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg></button>
+        <button class="ico heat" aria-pressed="false" aria-label="presence heat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3c1 3 5 5 5 10a5 5 0 01-10 0c0-2 1-3 1-3s1 2 2 2c0-4 2-6 2-9z"/></svg></button>
+        <button class="ico prop" aria-pressed="false" aria-label="proposal heat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s-6-5.5-6-11a6 6 0 0112 0c0 5.5-6 11-6 11z"/><circle cx="12" cy="10" r="2"/></svg></button>
+        <select aria-label="speed"><option>1×</option><option selected>2×</option><option>4×</option></select>
+      </div></div>
+    <div class="cell"><span class="cap">.steps — page navigation</span>
+      <div class="steps" id="steps"><button aria-pressed="false"><b>1</b>profile</button><button aria-pressed="false"><b>2</b>simulation</button><button aria-pressed="true"><b>3</b>results</button></div></div>
+    <div class="cell"><span class="cap">.tabs — panel switcher</span>
+      <div class="tabs" role="tablist" id="tabs"><button class="tab" role="tab" aria-selected="true">conversations</button><button class="tab" role="tab" aria-selected="false">memory</button><button class="tab" role="tab" aria-selected="false">you</button></div></div>
+    <div class="cell"><span class="cap">.chip · .ev (evidence) · .youtag · .mono7</span>
+      <div class="row"><span class="chip">event</span><span class="chip thought">thought</span><span class="chip chat">chat</span><button class="ev">m12 m31</button><span class="youtag">you</span><span id="glyphs"></span></div></div>
+    <div class="cell"><span class="cap">.face (pixel portrait) · .face.you · .pair</span>
+      <div class="row" id="faces"></div></div>
+    <div class="cell"><span class="cap">.conv.live — feed card</span>
+      <div class="conv live" id="conv-demo"></div></div>
+    <div class="cell"><span class="cap">.sub — in-scene speech bubble</span>
+      <div style="padding:6px 0 14px"><span class="sub">what if the plants told you when the room is too loud?</span></div></div>
+    <div class="cell"><span class="cap">.verdict · .verdict.ok</span>
+      <div class="verdict ok"><div class="vbig">7</div><div><div class="vt">new ideas born</div><div class="hint">2 started by you · 3 joined · over 3 days</div></div></div></div>
+    <div class="cell"><span class="cap">.m.hi — highlighted memory row · .meter</span>
+      <div><div class="m"><time>10:12</time><span class="chip chat">chat</span><span>talked with E2·11 at the café</span></div><div class="m hi"><time>11:40</time><span class="chip thought">thought</span><span>sensing plants could pace a sketch session</span></div></div>
+      <span class="meter"><b style="width:62%"></b></span></div>
+    <div class="cell"><span class="cap">details.more — progressive disclosure</span>
+      <details class="more"><summary>inside: traces and memory evidence</summary><p class="hint" style="margin-top:8px">put logs, traces and evidence ids here, out of the main view.</p></details></div>
+  </div>
+</section>
+
+<!-- 4 · interaction rules -->
+<section class="sg-sec">
+  <div class="sg-h"><h2>4 · interaction and layout rules</h2><span class="mono">from styles.css + AGENTS.md</span></div>
+  <div class="rules">
+    <div><h3>states</h3><ul>
+      <li>press: move down 1px and drop the 1.5px shadow.</li>
+      <li>on / selected: <code>aria-pressed</code> or <code>aria-selected</code> fills with ink (or orange or green for heat toggles).</li>
+      <li>focus: 2px orange outline, 2px offset.</li>
+      <li>hover on faces and evidence pills: a thin ink or orange outline, no color fill.</li>
+      <li>live / in progress: orange border plus a 3px inset orange bar on the left.</li>
+    </ul></div>
+    <div><h3>shape and space</h3><ul>
+      <li>radius 6px for panels and cards, 999px for buttons and pills, 2–4px for squares and faces.</li>
+      <li>1px <code>--line</code> rules; 1.5px ink borders only on controls.</li>
+      <li>gaps of 6, 8, 10, 12 and 14px; panel padding 10–14px.</li>
+      <li>pixel images use <code>image-rendering:pixelated</code>.</li>
+    </ul></div>
+    <div><h3>do / avoid</h3><ul>
+      <li>do: restrained, editorial, mostly monochrome; one accent at a time.</li>
+      <li>do: keyboard access, reduced motion, layouts that work on phone widths.</li>
+      <li>avoid: dashboard card grids, gradients, new fonts or new radii.</li>
+      <li>avoid: real names — agents appear by code and pixel portrait only.</li>
+    </ul></div>
+  </div>
+</section>
+
+<!-- 5 · sandbox -->
+<section class="sg-sec">
+  <div class="sg-h"><h2>5 · sandbox · visual summary</h2><span class="mono">sample data · edit SAMPLE in the script</span></div>
+  <section class="evid">
+    <div class="evh"><div><div class="lab">results · prototype</div><h2 class="evt">how the ideas grew, conversation by conversation</h2></div>
+      <p class="hint">pick an idea to trace its thread. its conversations get outlined in the day strip. drag the slider, or press replay, to watch the run unfold. hover or focus a square to read it.</p></div>
+    <div class="scrub"><input type="range" id="t" min="0" max="1000" value="1000" aria-label="moment in the run"><span class="mono" id="tlab" style="font-size:11px"></span><button class="btn" id="play">replay</button></div>
+    <div id="days"></div>
+    <div class="legend" id="legend"></div>
+    <div class="readout" id="readout" aria-live="polite"><span class="hint">hover a square to read that conversation.</span></div>
+    <div class="sbx">
+      <div><div class="lab">ideas</div><div class="ilist" id="ilist"></div></div>
+      <div><div class="lab">thread</div><div class="idea" style="padding:12px 14px"><div class="it" id="th-title"></div><div class="thread" id="thread"></div></div></div>
+    </div>
+  </section>
+</section>
+</div>
+
+<script>
+/* Sample data mirrors the real shapes: IDEAS (agents.js newIdea + sim.js evolveIdea/joinIdea) and CLOG (sim.js:103). */
+const SAMPLE = {
+  agents: [
+    { id: 0, code: "E1·03", shirt: "#FF4F12", hair: "#2A1E16", skin: "#E7B48F", you: true,
+      project: "haptic sketching gloves" },
+    { id: 1, code: "E2·11", shirt: "#2B9A4C", hair: "#111111", skin: "#C98E6B",
+      project: "plants that sense the room" },
+    { id: 2, code: "E3·07", shirt: "#2F6FE0", hair: "#6B3E1F", skin: "#F1C9A5",
+      project: "memory maps of a building" },
+    { id: 3, code: "E1·09", shirt: "#17171B", hair: "#C9A26B", skin: "#8D5A3B",
+      project: "a quiet-hours scheduler" },
+  ],
+  places: { "341": "341", foodcam: "foodcam", atrium: "atrium", cafe: "café", hall: "hall" },
+  dayLen: 600,
+  ideas: [
+    { id: "i1", title: "gloves that feel the room", by: [0, 1], members: [0, 1, 3],
+      born: { t: 90, day: 1, clk: "10:30", place: "cafe" },
+      versions: [
+        { n: 1, kind: "born", t: 90, clk: "10:30", place: "cafe", by: [0, 1], text: "born from crossing the two projects" },
+        { n: 2, kind: "join", t: 420, clk: "16:00", place: "atrium", by: [3], text: "E1·09 joins: add quiet hours" },
+        { n: 3, kind: "evo", t: 760, clk: "11:40", place: "cafe", by: [1, 3], text: "adds plant sensing as a pacing signal" },
+      ] },
+    { id: "i2", title: "a building that remembers", by: [2, 3], members: [2, 3],
+      born: { t: 300, day: 1, clk: "14:00", place: "foodcam" },
+      versions: [
+        { n: 1, kind: "born", t: 300, clk: "14:00", place: "foodcam", by: [2, 3], text: "born from crossing the two projects" },
+        { n: 2, kind: "evo", t: 1320, clk: "13:00", place: "341", by: [2, 0], text: "memory maps become a shared sketchbook" },
+      ] },
+    { id: "i3", title: "plants on the memory map", by: [1, 2], members: [1, 2, 0],
+      born: { t: 980, day: 2, clk: "15:20", place: "hall" },
+      versions: [
+        { n: 1, kind: "born", t: 980, clk: "15:20", place: "hall", by: [1, 2], text: "born from crossing the two projects" },
+        { n: 2, kind: "join", t: 1500, clk: "16:00", place: "cafe", by: [0], text: "E1·03 joins: gloves as the input" },
+      ] },
+  ],
+  clog: [],
+};
+(function buildClog() {
+  const pl = Object.keys(SAMPLE.places), ev = [];
+  SAMPLE.ideas.forEach(i => i.versions.forEach(v => ev.push({ t: v.t, place: v.place, out: v.kind,
+    a: v.by[0], b: v.by[1] ?? i.by[0], idea: i.id })));
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let k = 0; k < 34; k++) {
+    const t = Math.floor(rnd() * 1800), a = Math.floor(rnd() * 4);
+    let b = Math.floor(rnd() * 4); if (b === a) b = (a + 1) % 4;
+    ev.push({ t, place: pl[Math.floor(rnd() * pl.length)], out: rnd() < .35 ? "agr" : "none", a, b, idea: null });
+  }
+  ev.sort((x, y) => x.t - y.t).forEach((c, k) => {
+    c.id = "c" + (k + 1); c.day = Math.floor(c.t / SAMPLE.dayLen) + 1;
+    const m = 540 + Math.floor((c.t % SAMPLE.dayLen) * 0.9);
+    c.clk = String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+    c.mine = c.a === 0 || c.b === 0;
+  });
+  SAMPLE.clog = ev;
+})();
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+/* pixel portraits: stand-ins for the real sprite textures (scene.js) */
+const FACE = ["..hhhh..", ".hhhhhh.", ".hssssh.", ".s.ss.s.", ".ssssss.", "..s..s..", "..ssss..", ".cccccc.", "cccccccc", "cccccccc"];
+const faceCache = {};
+function faceURL(a) {
+  if (faceCache[a.id]) return faceCache[a.id];
+  const c = document.createElement("canvas"); c.width = 8; c.height = 10; const g = c.getContext("2d");
+  FACE.forEach((row, y) => [...row].forEach((ch, x) => {
+    const col = { h: a.hair, s: a.skin, c: a.shirt }[ch]; if (!col) return; g.fillStyle = col; g.fillRect(x, y, 1, 1);
+  }));
+  return (faceCache[a.id] = c.toDataURL());
+}
+const A = id => SAMPLE.agents[id];
+const face = (id, extra = "") => { const a = A(id);
+  return `<img class="face${a.you ? " you" : ""}${extra}" alt="${esc(a.code)}" title="${esc(a.code)}${a.you ? " · you" : ""}" src="${faceURL(a)}">`; };
+
+/* 7×7 monogram, same construction as sim.js mono7() */
+const PIX = { A: ["010","101","111","101","101"], G: ["011","100","101","101","011"], E: ["111","100","110","100","111"], S: ["011","100","010","001","110"] };
+function mono7(two, cls = "") { const g = [];
+  for (let r = 0; r < 7; r++) for (let c = 0; c < 7; c++) { let on = false;
+    if (r >= 1 && r <= 5) { const i = c < 3 ? 0 : c > 3 ? 1 : -1; if (i >= 0) { const ch = PIX[two[i]]; if (ch) on = ch[r - 1][c - (i ? 4 : 0)] === "1"; } }
+    g.push(`<i class="${on ? "on" : ""}"></i>`); }
+  return `<span class="mono7 ${cls}" aria-hidden="true">${g.join("")}</span>`; }
+
+/* ---- static demos ---- */
+$("band-glyph").innerHTML = mono7("GA");
+$("glyphs").innerHTML = mono7("SG", "dark") + " " + mono7("GA", "acc");
+$("faces").innerHTML = SAMPLE.agents.map(a => face(a.id)).join("") + `<span class="pair">${face(1)}${face(2)}</span>`;
+$("conv-demo").innerHTML = `<div class="meta"><b>10:30</b><span>café</span><span class="ok">idea born</span></div>
+  <div class="line">${face(0)}<span>I'm building gloves that sketch by touch.<span class="youtag">you</span></span></div>
+  <div class="line">${face(1)}<span>my plants notice when a room gets tense. <button class="ev">m4 m9</button></span></div>
+  <div class="line">${face(0)}<span class="pending">…</span></div>`;
+
+const OUT = [["born","--o-born","idea born"],["join","--o-join","someone joins"],["evo","--o-evo","idea evolves"],["agr","--o-agr","agreement"],["ref","--o-ref","referral"],["none","--o-none","no outcome"]];
+function swatches() {
+  const card = (v, name, note) => `<div class="sw"><i style="background:var(${v})"></i><div><b>${name}</b><span>${v} · ${css(v)}</span>${note ? `<small>${note}</small>` : ""}</div></div>`;
+  $("sw-base").innerHTML = [["--bg","bg","page"],["--panel","panel","section ground"],["--raise","raise","cards, controls"],["--ink","ink","text, borders"],["--muted","muted","secondary text"],["--line","line","rules"]].map(x => card(...x)).join("");
+  $("sw-acc").innerHTML = [["--orange","orange","you · live · born · focus"],["--leaf","leaf","proposal · chat · join"],["--hi-bg","highlight","selected memory row"],["--ok-bg","ok ground","success verdict"]].map(x => card(...x)).join("");
+  $("sw-out").innerHTML = OUT.map(([k, v, n]) => card(v, k, n)).join("");
+}
+
+document.querySelectorAll("#icos .ico").forEach(b => b.addEventListener("click", () => b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") !== "true")));
+const radio = (sel, attr) => document.querySelectorAll(sel).forEach(b => b.addEventListener("click", () => document.querySelectorAll(sel).forEach(x => x.setAttribute(attr, x === b))));
+radio("#steps button", "aria-pressed"); radio("#tabs .tab", "aria-selected");
+
+/* ---- sandbox ---- */
+const END = Math.max(...SAMPLE.clog.map(c => c.t)) + 1;
+let T = END, sel = SAMPLE.ideas[0].id, playing = null;
+const label = t => { const d = Math.floor(t / SAMPLE.dayLen) + 1, m = 540 + Math.floor((t % SAMPLE.dayLen) * 0.9);
+  return `day ${d} · ${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`; };
+const outName = Object.fromEntries(OUT.map(([k, , n]) => [k, n]));
+
+function renderDays() {
+  const days = Math.max(...SAMPLE.clog.map(c => c.day)), rows = [];
+  for (let d = 1; d <= days; d++) {
+    const cs = SAMPLE.clog.filter(c => c.day === d);
+    rows.push(`<div class="cday"><span>day ${d}</span><div class="cstrip">${cs.map(c =>
+      `<button class="csq ${c.out === "none" ? "" : c.out}${c.mine ? " mine" : ""}${c.idea === sel ? " hit" : ""}${c.t > T ? " future" : ""}" data-c="${c.id}" aria-label="${c.clk} ${esc(SAMPLE.places[c.place])} ${outName[c.out]}"></button>`).join("")}</div>
+      <b>${cs.length} conv · ${cs.filter(c => c.out === "born").length} born</b></div>`);
+  }
+  $("days").innerHTML = rows.join("");
+}
+function renderIdeas() {
+  $("ilist").innerHTML = SAMPLE.ideas.map(i => {
+    const live = i.versions.filter(v => v.t <= T), mine = i.members.includes(0);
+    return `<button class="idea${mine ? " mine" : ""}${i.born.t > T ? " future" : ""}" aria-pressed="${i.id === sel}" data-i="${i.id}">
+      <span class="it"><b>${esc(i.title)}</b></span>
+      <span class="row" style="gap:10px"><span class="mono" style="font-size:10px;color:var(--muted)">${esc(i.born.clk)} · ${esc(SAMPLE.places[i.born.place])} · v${Math.max(1, live.length)}</span>
+      <span class="pair">${i.members.map(m => face(m)).join("")}</span></span></button>`;
+  }).join("");
+}
+function renderThread() {
+  const i = SAMPLE.ideas.find(x => x.id === sel);
+  $("th-title").innerHTML = `<b>${esc(i.title)}</b><p class="hint">from ${esc(A(i.by[0]).project)} × ${esc(A(i.by[1]).project)}</p>`;
+  $("thread").innerHTML = i.versions.map(v => `<div class="tn ${v.kind}${v.t > T ? " future" : ""}">
+    <span class="mono">v${v.n} · day ${Math.floor(v.t / SAMPLE.dayLen) + 1} · ${esc(v.clk)} · ${esc(SAMPLE.places[v.place])}</span>
+    <span>${esc(v.text)} <span class="pair">${v.by.map(b => face(b)).join("")}</span></span></div>`).join("");
+}
+function renderLegend() { $("legend").innerHTML = OUT.map(([k, , n]) => `<span><i class="csq ${k === "none" ? "" : k}"></i>${n}</span>`).join("") +
+  `<span><i class="csq mine"></i>you took part</span><span><i class="csq hit"></i>in the selected thread</span>`; }
+function renderAll() { $("tlab").textContent = label(T); renderDays(); renderIdeas(); renderThread(); }
+
+$("ilist").addEventListener("click", e => { const b = e.target.closest("[data-i]"); if (!b) return; sel = b.dataset.i; renderAll(); });
+const readC = e => { const b = e.target.closest("[data-c]"); if (!b) return; const c = SAMPLE.clog.find(x => x.id === b.dataset.c);
+  const idea = c.idea && SAMPLE.ideas.find(i => i.id === c.idea);
+  $("readout").innerHTML = `<span class="mono" style="font-size:10px;color:var(--muted)">day ${c.day} · ${c.clk} · ${esc(SAMPLE.places[c.place])}</span><br>
+    <span class="pair">${face(c.a)}${face(c.b)}</span> ${esc(A(c.a).code)} and ${esc(A(c.b).code)} · ${outName[c.out]}${idea ? ` · <b>${esc(idea.title)}</b>` : ""}`; };
+$("days").addEventListener("mouseover", readC); $("days").addEventListener("focusin", readC);
+$("days").addEventListener("click", e => { const b = e.target.closest("[data-c]"); if (!b) return;
+  const c = SAMPLE.clog.find(x => x.id === b.dataset.c); if (c.idea) { sel = c.idea; renderAll(); } });
+$("t").addEventListener("input", () => { stop(); T = END * (+$("t").value / 1000); renderAll(); });
+function stop() { if (playing) { clearInterval(playing); playing = null; $("play").textContent = "replay"; } }
+$("play").addEventListener("click", () => {
+  if (playing) return stop();
+  const sl = $("t"); if (+sl.value >= 1000) sl.value = 0; $("play").textContent = "stop";
+  const step = matchMedia("(prefers-reduced-motion: reduce)").matches ? 100 : 8;
+  playing = setInterval(() => { sl.value = Math.min(1000, +sl.value + step); T = END * (+sl.value / 1000); renderAll(); if (+sl.value >= 1000) stop(); }, 60);
+});
+
+/* theme */
+function setTheme(t) { document.documentElement.dataset.theme = t;
+  document.querySelectorAll("[data-theme-btn]").forEach(b => b.setAttribute("aria-pressed", b.dataset.themeBtn === t));
+  try { localStorage.setItem("sg-theme", t); } catch (e) {}
+  swatches(); }
+document.querySelectorAll("[data-theme-btn]").forEach(b => b.addEventListener("click", () => setTheme(b.dataset.themeBtn)));
+let saved = "light"; try { saved = localStorage.getItem("sg-theme") || "light"; } catch (e) {}
+setTheme(saved); renderLegend(); renderAll();
+</script>
+</body>
+</html>
