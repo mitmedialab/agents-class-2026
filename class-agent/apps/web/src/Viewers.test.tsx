@@ -235,6 +235,26 @@ describe("DraftDocument", () => {
     ).toHaveAttribute("data-content-only", "true");
   });
 
+  it("draws an evidence thread from a project claim to a student-selected test", () => {
+    render(
+      <DraftDocument
+        content="My domain agent helps people plan around conflicting constraints."
+        evidenceThread={{
+          claim: "Helps people plan around conflicting constraints",
+          evidence: "A planning trace with two deadlines and one hour available",
+          status: "connected",
+        }}
+        title="Final project write-up"
+      />,
+    );
+
+    const thread = screen.getByRole("region", { name: "Evidence thread" });
+    expect(thread).toHaveAttribute("data-status", "connected");
+    expect(thread).toHaveTextContent("Helps people plan around conflicting constraints");
+    expect(thread).toHaveTextContent("A planning trace with two deadlines and one hour available");
+    expect(thread).toHaveTextContent("Claim connected to evidence");
+  });
+
   it("uses semantic field controls and renders validation guidance inline", () => {
     render(
       <DraftDocument

@@ -112,6 +112,102 @@
   overflow: hidden;
 }
 
+.ca-evidence-thread {
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  margin: var(--space-4);
+  min-height: 17rem;
+  overflow: hidden;
+  position: relative;
+}
+
+.ca-evidence-thread-line {
+  background: var(--color-text-muted);
+  height: 1px;
+  left: 15%;
+  position: absolute;
+  right: 15%;
+  top: 50%;
+  transform: rotate(-12deg);
+  transform-origin: left center;
+}
+
+.ca-evidence-thread-node {
+  background: var(--color-surface);
+  border: 1px solid var(--color-text-muted);
+  box-sizing: border-box;
+  display: grid;
+  gap: var(--space-2);
+  max-width: 44%;
+  min-height: 5.5rem;
+  padding: var(--space-3);
+  position: absolute;
+  z-index: 1;
+}
+
+.ca-evidence-thread-node span,
+.ca-evidence-thread > p {
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  letter-spacing: 0.1em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.ca-evidence-thread-node strong {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.ca-evidence-thread-claim {
+  left: var(--space-4);
+  top: var(--space-4);
+  transform: rotate(-3deg);
+}
+
+.ca-evidence-thread-artifact {
+  bottom: var(--space-4);
+  right: var(--space-4);
+  transform: rotate(3deg);
+}
+
+.ca-evidence-thread-pin {
+  background: var(--color-background);
+  border: 1px solid var(--color-text);
+  border-radius: 50%;
+  height: 1.1rem;
+  left: calc(50% - 0.55rem);
+  position: absolute;
+  top: calc(50% - 0.55rem);
+  width: 1.1rem;
+  z-index: 2;
+}
+
+.ca-evidence-thread > p {
+  bottom: var(--space-3);
+  left: 50%;
+  position: absolute;
+  text-align: center;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.ca-evidence-thread[data-status="connected"] .ca-evidence-thread-node {
+  border-color: var(--color-text);
+}
+
+@media (max-width: 28rem) {
+  .ca-evidence-thread {
+    min-height: 20rem;
+  }
+
+  .ca-evidence-thread-node {
+    max-width: 68%;
+  }
+}
+
+
 .ca-browser-viewer {
   background: var(--color-surface);
   border-radius: var(--radius-lg);

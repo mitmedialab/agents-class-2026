@@ -556,6 +556,16 @@ export const DRAFT_DOCUMENT_MANIFEST: ComponentManifest = {
       description: { type: "string", maxLength: 2_000 },
       status: { type: "string", enum: ["draft", "ready", "final", "submitted"] },
       content: { type: "string", minLength: 1, maxLength: 30_000 },
+      evidence_thread: {
+        type: "object",
+        properties: {
+          claim: { type: "string", minLength: 1, maxLength: 2_000 },
+          evidence: { type: "string", minLength: 1, maxLength: 2_000 },
+          status: { type: "string", enum: ["prompt", "connected"] },
+        },
+        required: ["claim", "status"],
+        additionalProperties: false,
+      },
       fields: {
         type: "array",
         minItems: 1,

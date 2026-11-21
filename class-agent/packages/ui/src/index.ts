@@ -34,6 +34,7 @@ export {
   type DraftDocumentField,
   type DraftDocumentProps,
   type DraftDocumentStatus,
+  type EvidenceThread,
   type DraftFieldInputType,
   type DraftFieldStatus,
 } from "./DraftDocument.js";
