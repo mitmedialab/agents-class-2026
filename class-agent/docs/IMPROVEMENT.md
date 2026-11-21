@@ -227,8 +227,9 @@ asked for, and an interactive run opens the report in the browser.
   this synthetic demo.
 - `--real-projects` reads the course GitHub repositories through the Course Agent's own
   read-only reader (`GITHUB_TOKEN`) instead of the synthetic ones. It requires `--live` and
-  `--evidence PATH`, a digest that describes the real cohort. Keep such a digest
-  in the git-ignored `examples/improvement_loop/local/`. Repository names are added to the
+  `--evidence PATH`, a digest that describes the real cohort.
+  `examples/improvement_loop/local/evidence.json` is one: aggregate counts only, with no
+  student or repository names. Repository names are added to the
   privacy screen, so a proposal that names a student waits for a human.
 - `--trial-exchanges N` sets how many student messages each simulated trial of a proposed
   skill contains. With `--langfuse`, trial runs are traces named `trial · <persona>` (the

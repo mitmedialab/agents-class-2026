@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "period": "2026-W47",
+  "cohort_size": 36,
+  "synthetic": false,
+  "signals": [
+    {
+      "id": "writeups-drop-after-week-6",
+      "goal_id": "build-agents",
+      "source": "student_projects",
+      "observation": "Of 36 student repositories, 20 to 23 hold a substantive write-up for each of weeks 1 to 6, most with readable code. Only 10 hold one for week 7 and 11 for week 8, with almost no readable code.",
+      "student_count": 12
+    },
+    {
+      "id": "no-current-week-work",
+      "goal_id": "multimodal-inputs",
+      "source": "student_projects",
+      "observation": "As of 19 November no repository holds a write-up or build for week 9 or week 10 beyond empty template placeholders.",
+      "student_count": 36
+    },
+    {
+      "id": "final-project-writeup-missing",
+      "goal_id": "domain-prototype",
+      "source": "student_projects",
+      "observation": "17 of 36 repositories have no final-project write-up of substance; 19 have one, with a median of about 14 KB.",
+      "student_count": 17
+    },
+    {
+      "id": "inactive-since-october",
+      "goal_id": "build-agents",
+      "source": "student_projects",
+      "observation": "21 of 36 repositories were last pushed in October. 14 have been pushed since 9 November.",
+      "student_count": 21
+    },
+    {
+      "id": "week8-course-agent-extensions",
+      "goal_id": "augment-humans",
+      "source": "student_projects",
+      "observation": "Student groups submitted six public Week 8 pull requests to the course repository that extend the Course Agent with personalization: student-owned memory, a study coach, peer-help matchmaking, and personalized peer builds. 11 repositories hold a week 8 write-up.",
+      "student_count": 11
+    },
+    {
+      "id": "builds-stored-as-archives",
+      "goal_id": "build-agents",
+      "source": "student_projects",
+      "observation": "6 repositories store weekly builds as zip archives, which the Course Agent's repository reader cannot open; it sees their write-ups but not their code.",
+      "student_count": 6
+    }
+  ]
+}
