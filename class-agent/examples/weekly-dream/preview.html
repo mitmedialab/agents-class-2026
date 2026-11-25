@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Weekly dream · Brooke</title><link rel="stylesheet" href="/tokens.css">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:var(--color-background);color:var(--color-text);font:16px/1.65 Helvetica,Arial,sans-serif}
+main{max-width:680px;margin:0 auto;padding:40px 24px}
+header{display:flex;justify-content:space-between;align-items:baseline;gap:16px;border-bottom:1px solid var(--color-border);padding-bottom:16px}
+h1{font-size:1rem;font-weight:500;margin:0}h2{font-size:1.65rem;font-weight:400;line-height:1.25;margin:28px 0 20px}
+p{margin:16px 0}a{color:inherit;text-underline-offset:4px}.muted,summary,#edition{color:var(--color-text-muted);font-size:.8rem}
+#provenance{font-size:.7rem;color:var(--color-text-muted);margin:12px 0 0}
+footer{border-top:1px solid var(--color-border);margin-top:28px;padding-top:14px;display:flex;gap:24px;flex-wrap:wrap}
+footer details{flex:1;min-width:160px}summary{cursor:pointer}details[open]>summary{margin-bottom:12px}
+.review{margin-top:40px;border-top:1px solid var(--color-border);padding-top:16px}
+.controls,.feedback{display:flex;gap:8px;flex-wrap:wrap}button{font:inherit;cursor:pointer}button:disabled{opacity:.4;cursor:not-allowed}
+.feedback button{font-size:.75rem;padding:6px 10px!important}.feedback-item{margin:14px 0}.feedback-item p{font-size:.85rem;margin-bottom:8px}
+label{display:block;font-size:.85rem;margin-top:16px}textarea{width:100%;min-height:90px;resize:vertical;font:inherit}form button{margin-top:12px}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.7rem}#status:empty{display:none}#status{font-size:.8rem}ul{padding-left:18px;font-size:.8rem}
+button:focus-visible,summary:focus-visible,a:focus-visible{outline:1px solid var(--color-text);outline-offset:4px}
+@media(max-width:450px){main{padding:24px 20px}h2{font-size:1.4rem}header{flex-wrap:wrap;gap:4px}}
+</style>
+</head>
+<body><main>
+<header><h1>Weekly dream</h1><span id="edition">For Brooke</span></header>
+<p id="provenance">Sample email · not sent</p>
+<section id="dream" aria-label="Your weekly dream"></section>
+<footer>
+<details><summary>Shape next week</summary><div id="feedback-items"></div></details>
+<details><summary>Why these connections?</summary><p class="muted">Based on your interests, past builds, and the course materials:</p><ul id="sources"></ul></details>
+</footer>
+<p id="status" role="status"></p>
+<details class="review"><summary>Preview controls</summary>
+<p class="muted">Local development only. Email delivery is not connected. Samples are written fixtures, not live model output.</p>
+<div class="controls"><button class="ca-button" data-variant="outline" id="example">Load sample / follow-up</button><button class="ca-button" data-variant="outline" id="live">Generate live</button><button class="ca-button" data-variant="outline" id="reset-example">Reset Brooke sample</button></div>
+<details><summary>Edit your focus</summary><form id="profile">
+<label for="interests">Interests, one per line</label><textarea class="ca-input" id="interests"></textarea>
+<label for="project">Current work and past builds</label><textarea class="ca-input" id="project"></textarea>
+<label for="current-build">Current weekly build</label><textarea class="ca-input" id="current-build"></textarea>
+<label for="prior-builds">Prior builds, one per line</label><textarea class="ca-input" id="prior-builds"></textarea>
+<label for="engaged-questions">Questions engaged with the Course Agent, one per line</label><textarea class="ca-input" id="engaged-questions"></textarea>
+<p class="muted">The enabled Course Agent updates these fields from your own messages and build files. Automatic updates retain their evidence in Saved memory. This sample preview does not simulate that learning.</p>
+<label for="questions">Open questions, one per line</label><textarea class="ca-input" id="questions"></textarea>
+<button class="ca-button" data-variant="outline" type="submit">Save my focus</button></form></details>
+<details><summary>Saved memory</summary><pre id="memory"></pre></details>
+<details><summary>Earlier dreams</summary><div id="history"></div></details>
+<p><button id="clear" class="ca-button" data-variant="outline">Clear local dream memory</button></p>
+<p class="muted">Clears this feature's focus, dreams and feedback; not course records, chats or backups.</p>
+</details>
+</main>
+<script>
+
+let state;const $=id=>document.getElementById(id);const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function render(s) {
+  state=s;
+  const m=s.memory,p=m.profile,d=m.dreams[0];
+  $('interests').value=p.interests.join('\n');
+  $('project').value=p.project;
+  $('current-build').value=p.current_weekly_build||'';
+  $('prior-builds').value=(p.prior_builds||[]).join('\n');
+  $('engaged-questions').value=(p.engaged_questions||[]).join('\n');
+  $('questions').value=p.open_questions.join('\n');
+  $('memory').textContent=JSON.stringify(m,null,2);
+  $('live').disabled=!s.live_available;
+  $('live').title=s.live_available?'Uses the configured model':'Requires a server-side API key';
+  $('edition').textContent='For Brooke · Week '+s.week;
+  $('provenance').textContent=d?.mode==='reviewed_example'?'Sample email · not sent':'Local preview · not sent';
+  if(d) {
+    $('dream').innerHTML='<h2>'+esc(d.draft.headline)+'</h2>'+d.draft.items.map(i=>
+      '<p>'+esc(i.text)+(i.link?' <a href="'+esc(i.link)+'" target="_blank" rel="noopener noreferrer">'+esc(i.title)+' ↗</a>':'')+'</p>'
+    ).join('');
+    $('feedback-items').innerHTML=d.draft.items.map(i=>'<div class="feedback-item"><p>'+esc(i.title)+'</p><div class="feedback">'+
+      [['useful','Useful'],['already_explored','Already explored'],['not_relevant','Not for me']].map(([rating,label])=>
+      '<button type="button" class="ca-button" data-variant="outline" data-dream="'+d.id+'" data-key="'+esc(i.key)+'" data-rating="'+rating+'" aria-pressed="'+(m.feedback.filter(f=>f.dream_id===d.id&&f.item_key===i.key).at(-1)?.rating===rating)+'">'+label+'</button>').join('')+'</div></div>').join('');
+    $('sources').innerHTML=d.sources.map(s=>'<li>'+esc(s.title)+'</li>').join('');
+  } else {
+    $('dream').innerHTML='<h2>Your next connection starts here.</h2><p>Open Preview controls below to load the sample email.</p>';
+    $('feedback-items').replaceChildren(); $('sources').replaceChildren();
+  }
+  $('history').innerHTML=m.dreams.slice(1).map(d=>'<p>'+esc(d.draft.headline)+'</p>').join('')||'<p>No earlier dreams.</p>';
+}
+async function act(action,payload={}){$('status').textContent='Working…';try{const r=await fetch('/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,payload})});const s=await r.json();if(!r.ok)throw Error(s.detail||'Request failed');render(s);$('status').textContent=action==='example'?'Sample email saved locally. Not live-generated or sent.':action==='live'?'Generated by the Course Agent. Not sent.':'Saved.';}catch(e){$('status').textContent=e.message;}}
+$('example').onclick=()=>act('example');$('live').onclick=()=>act('live');$('profile').onsubmit=e=>{e.preventDefault();act('profile',{interests:$('interests').value.split('\n').map(s=>s.trim()).filter(Boolean),project:$('project').value,current_weekly_build:$('current-build').value,prior_builds:$('prior-builds').value.split('\n').map(s=>s.trim()).filter(Boolean),engaged_questions:$('engaged-questions').value.split('\n').map(s=>s.trim()).filter(Boolean),open_questions:$('questions').value.split('\n').map(s=>s.trim()).filter(Boolean),revision:state.memory.profile.revision});};$('feedback-items').onclick=e=>{const b=e.target.closest('button[data-rating]');if(b)act('feedback',{dream_id:b.dataset.dream,item_key:b.dataset.key,rating:b.dataset.rating,note:''});};$('reset-example').onclick=()=>{if(confirm('Replace this local preview’s focus, dreams and feedback with the original Brooke sample profile?'))act('reset_example',{confirm:true});};$('clear').onclick=()=>{if(confirm('Clear this local preview’s saved focus, dreams and feedback?'))act('clear',{confirm:true});};fetch('/state').then(r=>r.json()).then(render).catch(e=>$('status').textContent=e.message);
+</script>
+</body></html>

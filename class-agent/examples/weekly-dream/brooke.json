@@ -1,0 +1,88 @@
+{
+  "notice": "Local, editable example assembled from Brooke's stated interests and published projects. Not a copy of the private course roster.",
+  "name": "Brooke Smilen",
+  "week": 8,
+  "resource_uris": [
+    "course://slides/week-07",
+    "course://schedule"
+  ],
+  "profile": {
+    "interests": [
+      "language evolution in AI",
+      "Shannon entropy",
+      "associative networks",
+      "creativity",
+      "multi-agent coordination"
+    ],
+    "project": "With David Selles (Harvard GSD), exploring associative agent network structures to improve the novelty and diversity of generated ideas. Past builds: The Town, a 50-agent environment for hidden-rule discovery and coordination; Tengo, a writing interface visualizing model interpretations; Perci, a visual perception study companion. Sources: https://mitmedialab.github.io/agents2026-brooke/week07/ and https://brookesmilen.com/research/",
+    "open_questions": [
+      "How can agent networks generate diverse ideas without losing useful connections?"
+    ],
+    "revision": 0
+  },
+  "editions": [
+    {
+      "week": 8,
+      "headline": "What should your network forget?",
+      "items": [
+        {
+          "kind": "connection",
+          "key": "memory-association-coverage",
+          "title": "A connection",
+          "text": "The memory lecture offers an angle on your associative agent networks: remembering explored paths could help agents seek out more distant connections.",
+          "source_ids": [
+            "course-1",
+            "student-focus"
+          ]
+        },
+        {
+          "kind": "reading",
+          "key": "memgpt-memory-routing",
+          "title": "Read MemGPT",
+          "text": "MemGPT\u2019s distinction between active context and stored memory is worth bringing into your network design: which associations should stay close, and which should be retrieved only when needed?",
+          "source_ids": [
+            "course-2",
+            "student-focus"
+          ],
+          "link": "https://arxiv.org/abs/2310.08560"
+        },
+        {
+          "kind": "question",
+          "key": "forgetting-for-novelty",
+          "title": "A question",
+          "text": "Could selective forgetting increase idea diversity without making the network repeat itself?",
+          "source_ids": [
+            "course-1",
+            "student-focus"
+          ]
+        }
+      ]
+    },
+    {
+      "week": 8,
+      "headline": "Could compaction erase the surprising idea?",
+      "items": [
+        {
+          "kind": "connection",
+          "key": "compact-messages-budget",
+          "title": "A different connection",
+          "text": "You marked association coverage as already explored. Try the communication channel: compare compacted messages with full histories while holding model, network structure, and token budget constant.",
+          "source_ids": [
+            "course-1",
+            "student-focus"
+          ]
+        },
+        {
+          "kind": "question",
+          "key": "compression-loses-surprise",
+          "title": "A question",
+          "text": "A summary may preserve the main point but lose a weak association. How would you detect whether that lost detail could have seeded a novel idea?",
+          "source_ids": [
+            "course-1",
+            "student-focus"
+          ]
+        }
+      ]
+    }
+  ]
+}

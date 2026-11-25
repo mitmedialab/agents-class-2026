@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+<title>Weekly Dream agent architecture</title>
+<desc>A student communicates with an LLM call guided by the Weekly Dream prompt. Its tool pack acts on course materials and student builds. Observations return to the model. State and memory supply the student profile, past dreams and feedback. The loop ends with an email draft.</desc>
+<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8" fill="none" stroke="#d4d4d4" stroke-width="1.3"/></marker></defs>
+<rect width="1600" height="900" fill="black"/>
+
+<text x="80" y="70" fill="#f5f5f5" font-family="Arial, Helvetica, sans-serif" font-size="44" font-weight="700" text-anchor="start" dominant-baseline="central">Weekly Dream</text>
+<text x="80" y="120" fill="#b5b5b5" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="400" text-anchor="start" dominant-baseline="central">LLM agent architecture</text>
+<rect x="70" y="425" width="200" height="80" rx="40" fill="#25130d" stroke="#f48658" stroke-width="2"/>
+<text x="170" y="465" fill="#f48658" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="700" text-anchor="middle" dominant-baseline="central">Student</text>
+<rect x="475" y="410" width="300" height="110" rx="0" fill="#0c1909" stroke="#85d167" stroke-width="2"/>
+<text x="625" y="446" fill="#85d167" font-family="Arial, Helvetica, sans-serif" font-size="29" font-weight="700" text-anchor="middle" dominant-baseline="central">LLM call</text>
+<text x="625" y="484" fill="#f5f5f5" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" text-anchor="middle" dominant-baseline="central">Weekly Dream prompt</text>
+<rect x="475" y="170" width="300" height="110" rx="0" fill="#141020" stroke="#b0a0ed" stroke-width="2"/>
+<text x="625" y="200" fill="#b0a0ed" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="700" text-anchor="middle" dominant-baseline="central">State / Memory</text>
+<text x="625" y="233" fill="#f5f5f5" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="400" text-anchor="middle" dominant-baseline="central">Student profile</text>
+<text x="625" y="259" fill="#f5f5f5" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="400" text-anchor="middle" dominant-baseline="central">Past dreams + feedback</text>
+<rect x="925" y="220" width="270" height="135" rx="0" fill="#141020" stroke="#b0a0ed" stroke-width="2"/>
+<text x="1060" y="249" fill="#b0a0ed" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="700" text-anchor="middle" dominant-baseline="central">Tool pack</text>
+<text x="1060" y="283" fill="#f5f5f5" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="400" text-anchor="middle" dominant-baseline="central">Read context</text>
+<text x="1060" y="309" fill="#f5f5f5" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="400" text-anchor="middle" dominant-baseline="central">Update memory</text>
+<text x="1060" y="335" fill="#f5f5f5" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="400" text-anchor="middle" dominant-baseline="central">Save dream</text>
+<rect x="1250" y="405" width="280" height="130" rx="44" fill="#25130d" stroke="#f48658" stroke-width="2"/>
+<text x="1390" y="438" fill="#f48658" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" text-anchor="middle" dominant-baseline="central">Environment</text>
+<text x="1390" y="475" fill="#f5f5f5" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="400" text-anchor="middle" dominant-baseline="central">Course materials</text>
+<text x="1390" y="502" fill="#f5f5f5" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="400" text-anchor="middle" dominant-baseline="central">Student builds + activity</text>
+<rect x="475" y="710" width="300" height="90" rx="0" fill="#141020" stroke="#b0a0ed" stroke-width="2"/>
+<text x="625" y="741" fill="#b0a0ed" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="700" text-anchor="middle" dominant-baseline="central">Weekly dream</text>
+<text x="625" y="775" fill="#f5f5f5" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="400" text-anchor="middle" dominant-baseline="central">Email draft</text>
+<path d="M 284 465 L 460 465" fill="none" stroke="#d4d4d4" stroke-width="2" stroke-dasharray="6 6" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+<text x="373" y="434" fill="#f5f5f5" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="400" text-anchor="middle" dominant-baseline="central">Input / feedback</text>
+<path d="M 625 295 L 625 395" fill="none" stroke="#d4d4d4" stroke-width="2" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+<text x="647" y="346" fill="#f5f5f5" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" text-anchor="start" dominant-baseline="central">Context / updates</text>
+<path d="M 787 438 C 850 385, 858 300, 910 288" fill="none" stroke="#d4d4d4" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="855" y="402" fill="#f5f5f5" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" text-anchor="middle" dominant-baseline="central">Action</text>
+<path d="M 1209 288 C 1330 288, 1390 340, 1390 390" fill="none" stroke="#d4d4d4" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M 1238 511 C 1120 661, 918 657, 788 510" fill="none" stroke="#d4d4d4" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="1030" y="659" fill="#f5f5f5" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" text-anchor="middle" dominant-baseline="central">Observations</text>
+<path d="M 625 535 L 625 695" fill="none" stroke="#d4d4d4" stroke-width="2" stroke-dasharray="6 6" marker-end="url(#arrow)"/>
+<text x="650" y="618" fill="#f5f5f5" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="400" text-anchor="start" dominant-baseline="central">Finish</text>
+<text x="80" y="863" fill="#999999" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="400" text-anchor="start" dominant-baseline="central">Adapted from course slides: Week 2, slide 7; Week 7, slide 5.</text>
+</svg>
