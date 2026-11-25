@@ -81,8 +81,8 @@ are accepted only when their exact app-specific URIs are configured in
 `MCP_GEMINI_OAUTH_REDIRECT_URIS`. Claude and Gemini still require live
 end-to-end sign-in tests before students are invited to connect them.
 The learning instruction is client-neutral.
-The maintained public registry currently contains seven lecture-slide PDFs
-(weeks 1, 2, 3, 4, 6, 7, and 8) and one reading PDF; the MCP does not discover or
+The maintained public registry currently contains ten lecture-slide PDFs
+(weeks 1, 2, 3, 4, 6, 7, 8, 9, 10, and 11) and one reading PDF; the MCP does not discover or
 ingest every reading linked elsewhere on the web.
 
 Authorization is enforced by the server, not by a prompt: OAuth tokens resolve

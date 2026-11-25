@@ -194,6 +194,20 @@
       }
     },
     {
+      "uri": "course://slides/week-11",
+      "title": "Reinforcement Learning and Self-Evolving Agents",
+      "description": "Slides for the eleventh course meeting by Ao Qu on reinforcement learning, policy gradients, RLHF, agentic RL, distillation, and continual self-improvement.",
+      "media_type": "application/pdf",
+      "path": "course/slides/week-11/week-11-slides.pdf",
+      "visibility": "public",
+      "status": "published",
+      "accessibility_path": "course/slides/week-11/accessibility.txt",
+      "caption_path": "course/slides/week-11/captions.txt",
+      "assets": {
+        "first_slide": "registry/slide-thumbnails/b98f681a5c3fd0a3671dbec2b8e0c704ad2064eafe26a5ee1b0ab2c8f6920391.png"
+      }
+    },
+    {
       "uri": "course://readings/software-agents-bradshaw",
       "title": "An Introduction to Software Agents",
       "description": "Week 1 assigned reading by Jeffrey M. Bradshaw on the history, definitions, motivations, and attributes of software agents.",

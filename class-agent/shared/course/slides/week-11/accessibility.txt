@@ -1,0 +1,66 @@
+1 | Cover image of a martial artist in a training room beneath the title Reinforcement Learning and Self-Evolving Agents, credited to Ao Qu, MIT Multisensory Intelligence Group, November 24, 2026.
+2 | Seven-row lecture agenda covers RL basics, policy gradients, RL for LLMs, agentic RL, rewards beyond verification, distillation, and practical training infrastructure.
+3 | Pretraining-to-SFT-to-RL pipeline sits above a stacked compute-allocation chart and highlighted estimates of increasing RL compute.
+4 | Five milestone cards summarize game playing, math and programming competitions, and two claimed mathematical proofs explicitly marked as still being checked.
+5 | Agent-environment feedback loop appears beside six example images including a car, Go board, robot arms, football, and a first-person game.
+6 | MDP definitions and policy and reward equations surround an agent-environment loop and small game and controller illustrations.
+7 | Three-column table compares states, actions, and rewards for a self-driving car, Go, and a robot arm, with a photo above each column.
+8 | Red language-model box exchanges next-token actions, context states, and final-answer rewards with an environment box; arithmetic provides a worked example.
+9 | Side-by-side SFT and RL panels compare data, objectives, and arithmetic examples, above three limitations of copying expert answers.
+10 | Policy Gradients section slide features a Pong arcade cabinet.
+11 | Pong screen feeds a neural-network diagram with an Up or Down output and positive or negative scoring rewards.
+12 | Pong and neural-network diagram is paired with a green supervised log-likelihood objective and the statement that training labels are unavailable.
+13 | Three runs are drawn as sequences of up and down arrows above repeated Pong and neural-network images.
+14 | Three action sequences are shaded green for a win and pink for losses, with a note that each move is sampled from the current policy.
+15 | Winning and losing action sequences are paired with positively and negatively weighted log-likelihood expressions.
+16 | Three action sequences receive rewards of plus or minus one above a general reward-weighted log-likelihood objective.
+17 | REINFORCE gradient slide includes an overlaid derivation using the log trick and a banner describing learning from reward-weighted samples.
+18 | Baseline-subtracted policy-gradient equation is illustrated with rewards 10, 11, and 12 centered around a baseline of 11.
+19 | Advantage-weighted gradient equation introduces Q and V, with a one-step target explaining how to credit individual actions.
+20 | Actor, environment, and critic boxes exchange actions, rewards, and advantage; a temporal-difference equation appears below.
+21 | Critic-training slide shows squared-error regression and an overlaid box with generalized advantage estimation equations.
+22 | PPO clipped-objective equation sits above a sequence of repeated batch updates and a small tightrope-walking photograph.
+23 | Comparison table lists REINFORCE, a baseline, a critic, and PPO by their gradient weights and the problem each addresses.
+24 | Three-stage RLHF header sits above the InstructGPT diagram of demonstrations, human rankings, reward modeling, and policy optimization.
+25 | Ranked-data collection stage is highlighted beside an RLHF diagram and steps for generating and comparing answers.
+26 | Chosen and rejected Cambridge descriptions illustrate the reward-model preference loss beneath the three-stage RLHF header.
+27 | Reward-model objective with a KL penalty appears above a PPO training diagram and three numbered steps.
+28 | Pink RLHF and blue DPO diagrams contrast reward-model training plus RL with direct training on preference pairs, above the DPO objective.
+29 | PPO and GRPO pipeline diagrams compare using a value model with estimating advantages from a group of response rewards.
+30 | Annotated GRPO objective highlights grouped samples, clipping, reference-model regularization, and group-relative advantages.
+31 | DeepSeek-R1-Zero slide combines a prompt template, accuracy and response-length curves, and a highlighted self-checking example.
+32 | Annotated DAPO equation and four feature boxes explain token-level loss, higher clipping, dynamic sampling, and overlong-response shaping.
+33 | Reasoning and agentic RL rollout sequences appear beside PPO and search-augmented GRPO training diagrams.
+34 | Worked Search-R1 transcript alternates reasoning, searches, gray search-engine results, and a rewarded final answer about the Eiffel Tower.
+35 | Long reasoning trace and rising context-length chart contrast growing history with a bounded sawtooth-shaped MEM1 context curve.
+36 | Two MEM1 response panels separate internal state, action, and observation beside reported accuracy and memory improvements.
+37 | MEM1 training pipeline, rollout trace, and colored attention-mask grid show which generated tokens and stored context enter training.
+38 | Side-by-side rollout diagrams show stopping at a context limit versus summarizing and continuing; a bar chart compares benchmark scores.
+39 | Boat-racing game screenshot and chess-agent reasoning excerpt illustrate exploiting a reward function and modifying an opponent's engine.
+40 | RL trainer exchanges a policy, trajectory, and reward with a sandbox containing instructions, a terminal agent, and a test script; the diagram notes parallel containers and an allowlisted network.
+41 | Four-step case study describes a reported sandbox escape through DNS, with reasoning and response excerpts and a highlighted mitigation statement.
+42 | Two rows contrast verifiable math, code, and games with non-verifiable writing, research, and assistance, then identify rubrics, other agents, and user feedback as reward sources.
+43 | Deep-research reward diagram links a user query, persistent rubrics, model rollouts, generated rubrics, a rubric buffer, and weighted reward aggregation.
+44 | The same DR Tulu pipeline highlights sampling answers, mining contrasting rubrics, and retaining rubrics that distinguish answer quality.
+45 | Werewolf game slide lists night and day rules beside a reward-design table for team outcomes, eliminations, and role-specific events.
+46 | Conversation-history and baseline-persuader boxes connect through a Theory of Mind augmented persuader diagram, with three numbered explanatory callouts.
+47 | Three-stage user-simulator pipeline covers dialogue generation, consistency scoring, and multi-turn RL, above grouped benchmark bars.
+48 | User history and conversation context feed a simulated response, which an LLM judge compares with a real response to assign a Turing reward.
+49 | Persimmon slide pairs a sample conversation with a Model Turing Test chart and highlighted human-judge and AI-detector error rates.
+50 | Three OpenClaw user-feedback examples show corrections about homework, grading, and code comments, with subsequent agent corrections highlighted in green.
+51 | Side-by-side binary conversation rewards and on-policy distillation diagrams explain using natural-language corrections as token-level training feedback.
+52 | Two feedback-loop diagrams contrast scalar verifiable rewards with richer feedback used for learning by distillation.
+53 | Teacher and student token sequences are connected by dashed copying arrows in an illustration of supervised teacher-student distillation.
+54 | Student and teacher token sequences, a KL equation, and a code block illustrate the student generating an attempt and learning from teacher scores.
+55 | Three-column comparison of SFT, RL, and distillation identifies who writes the solution and whether feedback is token-level or a single score.
+56 | Student token sequence is scored by a second copy of the student with additional feedback; a runtime-error box illustrates privileged information.
+57 | Two line charts compare self-distillation and GRPO by number of generations on LiveCodeBench and by model size.
+58 | Paper figure shows repeated question, answer, feedback, and self-distillation steps, with a caption describing compressing interaction history into model weights.
+59 | Paired continual-learning line charts compare self-distillation with SFT while training sequentially on different tasks.
+60 | Three colored columns explain policy-gradient clipping, KL regularization to a frozen reference, and entropy in the training loss.
+61 | Six training curves show reward, validation accuracy, entropy, response length, KL per update, and gradient norm, with normal and warning patterns under each.
+62 | Cyclic verl training diagram connects prompts, rollout generation, rewards, advantages, and weight updates, with a note about sharing two GPUs.
+63 | Practical verl example shows a task-data JSON record, Python reward function, command-line training configuration, curve monitoring, and checkpoint export.
+64 | reef introduction includes a GitHub repository screenshot and an infrastructure diagram beside project and announcement links.
+65 | Two flowcharts contrast verl's fixed dataset, training, checkpoint, and deployment with reef's live traffic, serving, training, and evaluation loop.
+66 | Final three-column comparison summarizes who generates attempts and how feedback is supplied in SFT, RL, and distillation.

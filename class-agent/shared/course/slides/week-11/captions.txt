@@ -1,0 +1,64 @@
+1 | Ao Qu introduces reinforcement learning and self-evolving agents for the November 24 course meeting.
+3 | The compute chart motivates the lecture's shift from predicting or copying text to improving behavior with rewards; the numerical shares are estimates presented in the slides.
+4 | The milestone cards distinguish established competition results from the slide's mathematical-proof claims that remain under checking.
+5 | The feedback loop connects an agent's actions to changing environmental states and rewards across games and physical control tasks.
+6 | An MDP supplies states, actions, transitions, and rewards; a policy chooses actions to maximize expected total reward.
+7 | The examples show that the same formalism can describe camera-based driving, board-game moves, and robot joint control.
+8 | Token generation becomes sequential decision making: the current text is the state, the next token is the action, and correctness can be scored at the end.
+9 | SFT copies expert demonstrations, while RL learns from the model's own attempts and the rewards they receive.
+11 | Pong supplies outcome feedback without an expert label for every paddle movement.
+12 | Ordinary supervised training would require target actions; the example instead has only rewards from playing.
+13 | Sampling several trajectories exposes the policy's own behavior before any reward-based update.
+14 | The same policy can produce both wins and losses, creating experience from which to learn.
+15 | Winning actions receive positive learning weight, while losing actions receive negative weight.
+16 | The general objective weights the log probability of each sampled action by its trajectory's reward.
+17 | The log-derivative trick estimates a policy gradient without differentiating through the environment's reward calculation.
+18 | Subtracting expected reward makes the update reflect whether an outcome was better or worse than usual.
+19 | An action's advantage compares its expected return with the value of its starting state, improving credit assignment within an episode.
+20 | The actor chooses actions and the critic estimates value, supplying a per-step learning signal.
+21 | Value regression trains the critic; GAE combines temporal-difference errors to produce smoother advantage estimates.
+22 | Reusing a batch can move the policy far from the one that collected it, so PPO clips probability ratios to limit updates.
+23 | The table builds from raw trajectory rewards to baselines, action advantages, and constrained policy updates.
+24 | RLHF turns human answer rankings into a learned reward function and then optimizes a language model against that reward.
+25 | Ranking several answers creates pairwise preference data without requiring humans to write an ideal answer for every prompt.
+26 | The reward model learns to assign a higher score to preferred answers than to rejected ones.
+27 | The KL penalty constrains departure from a reference model while PPO improves the learned reward score.
+28 | DPO uses preference pairs directly, avoiding the separate reward-model and online sampling stages shown for RLHF.
+29 | GRPO replaces the learned critic with a baseline estimated from multiple responses to the same prompt.
+30 | Group-relative reward normalization supplies the advantage used in a clipped policy objective.
+31 | The slide presents accuracy gains, longer reasoning, and self-checking behavior emerging from rule-reward training without an initial SFT stage.
+32 | DAPO modifies how long outputs contribute, how clipping permits exploration, which response groups train, and how truncation is penalized.
+33 | Agentic RL extends a rollout beyond one generated answer to repeated reasoning, search, and observation steps.
+34 | Search results are environmental observations and are masked out of the training loss; only the model's own tokens are trained and the final answer is scored.
+35 | Keeping every thought and observation causes context to grow, motivating learned memory management.
+36 | MEM1 rewrites a compact internal state and discards earlier step context to support longer tasks with bounded working memory.
+37 | Final-answer reward trains generated reasoning and memory tokens while environment observations remain outside the token loss.
+38 | Learned context compaction lets an agent summarize and continue instead of stopping when its context window fills.
+39 | The boat agent and chess example show how maximizing a proxy reward can diverge from the intended task.
+40 | Each rollout executes tools inside an isolated environment, and test outcomes supply rewards to the trainer.
+41 | The reported DNS incident illustrates why tool-using RL also depends on enforcing environmental boundaries, beyond choosing a reward.
+42 | When correctness cannot be checked mechanically, the lecture considers rubric judges, agent interactions, and users' natural-language feedback.
+43 | Deep research can have many valid answers, so a collection of weighted rubrics supplies a richer evaluation than a single exact match.
+44 | DR Tulu evolves its rubric set by comparing sampled answers and retaining checks that separate good and bad responses.
+45 | Werewolf provides interaction-based rewards through team wins and losses and smaller events during play.
+46 | The persuasion system uses a model of the other participant and measures changes in agreement as a reward signal.
+47 | User simulation is trained for consistency with a persona across prompts, lines, and question-answer turns.
+48 | A judge's ability to distinguish a simulated reply from a real user's reply supplies a Turing-style reward.
+49 | Persimmon illustrates scaling human simulation and evaluating how readily judges identify model-generated conversation.
+50 | User corrections about desired behavior provide training information while an agent is deployed.
+51 | Token-level distillation can use the content of a correction, whereas a binary reward records only whether a reply was good or bad.
+52 | Distillation addresses sparse scalar feedback by allowing a teacher to score the student's attempted answer more densely.
+53 | Copying teacher-generated solutions can leave a student without practice recovering from its own mistakes.
+54 | In on-policy distillation, the student generates the attempt and the teacher scores those student-generated tokens.
+55 | The comparison separates the source of a trajectory from the granularity and source of its feedback.
+56 | Self-distillation uses the student with privileged feedback as its own teacher, such as feedback from a failed program execution.
+57 | The charts compare self-distillation with GRPO across additional generations and larger model sizes.
+58 | Repeated self-distillation aims to absorb useful interaction feedback into model weights rather than continually appending it to context.
+59 | Sequential-task curves illustrate the lecture's comparison of knowledge retention during self-distillation and supervised fine-tuning.
+60 | The loss combines reward-driven policy updates, optional reference-model regularization, and an exploration-related entropy term.
+61 | Monitoring reward together with validation, entropy, output length, KL, and gradient norms helps distinguish progress from collapse or instability.
+62 | A verl step samples responses, scores them, estimates advantages, updates the policy, and synchronizes weights for the next rollout.
+63 | The practical workflow prepares prompts and a reward function, launches configured training, monitors curves, and exports a serving checkpoint.
+64 | reef is presented as infrastructure for agents that continue improving while serving requests.
+65 | The flowcharts contrast training over a prepared dataset with a service that learns from live interactions and evaluates new versions.
+66 | SFT copies teacher solutions, RL scores student attempts with an environment reward, and distillation supplies teacher feedback for each token of a student attempt.
