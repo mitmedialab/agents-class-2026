@@ -12,6 +12,11 @@ student's historical feedback is retained in the private file. The Course Agent 
 the logged-in credit student's own notes through `grades.get_mine`; it accepts no
 student identifier. There is no numeric score in the imported feedback.
 
+The Course MCP exposes released weekly-build availability and the connected
+credit student's own feedback through `list_my_weekly_feedback` and
+`read_my_weekly_feedback`. It accepts no student identifier and applies the same
+active-credit and released-assignment checks.
+
 Feedback is fetched through `GET /grades/mine/assignments/{assignment_id}` and is
 never copied into workspace events or public course resources. `GET /grades/mine`
 returns assignment titles and availability for the Grading links. Both endpoints

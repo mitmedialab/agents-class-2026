@@ -163,12 +163,26 @@ def test_chatgpt_redirect_allowlist_and_settings() -> None:
             "MCP_PUBLIC_BASE_URL": BASE_URL,
             "MCP_GEMINI_OAUTH_REDIRECT_URIS": gemini_callback,
             "GITHUB_STUDENT_PROJECT_ALIASES": "test-student2=agents2026-student",
+            "GRADE_DATA_PATH": "/tmp/course-feedback.json",
+            "GRADE_PREVIEW_USERNAME": "test-student2",
+            "GRADE_PREVIEW_DATA_PATH": "/tmp/course-preview.json",
         }
     )
     assert parsed_settings.gemini_redirect_uris == (gemini_callback,)
     assert parsed_settings.github_student_project_aliases == (
         ("test-student2", "agents2026-student"),
     )
+    assert parsed_settings.grade_data_path == Path("/tmp/course-feedback.json")
+    assert parsed_settings.grade_preview_username == "test-student2"
+    assert parsed_settings.grade_preview_data_path == Path("/tmp/course-preview.json")
+    with pytest.raises(ValueError, match="grade preview"):
+        CourseMcpSettings.from_environment(
+            {
+                "DATABASE_URL": "postgresql://unused/unused",
+                "MCP_PUBLIC_BASE_URL": BASE_URL,
+                "GRADE_PREVIEW_USERNAME": "test-student2",
+            }
+        )
     with pytest.raises(ConfigurationError, match="GITHUB_STUDENT_PROJECT_ALIASES"):
         CourseMcpSettings.from_environment(
             {
@@ -211,7 +225,15 @@ def test_access_code_reset_invalidates_prior_mcp_grants() -> None:
     asyncio.run(scenario())
 
 
-def test_course_resources_follow_student_visibility(tmp_path: Path) -> None:
+def test_course_resources_follow_student_visibility(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def inline_to_thread(function: object, *args: object, **kwargs: object) -> object:
+        assert callable(function)
+        return function(*args, **kwargs)
+
+    monkeypatch.setattr(asyncio, "to_thread", inline_to_thread)
+
     async def scenario() -> None:
         definitions = []
         for name, visibility in (
@@ -276,7 +298,15 @@ def test_course_resources_follow_student_visibility(tmp_path: Path) -> None:
     asyncio.run(scenario())
 
 
-def test_project_links_and_repository_are_scoped_to_student_identity(tmp_path: Path) -> None:
+def test_project_links_and_repository_are_scoped_to_student_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def inline_to_thread(function: object, *args: object, **kwargs: object) -> object:
+        assert callable(function)
+        return function(*args, **kwargs)
+
+    monkeypatch.setattr(asyncio, "to_thread", inline_to_thread)
+
     class FakeProjects:
         def list_projects(self) -> list[StudentProject]:
             return [
@@ -354,6 +384,9 @@ def test_project_links_and_repository_are_scoped_to_student_identity(tmp_path: P
             "list_student_course_websites",
             "get_my_course_website",
             "inspect_my_student_repository",
+            "list_my_weekly_feedback",
+            "read_my_weekly_feedback",
+            "read_my_question_discussion",
         } <= tool_names
         assert "inspect_student_site" not in tool_names
         assert "inspect_my_student_site" not in tool_names

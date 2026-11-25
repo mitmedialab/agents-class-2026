@@ -71,7 +71,9 @@ uv run python -m course_server.api
 
 The optional Course MCP runs as a separate process using the same course accounts,
 released assignments, authorized course resources, updates, and private student
-messages. Its GitHub tools return course project website URLs and can inspect the
+messages. Active credit students can read their own weekly feedback. Students can
+read course-staff question discussions and follow a course-site link to type a reply.
+Its GitHub tools return course project website URLs and can inspect the
 student's own repository when that integration is enabled; the MCP does not fetch
 student websites. An optional messaging path
 prepares student-to-student and student-to-staff messages and replies for

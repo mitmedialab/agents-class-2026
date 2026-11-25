@@ -34,10 +34,10 @@ server {
     index index.html;
 
     # ChatGPT's Course MCP, OAuth discovery, course-account consent, and
-    # human-confirmed course-message inbox.
+    # human-confirmed course-message inbox and student question replies.
     # Keep these paths ahead of the SPA fallback and on the same HTTPS origin
     # so the existing HttpOnly course login cookie works on /connect.
-    location ~ ^/(mcp|mcp-pages\.css|ai-connect|connect|connections|learning-contract(?:\.md)?|messages(?:/.*)?|authorize|token|register|revoke|\.well-known/oauth-authorization-server|\.well-known/oauth-protected-resource/mcp)$ {
+    location ~ ^/(mcp|mcp-pages\.css|ai-connect|connect|connections|learning-contract(?:\.md)?|messages(?:/.*)?|questions(?:/.*)?|authorize|token|register|revoke|\.well-known/oauth-authorization-server|\.well-known/oauth-protected-resource/mcp)$ {
         client_max_body_size 64k;
         limit_req zone=class_agent_api burst=20 nodelay;
         limit_conn class_agent_connections 20;

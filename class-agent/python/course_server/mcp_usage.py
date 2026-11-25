@@ -5,14 +5,14 @@ from __future__ import annotations
 import hashlib
 import logging
 import time
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.fastmcp import FastMCP
-from mcp.types import ContentBlock
+from mcp.types import ContentBlock, Tool
 from psycopg_pool import AsyncConnectionPool
 
 logger = logging.getLogger(__name__)
@@ -81,6 +81,23 @@ class InstrumentedCourseMCP(FastMCP[Any]):
     """Observe actual authorized tool calls without retaining tool arguments/results."""
 
     usage_recorder: McpUsageRecorder | None = None
+    grade_tool_allowed: Callable[[], Awaitable[bool]] | None = None
+
+    async def list_tools(self) -> list[Tool]:
+        tools = await super().list_tools()
+        if get_access_token() is None or self.grade_tool_allowed is None:
+            return tools
+        try:
+            allowed = await self.grade_tool_allowed()
+        except PermissionError:
+            allowed = False
+        if allowed:
+            return tools
+        return [
+            tool
+            for tool in tools
+            if tool.name not in {"list_my_weekly_feedback", "read_my_weekly_feedback"}
+        ]
 
     async def call_tool(
         self, name: str, arguments: dict[str, Any]
@@ -92,7 +109,7 @@ class InstrumentedCourseMCP(FastMCP[Any]):
             user_id = UUID(access.subject)
         except ValueError:
             return await super().call_tool(name, arguments)
-        known_tool = any(tool.name == name for tool in await self.list_tools())
+        known_tool = any(tool.name == name for tool in await super().list_tools())
         safe_name = name if known_tool else _UNKNOWN_TOOL
         started = time.perf_counter()
         outcome = "success"

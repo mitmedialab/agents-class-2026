@@ -20,9 +20,12 @@ The course website's `/ai-connect` page links to client setup screens and gives
 the MCP URL and manual steps; opening a client link alone grants no access.
 
 The MCP now exposes released assignments; searchable, authorized course resources
-(including readings and extracted slide text); updates and deadlines; and the
-student's own staff communications. If the website's GitHub integration is
-enabled, it can return deployed course-website URLs, identify the connected
+(including readings and extracted slide text); updates and deadlines; the
+student's own staff communications and question follow-up discussions; and
+private weekly feedback for active credit students. A discussion read links to
+a course-owned page where the student can type and send a reply. If the
+website's GitHub integration is enabled, it can return deployed course-website
+URLs, identify the connected
 student's own course website, and inspect that student's own repository. It does not
 fetch the deployed sites; repository reads remain server-side and read-only.
 With messaging enabled, the MCP can also

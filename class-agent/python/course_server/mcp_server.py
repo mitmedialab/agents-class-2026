@@ -43,10 +43,12 @@ from course_server.config import MailSettings, _student_project_aliases
 from course_server.course_direct_messages import CourseDirectMessageService, CourseMessageError
 from course_server.course_roster import CourseRoster, load_course_roster
 from course_server.faq import LocalFaqKnowledgeStore, PostgresFaqStore, PublishedFaqResourceCatalog
+from course_server.grades import FileGradeBook
 from course_server.instructor_messages import PostgresInstructorMessageStore
 from course_server.mail import PostgresTAQuestionStore
 from course_server.mcp_assignments import CourseMcpAssignmentService
 from course_server.mcp_form_security import same_origin_form_submission
+from course_server.mcp_grades import CourseMcpGradeService
 from course_server.mcp_message_pages import register_course_message_pages
 from course_server.mcp_oauth import MESSAGE_DRAFT_SCOPE, CourseOAuthProvider
 from course_server.mcp_projects import CourseMcpProjectService
@@ -56,6 +58,11 @@ from course_server.mcp_usage import InstrumentedCourseMCP, McpUsageRecorder
 from course_server.migrations import apply_migrations
 from course_server.notifications import NotificationCenterService, PostgresNotificationItemReadStore
 from course_server.postgres.auth_store import PostgresAuthStore, create_auth_pool
+from course_server.question_discussions import (
+    PostgresQuestionReplyStore,
+    QuestionDiscussionError,
+    QuestionDiscussionService,
+)
 from course_server.student_communications import (
     StudentCommunicationNotFound,
     StudentCommunicationService,
@@ -95,6 +102,10 @@ class CourseMcpSettings:
     public_base_url: str
     assignment_data_path: Path
     course_roster_path: Path
+    grade_data_path: Path = _PROJECT_ROOT / "var/grades/weekly-feedback.json"
+    grade_preview_username: str | None = None
+    grade_preview_data_path: Path | None = None
+    grade_preview_only: bool = False
     course_data_path: Path = _PROJECT_ROOT / "data"
     published_faq_path: Path = _PROJECT_ROOT / "var/course-knowledge/published-faq.json"
     github_projects_enabled: bool = False
@@ -127,6 +138,10 @@ class CourseMcpSettings:
             raise ValueError("GITHUB_TOKEN is required when project inspection is enabled")
         if self.messaging_enabled and not self.mail_enabled:
             raise ValueError("Course messaging requires the configured mail worker")
+        if (self.grade_preview_username is None) != (self.grade_preview_data_path is None):
+            raise ValueError("grade preview username and path must be configured together")
+        if self.grade_preview_only and self.grade_preview_username is None:
+            raise ValueError("grade preview-only mode requires a preview account")
         if re.fullmatch(r"[A-Za-z0-9._-]{1,64}", self.release) is None:
             raise ValueError("MCP_RELEASE must be a short release identifier")
 
@@ -148,6 +163,11 @@ class CourseMcpSettings:
             and MailSettings.optional_from_environment(values) is None
         ):
             raise ValueError("Course messaging requires the configured mail worker")
+        preview_username = values.get("GRADE_PREVIEW_USERNAME", "").strip().casefold() or None
+        preview_path = values.get("GRADE_PREVIEW_DATA_PATH", "").strip() or None
+        raw_preview_only = values.get("GRADE_PREVIEW_ONLY", "false").strip().casefold()
+        if raw_preview_only not in {"true", "false", "1", "0", "yes", "no"}:
+            raise ValueError("GRADE_PREVIEW_ONLY must be true or false")
         repository_prefix = values.get("GITHUB_REPOSITORY_PREFIX", "agents2026-").strip()
         excluded_repositories = tuple(
             name.strip()
@@ -163,6 +183,12 @@ class CourseMcpSettings:
             course_roster_path=Path(
                 values.get("COURSE_ROSTER_PATH") or _PROJECT_ROOT / "var/roster/course-members.json"
             ).expanduser(),
+            grade_data_path=Path(
+                values.get("GRADE_DATA_PATH") or _PROJECT_ROOT / "var/grades/weekly-feedback.json"
+            ).expanduser(),
+            grade_preview_username=preview_username,
+            grade_preview_data_path=Path(preview_path).expanduser() if preview_path else None,
+            grade_preview_only=raw_preview_only in {"true", "1", "yes"},
             course_data_path=Path(
                 values.get("COURSE_DATA_PATH") or _PROJECT_ROOT / "data"
             ).expanduser(),
@@ -297,10 +323,19 @@ def create_course_mcp_app(
         messaging_enabled=settings.messaging_enabled,
         gemini_redirect_uris=settings.gemini_redirect_uris,
     )
+    assignment_store = FileAssignmentStore(settings.assignment_data_path)
     assignments = CourseMcpAssignmentService(
-        FileAssignmentStore(settings.assignment_data_path),
+        assignment_store,
         public_base_url=settings.public_base_url,
     )
+    gradebook = FileGradeBook(
+        settings.grade_data_path,
+        credit_usernames=roster.active_credit_usernames if roster else frozenset(),
+        preview_username=settings.grade_preview_username,
+        preview_path=settings.grade_preview_data_path,
+        preview_only=settings.grade_preview_only,
+    )
+    grades = CourseMcpGradeService(gradebook, assignment_store)
     resource_catalog = resources or PublishedFaqResourceCatalog(
         FileResourceProvider.from_registry(protected_data_path=settings.course_data_path),
         LocalFaqKnowledgeStore(settings.published_faq_path),
@@ -309,6 +344,10 @@ def create_course_mcp_app(
         resource_catalog, public_base_url=settings.public_base_url
     )
     question_store = PostgresTAQuestionStore(pool)
+    question_reply_store = PostgresQuestionReplyStore(pool)
+    question_discussions = QuestionDiscussionService(
+        auth=auth_store, questions=question_store, replies=question_reply_store
+    )
     instructor_message_store = PostgresInstructorMessageStore(pool)
     messages = StudentCommunicationService(
         auth=auth_store,
@@ -327,9 +366,10 @@ def create_course_mcp_app(
         reads=PostgresNotificationItemReadStore(pool),
         auth=auth_store,
         resources=resource_catalog,
-        assignments=FileAssignmentStore(settings.assignment_data_path),
+        assignments=assignment_store,
         instructor_messages=instructor_message_store,
         questions=question_store,
+        question_replies=question_reply_store,
     )
     if student_projects is None and settings.github_projects_enabled:
         if roster is None:
@@ -412,6 +452,11 @@ def create_course_mcp_app(
             raise PermissionError("Reconnect with course message-draft access first.")
         return await principal()
 
+    async def grade_tool_allowed() -> bool:
+        return gradebook.can_access(await principal())
+
+    mcp.grade_tool_allowed = grade_tool_allowed
+
     @mcp.tool(
         name="list_my_assignments",
         description=(
@@ -445,6 +490,29 @@ def create_course_mcp_app(
     )
     async def get_my_assignment(assignment_id: str) -> dict[str, Any]:
         return await assignments.get_assignment(await principal(), assignment_id)
+
+    @mcp.tool(
+        name="list_my_weekly_feedback",
+        description=(
+            "List released weekly builds with feedback availability for the connected active "
+            "credit student. Listener accounts cannot access private feedback."
+        ),
+        annotations=_READ_ONLY,
+    )
+    async def list_my_weekly_feedback() -> list[dict[str, Any]]:
+        return await grades.list_feedback(await principal())
+
+    @mcp.tool(
+        name="read_my_weekly_feedback",
+        description=(
+            "Read the connected active credit student's own qualitative TA feedback for one "
+            "released weekly build. A null feedback value means none is posted; it does not "
+            "mean the student missed the assignment. No student identifier is accepted."
+        ),
+        annotations=_READ_ONLY,
+    )
+    async def read_my_weekly_feedback(assignment_id: str) -> dict[str, Any]:
+        return await grades.read_feedback(await principal(), assignment_id)
 
     @mcp.tool(
         name="list_course_resources",
@@ -661,7 +729,30 @@ def create_course_mcp_app(
             item = await messages.get_mine(await principal(), UUID(communication_id))
         except (ValueError, StudentCommunicationNotFound) as error:
             raise ValueError("This course message is unavailable to this student.") from error
-        return item.model_dump(mode="json", exclude_none=True)
+        result = item.model_dump(mode="json", exclude_none=True)
+        if item.kind == "staff_question" and item.state == "answered":
+            discussion = await question_discussions.get(await principal(), item.id)
+            discussion["course_site_reply_url"] = f"{base_url}/questions/{item.id}"
+            result["discussion"] = discussion
+        return result
+
+    @mcp.tool(
+        name="read_my_question_discussion",
+        description=(
+            "Read the connected student's own course-staff question, staff answer, and all "
+            "follow-up replies. Use the returned course-site URL if the student wants to "
+            "write a reply; the student types and sends it on the course site."
+        ),
+        annotations=_READ_ONLY,
+    )
+    async def read_my_question_discussion(question_id: str) -> dict[str, Any]:
+        try:
+            parsed_id = UUID(question_id)
+            discussion = await question_discussions.get(await principal(), parsed_id)
+        except (ValueError, QuestionDiscussionError) as error:
+            raise ValueError("This course discussion is unavailable to this student.") from error
+        discussion["course_site_reply_url"] = f"{base_url}/questions/{parsed_id}"
+        return discussion
 
     if direct_messages is not None:
 
@@ -762,7 +853,9 @@ def create_course_mcp_app(
                 "confirmation_url": f"{base_url}/messages/confirm/{draft.id}",
             }
 
-        register_course_message_pages(mcp, direct_messages, authentication, base_url)
+    register_course_message_pages(
+        mcp, direct_messages, authentication, base_url, question_discussions
+    )
 
     async def cookie_student(request: Request) -> PrincipalContext | None:
         token = request.cookies.get(_AUTH_COOKIE)

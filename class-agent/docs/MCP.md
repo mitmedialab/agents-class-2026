@@ -16,11 +16,29 @@ The always-on tools are:
 | `list_course_resources`, `read_course_resource`, `search_course_resources` | Authorized course catalog: syllabus, schedule, readings, extracted PDF slide text, published FAQ, and any student-visible private course files. Long reads are paginated. Markdown is returned as source text, across pages if needed. Results include a `?q=` link that asks the course website's agent to open the original resource in its workspace; raw PDF and asset links are not returned. |
 | `read_course_slide_page` | One numbered page of an authorized registered course slide PDF as an actual PNG image, with page metadata, extracted text, and the course-agent opening link. It is not an invented diagram or a downloadable original PDF. |
 | `list_my_course_updates` | Current course announcements, upcoming deadlines, communications, and lecture notices; paginated history is available without marking anything read. |
-| `list_my_course_messages`, `read_my_course_message` | Paginated summaries and full reads of the student's own staff-question threads, replies, and instructor messages. |
+| `list_my_course_messages`, `read_my_course_message` | Paginated summaries and full reads of the student's own staff-question threads, follow-up discussion replies, and instructor messages. |
+| `read_my_question_discussion` | The student's complete course-staff question discussion, including later replies, plus a link to the course-owned reply page. |
+| `list_my_weekly_feedback`, `read_my_weekly_feedback` | Released weekly-build feedback availability and the connected active credit student's own qualitative TA feedback. Listener accounts cannot read it. |
 
 The slide image is delivered to the connected AI client for viewing, so that
 client's chat retention and data policies apply. The course server does not
 save the rendered PNG in its MCP usage log.
+
+`read_my_question_discussion` links to `/questions/{question_id}` on the course
+site. The student signs in there, reviews the thread, types their own reply, and
+presses **Send reply**. The MCP has no tool that sends a discussion reply from
+model-supplied text. This is separate from `prepare_course_reply`, which prepares
+a direct course-inbox message linked to a question and still requires the
+website's message-confirmation step. The MCP update feed includes later staff
+discussion replies without marking them read.
+
+Weekly feedback comes from the protected `GRADE_DATA_PATH` file and the active
+credit roster, not the public resource index. The MCP uses the same grade path,
+preview-account settings, and released-assignment checks as the website. It
+returns `feedback: null` when a graded released build has no posted note; this
+does not establish that a student missed the assignment. Feedback is read-only
+and is not written to MCP usage logs. Feedback tools are omitted from tool
+discovery for listener accounts and still enforce credit-student access on calls.
 
 When `MCP_MESSAGING_ENABLED=true` and the existing mail worker is configured,
 five more tools appear: `list_course_message_recipients`,
@@ -156,7 +174,8 @@ reload systemd, and enable/start the service. The live nginx configuration has
 site-specific rate limits: add the small
 `deploy/cognitive-agents-mcp-location.conf` block inside its HTTPS server instead
 of replacing the entire live file with `deploy/cognitive-agents.nginx`. Run
-`nginx -t` before reloading nginx. Restart the existing mail worker to load the
+`nginx -t` before reloading nginx. The MCP location must include `/questions/...`
+for the student reply page. Restart the existing mail worker to load the
 course-message email outbox code. Keep the
 website API service running; the MCP uses its database and same-origin login
 cookie but has its own process. Verify that the public
@@ -169,6 +188,11 @@ Then verify the public
 unauthenticated `/mcp` request receives 401. Do not put access codes, tokens, or
 private messages in diagnostic logs. Rate limiting is provided by the nginx
 route; the normal course login service also rate-limits incorrect codes.
+Confirm that the MCP process uses the same protected `GRADE_DATA_PATH` and
+`COURSE_ROSTER_PATH` as the website. Restart it after changing slide manifests
+so the resource catalog includes new decks, and refresh the client plugin's
+tool metadata after deploying new tools.
+
 The MCP transport accepts the configured public hostname forwarded by nginx
 and the local listener host; other Host headers remain blocked. After changing
 Python MCP code, restart `class-agent-mcp.service` before retrying tool discovery.
@@ -252,8 +276,13 @@ Pilot prompts to test with a student account:
    asks about your build and follows up on your own answer, without claiming
    the course server saved or graded that exchange.
 4. “Show my course staff messages.” Confirm only that student's messages appear.
+   Open a question with follow-up replies and confirm the full discussion and
+   `/questions/{question_id}` link appear. Sign in through that link and send a
+   reply on the course site; confirm another student cannot open the thread.
 5. “What course updates and deadlines do I have?” Confirm it does not mark
-   notifications read on the website.
+   notifications read on the website and includes staff discussion follow-ups.
+   For an active credit student, ask for weekly feedback. Confirm it contains
+   only that student's released feedback and is unavailable to a listener.
 6. “Find the lecture slides and relevant reading for this assignment.” Confirm
    it cites the course resources with `?q=` opening links, not raw PDF URLs,
    and does not claim to have seen slide diagrams unless it called

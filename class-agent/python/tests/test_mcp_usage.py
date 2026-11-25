@@ -11,11 +11,47 @@ import psycopg
 import pytest
 from psycopg import sql
 
-from course_server.mcp_usage import McpUsageRecorder, usage_summary
+from course_server.mcp_usage import InstrumentedCourseMCP, McpUsageRecorder, usage_summary
 from course_server.migrations import apply_migrations
 from course_server.postgres.auth_store import create_auth_pool
 
 TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
+
+
+def test_feedback_tools_are_hidden_without_credit_access(monkeypatch: pytest.MonkeyPatch) -> None:
+    mcp = InstrumentedCourseMCP("test", stateless_http=True)
+
+    @mcp.tool(name="list_my_weekly_feedback")
+    async def feedback() -> str:
+        return "private"
+
+    @mcp.tool(name="read_course_resource")
+    async def resource() -> str:
+        return "public"
+
+    async def denied() -> bool:
+        return False
+
+    async def allowed() -> bool:
+        return True
+
+    async def unavailable() -> bool:
+        raise PermissionError("not an active student")
+
+    mcp.grade_tool_allowed = denied
+    assert {tool.name for tool in asyncio.run(mcp.list_tools())} == {
+        "list_my_weekly_feedback",
+        "read_course_resource",
+    }
+    monkeypatch.setattr("course_server.mcp_usage.get_access_token", lambda: object())
+    assert [tool.name for tool in asyncio.run(mcp.list_tools())] == ["read_course_resource"]
+    mcp.grade_tool_allowed = unavailable
+    assert [tool.name for tool in asyncio.run(mcp.list_tools())] == ["read_course_resource"]
+    mcp.grade_tool_allowed = allowed
+    assert {tool.name for tool in asyncio.run(mcp.list_tools())} == {
+        "list_my_weekly_feedback",
+        "read_course_resource",
+    }
 
 
 def _schema_url(database_url: str, schema_name: str) -> str:

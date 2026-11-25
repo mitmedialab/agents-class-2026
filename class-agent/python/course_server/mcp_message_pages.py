@@ -21,9 +21,12 @@ from course_server.auth import (
 )
 from course_server.course_direct_messages import CourseDirectMessageService, CourseMessageError
 from course_server.mcp_form_security import same_origin_form_submission
+from course_server.question_discussions import QuestionDiscussionError, QuestionDiscussionService
 
 _AUTH_COOKIE = "class_agent_auth"
-_NEXT_PATH = re.compile(r"^/messages(?:/[0-9a-f-]+|/confirm/[0-9a-f-]+)?$")
+_NEXT_PATH = re.compile(
+    r"^(?:/messages(?:/[0-9a-f-]+|/confirm/[0-9a-f-]+)?|/questions/[0-9a-f-]+)$"
+)
 
 
 def _page(title: str, content: str) -> HTMLResponse:
@@ -43,7 +46,7 @@ def _safe_next(value: str) -> str:
 def _login_page(next_path: str, error: str = "") -> HTMLResponse:
     alert = f'<p role="alert">{html.escape(error)}</p>' if error else ""
     return _page(
-        "Sign in to course messages",
+        "Sign in to your course account",
         alert
         + '<form method="post" action="/messages/login">'
         + f'<input type="hidden" name="next" value="{html.escape(next_path, quote=True)}">'
@@ -57,9 +60,10 @@ def _login_page(next_path: str, error: str = "") -> HTMLResponse:
 
 def register_course_message_pages(
     mcp: FastMCP,
-    messages: CourseDirectMessageService,
+    messages: CourseDirectMessageService | None,
     authentication: AuthenticationService,
     base_url: str,
+    questions: QuestionDiscussionService,
 ) -> None:
     async def member(request: Request) -> PrincipalContext | None:
         token = request.cookies.get(_AUTH_COOKIE)
@@ -110,6 +114,62 @@ def register_course_message_pages(
             max_age=max(0, int((credential.expires_at - datetime.now(UTC)).total_seconds())),
         )
         return response
+
+    @mcp.custom_route("/questions/{question_id}", methods=["GET", "POST"])  # type: ignore[untyped-decorator]
+    async def question_discussion(request: Request) -> Response:
+        principal = await member(request)
+        if principal is None:
+            return login_redirect(request.url.path)
+        if "student" not in principal.roles:
+            return PlainTextResponse("Question not found.", status_code=404)
+        try:
+            question_id = UUID(request.path_params["question_id"])
+            discussion = await questions.get(principal, question_id)
+        except (ValueError, QuestionDiscussionError):
+            return PlainTextResponse("Question not found.", status_code=404)
+        if request.method == "POST":
+            if not form_allowed(request):
+                return PlainTextResponse("Invalid reply request.", status_code=400)
+            form = await request.form()
+            try:
+                await questions.send(principal, question_id, str(form.get("body", "")))
+            except QuestionDiscussionError as error:
+                return _page(
+                    "Reply not sent",
+                    f"<p>{html.escape(str(error))}</p>"
+                    f'<p><a href="/questions/{question_id}">Return to the discussion</a></p>',
+                )
+            return RedirectResponse(f"/questions/{question_id}", status_code=303)
+
+        entries = [
+            ("You", str(discussion["question"])),
+        ]
+        if discussion["answer"]:
+            entries.append(("Course staff", str(discussion["answer"])))
+        entries.extend(
+            (str(reply["sender_label"]), str(reply["body"])) for reply in discussion["replies"]
+        )
+        history = "".join(
+            f"<li><strong>{html.escape(sender)}</strong><pre>{html.escape(body)}</pre></li>"
+            for sender, body in entries
+        )
+        reply_form = (
+            f'<form method="post" action="/questions/{question_id}">'
+            "<label>Your reply to course staff "
+            '<textarea name="body" maxlength="10000" required></textarea></label>'
+            '<button type="submit">Send reply</button></form>'
+            if discussion["can_reply"]
+            else "<p>Replies open after course staff answers this question.</p>"
+        )
+        return _page(
+            str(discussion["subject"]),
+            "<p>Review the conversation and type your reply here. "
+            "Nothing is sent until you press Send reply.</p>"
+            f"<ol>{history}</ol>{reply_form}",
+        )
+
+    if messages is None:
+        return
 
     @mcp.custom_route("/messages", methods=["GET"])  # type: ignore[untyped-decorator]
     async def inbox(request: Request) -> Response:
