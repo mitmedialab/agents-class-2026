@@ -18,6 +18,12 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": "http://127.0.0.1:8000",
+      // Place Lab with its own server (GenerativeAgents/serve.py --port 8010: Gemini conversations,
+      // memory across runs). When it is not running the page falls back to public/placelab/.
+      "/placelab-live": {
+        target: "http://127.0.0.1:8010",
+        rewrite: (path) => path.replace(/^\/placelab-live/, ""),
+      },
     },
   },
   test: {
